@@ -124,7 +124,7 @@ export const signUp = async (email, password, userData = {}) => {
       password,
       options: {
         data: {
-          first_name: userData.first_name,
+          first_na : userData.first_name,
           last_name: userData.last_name,
           phone: userData.phone,
           newsletter: userData.newsletter,

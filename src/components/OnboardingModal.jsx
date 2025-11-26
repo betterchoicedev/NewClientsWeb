@@ -14,6 +14,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const [filteredSteps, setFilteredSteps] = useState([]);
 
   const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
     phone: '',
     phoneCountryCode: '+972',
     language: 'en',
@@ -29,7 +31,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     goal: '',
     client_preference: '',
     region: '',
-    medical_conditions: ''
+    medical_conditions: '',
+    timezone: ''
   });
 
   // Popular country codes with phone number validation rules
@@ -68,6 +71,50 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     { code: '+65', country: '🇸🇬 Singapore', minLength: 8, maxLength: 8 },
     { code: '+66', country: '🇹🇭 Thailand', minLength: 9, maxLength: 9 },
     { code: '+90', country: '🇹🇷 Turkey', minLength: 10, maxLength: 10 }
+  ];
+
+  // Common timezones list
+  const timezones = [
+    { value: 'Asia/Jerusalem', label: '🇮🇱 Israel (Asia/Jerusalem)', offset: 'GMT+2/+3' },
+    { value: 'Europe/London', label: '🇬🇧 London (Europe/London)', offset: 'GMT+0/+1' },
+    { value: 'Europe/Paris', label: '🇫🇷 Paris (Europe/Paris)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Berlin', label: '🇩🇪 Berlin (Europe/Berlin)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Rome', label: '🇮🇹 Rome (Europe/Rome)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Madrid', label: '🇪🇸 Madrid (Europe/Madrid)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Amsterdam', label: '🇳🇱 Amsterdam (Europe/Amsterdam)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Brussels', label: '🇧🇪 Brussels (Europe/Brussels)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Zurich', label: '🇨🇭 Zurich (Europe/Zurich)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Vienna', label: '🇦🇹 Vienna (Europe/Vienna)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Stockholm', label: '🇸🇪 Stockholm (Europe/Stockholm)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Oslo', label: '🇳🇴 Oslo (Europe/Oslo)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Copenhagen', label: '🇩🇰 Copenhagen (Europe/Copenhagen)', offset: 'GMT+1/+2' },
+    { value: 'Europe/Helsinki', label: '🇫🇮 Helsinki (Europe/Helsinki)', offset: 'GMT+2/+3' },
+    { value: 'Europe/Dublin', label: '🇮🇪 Dublin (Europe/Dublin)', offset: 'GMT+0/+1' },
+    { value: 'Europe/Lisbon', label: '🇵🇹 Lisbon (Europe/Lisbon)', offset: 'GMT+0/+1' },
+    { value: 'Europe/Athens', label: '🇬🇷 Athens (Europe/Athens)', offset: 'GMT+2/+3' },
+    { value: 'Europe/Moscow', label: '🇷🇺 Moscow (Europe/Moscow)', offset: 'GMT+3' },
+    { value: 'Asia/Dubai', label: '🇦🇪 Dubai (Asia/Dubai)', offset: 'GMT+4' },
+    { value: 'Asia/Shanghai', label: '🇨🇳 Shanghai (Asia/Shanghai)', offset: 'GMT+8' },
+    { value: 'Asia/Tokyo', label: '🇯🇵 Tokyo (Asia/Tokyo)', offset: 'GMT+9' },
+    { value: 'Asia/Seoul', label: '🇰🇷 Seoul (Asia/Seoul)', offset: 'GMT+9' },
+    { value: 'Asia/Kolkata', label: '🇮🇳 Kolkata (Asia/Kolkata)', offset: 'GMT+5:30' },
+    { value: 'Asia/Singapore', label: '🇸🇬 Singapore (Asia/Singapore)', offset: 'GMT+8' },
+    { value: 'Asia/Bangkok', label: '🇹🇭 Bangkok (Asia/Bangkok)', offset: 'GMT+7' },
+    { value: 'Asia/Kuala_Lumpur', label: '🇲🇾 Kuala Lumpur (Asia/Kuala_Lumpur)', offset: 'GMT+8' },
+    { value: 'Asia/Istanbul', label: '🇹🇷 Istanbul (Asia/Istanbul)', offset: 'GMT+3' },
+    { value: 'Australia/Sydney', label: '🇦🇺 Sydney (Australia/Sydney)', offset: 'GMT+10/+11' },
+    { value: 'Australia/Melbourne', label: '🇦🇺 Melbourne (Australia/Melbourne)', offset: 'GMT+10/+11' },
+    { value: 'Pacific/Auckland', label: '🇳🇿 Auckland (Pacific/Auckland)', offset: 'GMT+12/+13' },
+    { value: 'Africa/Johannesburg', label: '🇿🇦 Johannesburg (Africa/Johannesburg)', offset: 'GMT+2' },
+    { value: 'America/New_York', label: '🇺🇸 New York (America/New_York)', offset: 'GMT-5/-4' },
+    { value: 'America/Chicago', label: '🇺🇸 Chicago (America/Chicago)', offset: 'GMT-6/-5' },
+    { value: 'America/Denver', label: '🇺🇸 Denver (America/Denver)', offset: 'GMT-7/-6' },
+    { value: 'America/Los_Angeles', label: '🇺🇸 Los Angeles (America/Los_Angeles)', offset: 'GMT-8/-7' },
+    { value: 'America/Toronto', label: '🇨🇦 Toronto (America/Toronto)', offset: 'GMT-5/-4' },
+    { value: 'America/Vancouver', label: '🇨🇦 Vancouver (America/Vancouver)', offset: 'GMT-8/-7' },
+    { value: 'America/Mexico_City', label: '🇲🇽 Mexico City (America/Mexico_City)', offset: 'GMT-6/-5' },
+    { value: 'America/Sao_Paulo', label: '🇧🇷 São Paulo (America/Sao_Paulo)', offset: 'GMT-3/-2' },
+    { value: 'America/Buenos_Aires', label: '🇦🇷 Buenos Aires (America/Buenos_Aires)', offset: 'GMT-3' }
   ];
 
   // Function to validate phone number based on country code
@@ -114,7 +161,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const allSteps = [
     {
       title: language === 'hebrew' ? 'מידע אישי בסיסי' : 'Basic Personal Information',
-      fields: ['phone', 'language', 'city', 'region']
+      fields: ['first_name', 'last_name', 'phone', 'language', 'city', 'region', 'timezone']
     },
     {
       title: language === 'hebrew' ? 'פרטי בריאות' : 'Health Information',
@@ -128,6 +175,23 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
   const steps = filteredSteps;
 
+  // Auto-detect timezone on mount
+  useEffect(() => {
+    if (isOpen && !formData.timezone) {
+      try {
+        const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        // Check if detected timezone is in our list
+        const isInList = timezones.some(tz => tz.value === detectedTimezone);
+        setFormData(prev => ({
+          ...prev,
+          timezone: isInList ? detectedTimezone : ''
+        }));
+      } catch (error) {
+        console.error('Error detecting timezone:', error);
+      }
+    }
+  }, [isOpen]);
+
   // Load existing data and determine which fields to show
   useEffect(() => {
     if (isOpen && user) {
@@ -140,7 +204,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('phone, user_language, city, region, birth_date, age, gender, current_weight, target_weight, height, food_allergies, dietary_preferences, activity_level, goal, client_preference, medical_conditions')
+        .select('first_name, last_name, phone, user_language, city, region, timezone, birth_date, age, gender, current_weight, target_weight, height, food_allergies, food_limitations, activity_level, goal, client_preference, medical_conditions')
         .eq('user_id', user.id)
         .single();
 
@@ -154,17 +218,20 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       if (data) {
         setFormData(prev => ({
           ...prev,
+          first_name: data.first_name || '',
+          last_name: data.last_name || '',
           phone: data.phone || '',
           language: data.user_language || 'en',
           city: data.city || '',
           region: data.region || '',
+          timezone: data.timezone || '',
           date_of_birth: data.birth_date || '',
           gender: data.gender || '',
           weight_kg: data.current_weight ? data.current_weight.toString() : '',
           target_weight: data.target_weight ? data.target_weight.toString() : '',
           height_cm: data.height ? data.height.toString() : '',
           food_allergies: data.food_allergies || '',
-          food_limitations: data.dietary_preferences || '',
+          food_limitations: data.food_limitations || '',
           activity_level: data.activity_level || '',
           goal: data.goal || '',
           client_preference: typeof data.client_preference === 'string' ? data.client_preference : (data.client_preference?.preference || ''),
@@ -187,6 +254,18 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       console.log('Checking existing data from DB:', data);
       
       // Check each field with detailed logging
+      if (isEmpty(data?.first_name)) {
+        missingFields.push('first_name');
+      } else {
+        console.log('✓ First name has value:', data?.first_name);
+      }
+      
+      if (isEmpty(data?.last_name)) {
+        missingFields.push('last_name');
+      } else {
+        console.log('✓ Last name has value:', data?.last_name);
+      }
+      
       if (isEmpty(data?.phone)) {
         missingFields.push('phone');
       } else {
@@ -209,6 +288,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         missingFields.push('region');
       } else {
         console.log('✓ Region has value:', data?.region);
+      }
+      
+      if (isEmpty(data?.timezone)) {
+        missingFields.push('timezone');
+      } else {
+        console.log('✓ Timezone has value:', data?.timezone);
       }
       
       if (isEmpty(data?.birth_date)) {
@@ -247,10 +332,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.log('✓ Food allergies has value:', data?.food_allergies);
       }
       
-      if (isEmpty(data?.dietary_preferences)) {
+      if (isEmpty(data?.food_limitations)) {
         missingFields.push('food_limitations');
       } else {
-        console.log('✓ Food limitations has value:', data?.dietary_preferences);
+        console.log('✓ Food limitations has value:', data?.food_limitations);
       }
       
       if (isEmpty(data?.activity_level)) {
@@ -396,8 +481,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     // Validate current step fields
     const currentStepFields = filteredSteps[currentStep]?.fields || [];
     
-    // Fields that can be empty (None is a valid selection)
-    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations', 'client_preference'];
+    // Fields that can be empty (None is a valid selection or auto-filled)
+    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations', 'client_preference', 'timezone'];
     
     const missingFields = currentStepFields.filter(field => {
       // Skip validation for optional fields (empty string means "None" is selected)
@@ -497,7 +582,25 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         updated_at: new Date().toISOString()
       };
 
+      // Calculate full_name from first_name and last_name
+      let fullName = null;
+      if (allOnboardingFields.includes('first_name') && allOnboardingFields.includes('last_name')) {
+        if (formData.first_name || formData.last_name) {
+          fullName = `${formData.first_name || ''} ${formData.last_name || ''}`.trim();
+        }
+      }
+
       // Save all fields that were part of the onboarding, regardless of whether they have values
+      if (allOnboardingFields.includes('first_name') && formData.first_name) {
+        clientData.first_name = formData.first_name;
+      }
+      if (allOnboardingFields.includes('last_name') && formData.last_name) {
+        clientData.last_name = formData.last_name;
+      }
+      if (fullName) {
+        clientData.full_name = fullName;
+      }
+      
       // Format phone number with country code
       if (allOnboardingFields.includes('phone')) {
         if (formData.phone && formData.phone.trim()) {
@@ -524,6 +627,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       }
       if (allOnboardingFields.includes('region') && formData.region) {
         clientData.region = formData.region;
+      }
+      if (allOnboardingFields.includes('timezone') && formData.timezone) {
+        clientData.timezone = formData.timezone;
       }
       if (allOnboardingFields.includes('date_of_birth') && formData.date_of_birth) {
         clientData.birth_date = formData.date_of_birth;
@@ -552,7 +658,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         clientData.food_allergies = formData.food_allergies || null;
       }
       if (allOnboardingFields.includes('food_limitations')) {
-        clientData.dietary_preferences = formData.food_limitations || null;
+        clientData.food_limitations = formData.food_limitations || null;
       }
       if (allOnboardingFields.includes('activity_level') && formData.activity_level) {
         clientData.activity_level = formData.activity_level;
@@ -579,19 +685,25 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         user_language: formData.language,
         city: formData.city,
         region: formData.region,
+        timezone: formData.timezone,
         date_of_birth: formData.date_of_birth,
         age: age,
         gender: formData.gender,
         weight_kg: formData.weight_kg ? parseFloat(formData.weight_kg) : null,
         height_cm: formData.height_cm ? parseFloat(formData.height_cm) : null,
-        food_allergies: formData.food_allergies,
-        food_limitations: formData.food_limitations,
+        food_allergies: formData.food_allergies || null,
+        food_limitations: formData.food_limitations || null,
         Activity_level: formData.activity_level,
         goal: formData.goal,
-        client_preference: formData.client_preference,
+        client_preference: formData.client_preference || null,
         onboarding_done: true,
         updated_at: new Date().toISOString()
       };
+
+      // Set full_name if we have it
+      if (fullName) {
+        chatUserData.full_name = fullName;
+      }
 
       // Set phone_number and whatsapp_number if phone was collected during onboarding
       if (formattedPhone) {
@@ -762,6 +874,38 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
         {/* Form Fields */}
         <div className="space-y-6">
+          {currentFields.includes('first_name') && (
+            <div className="group">
+              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'שם פרטי' : 'First Name'}
+              </label>
+              <input
+                type="text"
+                name="first_name"
+                value={formData.first_name}
+                onChange={handleInputChange}
+                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                placeholder={language === 'hebrew' ? 'יוסי' : 'John'}
+              />
+            </div>
+          )}
+
+          {currentFields.includes('last_name') && (
+            <div className="group">
+              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'שם משפחה' : 'Last Name'}
+              </label>
+              <input
+                type="text"
+                name="last_name"
+                value={formData.last_name}
+                onChange={handleInputChange}
+                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                placeholder={language === 'hebrew' ? 'כהן' : 'Doe'}
+              />
+            </div>
+          )}
+
           {currentFields.includes('phone') && (
             <div className="group">
               <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
@@ -838,6 +982,27 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
                 placeholder={language === 'hebrew' ? 'מרכז' : 'Center'}
               />
+            </div>
+          )}
+
+          {currentFields.includes('timezone') && (
+            <div className="group">
+              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'אזור זמן' : 'Timezone'}
+              </label>
+              <select
+                name="timezone"
+                value={formData.timezone}
+                onChange={handleInputChange}
+                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+              >
+                <option value="">{language === 'hebrew' ? 'בחר אזור זמן' : 'Select timezone'}</option>
+                {timezones.map((tz) => (
+                  <option key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 

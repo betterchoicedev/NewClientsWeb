@@ -11,8 +11,6 @@ function SignupPage() {
   const { isAuthenticated } = useAuth();
   const { isDarkMode, toggleTheme, themeClasses } = useTheme();
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -118,8 +116,6 @@ function SignupPage() {
 
     try {
       const userData = {
-        first_name: formData.firstName,
-        last_name: formData.lastName,
         email: formData.email,
         newsletter: formData.newsletter
       };
@@ -162,8 +158,6 @@ function SignupPage() {
         );
         // Clear form
         setFormData({
-          firstName: '',
-          lastName: '',
           email: '',
           password: '',
           confirmPassword: '',
@@ -249,41 +243,6 @@ function SignupPage() {
                     {success}
                   </div>
                 )}
-                {/* Name Fields */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div>
-                    <label htmlFor="firstName" className={`block text-sm font-medium ${themeClasses.textPrimary} mb-2`}>
-                      {language === 'hebrew' ? 'שם פרטי' : 'First Name'}
-                    </label>
-                    <input
-                      id="firstName"
-                      name="firstName"
-                      type="text"
-                      autoComplete="given-name"
-                      required
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 transition-colors duration-300 ${themeClasses.inputBg} ${themeClasses.inputFocus}`}
-                      placeholder={language === 'hebrew' ? 'שם פרטי' : 'First name'}
-                      value={formData.firstName}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="lastName" className={`block text-sm font-medium ${themeClasses.textPrimary} mb-2`}>
-                      {language === 'hebrew' ? 'שם משפחה' : 'Last Name'}
-                    </label>
-                    <input
-                      id="lastName"
-                      name="lastName"
-                      type="text"
-                      autoComplete="family-name"
-                      required
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 transition-colors duration-300 ${themeClasses.inputBg} ${themeClasses.inputFocus}`}
-                      placeholder={language === 'hebrew' ? 'שם משפחה' : 'Last name'}
-                      value={formData.lastName}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                </div>
 
                 {/* Email */}
                 <div>

@@ -5,12 +5,65 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useStripe } from '../context/StripeContext';
 import { supabase, supabaseSecondary } from '../supabase/supabaseClient';
-import { getMealPlan, debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, getChatMessages, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany } from '../supabase/secondaryClient';
+import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, getChatMessages, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany } from '../supabase/secondaryClient';
 import { normalizePhoneForDatabase } from '../supabase/auth';
 import { getAllProducts, getProductsByCategory, getProduct } from '../config/stripe-products';
 import PricingCard from '../components/PricingCard';
 import OnboardingModal from '../components/OnboardingModal';
 import { translateMenu } from '../services/translateService';
+
+// Function to get active meal plan from client_meal_plans table
+const getClientMealPlan = async (userCode) => {
+  try {
+    const { data, error } = await supabase
+      .from('client_meal_plans')
+      .select('*')
+      .eq('user_code', userCode)
+      .eq('active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No active meal plan found
+        return { data: null, error: null };
+      }
+      return { data: null, error };
+    }
+
+    // Check if today is in the active_days
+    // active_days: array of numbers 0-6 where 0=Sunday, 1=Monday, etc.
+    // If active_days is null, it's an everyday plan
+    const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const isActiveToday = data.active_days === null || data.active_days.includes(today);
+
+    if (!isActiveToday) {
+      // Meal plan exists but not active for today
+      console.log(`Meal plan found but not active for today (day ${today}). Active days:`, data.active_days);
+      return { data: null, error: null };
+    }
+
+    // Prioritize client_edited_meal_plan over dietitian_meal_plan
+    const mealPlan = data.client_edited_meal_plan || data.dietitian_meal_plan;
+
+    return {
+      data: {
+        meal_plan: mealPlan,
+        daily_total_calories: data.daily_total_calories,
+        macros_target: data.macros_target,
+        meal_plan_name: data.meal_plan_name,
+        active_from: data.active_from,
+        active_until: data.active_until,
+        active_days: data.active_days
+      },
+      error: null
+    };
+  } catch (err) {
+    console.error('Error fetching client meal plan:', err);
+    return { data: null, error: err };
+  }
+};
 
 const ProfilePage = () => {
   const { user, isAuthenticated } = useAuth();
@@ -1297,7 +1350,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language }) => {
 
       try {
         setLoading(true);
-        const { data, error } = await getMealPlan(userCode);
+        const { data, error } = await getClientMealPlan(userCode);
         
         if (error) {
           console.error('Error loading meal plan:', error);
@@ -1873,7 +1926,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
         }
 
         // Load meal plan targets
-        const { data: mealPlanData, error: mealPlanError } = await getMealPlan(userCode);
+        const { data: mealPlanData, error: mealPlanError } = await getClientMealPlan(userCode);
         
         if (mealPlanError) {
           console.error('Error loading meal plan:', mealPlanError);
