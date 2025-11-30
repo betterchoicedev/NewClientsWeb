@@ -19,6 +19,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { StripeProvider } from './context/StripeContext';
+import { SettingsProvider } from './context/SettingsContext';
 import CookieConsent from './components/CookieConsent';
 import AccessibilityWidget from './components/AccessibilityWidget';
 import './App.css';
@@ -29,6 +30,7 @@ function App() {
       <AuthProvider>
         <StripeProvider>
           <LanguageProvider>
+            <SettingsProvider>
             <Router>
               <div className="App">
                 <CookieConsent />
@@ -53,6 +55,7 @@ function App() {
                 </Routes>
               </div>
             </Router>
+            </SettingsProvider>
           </LanguageProvider>
         </StripeProvider>
       </AuthProvider>
