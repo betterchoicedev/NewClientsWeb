@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import { useStripe } from '../context/StripeContext';
 import { supabase, supabaseSecondary } from '../supabase/supabaseClient';
 import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, getChatMessages, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany } from '../supabase/secondaryClient';
 import { normalizePhoneForDatabase } from '../supabase/auth';
@@ -2335,7 +2334,6 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
 
 // Pricing Tab Component
 const PricingTab = ({ themeClasses, user, language }) => {
-  const { getCustomerSubscriptions, error } = useStripe();
   const [activeCategory, setActiveCategory] = useState('all');
   const [userSubscriptions, setUserSubscriptions] = useState([]);
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
@@ -2354,8 +2352,17 @@ const PricingTab = ({ themeClasses, user, language }) => {
   const fetchUserSubscriptions = async () => {
     try {
       setLoadingSubscriptions(true);
-      const subscriptions = await getCustomerSubscriptions(user.id);
-      setUserSubscriptions(subscriptions || []);
+      // Fetch subscriptions directly from Azure backend
+      const response = await fetch(`https://clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net/api/stripe/subscriptions?customerId=${encodeURIComponent(user.id)}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch subscriptions');
+      }
+      
+      const data = await response.json();
+      const subscriptions = data.subscriptions || [];
+      setUserSubscriptions(subscriptions);
       setSubscriptionsLastFetched(Date.now()); // Set timestamp when data is fetched
     } catch (error) {
       console.error('Error fetching subscriptions:', error);
