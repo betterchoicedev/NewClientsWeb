@@ -52,7 +52,7 @@ export const StripeProvider = ({ children }) => {
       };
 
       // Call backend API to create checkout session
-      const response = await fetch('https://newclientsweb.onrender.com/api/stripe/create-checkout-session', {
+      const response = await fetch('https://clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -104,7 +104,7 @@ export const StripeProvider = ({ children }) => {
     setError(null);
 
     try {
-      const response = await fetch('https://newclientsweb.onrender.com/api/stripe/create-payment-intent', {
+      const response = await fetch('https://clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net/api/stripe/create-payment-intent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -136,7 +136,7 @@ export const StripeProvider = ({ children }) => {
   // Get customer's subscriptions
   const getCustomerSubscriptions = async (customerId) => {
     try {
-      const response = await fetch(`https://newclientsweb.onrender.com/api/stripe/subscriptions?customerId=${encodeURIComponent(customerId)}`);
+      const response = await fetch(`https://clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net/api/stripe/subscriptions?customerId=${encodeURIComponent(customerId)}`);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -157,7 +157,7 @@ export const StripeProvider = ({ children }) => {
     setError(null);
 
     try {
-      const response = await fetch(`https://newclientsweb.onrender.com/api/stripe/subscriptions/${subscriptionId}/cancel`, {
+      const response = await fetch(`https://clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net/api/stripe/subscriptions/${subscriptionId}/cancel`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -190,7 +190,7 @@ export const StripeProvider = ({ children }) => {
     setError(null);
 
     try {
-      const response = await fetch(`https://newclientsweb.onrender.com/api/stripe/subscriptions/${subscriptionId}/reactivate`, {
+      const response = await fetch(`https://clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net/api/stripe/subscriptions/${subscriptionId}/reactivate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +217,7 @@ export const StripeProvider = ({ children }) => {
   // Get checkout session details
   const getCheckoutSession = async (sessionId) => {
     try {
-      const response = await fetch(`https://newclientsweb.onrender.com/api/stripe/checkout-session/${sessionId}`);
+      const response = await fetch(`https://clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net/api/stripe/checkout-session/${sessionId}`);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -237,7 +237,7 @@ export const StripeProvider = ({ children }) => {
     setError(null);
 
     try {
-      const response = await fetch(`https://newclientsweb.onrender.com/api/stripe/subscriptions/${subscriptionId}/payment-method`, {
+      const response = await fetch(`https://clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net/api/stripe/subscriptions/${subscriptionId}/payment-method`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
