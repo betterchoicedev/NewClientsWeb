@@ -1,0 +1,92 @@
+name: Deploy Stripe Server → Azure (stripe-server)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'my-app/server/**'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'my-app/server/package-lock.json'
+      
+      # Install production dependencies
+      - name: Install dependencies
+        run: |
+          cd my-app/server
+          npm ci --production --ignore-scripts
+      
+      # Package the server folder contents (not the folder itself)
+      - name: Zip server for Azure
+        run: |
+          cd my-app/server
+          # Create zip with all files (excluding git files and logs)
+          zip -r ../../server.zip . -x "*.git*" "*.log" ".DS_Store" "Thumbs.db"
+          cd ../..
+          echo "✅ Server zipped successfully"
+          ls -lh server.zip
+      
+      # Deploy to App Service
+      - name: Deploy to App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ClientsWebBackend
+          slot-name: Production
+          package: ${{ github.workspace }}/server.zip
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_CLIENTSWEBBACKEND }}
+
+# ========================================
+# AZURE APP SERVICE CONFIGURATION
+# ========================================
+# 
+# 1. Azure Web App: ClientsWebBackend
+#    - App name configured: ClientsWebBackend
+#
+# 2. Get Publish Profile:
+#    - Azure Portal → ClientsWebBackend → Get publish profile
+#    - Add to GitHub Secrets as: AZUREAPPSERVICE_PUBLISHPROFILE_CLIENTSWEBBACKEND
+#
+# 3. Configure Environment Variables in Azure App Service:
+#    Required:
+#    - STRIPE_SECRET_KEY=sk_live_... (your Stripe secret key)
+#    - STRIPE_WEBHOOK_SECRET=whsec_... (your Stripe webhook secret)
+#    - REACT_APP_SUPABASE_URL=https://... (your Supabase URL)
+#    - SUPABASE_SERVICE_ROLE_KEY=eyJ... (or use REACT_APP_SUPABASE_ANON_KEY)
+#
+#    Optional (with defaults):
+#    - PORT=8080 (defaults to 8080)
+#    - NODE_ENV=production
+#    - HTTP_PLATFORM_PORT=8080 (for Windows)
+#
+# 4. App Settings (Azure Portal → Configuration → Application Settings):
+#    For Windows App Service:
+#    - WEBSITES_PORT = 8080
+#    - SCM_DO_BUILD_DURING_DEPLOYMENT = 0 (deps already included)
+#    - WEBSITES_NODE_DEFAULT_VERSION = 18.17.0
+#
+#    For Linux App Service (recommended):
+#    - PORT = 8080
+#    - NODE_ENV = production
+#    - SCM_DO_BUILD_DURING_DEPLOYMENT = false (deps already included)
+#
+# 5. Startup Command:
+#    - Windows: node index.js
+#    - Linux: npm start (or node index.js)
+#
+# 6. Webhook Configuration:
+#    - Update Stripe webhook URL to: 
+#      https://clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net/api/webhooks/stripe
+#    - Domain: clientswebbackend-dvbga0cqbea2ggcy.eastus-01.azurewebsites.net   i am changing it now
+
