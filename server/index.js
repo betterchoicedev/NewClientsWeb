@@ -243,8 +243,10 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
         },
       ],
       mode: mode,
-      success_url: successUrl || `${req.headers.origin || 'http://localhost:3000'}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${req.headers.origin || 'http://localhost:3000'}/payment-cancel`,
+      // Use BetterChoice production domain as default for redirects
+      // Still allow overriding via successUrl/cancelUrl in the request body
+      success_url: successUrl || `https://betterchoice.one/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `https://betterchoice.one/payment-cancel`,
       metadata: {
         priceId,
         ...metadata
