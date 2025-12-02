@@ -750,8 +750,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         }
       }
 
-      // Onboarding complete - close modal
-      onClose();
+      // Onboarding complete - close modal with completion status
+      onClose(true);
     } catch (err) {
       console.error('Error saving onboarding data:', err);
       setError(language === 'hebrew' ? 'שגיאה בשמירת הנתונים. אנא נסה שוב.' : 'Error saving data. Please try again.');
@@ -763,47 +763,15 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const handleSkip = async () => {
     setLoading(true);
     try {
-      // Mark onboarding as completed even though they skipped
-      const { error: updateError } = await supabase
-        .from('clients')
-        .update({ 
-          onboarding_completed: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
-
-      if (updateError) {
-        console.error('Error marking onboarding as skipped:', updateError);
-      }
-
-      // Also update chat_users if available
-      if (supabaseSecondary && userCode) {
-        try {
-          const { data: chatUser, error: chatUserError } = await supabaseSecondary
-            .from('chat_users')
-            .select('id')
-            .eq('user_code', userCode)
-            .single();
-
-          if (!chatUserError && chatUser) {
-            await supabaseSecondary
-              .from('chat_users')
-              .update({ 
-                onboarding_done: true,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', chatUser.id);
-          }
-        } catch (syncError) {
-          console.error('Error syncing skip to chat_users:', syncError);
-        }
-      }
-
-      onClose();
+      // Don't mark onboarding as completed when skipped
+      // This allows the onboarding to show again when they return to the profile page
+      // Just close the modal without updating onboarding_completed
+      // Pass false to indicate it was skipped (not completed)
+      onClose(false);
     } catch (err) {
       console.error('Error skipping onboarding:', err);
-      // Close anyway
-      onClose();
+      // Close anyway, but indicate it was skipped
+      onClose(false);
     } finally {
       setLoading(false);
     }

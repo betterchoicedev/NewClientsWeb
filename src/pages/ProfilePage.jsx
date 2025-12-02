@@ -137,6 +137,7 @@ const ProfilePage = () => {
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
   const [companyError, setCompanyError] = useState('');
   const [assignedCompanyId, setAssignedCompanyId] = useState('');
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
 
   const loadCompanyOptions = useCallback(async () => {
     if (!supabaseSecondary) return;
@@ -199,36 +200,21 @@ const ProfilePage = () => {
       if (data) {
         setUserCode(data.user_code);
         
-        // If onboarding is already done, don't show the modal
-        if (data.onboarding_completed === true) {
-          setShowOnboarding(false);
-          return;
-        }
+        // Track onboarding completion status
+        setOnboardingCompleted(data.onboarding_completed === true);
         
-        // Check if onboarding is needed (missing critical fields)
-        const needsOnboarding = !data.phone || 
-          !data.user_language || 
-          !data.city || 
-          !data.birth_date || 
-          !data.age || 
-          !data.gender || 
-          !data.current_weight || 
-          !data.target_weight ||
-          !data.height ||
-          !data.food_allergies ||
-          !data.dietary_preferences ||
-          !data.food_limitations ||
-          !data.activity_level ||
-          !data.goal ||
-          !data.client_preference ||
-          !data.region ||
-          !data.medical_conditions;
-
-        if (needsOnboarding) {
+        // Show onboarding ONLY if onboarding_completed is not true
+        // Once onboarding is completed (onboarding_completed === true), never show it again
+        // regardless of missing fields - user can fill them later in the profile
+        if (data.onboarding_completed !== true) {
           setShowOnboarding(true);
+        } else {
+          // Onboarding is completed - don't show it again
+          setShowOnboarding(false);
         }
       } else {
         // No profile data at all - show onboarding
+        setOnboardingCompleted(false);
         setShowOnboarding(true);
       }
     } catch (error) {
@@ -237,11 +223,21 @@ const ProfilePage = () => {
   };
 
   // Callback to handle onboarding completion
-  const handleOnboardingComplete = async () => {
-    // Reload profile data
-    await loadProfileData();
-    // Re-check onboarding status (will close modal if onboarding_completed is true)
-    await checkOnboardingStatus();
+  const handleOnboardingComplete = async (completed = true) => {
+    if (completed) {
+      // Onboarding was completed - set state immediately to allow editing
+      setOnboardingCompleted(true);
+      setShowOnboarding(false);
+      // Reload profile data and re-check status to ensure everything is in sync
+      await loadProfileData();
+      await checkOnboardingStatus();
+    } else {
+      // Onboarding was skipped - just close the modal without re-checking
+      // This prevents the modal from immediately reopening
+      setShowOnboarding(false);
+      // Keep onboardingCompleted as false so fields remain read-only
+      setOnboardingCompleted(false);
+    }
   };
 
   // Load profile data on component mount
@@ -251,6 +247,13 @@ const ProfilePage = () => {
       checkOnboardingStatus();
     }
   }, [user, profileData.userCode]);
+
+  // Reload onboarding status when profile tab becomes active
+  useEffect(() => {
+    if (activeTab === 'profile' && user) {
+      checkOnboardingStatus();
+    }
+  }, [activeTab, user]);
 
   useEffect(() => {
     loadCompanyOptions();
@@ -887,6 +890,7 @@ const ProfilePage = () => {
             isLoadingCompanies={isLoadingCompanies}
             companyError={companyError}
             language={language}
+            onboardingCompleted={onboardingCompleted}
             />
           )}
           {activeTab === 'myPlan' && (
@@ -919,7 +923,16 @@ const ProfilePage = () => {
 };
 
 // Profile Tab Component
-const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, errorMessage, themeClasses, t, companyOptions, isLoadingCompanies, companyError, language }) => {
+const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, errorMessage, themeClasses, t, companyOptions, isLoadingCompanies, companyError, language, onboardingCompleted = false }) => {
+  // Helper function to check if a field should be shown (if onboarding not completed, only show non-null fields)
+  const shouldShowField = (fieldValue) => {
+    if (onboardingCompleted === true) return true; // Show all fields if onboarding is completed
+    return fieldValue !== null && fieldValue !== undefined && fieldValue !== ''; // Only show non-null fields if skipped
+  };
+
+  // Personal Information fields are always read-only - cannot be edited
+  const isReadOnly = true;
+
   return (
     <div className={`${themeClasses.bgPrimary} min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
       {/* Header Section */}
@@ -951,12 +964,13 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 {t.profile.profileTab.personalInfo}
               </h3>
               <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mt-1`}>
-                Your basic personal details
+                {language === 'hebrew' ? 'פרטים אישיים - לא ניתן לערוך' : 'Your basic personal details - Read only'}
               </p>
             </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            {shouldShowField(profileData.firstName) && (
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
                 {t.profile.profileTab.firstName} *
@@ -965,11 +979,18 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 type="text"
                 value={profileData.firstName}
                 onChange={(e) => onInputChange('firstName', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
+                readOnly={isReadOnly}
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
+                  isReadOnly 
+                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
+                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
+                }`}
                 required
               />
             </div>
+            )}
 
+            {shouldShowField(profileData.lastName) && (
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
                 {t.profile.profileTab.lastName} *
@@ -978,11 +999,18 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 type="text"
                 value={profileData.lastName}
                 onChange={(e) => onInputChange('lastName', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
+                readOnly={isReadOnly}
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
+                  isReadOnly 
+                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
+                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
+                }`}
                 required
               />
             </div>
+            )}
 
+            {shouldShowField(profileData.email) && (
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
                 {t.profile.profileTab.email} *
@@ -991,11 +1019,18 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 type="email"
                 value={profileData.email}
                 onChange={(e) => onInputChange('email', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
+                readOnly={isReadOnly}
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
+                  isReadOnly 
+                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
+                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
+                }`}
                 required
               />
             </div>
+            )}
 
+            {shouldShowField(profileData.phone) && (
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
                 {t.profile.profileTab.phone}
@@ -1004,11 +1039,18 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 type="tel"
                 value={profileData.phone}
                 onChange={(e) => onInputChange('phone', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
+                readOnly={isReadOnly}
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
+                  isReadOnly 
+                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
+                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
+                }`}
                 placeholder="+1 (555) 123-4567"
               />
             </div>
+            )}
 
+            {shouldShowField(profileData.birthDate) && (
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
                 Birth Date
@@ -1017,10 +1059,17 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 type="date"
                 value={profileData.birthDate}
                 onChange={(e) => onInputChange('birthDate', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
+                readOnly={isReadOnly}
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
+                  isReadOnly 
+                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
+                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
+                }`}
               />
             </div>
+            )}
 
+            {shouldShowField(profileData.age) && (
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
                 Age {profileData.birthDate ? '(Auto-calculated)' : ''}
@@ -1029,15 +1078,15 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 type="number"
                 value={profileData.age}
                 onChange={(e) => onInputChange('age', e.target.value)}
+                readOnly={isReadOnly || !!profileData.birthDate}
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
-                  profileData.birthDate 
+                  (isReadOnly || profileData.birthDate)
                     ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
                     : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
                 }`}
                 placeholder="25"
                 min="1"
                 max="120"
-                readOnly={!!profileData.birthDate}
               />
               {profileData.birthDate && (
                 <p className={`${themeClasses.textMuted} text-xs mt-1`}>
@@ -1045,7 +1094,9 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 </p>
               )}
             </div>
+            )}
 
+            {shouldShowField(profileData.gender) && (
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
                 Gender
@@ -1053,7 +1104,12 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               <select
                 value={profileData.gender}
                 onChange={(e) => onInputChange('gender', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
+                disabled={isReadOnly}
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
+                  isReadOnly 
+                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
+                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
+                }`}
               >
                 <option value="">Select Gender</option>
                 <option value="male">Male</option>
@@ -1062,6 +1118,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 <option value="prefer_not_to_say">Prefer not to say</option>
               </select>
             </div>
+            )}
 
             <div className="md:col-span-2">
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
