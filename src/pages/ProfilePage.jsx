@@ -2056,15 +2056,15 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           </div>
           
           <div className="flex items-center gap-2">
-            {/* Translation Indicator */}
-            {isTranslating && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 border border-blue-500/30 rounded-lg">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                <span className="text-blue-400 text-xs sm:text-sm font-medium">
-                  {language === 'hebrew' ? 'מתרגם...' : 'Translating...'}
-                </span>
-              </div>
-            )}
+          {/* Translation Indicator */}
+          {isTranslating && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+              <span className="text-blue-400 text-xs sm:text-sm font-medium">
+                {language === 'hebrew' ? 'מתרגם...' : 'Translating...'}
+              </span>
+            </div>
+          )}
             
             {/* Reset Button */}
             {originalPlanData && (
@@ -2093,65 +2093,65 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         }`}>
           {/* Total Calories Card */}
           {settings.showCalories && (
-            <div className="bg-gradient-to-br from-teal-600 to-teal-700 rounded-xl sm:rounded-2xl p-5 sm:p-6 md:p-8 shadow-xl shadow-teal-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-teal-500/30 animate-bounceIn text-center sm:text-left">
-              <div className="text-white text-4xl sm:text-4xl md:text-5xl font-bold tracking-tight animate-countUp">{planData.totals.calories.toLocaleString()}</div>
-              <div className="text-teal-100 text-base sm:text-lg font-semibold mt-1 sm:mt-2">
-                {language === 'hebrew' ? 'קלוריות' : 'Calories'}
-              </div>
+          <div className="bg-gradient-to-br from-teal-600 to-teal-700 rounded-xl sm:rounded-2xl p-5 sm:p-6 md:p-8 shadow-xl shadow-teal-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-teal-500/30 animate-bounceIn text-center sm:text-left">
+            <div className="text-white text-4xl sm:text-4xl md:text-5xl font-bold tracking-tight animate-countUp">{planData.totals.calories.toLocaleString()}</div>
+            <div className="text-teal-100 text-base sm:text-lg font-semibold mt-1 sm:mt-2">
+              {language === 'hebrew' ? 'קלוריות' : 'Calories'}
             </div>
+          </div>
           )}
 
           {/* Protein Card */}
           {settings.showMacros && (
-            <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-xl shadow-red-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-red-500/30 animate-bounceIn text-center sm:text-left" style={{ animationDelay: '0.1s' }}>
+          <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-xl shadow-red-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-red-500/30 animate-bounceIn text-center sm:text-left" style={{ animationDelay: '0.1s' }}>
               <div className="text-white text-3xl sm:text-3xl md:text-4xl font-bold tracking-tight">{formatWeight(planData.totals.protein)}</div>
-              <div className="text-red-100 text-base sm:text-lg font-semibold mt-1">
-                {language === 'hebrew' ? 'חלבון' : 'Protein'}
-              </div>
-              <div className="text-red-200 text-xs sm:text-sm mt-1 sm:mt-2">
-                {proteinPercentage}% {language === 'hebrew' ? 'מהמקרו' : 'of macros'}
-              </div>
+            <div className="text-red-100 text-base sm:text-lg font-semibold mt-1">
+              {language === 'hebrew' ? 'חלבון' : 'Protein'}
             </div>
+            <div className="text-red-200 text-xs sm:text-sm mt-1 sm:mt-2">
+              {proteinPercentage}% {language === 'hebrew' ? 'מהמקרו' : 'of macros'}
+            </div>
+          </div>
           )}
 
           {/* Carbs Card */}
           {settings.showMacros && (
-            <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-xl shadow-blue-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/30 animate-bounceIn text-center sm:text-left" style={{ animationDelay: '0.2s' }}>
+          <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-xl shadow-blue-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/30 animate-bounceIn text-center sm:text-left" style={{ animationDelay: '0.2s' }}>
               <div className="text-white text-3xl sm:text-3xl md:text-4xl font-bold tracking-tight">{formatWeight(planData.totals.carbs)}</div>
-              <div className="text-blue-100 text-base sm:text-lg font-semibold mt-1">
-                {language === 'hebrew' ? 'פחמימות' : 'Carbs'}
-              </div>
-              <div className="text-blue-200 text-xs sm:text-sm mt-1 sm:mt-2">
-                {carbsPercentage}% {language === 'hebrew' ? 'מהמקרו' : 'of macros'}
-              </div>
+            <div className="text-blue-100 text-base sm:text-lg font-semibold mt-1">
+              {language === 'hebrew' ? 'פחמימות' : 'Carbs'}
             </div>
+            <div className="text-blue-200 text-xs sm:text-sm mt-1 sm:mt-2">
+              {carbsPercentage}% {language === 'hebrew' ? 'מהמקרו' : 'of macros'}
+            </div>
+          </div>
           )}
 
           {/* Fat Card */}
           {settings.showMacros && (
-            <div className="bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-xl shadow-amber-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-amber-500/30 animate-bounceIn text-center sm:text-left" style={{ animationDelay: '0.3s' }}>
+          <div className="bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-xl shadow-amber-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-amber-500/30 animate-bounceIn text-center sm:text-left" style={{ animationDelay: '0.3s' }}>
               <div className="text-white text-3xl sm:text-3xl md:text-4xl font-bold tracking-tight">{formatWeight(planData.totals.fat)}</div>
-              <div className="text-amber-100 text-base sm:text-lg font-semibold mt-1">
-                {language === 'hebrew' ? 'שומן' : 'Fat'}
-              </div>
-              <div className="text-amber-200 text-xs sm:text-sm mt-1 sm:mt-2">
-                {fatPercentage}% {language === 'hebrew' ? 'מהמקרו' : 'of macros'}
-              </div>
+            <div className="text-amber-100 text-base sm:text-lg font-semibold mt-1">
+              {language === 'hebrew' ? 'שומן' : 'Fat'}
             </div>
+            <div className="text-amber-200 text-xs sm:text-sm mt-1 sm:mt-2">
+              {fatPercentage}% {language === 'hebrew' ? 'מהמקרו' : 'of macros'}
+            </div>
+          </div>
           )}
         </div>
 
         {/* Macro Distribution Bar */}
         {settings.showMacros && (
-          <div className="animate-slideInUp" style={{ animationDelay: '0.4s' }}>
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <span className={`${themeClasses.textPrimary} text-base sm:text-lg md:text-xl font-semibold tracking-tight`}>
-                {language === 'hebrew' ? 'התפלגות מקרו' : 'Macro Distribution'}
-              </span>
-              <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium`}>
-                {language === 'hebrew' ? 'מקרו' : 'macros'}
-              </span>
-            </div>
+        <div className="animate-slideInUp" style={{ animationDelay: '0.4s' }}>
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <span className={`${themeClasses.textPrimary} text-base sm:text-lg md:text-xl font-semibold tracking-tight`}>
+              {language === 'hebrew' ? 'התפלגות מקרו' : 'Macro Distribution'}
+            </span>
+            <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium`}>
+              {language === 'hebrew' ? 'מקרו' : 'macros'}
+            </span>
+          </div>
           
           {/* Progress Bar */}
           <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg`}>
@@ -2213,7 +2213,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
               </div>
             </div>
           </div>
-          </div>
+        </div>
         )}
       </div>
 
@@ -2307,15 +2307,15 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                       <div className="text-emerald-400 text-3xl sm:text-4xl font-bold tracking-tight animate-countUp">{mealCalories.toLocaleString()}</div>
                     )}
                     {settings.showMacros && (
-                      <div className={`${themeClasses.textPrimary} text-sm sm:text-base`}>
-                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    <div className={`${themeClasses.textPrimary} text-sm sm:text-base`}>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1">
                           <span className="font-semibold whitespace-nowrap">{formatWeight(mealProtein)} {language === 'hebrew' ? 'חלבון' : 'Protein'}</span>
-                          <span className={`${themeClasses.textMuted} hidden sm:inline`}>•</span>
+                        <span className={`${themeClasses.textMuted} hidden sm:inline`}>•</span>
                           <span className="font-semibold whitespace-nowrap">{formatWeight(mealCarbs)} {language === 'hebrew' ? 'פחמימות' : 'Carbs'}</span>
-                          <span className={`${themeClasses.textMuted} hidden sm:inline`}>•</span>
+                        <span className={`${themeClasses.textMuted} hidden sm:inline`}>•</span>
                           <span className="font-semibold whitespace-nowrap">{formatWeight(mealFat)} {language === 'hebrew' ? 'שומן' : 'Fat'}</span>
-                        </div>
                       </div>
+                    </div>
                     )}
                   </div>
                 </div>
@@ -2369,19 +2369,19 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                   <div className={`${themeClasses.bgSecondary} rounded-2xl p-4 sm:p-6`}>
                     <div className="flex items-center justify-between mb-3 sm:mb-4">
                       <div className="flex items-center">
-                        <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center mr-2 sm:mr-3 shadow-lg shadow-emerald-500/25">
-                          <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/>
-                          </svg>
-                        </div>
-                        <span className={`${themeClasses.textPrimary} text-base sm:text-lg font-bold tracking-tight`}>
-                          {language === 'hebrew' ? 'מרכיבים' : 'Ingredients'}
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center mr-2 sm:mr-3 shadow-lg shadow-emerald-500/25">
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/>
+                        </svg>
+                      </div>
+                      <span className={`${themeClasses.textPrimary} text-base sm:text-lg font-bold tracking-tight`}>
+                        {language === 'hebrew' ? 'מרכיבים' : 'Ingredients'}
+                      </span>
+                      {meal.main && meal.main.ingredients && (
+                        <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-3`}>
+                          {meal.main.ingredients.length} {language === 'hebrew' ? 'פריטים' : 'Items'}
                         </span>
-                        {meal.main && meal.main.ingredients && (
-                          <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-3`}>
-                            {meal.main.ingredients.length} {language === 'hebrew' ? 'פריטים' : 'Items'}
-                          </span>
-                        )}
+                      )}
                       </div>
                       <button
                         onClick={() => handleOpenAddIngredient(index)}
@@ -2417,7 +2417,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                               >
                                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
+                            </svg>
                               </button>
                               <button
                                 onClick={() => handleDeleteIngredient(index, idx)}
@@ -2762,73 +2762,73 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
         }`}>
           {/* Calories Card */}
           {settings.showCalories && (
-            <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.4s' }}>
-              <div className="flex items-center mb-4">
-                <div className="w-4 h-4 bg-orange-500 rounded-full mr-3"></div>
-                <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
-                  {language === 'hebrew' ? 'קלוריות' : 'Calories'}
-                </h4>
-              </div>
-              <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
-                {totalCalories.toLocaleString()} / {dailyGoals.calories.toLocaleString()}
-              </div>
-              <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
-                <div 
-                  className="bg-orange-500 h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(caloriesPercent, 100)}%` }}
-                ></div>
-              </div>
-              <div className="text-orange-400 text-sm font-medium">{caloriesPercent}%</div>
+          <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.4s' }}>
+            <div className="flex items-center mb-4">
+              <div className="w-4 h-4 bg-orange-500 rounded-full mr-3"></div>
+              <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
+                {language === 'hebrew' ? 'קלוריות' : 'Calories'}
+              </h4>
             </div>
+            <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
+                {totalCalories.toLocaleString()} / {dailyGoals.calories.toLocaleString()}
+            </div>
+            <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
+              <div 
+                className="bg-orange-500 h-3 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(caloriesPercent, 100)}%` }}
+              ></div>
+            </div>
+            <div className="text-orange-400 text-sm font-medium">{caloriesPercent}%</div>
+          </div>
           )}
 
           {/* Protein Card */}
           {settings.showMacros && (
-            <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.5s' }}>
-              <div className="flex items-center mb-4">
-                <div className="w-4 h-4 bg-green-500 rounded-full mr-3"></div>
-                <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
-                  {language === 'hebrew' ? 'חלבון' : 'Protein'}
-                </h4>
-              </div>
-              <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
-                {formatWeight(totalProtein)} / {formatWeight(dailyGoals.protein)}
-              </div>
-              <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
-                <div 
-                  className="bg-green-500 h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(proteinPercent, 100)}%` }}
-                ></div>
-              </div>
-              <div className="text-green-400 text-sm font-medium">{proteinPercent}%</div>
+          <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.5s' }}>
+            <div className="flex items-center mb-4">
+              <div className="w-4 h-4 bg-green-500 rounded-full mr-3"></div>
+              <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
+                {language === 'hebrew' ? 'חלבון' : 'Protein'}
+              </h4>
             </div>
+            <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
+                {formatWeight(totalProtein)} / {formatWeight(dailyGoals.protein)}
+            </div>
+            <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
+              <div 
+                className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(proteinPercent, 100)}%` }}
+              ></div>
+            </div>
+            <div className="text-green-400 text-sm font-medium">{proteinPercent}%</div>
+          </div>
           )}
 
           {/* Fat Card */}
           {settings.showMacros && (
-            <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.6s' }}>
-              <div className="flex items-center mb-4">
-                <div className="w-4 h-4 bg-yellow-500 rounded-full mr-3"></div>
-                <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
-                  {language === 'hebrew' ? 'שומן' : 'Fat'}
-                </h4>
-              </div>
-              <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
-                {formatWeight(totalFat)} / {formatWeight(dailyGoals.fat)}
-              </div>
-              <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
-                <div 
-                  className="bg-yellow-500 h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(fatPercent, 100)}%` }}
-                ></div>
-              </div>
-              <div className="text-yellow-400 text-sm font-medium">{fatPercent}%</div>
+          <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.6s' }}>
+            <div className="flex items-center mb-4">
+              <div className="w-4 h-4 bg-yellow-500 rounded-full mr-3"></div>
+              <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
+                {language === 'hebrew' ? 'שומן' : 'Fat'}
+              </h4>
             </div>
+            <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
+                {formatWeight(totalFat)} / {formatWeight(dailyGoals.fat)}
+            </div>
+            <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
+              <div 
+                className="bg-yellow-500 h-3 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(fatPercent, 100)}%` }}
+              ></div>
+            </div>
+            <div className="text-yellow-400 text-sm font-medium">{fatPercent}%</div>
+          </div>
           )}
 
           {/* Carbs Card */}
           {settings.showMacros && (
-            <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.7s' }}>
+          <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.7s' }}>
             <div className="flex items-center mb-4">
               <div className="w-4 h-4 bg-blue-500 rounded-full mr-3"></div>
               <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
@@ -2932,7 +2932,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
                             </div>
                             <div className="flex items-center gap-4">
                               {settings.showCalories && (
-                                <span className="text-emerald-400 font-medium">{log.total_calories || 0} {language === 'hebrew' ? 'קל' : 'cal'}</span>
+                              <span className="text-emerald-400 font-medium">{log.total_calories || 0} {language === 'hebrew' ? 'קל' : 'cal'}</span>
                               )}
                               {settings.showMacros && (
                                 <>

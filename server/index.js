@@ -565,6 +565,13 @@ app.post('/api/webhooks/stripe', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
+  console.log('🎯 Webhook received from IP:', req.ip || req.headers['x-forwarded-for']);
+  
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error('❌ STRIPE_WEBHOOK_SECRET is not configured!');
+    return res.status(500).send('Webhook secret not configured');
+  }
+
   try {
     event = stripe.webhooks.constructEvent(
       req.body, 
@@ -572,9 +579,10 @@ app.post('/api/webhooks/stripe', async (req, res) => {
       process.env.STRIPE_WEBHOOK_SECRET
     );
     
-    console.log('Received webhook event:', event.type, event.id);
+    console.log('✅ Webhook verified:', event.type, event.id);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('❌ Webhook signature verification failed:', err.message);
+    console.error('Headers:', req.headers);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -622,6 +630,58 @@ app.post('/api/webhooks/stripe', async (req, res) => {
   }
 });
 
+// Manual endpoint to process a checkout session (backup if webhook fails)
+app.post('/api/stripe/process-checkout-session', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+    
+    console.log('🔄 Manually processing checkout session:', sessionId);
+    
+    // Retrieve full session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription', 'line_items']
+    });
+    
+    console.log('📋 Session retrieved:', session.id, 'Status:', session.payment_status);
+    
+    // Process the checkout completion
+    if (session.payment_status === 'paid') {
+      await handleCheckoutCompleted(session);
+      
+      // If subscription exists, process it too
+      if (session.subscription) {
+        const subscription = await stripe.subscriptions.retrieve(session.subscription, {
+          expand: ['items.data.price']
+        });
+        await handleSubscriptionCreated(subscription);
+      }
+      
+      res.json({ 
+        success: true, 
+        message: 'Checkout session processed successfully',
+        sessionId: session.id,
+        subscriptionId: session.subscription 
+      });
+    } else {
+      res.json({ 
+        success: false, 
+        message: 'Payment not completed',
+        paymentStatus: session.payment_status 
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error processing checkout session:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to process checkout session' 
+    });
+  }
+});
+
 // ====================================
 // WEBHOOK HANDLER FUNCTIONS
 // ====================================
@@ -636,6 +696,10 @@ async function handleCheckoutCompleted(session) {
     
     console.log('Checkout completed for user:', userId, 'email:', customerEmail);
     
+    if (!userId) {
+      console.warn('⚠️ No user_id found in checkout session. Metadata:', session.metadata);
+    }
+    
     // Save payment record
     const paymentData = {
       user_id: userId,
@@ -648,20 +712,25 @@ async function handleCheckoutCompleted(session) {
       created_at: new Date().toISOString()
     };
     
-    const { error: paymentError } = await supabase
+    console.log('💾 Saving payment to Supabase:', paymentData);
+    
+    const { data, error: paymentError } = await supabase
       .from('stripe_payments')
-      .insert([paymentData]);
+      .insert([paymentData])
+      .select();
     
     if (paymentError) {
-      console.error('❌ Error saving payment:', paymentError);
+      console.error('❌ Error saving payment to Supabase:', paymentError);
+      console.error('Payment data that failed:', paymentData);
     } else {
-      console.log('✅ Payment record saved successfully');
+      console.log('✅ Payment record saved successfully:', data);
     }
     
     // If this is a subscription, it will be handled by handleSubscriptionCreated
     
   } catch (error) {
     console.error('❌ Error processing checkout completion:', error);
+    console.error('Full error stack:', error.stack);
   }
 }
 
