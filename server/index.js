@@ -932,7 +932,7 @@ async function handleSubscriptionCreated(subscription) {
             customerEmail,
             subscription.status,
             subscriptionType,
-            new Date(subscription.current_period_end * 1000).toISOString()
+            commitmentEndDate ? commitmentEndDate.toISOString() : null
           );
         } else {
           console.warn('⚠️ No email found for customer:', subscription.customer);
@@ -1027,7 +1027,7 @@ async function handleSubscriptionUpdated(subscription) {
             customerEmail,
             subscription.status,
             subscriptionType,
-            new Date(subscription.current_period_end * 1000).toISOString()
+            commitmentEndDate ? commitmentEndDate.toISOString() : null
           );
         } else {
           console.warn('⚠️ No email found for customer:', subscription.customer);
@@ -1054,6 +1054,26 @@ async function handleSubscriptionDeleted(subscription) {
     
     console.log('Marking subscription as deleted for user:', userId);
     
+    // Get product and price info to calculate commitment_end_date
+    const price = subscription.items.data[0]?.price;
+    const priceId = price?.id;
+    const currentDate = new Date(subscription.current_period_start * 1000);
+    
+    // Determine commitment period based on exact price ID mapping
+    let commitmentMonths = null;
+    if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
+      commitmentMonths = 3; // BetterPro 3-Month Plan
+    } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
+      commitmentMonths = 6; // BetterPro 6-Month Plan
+    }
+    
+    // Calculate commitment end date (only if there's a commitment period)
+    let commitmentEndDate = null;
+    if (commitmentMonths) {
+      commitmentEndDate = new Date(currentDate);
+      commitmentEndDate.setMonth(commitmentEndDate.getMonth() + commitmentMonths);
+    }
+    
     // Update subscription status to cancelled
     const { error: deleteError } = await supabase
       .from('stripe_subscriptions')
@@ -1079,9 +1099,7 @@ async function handleSubscriptionDeleted(subscription) {
             customerEmail,
             'cancelled',
             null,
-            subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000).toISOString()
-              : new Date().toISOString()
+            commitmentEndDate ? commitmentEndDate.toISOString() : null
           );
         } else {
           console.warn('⚠️ No email found for customer:', subscription.customer);
