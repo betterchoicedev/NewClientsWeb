@@ -68,6 +68,84 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Check and auto-cancel subscriptions past their commitment period
+app.post('/api/stripe/check-commitment-periods', async (req, res) => {
+  try {
+    console.log('🔍 Checking subscriptions past their commitment period...');
+    
+    // Get all active subscriptions with commitment periods
+    const { data: subscriptions, error: fetchError } = await supabase
+      .from('stripe_subscriptions')
+      .select('*')
+      .eq('status', 'active')
+      .not('commitment_end_date', 'is', null)
+      .not('cancel_at_period_end', 'eq', true);
+    
+    if (fetchError) {
+      console.error('❌ Error fetching subscriptions:', fetchError);
+      return res.status(500).json({ error: 'Failed to fetch subscriptions' });
+    }
+    
+    const now = new Date();
+    let cancelledCount = 0;
+    const results = [];
+    
+    for (const sub of subscriptions || []) {
+      const commitmentEndDate = new Date(sub.commitment_end_date);
+      
+      if (now >= commitmentEndDate) {
+        try {
+          console.log(`⏰ Commitment period ended for subscription ${sub.stripe_subscription_id}. Auto-cancelling...`);
+          
+          // Cancel at period end in Stripe
+          const updatedSubscription = await stripe.subscriptions.update(sub.stripe_subscription_id, {
+            cancel_at_period_end: true
+          });
+          
+          // Update database
+          const { error: updateError } = await supabase
+            .from('stripe_subscriptions')
+            .update({ 
+              cancel_at_period_end: true,
+              updated_at: new Date().toISOString()
+            })
+            .eq('stripe_subscription_id', sub.stripe_subscription_id);
+          
+          if (updateError) {
+            console.error(`❌ Error updating subscription ${sub.stripe_subscription_id}:`, updateError);
+          } else {
+            cancelledCount++;
+            results.push({
+              subscriptionId: sub.stripe_subscription_id,
+              commitmentEndDate: commitmentEndDate.toISOString(),
+              periodEndDate: new Date(updatedSubscription.current_period_end * 1000).toISOString(),
+              status: 'cancelled_at_period_end'
+            });
+            console.log(`✅ Auto-cancelled subscription ${sub.stripe_subscription_id}. Payments will stop on ${new Date(updatedSubscription.current_period_end * 1000).toISOString()}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error cancelling subscription ${sub.stripe_subscription_id}:`, error);
+          results.push({
+            subscriptionId: sub.stripe_subscription_id,
+            error: error.message
+          });
+        }
+      }
+    }
+    
+    res.json({
+      message: `Checked ${subscriptions?.length || 0} subscriptions. Auto-cancelled ${cancelledCount} subscriptions past their commitment period.`,
+      checked: subscriptions?.length || 0,
+      cancelled: cancelledCount,
+      results
+    });
+    
+  } catch (error) {
+    console.error('❌ Error checking commitment periods:', error);
+    res.status(500).json({ error: error.message || 'Failed to check commitment periods' });
+  }
+});
+
 // Manual sync endpoint - sync existing Stripe data to database
 app.post('/api/stripe/sync-to-database', async (req, res) => {
   try {
@@ -856,7 +934,8 @@ async function handleSubscriptionCreated(subscription) {
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null; // Default no commitment
-    const currentDate = new Date(subscription.current_period_start * 1000);
+    // Use subscription created date (when subscription was first created) for commitment calculation
+    const subscriptionStartDate = new Date(subscription.created * 1000);
     
     // Only BetterPro plans have commitment periods
     if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
@@ -866,14 +945,15 @@ async function handleSubscriptionCreated(subscription) {
     }
     // Other products (Nutrition, Training, etc.) have no commitment period
     
-    // Calculate commitment end date (only if there's a commitment period)
+    // Calculate commitment end date from subscription start date (only if there's a commitment period)
     let commitmentEndDate = null;
     let canCancel = true; // Default: can cancel anytime
     
     if (commitmentMonths) {
-      commitmentEndDate = new Date(currentDate);
+      commitmentEndDate = new Date(subscriptionStartDate);
       commitmentEndDate.setMonth(commitmentEndDate.getMonth() + commitmentMonths);
       canCancel = new Date() >= commitmentEndDate; // Can only cancel after commitment period
+      console.log(`📅 Commitment period: ${commitmentMonths} months from ${subscriptionStartDate.toISOString()} to ${commitmentEndDate.toISOString()}`);
     }
     
     const subscriptionData = {
@@ -960,6 +1040,13 @@ async function handleSubscriptionUpdated(subscription) {
     
     console.log('Updating subscription for user:', userId);
     
+    // Get existing subscription from database to get original start date
+    const { data: existingSubscription } = await supabase
+      .from('stripe_subscriptions')
+      .select('*')
+      .eq('stripe_subscription_id', subscription.id)
+      .single();
+    
     // Get product and price info for commitment tracking
     const price = subscription.items.data[0]?.price;
     const priceId = price?.id;
@@ -967,7 +1054,9 @@ async function handleSubscriptionUpdated(subscription) {
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null; // Default no commitment
-    const currentDate = new Date(subscription.current_period_start * 1000);
+    // Use subscription created date from Stripe (when subscription was first created)
+    // This is the correct date to calculate commitment period from
+    const subscriptionStartDate = new Date(subscription.created * 1000);
     
     // Only BetterPro plans have commitment periods
     if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
@@ -984,22 +1073,32 @@ async function handleSubscriptionUpdated(subscription) {
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only';
     
-    // Calculate commitment end date (only if there's a commitment period)
+    // Calculate commitment end date - use stored value if exists, otherwise calculate from start date
     let commitmentEndDate = null;
     let canCancel = true; // Default: can cancel anytime
     
     if (commitmentMonths) {
-      commitmentEndDate = new Date(currentDate);
-      commitmentEndDate.setMonth(commitmentEndDate.getMonth() + commitmentMonths);
-      canCancel = new Date() >= commitmentEndDate; // Can only cancel after commitment period
+      // Use stored commitment_end_date if it exists (calculated at creation), otherwise calculate it
+      if (existingSubscription?.commitment_end_date) {
+        commitmentEndDate = new Date(existingSubscription.commitment_end_date);
+      } else {
+        commitmentEndDate = new Date(subscriptionStartDate);
+        commitmentEndDate.setMonth(commitmentEndDate.getMonth() + commitmentMonths);
+      }
+      
+      const now = new Date();
+      canCancel = now >= commitmentEndDate; // Can only cancel after commitment period
     }
+    
+    // Update subscription record
+    const finalCancelAtPeriodEnd = subscription.cancel_at_period_end || false;
     
     // Update subscription record
     const updateData = {
       status: subscription.status,
       current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
       current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-      cancel_at_period_end: subscription.cancel_at_period_end || false,
+      cancel_at_period_end: finalCancelAtPeriodEnd,
       commitment_months: commitmentMonths,
       commitment_end_date: commitmentEndDate ? commitmentEndDate.toISOString() : null,
       can_cancel: canCancel,
