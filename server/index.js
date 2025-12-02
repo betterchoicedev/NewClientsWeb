@@ -714,6 +714,48 @@ app.post('/api/stripe/process-checkout-session', async (req, res) => {
 // WEBHOOK HANDLER FUNCTIONS
 // ====================================
 
+// Helper function to update chat_users subscription info by email
+async function updateChatUserSubscription(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt) {
+  if (!chatSupabase || !customerEmail) {
+    if (!chatSupabase) {
+      console.warn('⚠️ chatSupabase client not configured, skipping chat_users update');
+    }
+    return;
+  }
+
+  try {
+    // Find chat_user by email
+    const { data: chatUser, error: findError } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('email', customerEmail)
+      .single();
+
+    if (findError || !chatUser) {
+      console.warn(`⚠️ Could not find chat_user with email: ${customerEmail}`, findError);
+      return;
+    }
+
+    // Update chat_user by id
+    const { error: updateError } = await chatSupabase
+      .from('chat_users')
+      .update({
+        subscription_status: subscriptionStatus,
+        subscription_type: subscriptionType,
+        subscription_expires_at: subscriptionExpiresAt
+      })
+      .eq('id', chatUser.id);
+
+    if (updateError) {
+      console.error('❌ Error updating chat_users subscription info:', updateError);
+    } else {
+      console.log(`✅ chat_users subscription info updated for email: ${customerEmail}`);
+    }
+  } catch (error) {
+    console.error('❌ Error in updateChatUserSubscription:', error);
+  }
+}
+
 async function handleCheckoutCompleted(session) {
   console.log('🎉 Processing checkout completion:', session.id);
   
@@ -880,25 +922,23 @@ async function handleSubscriptionCreated(subscription) {
       console.log('✅ Subscription record saved successfully:', insertedData);
 
       // Also update chat_users subscription info in the chat Supabase project
-      if (chatSupabase && userId) {
-        const chatUpdate = {
-          user_id: userId,
-          subscription_status: subscription.status,
-          subscription_type: subscriptionType,
-          subscription_expires_at: new Date(subscription.current_period_end * 1000).toISOString()
-        };
-
-        const { error: chatError } = await chatSupabase
-          .from('chat_users')
-          .upsert([chatUpdate], { onConflict: 'user_id' });
-
-        if (chatError) {
-          console.error('❌ Error updating chat_users subscription info (create):', chatError);
+      // Get customer email from Stripe
+      try {
+        const customer = await stripe.customers.retrieve(subscription.customer);
+        const customerEmail = customer.email;
+        
+        if (customerEmail) {
+          await updateChatUserSubscription(
+            customerEmail,
+            subscription.status,
+            subscriptionType,
+            new Date(subscription.current_period_end * 1000).toISOString()
+          );
         } else {
-          console.log('✅ chat_users subscription info updated (create):', chatUpdate);
+          console.warn('⚠️ No email found for customer:', subscription.customer);
         }
-      } else if (!chatSupabase) {
-        console.warn('⚠️ chatSupabase client not configured, skipping chat_users update on subscription create');
+      } catch (customerError) {
+        console.error('❌ Error retrieving customer for chat_users update:', customerError);
       }
     }
     
@@ -977,25 +1017,23 @@ async function handleSubscriptionUpdated(subscription) {
       console.log('✅ Subscription updated successfully');
 
       // Also update chat_users subscription info in the chat Supabase project
-      if (chatSupabase && userId) {
-        const chatUpdate = {
-          user_id: userId,
-          subscription_status: subscription.status,
-          subscription_type: subscriptionType,
-          subscription_expires_at: new Date(subscription.current_period_end * 1000).toISOString()
-        };
-
-        const { error: chatError } = await chatSupabase
-          .from('chat_users')
-          .upsert([chatUpdate], { onConflict: 'user_id' });
-
-        if (chatError) {
-          console.error('❌ Error updating chat_users subscription info (update):', chatError);
+      // Get customer email from Stripe
+      try {
+        const customer = await stripe.customers.retrieve(subscription.customer);
+        const customerEmail = customer.email;
+        
+        if (customerEmail) {
+          await updateChatUserSubscription(
+            customerEmail,
+            subscription.status,
+            subscriptionType,
+            new Date(subscription.current_period_end * 1000).toISOString()
+          );
         } else {
-          console.log('✅ chat_users subscription info updated (update):', chatUpdate);
+          console.warn('⚠️ No email found for customer:', subscription.customer);
         }
-      } else if (!chatSupabase) {
-        console.warn('⚠️ chatSupabase client not configured, skipping chat_users update on subscription update');
+      } catch (customerError) {
+        console.error('❌ Error retrieving customer for chat_users update:', customerError);
       }
     }
     
@@ -1031,27 +1069,25 @@ async function handleSubscriptionDeleted(subscription) {
       console.log('✅ Subscription marked as cancelled successfully');
 
       // Also update chat_users subscription info in the chat Supabase project
-      if (chatSupabase && userId) {
-        const chatUpdate = {
-          user_id: userId,
-          subscription_status: 'cancelled',
-          subscription_type: null,
-          subscription_expires_at: subscription.current_period_end
-            ? new Date(subscription.current_period_end * 1000).toISOString()
-            : new Date().toISOString()
-        };
-
-        const { error: chatError } = await chatSupabase
-          .from('chat_users')
-          .upsert([chatUpdate], { onConflict: 'user_id' });
-
-        if (chatError) {
-          console.error('❌ Error updating chat_users subscription info (delete):', chatError);
+      // Get customer email from Stripe
+      try {
+        const customer = await stripe.customers.retrieve(subscription.customer);
+        const customerEmail = customer.email;
+        
+        if (customerEmail) {
+          await updateChatUserSubscription(
+            customerEmail,
+            'cancelled',
+            null,
+            subscription.current_period_end
+              ? new Date(subscription.current_period_end * 1000).toISOString()
+              : new Date().toISOString()
+          );
         } else {
-          console.log('✅ chat_users subscription info updated (delete):', chatUpdate);
+          console.warn('⚠️ No email found for customer:', subscription.customer);
         }
-      } else if (!chatSupabase) {
-        console.warn('⚠️ chatSupabase client not configured, skipping chat_users update on subscription delete');
+      } catch (customerError) {
+        console.error('❌ Error retrieving customer for chat_users update:', customerError);
       }
     }
     
