@@ -3,10 +3,10 @@
 
 export const STRIPE_PRODUCTS = {
   BETTER_PRO: 'prod_SbI1Lu7FWbybUO',
-  PODCAST: 'prod_SbI1dssS5NElLZ', 
+  NUTRITION_ONLY: 'prod_SbI1dssS5NElLZ', 
   NUTRITION_TRAINING: 'prod_SbI1AIv2A46oJ9',
-  NUTRITION_ONLY: 'prod_SbI0A23T20wul3',
-  CONSULTATION: 'prod_SbI1dssS5NElLZ'
+  NUTRITION_ONLY_2X_MONTH: 'prod_SbI0A23T20wul3',
+  CONSULTATION: 'prod_SSzustraPd40C1'
 };
 
 export const STRIPE_PRICES = {
@@ -14,22 +14,17 @@ export const STRIPE_PRICES = {
   BETTER_PRO_OPTION_1: 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr',
   BETTER_PRO_OPTION_2: 'price_1Rg5R8HIeYfvCylDxX2PsOrR',
   
-  // Podcast Room - $300
-  PODCAST_ROOM: 'price_1Rg5R6HIeYfvCylDcsV3T2Kr',
+  // Nutrition Only - 2 pricing options (commitment periods)
+  NUTRITION_ONLY_3_MONTHS: 'price_1Rg5R6HIeYfvCylDcsV3T2Kr',
+  NUTRITION_ONLY_6_MONTHS: 'price_1Rg5R6HIeYfvCylDxuQODpK4',
   
-  // Nutrition + Training Monthly - 2 options
-  NUTRITION_TRAINING_MONTHLY_1: 'price_1Rg5R4HIeYfvCylDy1OT1YJc',
-  NUTRITION_TRAINING_MONTHLY_2: 'price_1Rg5R4HIeYfvCylDAshP6FOk',
+  // Nutrition + Training - 2 pricing options (commitment periods)
+  NUTRITION_TRAINING_6_MONTHS: 'price_1Rg5R4HIeYfvCylDy1OT1YJc',
+  NUTRITION_TRAINING_3_MONTHS: 'price_1Rg5R4HIeYfvCylDAshP6FOk',
   
-  // Nutrition + Training Biweekly
-  NUTRITION_TRAINING_BIWEEKLY: 'price_1Rg5RGHIeYfvCylDxuQODpK4',
-  
-  // Nutrition Only Monthly - 2 options
-  NUTRITION_ONLY_MONTHLY_1: 'price_1Rg5QtHIeYfvCylDyXHY5X6G',
-  NUTRITION_ONLY_MONTHLY_2: 'price_1Rg5QtHIeYfvCylDwr9v599a',
-  
-  // Nutrition Only Biweekly
-  NUTRITION_ONLY_BIWEEKLY: 'price_1Rg5RGHIeYfvCylDxuQODpK4',
+  // Nutrition Only 2x/month - 2 pricing options (commitment periods)
+  NUTRITION_ONLY_2X_3_MONTHS: 'price_1Rg5QtHIeYfvCylDyXHY5X6G',
+  NUTRITION_ONLY_2X_6_MONTHS: 'price_1Rg5QtHIeYfvCylDwr9v599a',
   
   // Consultation - $650 (One-time payment)
   CONSULTATION: 'price_1RY3uZHIeYfvCylD4mylbEP4'
@@ -108,38 +103,26 @@ export const PRODUCT_CONFIG = {
     category: 'complete',
     prices: [
       {
-        id: STRIPE_PRICES.NUTRITION_TRAINING_MONTHLY_1,
-        name: 'Monthly Sessions',
-        nameHebrew: 'מפגשים חודשיים',
+        id: STRIPE_PRICES.NUTRITION_TRAINING_6_MONTHS,
+        name: '6 Month Plan',
+        nameHebrew: 'תוכנית 6 חודשים',
         interval: 'month',
         interval_count: 1,
-        frequency: 'monthly',
+        commitment: 6,
         amount: 75000, // ₪750/month in agorot
         amountUSD: 21400, // $214/month in cents
-        currency: 'ILS',
-        popular: false
-      },
-      {
-        id: STRIPE_PRICES.NUTRITION_TRAINING_MONTHLY_2,
-        name: 'Monthly Premium',
-        nameHebrew: 'פרימיום חודשי',
-        interval: 'month', 
-        interval_count: 1,
-        frequency: 'monthly',
-        amount: 83000, // ₪830/month in agorot
-        amountUSD: 23700, // $237/month in cents
         currency: 'ILS',
         popular: true
       },
       {
-        id: STRIPE_PRICES.NUTRITION_TRAINING_BIWEEKLY,
-        name: 'Bi-weekly Sessions',
-        nameHebrew: 'מפגשים דו שבועיים',
-        interval: 'month',
+        id: STRIPE_PRICES.NUTRITION_TRAINING_3_MONTHS,
+        name: '3 Month Plan',
+        nameHebrew: 'תוכנית 3 חודשים',
+        interval: 'month', 
         interval_count: 1,
-        frequency: 'biweekly',
-        amount: 65000, // ₪650/month in agorot (biweekly should be higher)
-        amountUSD: 18600, // $186/month in cents
+        commitment: 3,
+        amount: 83000, // ₪830/month in agorot
+        amountUSD: 23700, // $237/month in cents
         currency: 'ILS',
         popular: false
       }
@@ -168,74 +151,79 @@ export const PRODUCT_CONFIG = {
     category: 'nutrition',
     prices: [
       {
-        id: STRIPE_PRICES.NUTRITION_ONLY_MONTHLY_1,
-        name: 'Monthly Basic',
-        nameHebrew: 'בסיסי חודשי',
+        id: STRIPE_PRICES.NUTRITION_ONLY_3_MONTHS,
+        name: '3 Month Plan',
+        nameHebrew: 'תוכנית 3 חודשים',
         interval: 'month',
         interval_count: 1,
-        frequency: 'monthly',
-        amount: 50000, // ₪500/month in agorot
-        amountUSD: 14300, // $143/month in cents
-        currency: 'ILS',
-        popular: false
-      },
-      {
-        id: STRIPE_PRICES.NUTRITION_ONLY_MONTHLY_2,
-        name: 'Monthly Pro', 
-        nameHebrew: 'מקצועי חודשי',
-        interval: 'month',
-        interval_count: 1,
-        frequency: 'monthly',
+        commitment: 3,
         amount: 58000, // ₪580/month in agorot
         amountUSD: 16600, // $166/month in cents
         currency: 'ILS',
-        popular: true
+        popular: false
       },
       {
-        id: STRIPE_PRICES.NUTRITION_ONLY_BIWEEKLY,
-        name: 'Bi-weekly Support',
-        nameHebrew: 'תמיכה דו שבועית',
+        id: STRIPE_PRICES.NUTRITION_ONLY_6_MONTHS,
+        name: '6 Month Plan', 
+        nameHebrew: 'תוכנית 6 חודשים',
         interval: 'month',
-        interval_count: 1, 
-        frequency: 'biweekly',
-        amount: 73000, // ₪730/month in agorot
-        amountUSD: 20900, // $209/month in cents
+        interval_count: 1,
+        commitment: 6,
+        amount: 50000, // ₪500/month in agorot
+        amountUSD: 14300, // $143/month in cents
         currency: 'ILS',
-        popular: false
+        discount: '14% off',
+        popular: true
       }
     ]
   },
   
-  [STRIPE_PRODUCTS.PODCAST]: {
-    name: 'Podcast Room',
-    nameHebrew: 'חדר הפודקאסט',
-    description: 'Access to premium podcast content and community',
-    descriptionHebrew: 'גישה לתוכן פודקאסט פרימיום וקהילה',
+  [STRIPE_PRODUCTS.NUTRITION_ONLY_2X_MONTH]: {
+    name: 'Nutrition Only - 2x Month',
+    nameHebrew: 'תזונה בלבד - פעמיים בחודש',
+    description: 'Focused nutrition planning with bi-monthly consultations',
+    descriptionHebrew: 'תכנון תזונתי ממוקד עם יעוצים דו-חודשיים',
     features: [
-      'Exclusive podcast episodes',
-      'Community access',
-      'Live Q&A sessions',
-      'Downloadable content',
-      'Early access to new content'
+      'Custom meal plans',
+      'Bi-monthly consultations',
+      'Nutritional analysis',
+      'Progress tracking',
+      'Email support',
+      'Recipe library'
     ],
     featuresHebrew: [
-      'פרקי פודקאסט בלעדיים',
-      'גישה לקהילה',
-      'מפגשי שאלות ותשובות חיים',
-      'תוכן להורדה',
-      'גישה מוקדמת לתוכן חדש'
+      'תוכניות ארוחות מותאמות',
+      'יעוצים דו-חודשיים',
+      'ניתוח תזונתי',
+      'מעקב התקדמות',
+      'תמיכה במייל',
+      'ספריית מתכונים'
     ],
-    category: 'content',
+    category: 'nutrition',
     prices: [
       {
-        id: STRIPE_PRICES.PODCAST_ROOM,
-        name: 'Monthly Access',
-        nameHebrew: 'גישה חודשית',
+        id: STRIPE_PRICES.NUTRITION_ONLY_2X_3_MONTHS,
+        name: '3 Month Plan',
+        nameHebrew: 'תוכנית 3 חודשים',
         interval: 'month',
         interval_count: 1,
-        amount: 15000, // ₪150/month in agorot
-        amountUSD: 4300, // $43/month in cents
+        commitment: 3,
+        amount: 73000, // ₪730/month in agorot
+        amountUSD: 20900, // $209/month in cents
         currency: 'ILS',
+        popular: false
+      },
+      {
+        id: STRIPE_PRICES.NUTRITION_ONLY_2X_6_MONTHS,
+        name: '6 Month Plan',
+        nameHebrew: 'תוכנית 6 חודשים',
+        interval: 'month',
+        interval_count: 1,
+        commitment: 6,
+        amount: 65000, // ₪650/month in agorot
+        amountUSD: 18600, // $186/month in cents
+        currency: 'ILS',
+        discount: '11% off',
         popular: true
       }
     ]

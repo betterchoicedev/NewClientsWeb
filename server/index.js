@@ -189,21 +189,38 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         // Determine subscription type based on product ID
         let subscriptionType = 'unknown';
         if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'better_pro';
-        else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'podcast_consultation';
+        else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
         else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
-        else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only';
+        else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
         
         // Determine commitment period based on exact price ID mapping
         let commitmentMonths = null; // Default no commitment 
         const currentDate = new Date(subscription.current_period_start * 1000);
         
-        // Only BetterPro plans have commitment periods
+        // BetterPro plans
         if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
           commitmentMonths = 3; // BetterPro 3-Month Plan
         } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
           commitmentMonths = 6; // BetterPro 6-Month Plan
         }
-        // Other products (Nutrition, Training, etc.) have no commitment period
+        // Nutrition Only plans
+        else if (priceId === 'price_1Rg5R6HIeYfvCylDcsV3T2Kr') {
+          commitmentMonths = 3; // Nutrition Only 3-Month Plan
+        } else if (priceId === 'price_1Rg5R6HIeYfvCylDxuQODpK4') {
+          commitmentMonths = 6; // Nutrition Only 6-Month Plan
+        }
+        // Nutrition + Training plans
+        else if (priceId === 'price_1Rg5R4HIeYfvCylDAshP6FOk') {
+          commitmentMonths = 3; // Nutrition + Training 3-Month Plan
+        } else if (priceId === 'price_1Rg5R4HIeYfvCylDy1OT1YJc') {
+          commitmentMonths = 6; // Nutrition + Training 6-Month Plan
+        }
+        // Nutrition Only 2x/month plans
+        else if (priceId === 'price_1Rg5QtHIeYfvCylDyXHY5X6G') {
+          commitmentMonths = 3; // Nutrition Only 2x/month 3-Month Plan
+        } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
+          commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
+        }
         
         // Calculate commitment end date (only if there's a commitment period)
         let commitmentEndDate = null;
@@ -928,22 +945,39 @@ async function handleSubscriptionCreated(subscription) {
     // Determine subscription type based on product ID
     let subscriptionType = 'unknown';
     if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'better_pro';
-    else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'podcast_consultation';
+    else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
-    else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only';
+    else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null; // Default no commitment
     // Use subscription created date (when subscription was first created) for commitment calculation
     const subscriptionStartDate = new Date(subscription.created * 1000);
     
-    // Only BetterPro plans have commitment periods
+    // BetterPro plans
     if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
       commitmentMonths = 3; // BetterPro 3-Month Plan
     } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
       commitmentMonths = 6; // BetterPro 6-Month Plan
     }
-    // Other products (Nutrition, Training, etc.) have no commitment period
+    // Nutrition Only plans
+    else if (priceId === 'price_1Rg5R6HIeYfvCylDcsV3T2Kr') {
+      commitmentMonths = 3; // Nutrition Only 3-Month Plan
+    } else if (priceId === 'price_1Rg5R6HIeYfvCylDxuQODpK4') {
+      commitmentMonths = 6; // Nutrition Only 6-Month Plan
+    }
+    // Nutrition + Training plans
+    else if (priceId === 'price_1Rg5R4HIeYfvCylDAshP6FOk') {
+      commitmentMonths = 3; // Nutrition + Training 3-Month Plan
+    } else if (priceId === 'price_1Rg5R4HIeYfvCylDy1OT1YJc') {
+      commitmentMonths = 6; // Nutrition + Training 6-Month Plan
+    }
+    // Nutrition Only 2x/month plans
+    else if (priceId === 'price_1Rg5QtHIeYfvCylDyXHY5X6G') {
+      commitmentMonths = 3; // Nutrition Only 2x/month 3-Month Plan
+    } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
+      commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
+    }
     
     // Calculate commitment end date from subscription start date (only if there's a commitment period)
     let commitmentEndDate = null;
@@ -1070,20 +1104,37 @@ async function handleSubscriptionUpdated(subscription) {
     // This is the correct date to calculate commitment period from
     const subscriptionStartDate = new Date(subscription.created * 1000);
     
-    // Only BetterPro plans have commitment periods
+    // BetterPro plans
     if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
       commitmentMonths = 3; // BetterPro 3-Month Plan
     } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
       commitmentMonths = 6; // BetterPro 6-Month Plan
     }
-    // Other products (Nutrition, Training, etc.) have no commitment period
+    // Nutrition Only plans
+    else if (priceId === 'price_1Rg5R6HIeYfvCylDcsV3T2Kr') {
+      commitmentMonths = 3; // Nutrition Only 3-Month Plan
+    } else if (priceId === 'price_1Rg5R6HIeYfvCylDxuQODpK4') {
+      commitmentMonths = 6; // Nutrition Only 6-Month Plan
+    }
+    // Nutrition + Training plans
+    else if (priceId === 'price_1Rg5R4HIeYfvCylDAshP6FOk') {
+      commitmentMonths = 3; // Nutrition + Training 3-Month Plan
+    } else if (priceId === 'price_1Rg5R4HIeYfvCylDy1OT1YJc') {
+      commitmentMonths = 6; // Nutrition + Training 6-Month Plan
+    }
+    // Nutrition Only 2x/month plans
+    else if (priceId === 'price_1Rg5QtHIeYfvCylDyXHY5X6G') {
+      commitmentMonths = 3; // Nutrition Only 2x/month 3-Month Plan
+    } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
+      commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
+    }
 
     // Determine subscription type based on product ID (same mapping as on create)
     let subscriptionType = 'unknown';
     if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'better_pro';
-    else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'podcast_consultation';
+    else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
-    else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only';
+    else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
     
     // Calculate commitment end date - use stored value if exists, otherwise calculate from start date
     let commitmentEndDate = null;
@@ -1172,10 +1223,29 @@ async function handleSubscriptionDeleted(subscription) {
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null;
+    // BetterPro plans
     if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
       commitmentMonths = 3; // BetterPro 3-Month Plan
     } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
       commitmentMonths = 6; // BetterPro 6-Month Plan
+    }
+    // Nutrition Only plans
+    else if (priceId === 'price_1Rg5R6HIeYfvCylDcsV3T2Kr') {
+      commitmentMonths = 3; // Nutrition Only 3-Month Plan
+    } else if (priceId === 'price_1Rg5R6HIeYfvCylDxuQODpK4') {
+      commitmentMonths = 6; // Nutrition Only 6-Month Plan
+    }
+    // Nutrition + Training plans
+    else if (priceId === 'price_1Rg5R4HIeYfvCylDAshP6FOk') {
+      commitmentMonths = 3; // Nutrition + Training 3-Month Plan
+    } else if (priceId === 'price_1Rg5R4HIeYfvCylDy1OT1YJc') {
+      commitmentMonths = 6; // Nutrition + Training 6-Month Plan
+    }
+    // Nutrition Only 2x/month plans
+    else if (priceId === 'price_1Rg5QtHIeYfvCylDyXHY5X6G') {
+      commitmentMonths = 3; // Nutrition Only 2x/month 3-Month Plan
+    } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
+      commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
     }
     
     // Calculate commitment end date (only if there's a commitment period)
