@@ -909,7 +909,6 @@ async function handleSubscriptionCreated(subscription) {
   console.log('🔄 Processing subscription creation:', subscription.id);
   
   try {
-    // Extract user_id from subscription metadata
     const userId = subscription.metadata?.user_id;
     
     if (!userId) {
@@ -932,28 +931,40 @@ async function handleSubscriptionCreated(subscription) {
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only';
     
-    // Determine commitment period based on exact price ID mapping
+    // Commitment logic
     let commitmentMonths = null; // Default no commitment
-    // Use subscription created date (when subscription was first created) for commitment calculation
     const subscriptionStartDate = new Date(subscription.created * 1000);
-    
+
     // Only BetterPro plans have commitment periods
     if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
       commitmentMonths = 3; // BetterPro 3-Month Plan
     } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
       commitmentMonths = 6; // BetterPro 6-Month Plan
     }
-    // Other products (Nutrition, Training, etc.) have no commitment period
     
-    // Calculate commitment end date from subscription start date (only if there's a commitment period)
     let commitmentEndDate = null;
     let canCancel = true; // Default: can cancel anytime
     
     if (commitmentMonths) {
       commitmentEndDate = new Date(subscriptionStartDate);
       commitmentEndDate.setMonth(commitmentEndDate.getMonth() + commitmentMonths);
-      canCancel = new Date() >= commitmentEndDate; // Can only cancel after commitment period
-      console.log(`📅 Commitment period: ${commitmentMonths} months from ${subscriptionStartDate.toISOString()} to ${commitmentEndDate.toISOString()}`);
+      canCancel = new Date() >= commitmentEndDate;
+      console.log(
+        `📅 Commitment period: ${commitmentMonths} months from ${subscriptionStartDate.toISOString()} to ${commitmentEndDate.toISOString()}`
+      );
+
+      // 🔑 This is what actually limits billing in Stripe
+      try {
+        const cancelAtTimestamp = Math.floor(commitmentEndDate.getTime() / 1000);
+        await stripe.subscriptions.update(subscription.id, {
+          cancel_at: cancelAtTimestamp,
+        });
+        console.log(
+          `🛑 Stripe subscription ${subscription.id} will auto-cancel at ${commitmentEndDate.toISOString()}`
+        );
+      } catch (err) {
+        console.error('❌ Failed to set cancel_at on subscription:', err);
+      }
     }
     
     const subscriptionData = {
@@ -977,11 +988,6 @@ async function handleSubscriptionCreated(subscription) {
     };
     
     console.log('📋 Subscription data to save:', subscriptionData);
-    
-    // Note: We'll rely on database constraints. If user doesn't exist, 
-    // the insert will fail and we'll retry with null user_id
-    
-    console.log('💾 Saving subscription to Supabase...');
     
     const { data: insertedData, error: subscriptionError } = await supabase
       .from('stripe_subscriptions')
