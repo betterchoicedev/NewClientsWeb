@@ -191,7 +191,26 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
             });
           
           if (paymentError) {
-            console.error('❌ Error saving payment:', paymentError);
+            // If foreign key error, try with null user_id
+            if (paymentError.code === '23503' && paymentData.user_id) {
+              console.warn('⚠️ Foreign key constraint error. Retrying sync with null user_id...');
+              paymentData.user_id = null;
+              const { error: retryError } = await supabase
+                .from('stripe_payments')
+                .upsert([paymentData], { 
+                  onConflict: 'stripe_checkout_session_id',
+                  ignoreDuplicates: false 
+                });
+              
+              if (retryError) {
+                console.error('❌ Error saving payment even with null user_id:', retryError);
+              } else {
+                console.log('✅ Payment synced (with null user_id):', session.id);
+                syncedCount++;
+              }
+            } else {
+              console.error('❌ Error saving payment:', paymentError);
+            }
           } else {
             console.log('✅ Payment synced:', session.id);
             syncedCount++;
@@ -734,24 +753,17 @@ async function handleCheckoutCompleted(session) {
       .select();
     
     if (paymentError) {
-      // If foreign key error, try with null user_id
-      if (paymentError.code === '23503' && userId) {
-        console.warn('⚠️ Foreign key constraint error. Retrying with null user_id...');
-        paymentData.user_id = null;
-        const { data: retryData, error: retryError } = await supabase
-          .from('stripe_payments')
-          .insert([paymentData])
-          .select();
-        
-        if (retryError) {
-          console.error('❌ Error saving payment even with null user_id:', retryError);
-        } else {
-          console.log('✅ Payment record saved successfully (with null user_id):', retryData);
-        }
-      } else {
-        console.error('❌ Error saving payment to Supabase:', paymentError);
-        console.error('Payment data that failed:', paymentData);
+      console.error('❌ Error saving payment to Supabase:', paymentError);
+      console.error('Payment error code:', paymentError.code, 'userId:', userId);
+      
+      // If foreign key error, the user_id might not exist in auth.users
+      // This should not happen if database constraints are properly configured
+      if (paymentError.code === '23503') {
+        console.error('⚠️ Foreign key constraint error - user_id may not exist in auth.users');
+        console.error('   Please verify that the foreign key points to auth.users, not users table');
       }
+      
+      console.error('Payment data that failed:', paymentData);
     } else {
       console.log('✅ Payment record saved successfully:', data);
     }
@@ -846,23 +858,14 @@ async function handleSubscriptionCreated(subscription) {
       .select();
     
     if (subscriptionError) {
-      // If error is foreign key constraint, try again with null user_id
-      if (subscriptionError.code === '23503' && subscriptionData.user_id) {
-        console.warn('⚠️ Foreign key constraint error. Retrying with null user_id...');
-        subscriptionData.user_id = null;
-        const { data: retryData, error: retryError } = await supabase
-          .from('stripe_subscriptions')
-          .insert([subscriptionData])
-          .select();
-        
-        if (retryError) {
-          console.error('❌ Error saving subscription even with null user_id:', retryError);
-        } else {
-          console.log('✅ Subscription record saved successfully (with null user_id):', retryData);
-        }
-      } else {
-        console.error('❌ Error saving subscription:', subscriptionError);
-        console.error('Subscription data that failed:', subscriptionData);
+      console.error('❌ Error saving subscription:', subscriptionError);
+      console.error('Subscription data that failed:', subscriptionData);
+      
+      // If foreign key error, the user_id might not exist in auth.users
+      // This should not happen if database constraints are properly configured
+      if (subscriptionError.code === '23503') {
+        console.error('⚠️ Foreign key constraint error - user_id may not exist in auth.users');
+        console.error('   Please verify that the foreign key points to auth.users, not users table');
       }
     } else {
       console.log('✅ Subscription record saved successfully:', insertedData);
@@ -1000,7 +1003,22 @@ async function handlePaymentSucceeded(invoice) {
           .insert([paymentData]);
         
         if (paymentError) {
-          console.error('❌ Error saving payment record:', paymentError);
+          // If foreign key error, try with null user_id
+          if (paymentError.code === '23503') {
+            console.warn('⚠️ Foreign key constraint error. Retrying payment with null user_id...');
+            paymentData.user_id = null;
+            const { error: retryError } = await supabase
+              .from('stripe_payments')
+              .insert([paymentData]);
+            
+            if (retryError) {
+              console.error('❌ Error saving payment even with null user_id:', retryError);
+            } else {
+              console.log('✅ Payment record saved successfully (with null user_id)');
+            }
+          } else {
+            console.error('❌ Error saving payment record:', paymentError);
+          }
         } else {
           console.log('✅ Payment record saved successfully');
         }
@@ -1053,7 +1071,22 @@ async function handlePaymentFailed(invoice) {
           .insert([paymentData]);
         
         if (paymentError) {
-          console.error('❌ Error saving failed payment record:', paymentError);
+          // If foreign key error, try with null user_id
+          if (paymentError.code === '23503') {
+            console.warn('⚠️ Foreign key constraint error. Retrying failed payment with null user_id...');
+            paymentData.user_id = null;
+            const { error: retryError } = await supabase
+              .from('stripe_payments')
+              .insert([paymentData]);
+            
+            if (retryError) {
+              console.error('❌ Error saving failed payment even with null user_id:', retryError);
+            } else {
+              console.log('✅ Failed payment record saved (with null user_id)');
+            }
+          } else {
+            console.error('❌ Error saving failed payment record:', paymentError);
+          }
         } else {
           console.log('✅ Failed payment record saved');
         }
