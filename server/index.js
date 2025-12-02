@@ -691,18 +691,32 @@ async function handleCheckoutCompleted(session) {
   
   try {
     // Extract user information
-    const userId = session.metadata?.user_id || session.client_reference_id;
+    let userId = session.metadata?.user_id || session.client_reference_id;
     const customerEmail = session.customer_details?.email || session.customer_email;
     
     console.log('Checkout completed for user:', userId, 'email:', customerEmail);
     
-    if (!userId) {
-      console.warn('⚠️ No user_id found in checkout session. Metadata:', session.metadata);
+    // If no userId but we have email, try to find user in clients table
+    if (!userId && customerEmail) {
+      console.log('🔍 No user_id found, searching for client by email:', customerEmail);
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('user_id')
+        .eq('email', customerEmail)
+        .single();
+      
+      if (clientData?.user_id) {
+        userId = clientData.user_id;
+        console.log('✅ Found client, using user_id:', userId);
+      }
     }
+    
+    // Note: We'll rely on database constraints. If user doesn't exist, 
+    // the insert will fail and we'll retry with null user_id
     
     // Save payment record
     const paymentData = {
-      user_id: userId,
+      user_id: userId || null,
       stripe_checkout_session_id: session.id,
       stripe_subscription_id: session.subscription,
       amount: session.amount_total ? session.amount_total / 100 : 0,
@@ -720,8 +734,24 @@ async function handleCheckoutCompleted(session) {
       .select();
     
     if (paymentError) {
-      console.error('❌ Error saving payment to Supabase:', paymentError);
-      console.error('Payment data that failed:', paymentData);
+      // If foreign key error, try with null user_id
+      if (paymentError.code === '23503' && userId) {
+        console.warn('⚠️ Foreign key constraint error. Retrying with null user_id...');
+        paymentData.user_id = null;
+        const { data: retryData, error: retryError } = await supabase
+          .from('stripe_payments')
+          .insert([paymentData])
+          .select();
+        
+        if (retryError) {
+          console.error('❌ Error saving payment even with null user_id:', retryError);
+        } else {
+          console.log('✅ Payment record saved successfully (with null user_id):', retryData);
+        }
+      } else {
+        console.error('❌ Error saving payment to Supabase:', paymentError);
+        console.error('Payment data that failed:', paymentData);
+      }
     } else {
       console.log('✅ Payment record saved successfully:', data);
     }
@@ -805,18 +835,42 @@ async function handleSubscriptionCreated(subscription) {
     
     console.log('📋 Subscription data to save:', subscriptionData);
     
-    const { error: subscriptionError } = await supabase
+    // Note: We'll rely on database constraints. If user doesn't exist, 
+    // the insert will fail and we'll retry with null user_id
+    
+    console.log('💾 Saving subscription to Supabase...');
+    
+    const { data: insertedData, error: subscriptionError } = await supabase
       .from('stripe_subscriptions')
-      .insert([subscriptionData]);
+      .insert([subscriptionData])
+      .select();
     
     if (subscriptionError) {
-      console.error('❌ Error saving subscription:', subscriptionError);
+      // If error is foreign key constraint, try again with null user_id
+      if (subscriptionError.code === '23503' && subscriptionData.user_id) {
+        console.warn('⚠️ Foreign key constraint error. Retrying with null user_id...');
+        subscriptionData.user_id = null;
+        const { data: retryData, error: retryError } = await supabase
+          .from('stripe_subscriptions')
+          .insert([subscriptionData])
+          .select();
+        
+        if (retryError) {
+          console.error('❌ Error saving subscription even with null user_id:', retryError);
+        } else {
+          console.log('✅ Subscription record saved successfully (with null user_id):', retryData);
+        }
+      } else {
+        console.error('❌ Error saving subscription:', subscriptionError);
+        console.error('Subscription data that failed:', subscriptionData);
+      }
     } else {
-      console.log('✅ Subscription record saved successfully');
+      console.log('✅ Subscription record saved successfully:', insertedData);
     }
     
   } catch (error) {
     console.error('❌ Error processing subscription creation:', error);
+    console.error('Full error stack:', error.stack);
   }
 }
 
