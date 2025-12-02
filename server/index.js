@@ -4,11 +4,20 @@ const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { createClient } = require('@supabase/supabase-js');
 
-// Initialize Supabase client for server-side operations
+// Initialize Supabase client for main project (Stripe, clients, etc.)
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY
 );
+
+// Initialize Supabase client for chat project (chat_users table)
+// Make sure to configure CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY
+const chatSupabaseUrl = process.env.CHAT_SUPABASE_URL;
+const chatSupabaseServiceRoleKey = process.env.CHAT_SUPABASE_SERVICE_ROLE_KEY;
+
+const chatSupabase = chatSupabaseUrl && chatSupabaseServiceRoleKey
+  ? createClient(chatSupabaseUrl, chatSupabaseServiceRoleKey)
+  : null;
 
 console.log('Supabase connection:', process.env.REACT_APP_SUPABASE_URL ? 'Configured' : 'Missing URL');
 
@@ -869,6 +878,28 @@ async function handleSubscriptionCreated(subscription) {
       }
     } else {
       console.log('✅ Subscription record saved successfully:', insertedData);
+
+      // Also update chat_users subscription info in the chat Supabase project
+      if (chatSupabase && userId) {
+        const chatUpdate = {
+          user_id: userId,
+          subscription_status: subscription.status,
+          subscription_type: subscriptionType,
+          subscription_expires_at: new Date(subscription.current_period_end * 1000).toISOString()
+        };
+
+        const { error: chatError } = await chatSupabase
+          .from('chat_users')
+          .upsert([chatUpdate], { onConflict: 'user_id' });
+
+        if (chatError) {
+          console.error('❌ Error updating chat_users subscription info (create):', chatError);
+        } else {
+          console.log('✅ chat_users subscription info updated (create):', chatUpdate);
+        }
+      } else if (!chatSupabase) {
+        console.warn('⚠️ chatSupabase client not configured, skipping chat_users update on subscription create');
+      }
     }
     
   } catch (error) {
@@ -890,7 +921,9 @@ async function handleSubscriptionUpdated(subscription) {
     console.log('Updating subscription for user:', userId);
     
     // Get product and price info for commitment tracking
-    const priceId = subscription.items.data[0]?.price?.id;
+    const price = subscription.items.data[0]?.price;
+    const priceId = price?.id;
+    const productId = price?.product;
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null; // Default no commitment
@@ -903,6 +936,13 @@ async function handleSubscriptionUpdated(subscription) {
       commitmentMonths = 6; // BetterPro 6-Month Plan
     }
     // Other products (Nutrition, Training, etc.) have no commitment period
+
+    // Determine subscription type based on product ID (same mapping as on create)
+    let subscriptionType = 'unknown';
+    if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'better_pro';
+    else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'podcast_consultation';
+    else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
+    else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only';
     
     // Calculate commitment end date (only if there's a commitment period)
     let commitmentEndDate = null;
@@ -935,6 +975,28 @@ async function handleSubscriptionUpdated(subscription) {
       console.error('❌ Error updating subscription:', updateError);
     } else {
       console.log('✅ Subscription updated successfully');
+
+      // Also update chat_users subscription info in the chat Supabase project
+      if (chatSupabase && userId) {
+        const chatUpdate = {
+          user_id: userId,
+          subscription_status: subscription.status,
+          subscription_type: subscriptionType,
+          subscription_expires_at: new Date(subscription.current_period_end * 1000).toISOString()
+        };
+
+        const { error: chatError } = await chatSupabase
+          .from('chat_users')
+          .upsert([chatUpdate], { onConflict: 'user_id' });
+
+        if (chatError) {
+          console.error('❌ Error updating chat_users subscription info (update):', chatError);
+        } else {
+          console.log('✅ chat_users subscription info updated (update):', chatUpdate);
+        }
+      } else if (!chatSupabase) {
+        console.warn('⚠️ chatSupabase client not configured, skipping chat_users update on subscription update');
+      }
     }
     
   } catch (error) {
@@ -967,6 +1029,30 @@ async function handleSubscriptionDeleted(subscription) {
       console.error('❌ Error marking subscription as cancelled:', deleteError);
     } else {
       console.log('✅ Subscription marked as cancelled successfully');
+
+      // Also update chat_users subscription info in the chat Supabase project
+      if (chatSupabase && userId) {
+        const chatUpdate = {
+          user_id: userId,
+          subscription_status: 'cancelled',
+          subscription_type: null,
+          subscription_expires_at: subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000).toISOString()
+            : new Date().toISOString()
+        };
+
+        const { error: chatError } = await chatSupabase
+          .from('chat_users')
+          .upsert([chatUpdate], { onConflict: 'user_id' });
+
+        if (chatError) {
+          console.error('❌ Error updating chat_users subscription info (delete):', chatError);
+        } else {
+          console.log('✅ chat_users subscription info updated (delete):', chatUpdate);
+        }
+      } else if (!chatSupabase) {
+        console.warn('⚠️ chatSupabase client not configured, skipping chat_users update on subscription delete');
+      }
     }
     
   } catch (error) {
