@@ -387,6 +387,30 @@ export const createClientRecord = async (userId, userData) => {
       let chatUserDataResult = null;
       if (supabaseSecondary && data && data[0]) {
         try {
+          // Find the default "better choice" company manager
+          let defaultProviderId = null;
+          try {
+            // Use the "better choice" company ID directly
+            const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
+            
+            // Find the first company_manager for this company
+            const { data: managerData, error: managerError } = await supabaseSecondary
+              .from('profiles')
+              .select('id')
+              .eq('company_id', betterChoiceCompanyId)
+              .eq('role', 'company_manager')
+              .order('created_at', { ascending: true })
+              .limit(1)
+              .single();
+
+            if (!managerError && managerData) {
+              defaultProviderId = managerData.id;
+            }
+          } catch (providerError) {
+            console.error('Error finding default provider:', providerError);
+            // Continue without provider_id if we can't find it
+          }
+
           const chatUserData = {
             user_code: userCode,
             full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
@@ -394,7 +418,8 @@ export const createClientRecord = async (userId, userData) => {
             phone_number: normalizedPhone,
             whatsapp_number: normalizedPhone, // Also set whatsapp_number for WhatsApp registrations
             platform: userData.platform || 'whatsapp',
-            activated: false,
+            provider_id: defaultProviderId, // Set to default company manager
+            activated: true, // Set activated to true
             is_verified: false,
             language: 'en',
             created_at: new Date().toISOString()
@@ -455,6 +480,30 @@ export const createClientRecord = async (userId, userData) => {
     let chatUserDataResult = null;
     if (supabaseSecondary && data && data[0]) {
       try {
+        // Find the default "better choice" company manager
+        let defaultProviderId = null;
+        try {
+          // Use the "better choice" company ID directly
+          const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
+          
+          // Find the first company_manager for this company
+          const { data: managerData, error: managerError } = await supabaseSecondary
+            .from('profiles')
+            .select('id')
+            .eq('company_id', betterChoiceCompanyId)
+            .eq('role', 'company_manager')
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .single();
+
+          if (!managerError && managerData) {
+            defaultProviderId = managerData.id;
+          }
+        } catch (providerError) {
+          console.error('Error finding default provider:', providerError);
+          // Continue without provider_id if we can't find it
+        }
+
         const chatUserData = {
           user_code: userCode,
           full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
@@ -462,7 +511,8 @@ export const createClientRecord = async (userId, userData) => {
           phone_number: normalizedPhone,
           whatsapp_number: normalizedPhone, // Also set whatsapp_number for WhatsApp registrations
           platform: userData.platform || 'whatsapp',
-          activated: false,
+          provider_id: defaultProviderId, // Set to default company manager
+          activated: true, // Set activated to true
           is_verified: false,
           language: 'en',
           created_at: new Date().toISOString()
