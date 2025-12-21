@@ -813,6 +813,14 @@ function RecipesPage() {
     loadRecipes();
   }, [language]);
 
+  // Prevent body scrolling to avoid double scrollbars
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   // Handle ESC key to close modal
   useEffect(() => {
     const handleEscape = (e) => {
@@ -911,12 +919,12 @@ function RecipesPage() {
 
 
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition`} dir={direction}>
+    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition flex flex-col`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Navigation */}
       <Navigation />
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
         {/* Hero Section */}
         <section className="py-8 sm:py-10 md:py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">

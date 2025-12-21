@@ -130,7 +130,20 @@ export const translateMenu = async (menu, targetLang = 'he') => {
     };
 
     // Call translation API
-    const response = await fetch('https://dietitian-be.azurewebsites.net/api/translate', {
+    const translateApiUrl = process.env.REACT_APP_TRANSLATE_API_URL || 'https://dietitian-be.azurewebsites.net/api/translate';
+    
+    if (!process.env.REACT_APP_TRANSLATE_API_URL) {
+      console.warn('⚠️ REACT_APP_TRANSLATE_API_URL is not set in environment variables. Using fallback URL.');
+      console.warn('💡 To fix: Add REACT_APP_TRANSLATE_API_URL to your .env file and restart the dev server.');
+    }
+
+    console.log('🌐 Calling translation API:', translateApiUrl);
+    console.log('📤 Request payload:', { 
+      mealsCount: menuToTranslate.meals?.length || 0, 
+      targetLang 
+    });
+
+    const response = await fetch(translateApiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -140,8 +153,31 @@ export const translateMenu = async (menu, targetLang = 'he') => {
     });
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || 'Translation failed');
+      // Try to get error details from response
+      let errorDetails = {};
+      try {
+        errorDetails = await response.json();
+      } catch (e) {
+        // If response is not JSON, try to get text
+        try {
+          const text = await response.text();
+          errorDetails = { message: text, status: response.status, statusText: response.statusText };
+        } catch (e2) {
+          errorDetails = { status: response.status, statusText: response.statusText };
+        }
+      }
+      
+      console.error('❌ Translation API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorDetails
+      });
+      
+      throw new Error(
+        errorDetails.error || 
+        errorDetails.message || 
+        `Translation failed: ${response.status} ${response.statusText}`
+      );
     }
     
     const result = await response.json();

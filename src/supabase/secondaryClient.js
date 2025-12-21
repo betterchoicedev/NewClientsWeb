@@ -232,19 +232,24 @@ export const updateFoodLog = async (foodLogId, foodLogData) => {
   if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
   
   try {
+    // Build update object with only provided fields
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+    
+    // Only include fields that are explicitly provided
+    if (foodLogData.meal_label !== undefined) updateData.meal_label = foodLogData.meal_label;
+    if (foodLogData.food_items !== undefined) updateData.food_items = foodLogData.food_items;
+    if (foodLogData.image_url !== undefined) updateData.image_url = foodLogData.image_url;
+    if (foodLogData.total_calories !== undefined) updateData.total_calories = foodLogData.total_calories;
+    if (foodLogData.total_protein_g !== undefined) updateData.total_protein_g = foodLogData.total_protein_g;
+    if (foodLogData.total_carbs_g !== undefined) updateData.total_carbs_g = foodLogData.total_carbs_g;
+    if (foodLogData.total_fat_g !== undefined) updateData.total_fat_g = foodLogData.total_fat_g;
+    if (foodLogData.log_date !== undefined) updateData.log_date = foodLogData.log_date;
+
     const { data, error } = await supabaseSecondary
       .from('food_logs')
-      .update({
-        meal_label: foodLogData.meal_label,
-        food_items: foodLogData.food_items,
-        image_url: foodLogData.image_url,
-        total_calories: foodLogData.total_calories,
-        total_protein_g: foodLogData.total_protein_g,
-        total_carbs_g: foodLogData.total_carbs_g,
-        total_fat_g: foodLogData.total_fat_g,
-        log_date: foodLogData.log_date,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', foodLogId)
       .select();
 

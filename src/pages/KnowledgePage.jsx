@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -7,6 +7,14 @@ import Navigation from '../components/Navigation';
 const KnowledgePage = () => {
   const { language, t, direction, toggleLanguage } = useLanguage();
   const { isDarkMode, toggleTheme, themeClasses } = useTheme();
+
+  // Prevent body scrolling to avoid double scrollbars
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
 
   const studies = [
     {
@@ -89,12 +97,12 @@ const KnowledgePage = () => {
   ];
 
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition`} dir={direction}>
+    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition flex flex-col`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Navigation */}
       <Navigation />
 
       {/* Main Content */}
-      <main>
+      <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
         {/* Hero Section */}
         <div className={`relative ${isDarkMode ? 'bg-gradient-to-b from-slate-800 via-slate-900 to-black' : 'bg-gradient-to-b from-emerald-50 via-emerald-100 to-emerald-200'} py-12 sm:py-16 md:py-20`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">

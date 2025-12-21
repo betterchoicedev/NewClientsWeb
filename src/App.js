@@ -22,6 +22,7 @@ import { StripeProvider } from './context/StripeContext';
 import { SettingsProvider } from './context/SettingsContext';
 import CookieConsent from './components/CookieConsent';
 import AccessibilityWidget from './components/AccessibilityWidget';
+import WebsiteTour from './components/WebsiteTour';
 import './App.css';
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
               <div className="App">
                 <CookieConsent />
                 <AccessibilityWidget />
+                <WebsiteTour />
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/login" element={<LoginPage />} />

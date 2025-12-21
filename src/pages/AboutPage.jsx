@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -8,12 +8,22 @@ const AboutPage = () => {
   const { language, direction, toggleLanguage } = useLanguage();
   const { isDarkMode, toggleTheme, themeClasses } = useTheme();
 
+  // Prevent body scrolling to avoid double scrollbars
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition`} dir={direction}>
+    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition flex flex-col`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Navigation */}
       <Navigation />
 
-      {/* Hero Section */}
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
+        {/* Hero Section */}
         <div className="relative bg-gradient-to-b from-slate-800 via-slate-900 to-black py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             {/* Logo */}
@@ -384,6 +394,7 @@ const AboutPage = () => {
             </div>
           </div>
         </div>
+      </main>
     </div>
   );
 };

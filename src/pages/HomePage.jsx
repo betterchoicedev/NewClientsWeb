@@ -107,15 +107,23 @@ function HomePage() {
     }
   };
 
+  // Prevent body scrolling to avoid double scrollbars
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition`} dir={direction}>
+    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition flex flex-col`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Navigation */}
       <Navigation />
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
         {/* Hero Section */}
-        <section className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8">
+        <section data-tour="hero-section" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
             <h2 className={`text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold ${themeClasses.textPrimary} mb-4 sm:mb-6`}>
               <span className="bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">{t.hero.welcome}</span>
@@ -329,7 +337,7 @@ function HomePage() {
         </section>
 
         {/* Features Section */}
-        <section className={`py-20 ${themeClasses.bgSecondary}`}>
+        <section data-tour="features-section" className={`py-20 ${themeClasses.bgSecondary}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
               <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>
@@ -649,7 +657,7 @@ function HomePage() {
         </section>
 
         {/* Pricing Section */}
-        <section className={`py-20 ${themeClasses.bgSecondary}`} id="know-your-numbers">
+        <section data-tour="pricing-section" className={`py-20 ${themeClasses.bgSecondary}`} id="know-your-numbers">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
               <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>
@@ -1594,44 +1602,44 @@ function HomePage() {
             </div>
           </div>
         </section>
-      </main>
 
-      {/* Footer */}
-      <footer className={`${themeClasses.footerBg} text-white py-8 sm:py-10 md:py-12`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 md:gap-8 mb-4 md:mb-0 text-center sm:text-left">
-              <Link 
-                to="/privacy-policy" 
-                className="text-gray-300 hover:text-white transition-colors duration-300 text-sm sm:text-base"
-              >
-                {t.footer.privacy}
-              </Link>
-              <Link 
-                to="/terms" 
-                className="text-gray-300 hover:text-white transition-colors duration-300 text-sm sm:text-base"
-              >
-                {t.footer.terms}
-              </Link>
-              <button
-                onClick={() => {
-                  try {
-                    CookieConsent.showPreferences();
-                  } catch (error) {
-                    console.error('Cookie consent error:', error);
-                  }
-                }}
-                className="text-gray-300 hover:text-white transition-colors duration-300 cursor-pointer text-sm sm:text-base"
-              >
-                {language === 'hebrew' ? 'הגדרות עוגיות' : 'Cookie Settings'}
-              </button>
-            </div>
-            <div className="text-gray-400 text-center">
-              <p className="text-xs sm:text-sm">{t.footer.copyright}</p>
+        {/* Footer */}
+        <footer className={`${themeClasses.footerBg} text-white py-8 sm:py-10 md:py-12`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 md:gap-8 mb-4 md:mb-0 text-center sm:text-left">
+                <Link 
+                  to="/privacy-policy" 
+                  className="text-gray-300 hover:text-white transition-colors duration-300 text-sm sm:text-base"
+                >
+                  {t.footer.privacy}
+                </Link>
+                <Link 
+                  to="/terms" 
+                  className="text-gray-300 hover:text-white transition-colors duration-300 text-sm sm:text-base"
+                >
+                  {t.footer.terms}
+                </Link>
+                <button
+                  onClick={() => {
+                    try {
+                      CookieConsent.showPreferences();
+                    } catch (error) {
+                      console.error('Cookie consent error:', error);
+                    }
+                  }}
+                  className="text-gray-300 hover:text-white transition-colors duration-300 cursor-pointer text-sm sm:text-base"
+                >
+                  {language === 'hebrew' ? 'הגדרות עוגיות' : 'Cookie Settings'}
+                </button>
+              </div>
+              <div className="text-gray-400 text-center">
+                <p className="text-xs sm:text-sm">{t.footer.copyright}</p>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </main>
 
     </div>
   );

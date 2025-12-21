@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -138,6 +138,9 @@ const ProfilePage = () => {
   const [companyError, setCompanyError] = useState('');
   const [assignedCompanyId, setAssignedCompanyId] = useState('');
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [indicatorPosition, setIndicatorPosition] = useState({ top: 0, height: 0 });
+  const tabRefs = useRef({});
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const loadCompanyOptions = useCallback(async () => {
     if (!supabaseSecondary) return;
@@ -673,6 +676,41 @@ const ProfilePage = () => {
     }
   ];
 
+  // Prevent body scrolling to avoid double scrollbars
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
+  // Update indicator position when activeTab changes
+  useEffect(() => {
+    const updateIndicatorPosition = () => {
+      const tabElement = tabRefs.current[activeTab];
+      if (tabElement) {
+        const navElement = tabElement.closest('nav');
+        const navContainer = navElement?.parentElement; // The div with p-4
+        if (navElement && navContainer) {
+          const navContainerRect = navContainer.getBoundingClientRect();
+          const tabRect = tabElement.getBoundingClientRect();
+          setIndicatorPosition({
+            top: tabRect.top - navContainerRect.top,
+            height: tabRect.height
+          });
+        }
+      }
+    };
+
+    // Update immediately
+    updateIndicatorPosition();
+    
+    // Also update after a short delay to account for any layout shifts
+    const timeoutId = setTimeout(updateIndicatorPosition, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [activeTab]);
+
   if (!isAuthenticated) {
     return (
       <div className={`min-h-screen ${themeClasses.bgPrimary} flex items-center justify-center`}>
@@ -689,15 +727,27 @@ const ProfilePage = () => {
   }
 
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary} flex flex-col lg:flex-row language-transition language-text-transition`} dir={direction}>
+    <div className={`min-h-screen ${themeClasses.bgPrimary} flex flex-col lg:flex-row language-transition language-text-transition`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Sidebar Navigation - Desktop */}
-      <div className={`hidden lg:block lg:w-80 ${themeClasses.bgCard} ${themeClasses.shadowCard} border-r ${themeClasses.borderPrimary}`}>
+      <div data-tour="profile-sidebar" className={`hidden lg:block lg:w-80 ${themeClasses.bgCard} ${themeClasses.shadowCard} border-r-2 ${themeClasses.borderPrimary} relative overflow-hidden`} style={{
+        borderLeft: '3px solid',
+        borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+        boxShadow: isDarkMode 
+          ? 'inset -1px 0 0 rgba(16, 185, 129, 0.1), 4px 0 12px rgba(0, 0, 0, 0.3)' 
+          : 'inset -1px 0 0 rgba(16, 185, 129, 0.1), 4px 0 12px rgba(0, 0, 0, 0.1)'
+      }}>
+        {/* Decorative gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none" />
+        
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="p-6 border-b-2 border-emerald-500/20 relative z-10">
           <div className="flex items-center mb-4">
-            <img src="/favicon.ico" alt="BetterChoice Logo" className="w-12 h-12 mr-3 rounded-lg shadow-md" />
+            <div className="relative">
+              <img src="/favicon.ico" alt="BetterChoice Logo" className="w-12 h-12 mr-3 rounded-lg shadow-lg ring-2 ring-emerald-500/20" />
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse" />
+            </div>
             <div>
-              <h1 className={`${themeClasses.textPrimary} text-xl font-bold`}>BetterChoice</h1>
+              <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
               <p className={`${themeClasses.textSecondary} text-sm`}>{t.profile.title}</p>
             </div>
           </div>
@@ -707,9 +757,10 @@ const ProfilePage = () => {
             {/* Go Back to Home */}
             <Link 
               to="/"
-              className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 hover:${themeClasses.bgSecondary} ${themeClasses.bgSecondary}`}
+              data-tour="profile-home-button"
+              className={`w-full flex items-center p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md`}
             >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 ${themeClasses.bgSecondary} ${themeClasses.textPrimary}`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 ${themeClasses.textPrimary}`}>
                 <span className="text-sm">🏠</span>
               </div>
               <div className="flex-1 text-left">
@@ -725,50 +776,83 @@ const ProfilePage = () => {
         </div>
 
         {/* Navigation Items */}
-        <div className="p-4">
-          <nav className="space-y-2">
-            {tabs.map((tab) => (
+        <div className="p-4 relative" id="nav-container">
+          {/* Sliding Indicator */}
+          <div 
+            className="absolute left-0 w-1 bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-500 rounded-r-full shadow-lg shadow-emerald-500/50 z-10 transition-all duration-500 ease-out"
+            style={{
+              top: `${indicatorPosition.top}px`,
+              height: `${indicatorPosition.height}px`,
+            }}
+          />
+          
+          <nav className="space-y-2 relative z-0">
+            {tabs.map((tab, index) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center p-4 rounded-lg transition-all duration-200 ${
+                ref={(el) => {
+                  if (el) tabRefs.current[tab.id] = el;
+                }}
+                data-tour={tab.id === 'profile' ? 'profile-tab' : tab.id === 'myPlan' ? 'myplan-tab' : tab.id === 'dailyLog' ? 'dailylog-tab' : tab.id === 'messages' ? 'messages-tab' : tab.id === 'pricing' ? 'pricing-tab' : tab.id === 'settings' ? 'settings-tab' : null}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  // Update indicator position immediately on click
+                  setTimeout(() => {
+                    const tabElement = tabRefs.current[tab.id];
+                    if (tabElement) {
+                      const navContainer = tabElement.closest('div.relative'); // The parent div with p-4
+                      if (navContainer) {
+                        const containerRect = navContainer.getBoundingClientRect();
+                        const tabRect = tabElement.getBoundingClientRect();
+                        setIndicatorPosition({
+                          top: tabRect.top - containerRect.top,
+                          height: tabRect.height
+                        });
+                      }
+                    }
+                  }, 0);
+                }}
+                className={`w-full flex items-center p-4 rounded-xl transition-all duration-300 relative ${
                   activeTab === tab.id
-                    ? `${themeClasses.bgSecondary} ${themeClasses.shadowCard}`
-                    : `hover:${themeClasses.bgSecondary}`
+                    ? `${themeClasses.bgSecondary} ${themeClasses.shadowCard} scale-[1.02]`
+                    : `hover:${themeClasses.bgSecondary} hover:scale-[1.01]`
                 }`}
               >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 ${
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mr-4 transition-all duration-300 ${
                   activeTab === tab.id 
-                    ? 'bg-emerald-500 text-white' 
+                    ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/50 scale-110' 
                     : `${themeClasses.bgSecondary} ${themeClasses.textPrimary}`
                 }`}>
                   <span className="text-lg">{tab.icon}</span>
                 </div>
                 <div className="flex-1 text-left">
-                  <div className={`font-semibold ${
+                  <div className={`font-semibold transition-colors duration-300 ${
                     activeTab === tab.id ? themeClasses.textPrimary : themeClasses.textSecondary
                   }`}>
                     {tab.label}
                   </div>
-                  <div className={`text-sm ${
+                  <div className={`text-sm transition-colors duration-300 ${
                     activeTab === tab.id ? themeClasses.textSecondary : themeClasses.textMuted
                   }`}>
                     {tab.description}
                   </div>
                 </div>
+                {activeTab === tab.id && (
+                  <div className="absolute right-2 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                )}
               </button>
             ))}
           </nav>
         </div>
 
         {/* Bottom Controls */}
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="p-6 border-t-2 border-emerald-500/20 relative z-10">
           <div className="flex items-center justify-between">
             {/* Language Control */}
             <div className="flex items-center">
               <button 
                 onClick={toggleLanguage}
-                className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-200 shadow-md`}
+                className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40`}
               >
                 <div className="flex items-center">
                   <svg className="w-5 h-5 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -784,7 +868,7 @@ const ProfilePage = () => {
             <div className="flex items-center">
               <button 
                 onClick={toggleTheme}
-                className={`${themeClasses.bgCard} border border-emerald-500/20 rounded-full p-3 hover:${themeClasses.bgSecondary} transition-all duration-200 shadow-lg shadow-emerald-500/10`}
+                className={`${themeClasses.bgCard} border-2 border-emerald-500/30 rounded-full p-3 hover:${themeClasses.bgSecondary} transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-110`}
               >
                 {isDarkMode ? (
                   <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
@@ -803,79 +887,213 @@ const ProfilePage = () => {
       </div>
 
       {/* Mobile Header - Shows on mobile only */}
-      <div className={`lg:hidden ${themeClasses.bgCard} ${themeClasses.shadowCard} border-b ${themeClasses.borderPrimary} p-4`}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <img src="/favicon.ico" alt="BetterChoice Logo" className="w-10 h-10 mr-3 rounded-lg shadow-md" />
-            <div>
-              <h1 className={`${themeClasses.textPrimary} text-lg font-bold`}>BetterChoice</h1>
-              <p className={`${themeClasses.textSecondary} text-xs`}>{t.profile.title}</p>
-            </div>
-          </div>
-          
-          <Link 
-            to="/"
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} text-sm`}
-          >
-            <span>🏠</span>
-            <span className="hidden sm:inline">{language === 'hebrew' ? 'בית' : 'Home'}</span>
-          </Link>
-        </div>
-
-        {/* Mobile Tab Navigation - Horizontal Scroll */}
-        <div className="overflow-x-auto -mx-4 px-4">
-          <div className="flex gap-2 min-w-max pb-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all duration-200 ${
-                  activeTab === tab.id
-                    ? 'bg-emerald-500 text-white shadow-md'
-                    : `${themeClasses.bgSecondary} ${themeClasses.textSecondary}`
-                }`}
+      <div className={`lg:hidden ${themeClasses.bgCard} ${themeClasses.shadowCard} relative overflow-hidden`} style={{
+        borderLeft: '3px solid',
+        borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+        borderRight: '2px solid',
+        borderRightColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderTop: '2px solid',
+        borderTopColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderBottom: '2px solid',
+        borderBottomColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        boxShadow: isDarkMode 
+          ? 'inset -1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 12px rgba(0, 0, 0, 0.3)' 
+          : 'inset -1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 12px rgba(0, 0, 0, 0.1)'
+      }}>
+        {/* Decorative gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none" />
+        
+        <div className="relative z-10">
+          {/* Header Section */}
+          <div className="p-4 pb-3 border-b-2 border-emerald-500/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <button
+                  onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
+                  className={`mr-3 p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
+                  aria-label={language === 'hebrew' ? 'תפריט' : 'Menu'}
+                >
+                  <div className="w-6 h-6 flex flex-col justify-center gap-1.5">
+                    <span className={`block h-0.5 w-6 ${themeClasses.textPrimary} transition-all duration-300 ${isMobileNavOpen ? 'rotate-45 translate-y-2' : ''}`} style={{ backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)' }}></span>
+                    <span className={`block h-0.5 w-6 ${themeClasses.textPrimary} transition-all duration-300 ${isMobileNavOpen ? 'opacity-0' : 'opacity-100'}`} style={{ backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)' }}></span>
+                    <span className={`block h-0.5 w-6 ${themeClasses.textPrimary} transition-all duration-300 ${isMobileNavOpen ? '-rotate-45 -translate-y-2' : ''}`} style={{ backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)' }}></span>
+                  </div>
+                </button>
+                <div className="relative">
+                  <img src="/favicon.ico" alt="BetterChoice Logo" className="w-12 h-12 mr-3 rounded-xl shadow-lg ring-2 ring-emerald-500/20" />
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse shadow-lg shadow-emerald-500/50" />
+                </div>
+                <div>
+                  <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
+                  <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
+                </div>
+              </div>
+              
+              <Link 
+                to="/"
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/20 ${themeClasses.textPrimary} text-sm font-medium`}
               >
-                <span className="text-lg">{tab.icon}</span>
-                <span className="text-sm font-medium">{tab.label}</span>
-              </button>
-            ))}
+                <span className="text-base">🏠</span>
+                <span className="hidden sm:inline">{language === 'hebrew' ? 'בית' : 'Home'}</span>
+              </Link>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Theme and Language Controls - Mobile */}
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <button 
-            onClick={toggleLanguage}
-            className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg p-2 transition-all duration-200`}
-          >
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
-              </svg>
-              <span className="text-blue-400 text-xs font-medium">{language === 'hebrew' ? 'עב' : 'En'}</span>
+      {/* Mobile Navigation Drawer - Slides in from left (English) or right (Hebrew) */}
+      <div className={`lg:hidden fixed inset-0 z-50 transition-opacity duration-300 ${isMobileNavOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+        {/* Backdrop */}
+        <div 
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
+        
+        {/* Navigation Panel */}
+        <div 
+          className={`absolute top-0 h-full w-80 max-w-[85vw] ${direction === 'rtl' ? 'right-0' : 'left-0'} ${themeClasses.bgCard} ${themeClasses.shadowCard} transform transition-transform duration-300 ease-out ${
+            isMobileNavOpen 
+              ? 'translate-x-0' 
+              : direction === 'rtl' 
+                ? 'translate-x-full' 
+                : '-translate-x-full'
+          }`}
+          style={{
+            [direction === 'rtl' ? 'borderLeft' : 'borderRight']: '3px solid',
+            [direction === 'rtl' ? 'borderLeftColor' : 'borderRightColor']: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+            boxShadow: isDarkMode 
+              ? direction === 'rtl' 
+                ? '-4px 0 12px rgba(0, 0, 0, 0.3)' 
+                : '4px 0 12px rgba(0, 0, 0, 0.3)'
+              : direction === 'rtl'
+                ? '-4px 0 12px rgba(0, 0, 0, 0.1)'
+                : '4px 0 12px rgba(0, 0, 0, 0.1)'
+          }}
+          dir={direction}
+        >
+          {/* Decorative gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none" />
+          
+          <div className="relative z-10 h-full flex flex-col">
+            {/* Header in drawer */}
+            <div className="p-4 pb-3 border-b-2 border-emerald-500/20">
+              <div className={`flex items-center justify-between mb-4 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                <div className={`flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                  <div className="relative">
+                    <img src="/favicon.ico" alt="BetterChoice Logo" className={`w-12 h-12 ${direction === 'rtl' ? 'ml-3' : 'mr-3'} rounded-xl shadow-lg ring-2 ring-emerald-500/20`} />
+                    <div className={`absolute -top-1 ${direction === 'rtl' ? '-left-1' : '-right-1'} w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse shadow-lg shadow-emerald-500/50`} />
+                  </div>
+                  <div className={direction === 'rtl' ? 'text-right' : 'text-left'}>
+                    <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
+                    <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className={`p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
+                  aria-label={language === 'hebrew' ? 'סגור' : 'Close'}
+                >
+                  <svg className={`w-6 h-6 ${themeClasses.textPrimary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <Link 
+                to="/"
+                onClick={() => setIsMobileNavOpen(false)}
+                className={`w-full flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''} gap-2 px-3 py-2.5 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/20 ${themeClasses.textPrimary} text-sm font-medium`}
+              >
+                <span className="text-base">🏠</span>
+                <span>{language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}</span>
+              </Link>
             </div>
-          </button>
 
-          <button 
-            onClick={toggleTheme}
-            className={`${themeClasses.bgCard} border border-emerald-500/20 rounded-full p-2 hover:${themeClasses.bgSecondary} transition-all duration-200`}
-          >
-            {isDarkMode ? (
-              <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd"/>
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
-              </svg>
-            )}
-          </button>
+            {/* Mobile Tab Navigation */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 bg-gradient-to-b from-emerald-500/5 to-transparent">
+              <div className="space-y-2">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    data-tour={tab.id === 'profile' ? 'profile-tab' : tab.id === 'myPlan' ? 'myplan-tab' : tab.id === 'dailyLog' ? 'dailylog-tab' : tab.id === 'messages' ? 'messages-tab' : tab.id === 'pricing' ? 'pricing-tab' : tab.id === 'settings' ? 'settings-tab' : null}
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      setIsMobileNavOpen(false);
+                    }}
+                    className={`w-full flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''} gap-3 px-4 py-3 rounded-2xl transition-all duration-300 relative font-medium ${
+                      activeTab === tab.id
+                        ? 'bg-gradient-to-r from-emerald-500 via-emerald-500 to-teal-500 text-white shadow-xl shadow-emerald-500/50 scale-[1.02] border-2 border-emerald-400/50'
+                        : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:scale-[1.01] hover:${themeClasses.bgPrimary} border border-transparent hover:border-emerald-500/20`
+                    }`}
+                  >
+                    <span className="text-2xl">{tab.icon}</span>
+                    <div className={`flex-1 ${direction === 'rtl' ? 'text-right' : 'text-left'}`}>
+                      <div className={`text-sm font-semibold ${activeTab === tab.id ? 'text-white' : ''}`}>{tab.label}</div>
+                      <div className={`text-xs mt-0.5 ${activeTab === tab.id ? 'text-emerald-100' : themeClasses.textMuted}`}>{tab.description}</div>
+                    </div>
+                    {activeTab === tab.id && (
+                      <>
+                        <div className={`absolute ${direction === 'rtl' ? 'left-2' : 'right-2'} w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-lg shadow-emerald-400/70 border-2 border-white dark:border-gray-800`} />
+                        <div className={`absolute inset-0 rounded-2xl ${direction === 'rtl' ? 'bg-gradient-to-l' : 'bg-gradient-to-r'} from-white/20 to-transparent pointer-events-none`} />
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Theme and Language Controls - Mobile */}
+            <div className="flex items-center justify-between px-4 py-3 border-t-2 border-emerald-500/20 bg-gradient-to-b from-transparent to-emerald-500/5">
+              <button 
+                onClick={toggleLanguage}
+                className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl px-4 py-2.5 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40 active:scale-95`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
+                  </svg>
+                  <span className="text-blue-400 text-sm font-semibold">{language === 'hebrew' ? 'עב' : 'En'}</span>
+                </div>
+              </button>
+
+              <button 
+                onClick={toggleTheme}
+                className={`${themeClasses.bgCard} border-2 border-emerald-500/30 rounded-full p-2.5 hover:${themeClasses.bgSecondary} transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-110 active:scale-95`}
+              >
+                {isDarkMode ? (
+                  <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd"/>
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-4 sm:p-6 md:p-8">
-        <div className={`${themeClasses.bgCard} ${themeClasses.shadowCard} rounded-lg p-6 h-full language-transition language-text-transition`}>
+      <div className={`flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar relative ${themeClasses.bgCard} ${themeClasses.shadowCard}`} style={{
+        minHeight: 0,
+        borderLeft: '3px solid',
+        borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+        borderRight: '2px solid',
+        borderRightColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderTop: '2px solid',
+        borderTopColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderBottom: '2px solid',
+        borderBottomColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        boxShadow: isDarkMode 
+          ? 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), 4px 0 12px rgba(0, 0, 0, 0.3)' 
+          : 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 4px 0 12px rgba(0, 0, 0, 0.1)'
+      }}>
+        {/* Decorative gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none z-0" />
+        
+        <div className={`rounded-xl p-6 language-transition language-text-transition relative z-10`}>
           {activeTab === 'profile' && (
             <ProfileTab
               profileData={profileData}
@@ -934,7 +1152,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   const isReadOnly = true;
 
   return (
-    <div className={`${themeClasses.bgPrimary} min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
+    <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
       {/* Header Section */}
       <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp">
         <div className="flex items-center mb-6 sm:mb-8">
@@ -978,13 +1196,8 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               <input
                 type="text"
                 value={profileData.firstName}
-                onChange={(e) => onInputChange('firstName', e.target.value)}
-                readOnly={isReadOnly}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
-                  isReadOnly 
-                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
-                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
-                }`}
+                readOnly
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-80`}
                 required
               />
             </div>
@@ -998,13 +1211,8 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               <input
                 type="text"
                 value={profileData.lastName}
-                onChange={(e) => onInputChange('lastName', e.target.value)}
-                readOnly={isReadOnly}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
-                  isReadOnly 
-                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
-                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
-                }`}
+                readOnly
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-80`}
                 required
               />
             </div>
@@ -1018,13 +1226,8 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               <input
                 type="email"
                 value={profileData.email}
-                onChange={(e) => onInputChange('email', e.target.value)}
-                readOnly={isReadOnly}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
-                  isReadOnly 
-                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
-                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
-                }`}
+                readOnly
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-80`}
                 required
               />
             </div>
@@ -1038,109 +1241,13 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               <input
                 type="tel"
                 value={profileData.phone}
-                onChange={(e) => onInputChange('phone', e.target.value)}
-                readOnly={isReadOnly}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
-                  isReadOnly 
-                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
-                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
-                }`}
+                readOnly
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-80`}
                 placeholder="+1 (555) 123-4567"
               />
             </div>
             )}
-
-            {shouldShowField(profileData.birthDate) && (
-            <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                Birth Date
-              </label>
-              <input
-                type="date"
-                value={profileData.birthDate}
-                onChange={(e) => onInputChange('birthDate', e.target.value)}
-                readOnly={isReadOnly}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
-                  isReadOnly 
-                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
-                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
-                }`}
-              />
             </div>
-            )}
-
-            {shouldShowField(profileData.age) && (
-            <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                Age {profileData.birthDate ? '(Auto-calculated)' : ''}
-              </label>
-              <input
-                type="number"
-                value={profileData.age}
-                onChange={(e) => onInputChange('age', e.target.value)}
-                readOnly={isReadOnly || !!profileData.birthDate}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
-                  (isReadOnly || profileData.birthDate)
-                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
-                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
-                }`}
-                placeholder="25"
-                min="1"
-                max="120"
-              />
-              {profileData.birthDate && (
-                <p className={`${themeClasses.textMuted} text-xs mt-1`}>
-                  Age is automatically calculated from your birth date
-                </p>
-              )}
-            </div>
-            )}
-
-            {shouldShowField(profileData.gender) && (
-            <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                Gender
-              </label>
-              <select
-                value={profileData.gender}
-                onChange={(e) => onInputChange('gender', e.target.value)}
-                disabled={isReadOnly}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
-                  isReadOnly 
-                    ? 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed' 
-                    : `${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`
-                }`}
-              >
-                <option value="">Select Gender</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-                <option value="prefer_not_to_say">Prefer not to say</option>
-              </select>
-            </div>
-            )}
-
-            <div className="md:col-span-2">
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                User Code
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={profileData.userCode}
-                  readOnly
-                  className={`w-full px-4 py-3 rounded-lg border-2 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 cursor-not-allowed`}
-                  placeholder="Auto-generated during signup"
-                />
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Auto-generated</span>
-                </div>
-              </div>
-              <p className={`${themeClasses.textMuted} text-xs mt-1`}>
-                Your unique 6-letter user code (generated automatically)
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Location Information */}
@@ -1439,6 +1546,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
 // My Plan Tab Component
 const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const { settings } = useSettings();
+  const { isDarkMode } = useTheme();
   const [loading, setLoading] = useState(true);
   const [planData, setPlanData] = useState(null);
   const [originalPlanData, setOriginalPlanData] = useState(null);
@@ -1643,31 +1751,69 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     );
   }
 
-  if (error) {
+  if (error || !planData) {
     return (
-      <div className="text-center py-12">
-        <div className={`${themeClasses.textPrimary} text-xl font-semibold mb-2`}>
-          {t.profile.myPlanTab.noPlan}
+      <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn flex items-center justify-center`}>
+        <div className="max-w-2xl w-full">
+          {/* Icon */}
+          <div className="flex justify-center mb-6">
+            <div className="w-24 h-24 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/25 animate-pulse">
+              <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
         </div>
-        <p className={`${themeClasses.textSecondary} mb-4`}>
-          {error}
-        </p>
-        <p className={`${themeClasses.textSecondary} text-sm`}>
-          {t.profile.myPlanTab.noPlanDescription}
+          </div>
+
+          {/* Title */}
+          <h2 className={`${themeClasses.textPrimary} text-3xl sm:text-4xl font-bold text-center mb-4`}>
+            {language === 'hebrew' ? 'אין תוכנית תזונה זמינה' : 'No Meal Plan Available'}
+          </h2>
+
+          {/* Description */}
+          <div className={`${themeClasses.textSecondary} text-center space-y-4 mb-8`}>
+            <p className="text-lg sm:text-xl">
+              {language === 'hebrew' 
+                ? 'עדיין אין לכם תוכנית תזונה מותאמת אישית.'
+                : 'You don\'t have a personalized meal plan yet.'
+              }
+            </p>
+            <p className="text-base sm:text-lg">
+              {language === 'hebrew'
+                ? 'אנא פנו לספק שלכם (דיאטנית/מנהל) כדי לקבל תוכנית תזונה מותאמת אישית שתוצג כאן.'
+                : 'Please contact your provider (dietitian/manager) to receive a personalized meal plan that will be displayed here.'
+              }
         </p>
       </div>
-    );
-  }
 
-  if (!planData) {
-    return (
-      <div className="text-center py-12">
-        <div className={`${themeClasses.textPrimary} text-xl font-semibold mb-2`}>
-          {t.profile.myPlanTab.noPlan}
+          {/* Contact Info Card */}
+          <div className={`${themeClasses.bgSecondary} rounded-xl p-6 border-l-4 border-emerald-500`}>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-emerald-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
         </div>
-        <p className={`${themeClasses.textSecondary}`}>
-          {t.profile.myPlanTab.noPlanDescription}
-        </p>
+              <div className="flex-1">
+                <h3 className={`${themeClasses.textPrimary} font-semibold text-lg mb-2`}>
+                  {language === 'hebrew' ? 'צרו קשר עם הספק שלכם' : 'Contact Your Provider'}
+                </h3>
+                <p className={`${themeClasses.textSecondary} text-sm`}>
+                  {language === 'hebrew'
+                    ? 'הספק שלכם יכול ליצור עבורכם תוכנית תזונה מותאמת אישית. לאחר יצירת התוכנית, היא תופיע כאן אוטומטית.'
+                    : 'Your provider can create a personalized meal plan for you. Once created, it will appear here automatically.'
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Decorative Elements */}
+          <div className="mt-8 flex justify-center gap-2">
+            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+            <div className="w-2 h-2 bg-emerald-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -2087,9 +2233,24 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   };
 
   return (
-    <div className={`${themeClasses.bgPrimary} min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
+    <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
       {/* Daily Summary Section */}
-      <div className="mb-6 sm:mb-8 md:mb-10 lg:mb-12 animate-slideInUp">
+      <div className="mb-6 sm:mb-8 md:mb-10 lg:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
+        borderLeft: '3px solid',
+        borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+        borderRight: '2px solid',
+        borderRightColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderTop: '2px solid',
+        borderTopColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderBottom: '2px solid',
+        borderBottomColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        boxShadow: isDarkMode 
+          ? 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)' 
+          : 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+      }}>
+        {/* Decorative gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none rounded-xl" />
+        <div className="relative z-10">
         <div className="flex items-center justify-between mb-4 sm:mb-6 md:mb-8">
           <div className="flex items-center">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center mr-3 sm:mr-4 shadow-lg shadow-emerald-500/25 animate-pulse">
@@ -2160,12 +2321,12 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 
           {/* Protein Card */}
           {settings.showMacros && (
-          <div className="bg-gradient-to-br from-red-600 to-red-700 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-xl shadow-red-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-red-500/30 animate-bounceIn text-center sm:text-left" style={{ animationDelay: '0.1s' }}>
+          <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl sm:rounded-2xl p-5 sm:p-6 shadow-xl shadow-purple-500/20 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/30 animate-bounceIn text-center sm:text-left" style={{ animationDelay: '0.1s' }}>
               <div className="text-white text-3xl sm:text-3xl md:text-4xl font-bold tracking-tight">{formatWeight(planData.totals.protein)}</div>
-            <div className="text-red-100 text-base sm:text-lg font-semibold mt-1">
+            <div className="text-purple-100 text-base sm:text-lg font-semibold mt-1">
               {language === 'hebrew' ? 'חלבון' : 'Protein'}
             </div>
-            <div className="text-red-200 text-xs sm:text-sm mt-1 sm:mt-2">
+            <div className="text-purple-200 text-xs sm:text-sm mt-1 sm:mt-2">
               {proteinPercentage}% {language === 'hebrew' ? 'מהמקרו' : 'of macros'}
             </div>
           </div>
@@ -2197,10 +2358,27 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           </div>
           )}
         </div>
+        </div>
+        </div>
 
         {/* Macro Distribution Bar */}
         {settings.showMacros && (
-        <div className="animate-slideInUp" style={{ animationDelay: '0.4s' }}>
+        <div className="mb-6 sm:mb-8 md:mb-10 lg:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{ animationDelay: '0.4s', 
+          borderLeft: '3px solid',
+          borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+          borderRight: '2px solid',
+          borderRightColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+          borderTop: '2px solid',
+          borderTopColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+          borderBottom: '2px solid',
+          borderBottomColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+          boxShadow: isDarkMode 
+            ? 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)' 
+            : 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+        }}>
+          {/* Decorative gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none rounded-xl" />
+          <div className="relative z-10">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <span className={`${themeClasses.textPrimary} text-base sm:text-lg md:text-xl font-semibold tracking-tight`}>
               {language === 'hebrew' ? 'התפלגות מקרו' : 'Macro Distribution'}
@@ -2214,7 +2392,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg`}>
             <div className="flex h-8 sm:h-10 rounded-lg sm:rounded-xl overflow-hidden shadow-inner">
               <div 
-                className="bg-gradient-to-r from-red-600 to-red-500 flex items-center justify-center text-white text-xs sm:text-sm font-semibold transition-all duration-1000 ease-out animate-progressBar"
+                className="bg-gradient-to-r from-purple-600 to-purple-500 flex items-center justify-center text-white text-xs sm:text-sm font-semibold transition-all duration-1000 ease-out animate-progressBar"
                 style={{ width: `${proteinPercentage}%` }}
               >
                 {proteinPercentage > 15 && (
@@ -2251,7 +2429,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
             {/* Labels Below */}
             <div className="flex flex-col sm:flex-row justify-between gap-2 sm:gap-0 mt-3 sm:mt-4">
               <div className="flex items-center">
-                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-red-500 rounded-full mr-2 animate-pulse"></div>
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-purple-500 rounded-full mr-2 animate-pulse"></div>
                 <span className={`${themeClasses.textPrimary} text-xs sm:text-sm font-medium`}>
                   {language === 'hebrew' ? 'חלבון' : 'Protein'} {proteinPercentage}%
                 </span>
@@ -2271,8 +2449,8 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
             </div>
           </div>
         </div>
-        )}
       </div>
+        )}
 
       {/* Today Section */}
       <div className="animate-slideInUp" style={{ animationDelay: '0.5s' }}>
@@ -2328,7 +2506,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                         {meal.meal}
                       </p>
                       <h4 className={`${themeClasses.textPrimary} text-base sm:text-lg md:text-xl font-bold tracking-tight`}>
-                        {meal.main?.meal_title || meal.main?.title || meal.meal}
+                        {meal.main?.meal_name || meal.main?.meal_title || meal.main?.title || meal.meal}
                       </h4>
                     </div>
                     </div>
@@ -2382,13 +2560,13 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                   {/* Macro Breakdown Bars */}
                   <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
                     <div className="flex items-center gap-2 sm:gap-0">
-                      <div className="w-3 h-3 sm:w-4 sm:h-4 bg-red-500 rounded-full sm:mr-4 animate-pulse"></div>
+                      <div className="w-3 h-3 sm:w-4 sm:h-4 bg-purple-500 rounded-full sm:mr-4 animate-pulse"></div>
                       <span className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold sm:mr-4 w-12 sm:w-16`}>
                         {language === 'hebrew' ? 'חלבון' : 'Protein'}
                       </span>
                       <div className="flex-1 bg-slate-700 rounded-full h-2 sm:h-3 shadow-inner">
                         <div 
-                          className="bg-gradient-to-r from-red-600 to-red-500 h-2 sm:h-3 rounded-full transition-all duration-1000 ease-out shadow-sm"
+                          className="bg-gradient-to-r from-purple-600 to-purple-500 h-2 sm:h-3 rounded-full transition-all duration-1000 ease-out shadow-sm"
                           style={{ width: `${mealProteinPercent}%` }}
                         ></div>
                   </div>
@@ -2535,12 +2713,16 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 // Daily Log Tab Component
 const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
   const { settings } = useSettings();
+  const { isDarkMode } = useTheme();
   const [foodLogs, setFoodLogs] = useState([]);
   const [mealPlanTargets, setMealPlanTargets] = useState(null);
+  const [mealPlanMeals, setMealPlanMeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAddFood, setShowAddFood] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   
   // Helper function to format numbers with decimal places
   const formatNumber = (num) => {
@@ -2599,12 +2781,16 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
           setFoodLogs(foodLogsData || []);
         }
 
-        // Load meal plan targets
+        // Load meal plan targets and meals
         const { data: mealPlanData, error: mealPlanError } = await getClientMealPlan(userCode);
         
         if (mealPlanError) {
           console.error('Error loading meal plan:', mealPlanError);
           // Don't set error for meal plan, just use defaults
+          // Keep existing meals if available, otherwise set to empty
+          if (mealPlanMeals.length === 0) {
+            setMealPlanMeals([]);
+          }
         } else if (mealPlanData) {
           // Extract targets from meal plan
           const mealPlan = mealPlanData.meal_plan;
@@ -2644,6 +2830,72 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
           }
 
           setMealPlanTargets(targets);
+          
+          // Store meal plan meals for displaying meal titles
+          if (mealPlan && mealPlan.meals && mealPlan.meals.length > 0) {
+            // Store original meal categories before translation (for matching with food logs)
+            // Food logs use English categories: "breakfast", "lunch", "dinner", "snacks"
+            const originalMealCategories = mealPlan.meals.map(m => m.meal);
+            console.log('📝 DailyLogTab: Original meal categories:', originalMealCategories);
+            
+            // Translate meal plan if language is Hebrew
+            let mealsToStore = mealPlan.meals;
+            if (language === 'hebrew') {
+              try {
+                setIsTranslating(true);
+                console.log('🌐 DailyLogTab: Starting translation for meal plan with', mealPlan.meals.length, 'meals');
+                const translatedMealPlan = await translateMenu(mealPlan, 'he');
+                
+                // Only use translated meals if they exist and have the same structure
+                if (translatedMealPlan && translatedMealPlan.meals && translatedMealPlan.meals.length > 0) {
+                  console.log('✅ DailyLogTab: Translation successful');
+                  console.log('📋 DailyLogTab: Translated meal categories:', translatedMealPlan.meals.map(m => m.meal));
+                  console.log('📋 DailyLogTab: Sample translated meal_name:', translatedMealPlan.meals[0]?.main?.meal_name || translatedMealPlan.meals[0]?.main?.meal_title);
+                  
+                  // Verify the structure is correct before using
+                  if (translatedMealPlan.meals[0]?.meal && translatedMealPlan.meals[0]?.main) {
+                    // IMPORTANT: Preserve original English meal categories for matching with food logs
+                    // Only translate the display name (meal_name), not the category (meal)
+                    mealsToStore = translatedMealPlan.meals.map((translatedMeal, index) => {
+                      const originalCategory = originalMealCategories[index];
+                      console.log(`🔄 DailyLogTab: Restoring category ${index}: "${translatedMeal.meal}" -> "${originalCategory}"`);
+                      return {
+                        ...translatedMeal,
+                        meal: originalCategory || translatedMeal.meal // Restore original English category
+                      };
+                    });
+                    console.log('✅ DailyLogTab: Final meal categories after restore:', mealsToStore.map(m => m.meal));
+                  } else {
+                    console.warn('⚠️ DailyLogTab: Translated meals have incorrect structure, using original');
+                  }
+                } else {
+                  console.warn('⚠️ DailyLogTab: Translation returned no meals or empty array, using original');
+                }
+              } catch (translateError) {
+                console.error('❌ DailyLogTab: Translation error (using original):', translateError);
+                // Continue with original meal plan
+              } finally {
+                setIsTranslating(false);
+              }
+            }
+            
+            console.log('💾 DailyLogTab: Storing meals:', mealsToStore.length, 'meals');
+            console.log('💾 DailyLogTab: Final categories to store:', mealsToStore.map(m => m.meal));
+            setMealPlanMeals(mealsToStore);
+          } else {
+            // Fallback to default meals if no meal plan
+            console.log('📝 DailyLogTab: No meals in meal plan, keeping existing or using defaults');
+            // Only clear if we don't have any meals already
+            if (mealPlanMeals.length === 0) {
+              setMealPlanMeals([]);
+            }
+          }
+        } else {
+          // No meal plan found, keep existing meals if available
+          console.log('📝 DailyLogTab: No meal plan data found');
+          if (mealPlanMeals.length === 0) {
+            setMealPlanMeals([]);
+          }
         }
       } catch (err) {
         console.error('Unexpected error loading data:', err);
@@ -2654,29 +2906,266 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
     };
 
     loadData();
-  }, [userCode, selectedDate]);
+  }, [userCode, selectedDate, language]);
 
+  // Delete entire meal (food log entry)
+  const handleDeleteMeal = async (logId) => {
+    if (!window.confirm(
+      language === 'hebrew'
+        ? 'האם אתה בטוח שברצונך למחוק את כל הרשומה?'
+        : 'Are you sure you want to delete this entire log entry?'
+    )) {
+      return;
+    }
 
-  // Calculate totals from food logs
-  const totalCalories = foodLogs.reduce((sum, log) => sum + (log.total_calories || 0), 0);
-  const totalProtein = foodLogs.reduce((sum, log) => sum + (log.total_protein_g || 0), 0);
-  const totalCarbs = foodLogs.reduce((sum, log) => sum + (log.total_carbs_g || 0), 0);
-  const totalFat = foodLogs.reduce((sum, log) => sum + (log.total_fat_g || 0), 0);
+    try {
+      setProcessing(true);
+      const { error } = await deleteFoodLog(logId);
+      
+      if (error) {
+        console.error('Error deleting food log:', error);
+        alert(
+          language === 'hebrew'
+            ? 'שגיאה במחיקת הרשומה'
+            : 'Error deleting log entry'
+        );
+      } else {
+        // Reload food logs
+        const { data: foodLogsData, error: foodLogsError } = await getFoodLogs(userCode, selectedDate);
+        if (!foodLogsError) {
+          setFoodLogs(foodLogsData || []);
+        }
+      }
+    } catch (err) {
+      console.error('Unexpected error deleting food log:', err);
+      alert(
+        language === 'hebrew'
+          ? 'שגיאה במחיקת הרשומה'
+          : 'Error deleting log entry'
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Delete ingredient from a meal
+  const handleDeleteIngredient = async (logId, itemIndex) => {
+    try {
+      setProcessing(true);
+      
+      // Find the log entry
+      const log = foodLogs.find(l => l.id === logId);
+      if (!log) return;
+
+      // Parse food_items
+      let foodItems = [];
+      if (log.food_items) {
+        try {
+          foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+        } catch (e) {
+          console.error('Error parsing food_items:', e);
+          return;
+        }
+      }
+
+      // Remove the ingredient
+      if (Array.isArray(foodItems) && itemIndex >= 0 && itemIndex < foodItems.length) {
+        foodItems.splice(itemIndex, 1);
+      }
+
+      // If no items left, delete the entire log
+      if (foodItems.length === 0) {
+        await handleDeleteMeal(logId);
+        return;
+      }
+
+      // Recalculate totals
+      const newCalories = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
+      const newProtein = foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
+      const newCarbs = foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
+      const newFat = foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
+
+      // Preserve the original format - if it was an array, keep it as an array
+      // Supabase JSONB will handle the conversion automatically
+      // Don't stringify it - pass the array directly
+      const foodItemsToSave = foodItems;
+
+      // Update the food log
+      const { error } = await updateFoodLog(logId, {
+        food_items: foodItemsToSave,
+        total_calories: newCalories || 0,
+        total_protein_g: newProtein || 0,
+        total_carbs_g: newCarbs || 0,
+        total_fat_g: newFat || 0,
+        meal_label: log.meal_label || 'snacks',
+        image_url: log.image_url || null,
+        log_date: log.log_date || selectedDate
+      });
+
+      if (error) {
+        console.error('Error updating food log:', error);
+        alert(
+          language === 'hebrew'
+            ? 'שגיאה במחיקת המרכיב'
+            : 'Error deleting ingredient'
+        );
+      } else {
+        // Reload food logs
+        const { data: foodLogsData, error: foodLogsError } = await getFoodLogs(userCode, selectedDate);
+        if (!foodLogsError) {
+          setFoodLogs(foodLogsData || []);
+        }
+      }
+    } catch (err) {
+      console.error('Unexpected error deleting ingredient:', err);
+      alert(
+        language === 'hebrew'
+          ? 'שגיאה במחיקת המרכיב'
+          : 'Error deleting ingredient'
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Move meal to different category
+  const handleMoveMeal = async (logId, newMealLabel) => {
+    try {
+      setProcessing(true);
+      
+      // Find the log entry
+      const log = foodLogs.find(l => l.id === logId);
+      if (!log) return;
+
+      // Only update the meal_label - don't touch any other fields
+      const { error } = await updateFoodLog(logId, {
+        meal_label: newMealLabel
+      });
+
+      if (error) {
+        console.error('Error moving meal:', error);
+        alert(
+          language === 'hebrew'
+            ? 'שגיאה בהעברת הארוחה'
+            : 'Error moving meal'
+        );
+      } else {
+        // Reload food logs
+        const { data: foodLogsData, error: foodLogsError } = await getFoodLogs(userCode, selectedDate);
+        if (!foodLogsError) {
+          setFoodLogs(foodLogsData || []);
+        }
+      }
+    } catch (err) {
+      console.error('Unexpected error moving meal:', err);
+      alert(
+        language === 'hebrew'
+          ? 'שגיאה בהעברת הארוחה'
+          : 'Error moving meal'
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Calculate totals from food logs using food_items JSON column
+  const totalCalories = foodLogs.reduce((sum, log) => {
+    let logCalories = 0;
+    if (log.food_items) {
+      try {
+        const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+        if (Array.isArray(foodItems)) {
+          logCalories = foodItems.reduce((itemSum, item) => itemSum + (item.cals || 0), 0);
+        }
+      } catch (e) {
+        console.error('Error parsing food_items:', e);
+      }
+    }
+    // Fallback to old column if food_items is not available
+    return sum + logCalories + (log.total_calories || 0);
+  }, 0);
+  
+  const totalProtein = foodLogs.reduce((sum, log) => {
+    let logProtein = 0;
+    if (log.food_items) {
+      try {
+        const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+        if (Array.isArray(foodItems)) {
+          logProtein = foodItems.reduce((itemSum, item) => itemSum + (item.p || 0), 0);
+        }
+      } catch (e) {
+        console.error('Error parsing food_items:', e);
+      }
+    }
+    // Fallback to old column if food_items is not available
+    return sum + logProtein + (log.total_protein_g || 0);
+  }, 0);
+  
+  const totalCarbs = foodLogs.reduce((sum, log) => {
+    let logCarbs = 0;
+    if (log.food_items) {
+      try {
+        const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+        if (Array.isArray(foodItems)) {
+          logCarbs = foodItems.reduce((itemSum, item) => itemSum + (item.c || 0), 0);
+        }
+      } catch (e) {
+        console.error('Error parsing food_items:', e);
+      }
+    }
+    // Fallback to old column if food_items is not available
+    return sum + logCarbs + (log.total_carbs_g || 0);
+  }, 0);
+  
+  const totalFat = foodLogs.reduce((sum, log) => {
+    let logFat = 0;
+    if (log.food_items) {
+      try {
+        const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+        if (Array.isArray(foodItems)) {
+          logFat = foodItems.reduce((itemSum, item) => itemSum + (item.f || 0), 0);
+        }
+      } catch (e) {
+        console.error('Error parsing food_items:', e);
+      }
+    }
+    // Fallback to old column if food_items is not available
+    return sum + logFat + (log.total_fat_g || 0);
+  }, 0);
+
+  // Get meals from meal plan, or fallback to default meals
+  const meals = mealPlanMeals.length > 0 
+    ? mealPlanMeals.map(meal => meal.meal) // Extract meal categories from meal plan
+    : ['breakfast', 'lunch', 'dinner', 'snacks']; // Fallback to default
+  
+  // Create a map of meal category to meal title
+  const mealTitleMap = mealPlanMeals.reduce((acc, meal) => {
+    if (meal && meal.meal) {
+      const mealName = meal.main?.meal_name || meal.main?.meal_title || meal.main?.title || meal.meal;
+      acc[meal.meal] = mealName;
+      console.log(`📋 DailyLogTab: Meal mapping - ${meal.meal} -> ${mealName}`);
+    }
+    return acc;
+  }, {});
 
   // Group food logs by meal
-  const meals = ['breakfast', 'lunch', 'dinner', 'snacks'];
   const groupedLogs = meals.reduce((acc, meal) => {
     acc[meal] = foodLogs.filter(log => log.meal_label.toLowerCase() === meal.toLowerCase());
     return acc;
   }, {});
 
-  if (loading) {
+  if (loading || isTranslating) {
   return (
-      <div className={`${themeClasses.bgPrimary} min-h-screen p-8 animate-fadeIn`}>
+      <div className={`min-h-screen p-8 animate-fadeIn`}>
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className={`${themeClasses.textSecondary}`}>Loading food logs...</p>
+            <p className={`${themeClasses.textSecondary}`}>
+              {isTranslating 
+                ? (language === 'hebrew' ? 'מתרגם תוכנית תזונה...' : 'Translating meal plan...') 
+                : 'Loading food logs...'
+              }
+            </p>
       </div>
         </div>
         </div>
@@ -2716,17 +3205,33 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
 
   const weekDates = generateWeekDates(selectedDate);
   const selectedDateObj = new Date(selectedDate);
+  // JavaScript getDay() returns: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
   const dayNames = language === 'hebrew' 
-    ? ['ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳', 'א׳']
-    : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    ? ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת'] // Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const monthNames = language === 'hebrew'
     ? ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
     : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   return (
-    <div className={`${themeClasses.bgPrimary} min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
+    <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
       {/* Date Selector Section */}
-      <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp">
+      <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
+        borderLeft: '3px solid',
+        borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+        borderRight: '2px solid',
+        borderRightColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderTop: '2px solid',
+        borderTopColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderBottom: '2px solid',
+        borderBottomColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        boxShadow: isDarkMode 
+          ? 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)' 
+          : 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+      }}>
+        {/* Decorative gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none rounded-xl" />
+        <div className="relative z-10">
         <div className="mb-8">
           <h2 className={`${themeClasses.textPrimary} text-3xl font-bold tracking-tight mb-2`}>
             {dayNames[selectedDateObj.getDay()]}, {monthNames[selectedDateObj.getMonth()]} {selectedDateObj.getDate()}
@@ -2789,10 +3294,27 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
             );
           })}
         </div>
+        </div>
       </div>
 
       {/* Macro Summary Section */}
-      <div className="animate-slideInUp" style={{ animationDelay: '0.3s' }}>
+      <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
+        animationDelay: '0.3s',
+        borderLeft: '3px solid',
+        borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
+        borderRight: '2px solid',
+        borderRightColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderTop: '2px solid',
+        borderTopColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        borderBottom: '2px solid',
+        borderBottomColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+        boxShadow: isDarkMode 
+          ? 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)' 
+          : 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+      }}>
+        {/* Decorative gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none rounded-xl" />
+        <div className="relative z-10">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
             <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center mr-3">
@@ -2821,7 +3343,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
           {settings.showCalories && (
           <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.4s' }}>
             <div className="flex items-center mb-4">
-              <div className="w-4 h-4 bg-orange-500 rounded-full mr-3"></div>
+              <div className="w-4 h-4 bg-emerald-500 rounded-full mr-3"></div>
               <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
                 {language === 'hebrew' ? 'קלוריות' : 'Calories'}
               </h4>
@@ -2831,11 +3353,11 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
             </div>
             <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
               <div 
-                className="bg-orange-500 h-3 rounded-full transition-all duration-500"
+                className="bg-emerald-500 h-3 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(caloriesPercent, 100)}%` }}
               ></div>
             </div>
-            <div className="text-orange-400 text-sm font-medium">{caloriesPercent}%</div>
+            <div className="text-emerald-400 text-sm font-medium">{caloriesPercent}%</div>
           </div>
           )}
 
@@ -2843,7 +3365,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
           {settings.showMacros && (
           <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.5s' }}>
             <div className="flex items-center mb-4">
-              <div className="w-4 h-4 bg-green-500 rounded-full mr-3"></div>
+              <div className="w-4 h-4 bg-purple-500 rounded-full mr-3"></div>
               <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
                 {language === 'hebrew' ? 'חלבון' : 'Protein'}
               </h4>
@@ -2853,11 +3375,11 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
             </div>
             <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
               <div 
-                className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                className="bg-purple-500 h-3 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(proteinPercent, 100)}%` }}
               ></div>
             </div>
-            <div className="text-green-400 text-sm font-medium">{proteinPercent}%</div>
+            <div className="text-purple-400 text-sm font-medium">{proteinPercent}%</div>
           </div>
           )}
 
@@ -2865,7 +3387,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
           {settings.showMacros && (
           <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.6s' }}>
             <div className="flex items-center mb-4">
-              <div className="w-4 h-4 bg-yellow-500 rounded-full mr-3"></div>
+              <div className="w-4 h-4 bg-amber-500 rounded-full mr-3"></div>
               <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
                 {language === 'hebrew' ? 'שומן' : 'Fat'}
               </h4>
@@ -2875,11 +3397,11 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
             </div>
             <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
               <div 
-                className="bg-yellow-500 h-3 rounded-full transition-all duration-500"
+                className="bg-amber-500 h-3 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(fatPercent, 100)}%` }}
               ></div>
             </div>
-            <div className="text-yellow-400 text-sm font-medium">{fatPercent}%</div>
+            <div className="text-amber-400 text-sm font-medium">{fatPercent}%</div>
           </div>
           )}
 
@@ -2904,6 +3426,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
             <div className="text-blue-400 text-sm font-medium">{carbsPercent}%</div>
           </div>
           )}
+        </div>
         </div>
       </div>
 
@@ -2949,63 +3472,334 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
           return (
               <div 
                 key={meal} 
-                className={`${themeClasses.bgCard} border border-blue-500/30 rounded-2xl p-6 shadow-xl shadow-blue-500/10 transform hover:scale-[1.01] transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/20 animate-slideInUp`}
-                style={{ animationDelay: `${0.9 + index * 0.1}s` }}
+                className={`${themeClasses.bgCard} border border-blue-500/30 rounded-2xl p-6 shadow-xl shadow-blue-500/10 transform hover:scale-[1.01] transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/20 animate-slideInUp lg:relative`}
+                style={{ 
+                  animationDelay: `${0.9 + index * 0.1}s`,
+                }}
               >
-                <div className="flex items-center mb-4">
-                  <div className={`w-12 h-12 bg-gradient-to-br ${getMealColor(meal)} rounded-xl flex items-center justify-center mr-4 shadow-lg`}>
-                    <span className="text-2xl animate-bounce" style={{ animationDelay: `${index * 0.2}s` }}>{getMealIcon(meal)}</span>
+                {/* Mobile-only enhanced styling */}
+                <div className="lg:hidden absolute inset-0 rounded-2xl pointer-events-none" style={{
+                  borderLeft: '4px solid',
+                  borderLeftColor: meal.includes('breakfast') || meal.includes('בוקר') ? 'rgba(251, 191, 36, 0.4)' :
+                                  meal.includes('lunch') || meal.includes('צהריים') ? 'rgba(249, 115, 22, 0.4)' :
+                                  meal.includes('dinner') || meal.includes('ערב') ? 'rgba(59, 130, 246, 0.4)' :
+                                  meal.includes('snack') || meal.includes('חטיף') ? 'rgba(168, 85, 247, 0.4)' :
+                                  'rgba(16, 185, 129, 0.4)',
+                  borderRight: '2px solid',
+                  borderRightColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                  borderTop: '2px solid',
+                  borderTopColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                  borderBottom: '2px solid',
+                  borderBottomColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                  boxShadow: isDarkMode 
+                    ? 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)' 
+                    : 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                }} />
+                
+                {/* Decorative gradient overlay - Mobile only */}
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none lg:hidden rounded-2xl" />
+                
+                <div className="relative z-10">
+                <div className="flex items-center mb-4 sm:mb-6">
+                  <div className={`w-14 h-14 sm:w-16 sm:h-16 lg:w-12 lg:h-12 bg-gradient-to-br ${getMealColor(meal)} rounded-2xl lg:rounded-xl flex items-center justify-center mr-4 shadow-xl lg:shadow-lg`}>
+                    <span className="text-3xl sm:text-4xl lg:text-2xl animate-bounce" style={{ animationDelay: `${index * 0.2}s` }}>{getMealIcon(meal)}</span>
                   </div>
-                      <div>
-                    <h4 className={`${themeClasses.textPrimary} text-xl font-bold tracking-tight`}>{t.profile.dailyLogTab.meals[meal]}</h4>
-                    <p className={`${themeClasses.textSecondary} text-sm`}>{mealLogs.length} {language === 'hebrew' ? 'פריטים נרשמו' : 'items logged'}</p>
+                      <div className="flex-1">
+                    <p className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium mb-1 uppercase tracking-wide`}>
+                      {meal}
+                    </p>
+                    <h4 className={`${themeClasses.textPrimary} text-lg sm:text-xl md:text-2xl lg:text-base sm:text-lg md:text-xl font-bold tracking-tight`}>
+                      {mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal}
+                    </h4>
                   </div>
                 </div>
 
                 {mealLogs.length > 0 ? (
-                  <div className="space-y-3">
-                    {mealLogs.map((log, logIndex) => (
+                  <div className="space-y-2">
+                    {mealLogs.map((log, logIndex) => {
+                      // Parse food_items JSON
+                      let foodItems = [];
+                      let logCalories = 0;
+                      let logProtein = 0;
+                      let logCarbs = 0;
+                      let logFat = 0;
+                      
+                      if (log.food_items) {
+                        try {
+                          foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+                          if (Array.isArray(foodItems)) {
+                            logCalories = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
+                            logProtein = foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
+                            logCarbs = foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
+                            logFat = foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
+                          }
+                        } catch (e) {
+                          console.error('Error parsing food_items:', e);
+                          // Fallback to old columns
+                          logCalories = log.total_calories || 0;
+                          logProtein = log.total_protein_g || 0;
+                          logCarbs = log.total_carbs_g || 0;
+                          logFat = log.total_fat_g || 0;
+                        }
+                      } else {
+                        // Fallback to old columns if food_items doesn't exist
+                        logCalories = log.total_calories || 0;
+                        logProtein = log.total_protein_g || 0;
+                        logCarbs = log.total_carbs_g || 0;
+                        logFat = log.total_fat_g || 0;
+                      }
+                      
+                      return (
                       <div 
                         key={log.id} 
-                        className={`${themeClasses.bgSecondary} rounded-xl p-4 transform hover:translate-x-2 transition-all duration-300 hover:${themeClasses.bgPrimary} animate-slideInUp`}
-                        style={{ animationDelay: `${1.0 + index * 0.1 + logIndex * 0.05}s` }}
+                          className={`${themeClasses.bgSecondary} border-2 border-emerald-500/20 lg:border lg:border-gray-600/20 rounded-2xl lg:rounded-xl p-4 sm:p-5 lg:p-3 transform hover:scale-[1.01] transition-all duration-300 lg:duration-200 shadow-lg hover:shadow-xl lg:shadow-md lg:hover:shadow-lg hover:border-emerald-500/40 animate-slideInUp mb-3 relative overflow-hidden`}
+                        style={{ 
+                          animationDelay: `${1.0 + index * 0.1 + logIndex * 0.05}s`,
+                        }}
                       >
-                        <div className="flex justify-between items-center">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <p className={`${themeClasses.textPrimary} font-semibold text-lg`}>
-                                {log.food_items && log.food_items.length > 0 
-                                  ? log.food_items.map(item => item.name || item.food_name).join(', ')
-                                  : language === 'hebrew' ? 'רשומת מזון' : 'Food Entry'
-                                }
+                        {/* Mobile-only gradient background */}
+                        <div className="lg:hidden absolute inset-0 rounded-2xl pointer-events-none" style={{
+                          background: isDarkMode 
+                            ? 'linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)'
+                            : 'linear-gradient(135deg, rgba(241, 245, 249, 0.9) 0%, rgba(226, 232, 240, 0.9) 100%)'
+                        }} />
+                        
+                        {/* Subtle gradient overlay - Mobile only */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none rounded-2xl lg:hidden" />
+                        
+                        <div className="relative z-10">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-2">
+                              <p className={`${themeClasses.textMuted} text-xs`}>
+                                {language === 'hebrew' ? 'נרשם ב' : 'Logged at'} {new Date(log.created_at).toLocaleTimeString()}
                               </p>
                               {log.image_url && (
-                                <div className="w-8 h-8 bg-slate-600 rounded-lg flex items-center justify-center">
-                                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <div className="w-6 h-6 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded flex items-center justify-center border border-emerald-500/30">
+                                  <svg className="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd"/>
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {/* Move meal dropdown */}
+                              <select
+                                value={log.meal_label}
+                                onChange={(e) => handleMoveMeal(log.id, e.target.value)}
+                                disabled={processing}
+                                className={`text-xs px-2 py-1 rounded ${themeClasses.bgSecondary} ${themeClasses.textPrimary} border border-gray-600/30 hover:border-emerald-500/50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}
+                              >
+                                {meals.map((mealCategory) => (
+                                  <option key={mealCategory} value={mealCategory}>
+                                    {mealTitleMap[mealCategory] || t.profile.dailyLogTab.meals[mealCategory] || mealCategory}
+                                  </option>
+                                ))}
+                              </select>
+                              {/* Delete meal button */}
+                              <button
+                                onClick={() => handleDeleteMeal(log.id)}
+                                disabled={processing}
+                                className="w-6 h-6 flex items-center justify-center rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 hover:border-red-500/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={language === 'hebrew' ? 'מחק רשומה' : 'Delete entry'}
+                              >
+                                <svg className="w-3 h-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="flex-1">
+                            {foodItems.length > 0 ? (
+                              <div className="space-y-1.5">
+                                {foodItems.map((item, itemIndex) => (
+                                  <div 
+                                    key={itemIndex} 
+                                    className={`${themeClasses.bgCard} rounded-lg p-2.5 border border-gray-600/20 hover:border-emerald-500/30 transition-all duration-200`}
+                                  >
+                                    <div className="flex items-start justify-between mb-1">
+                                      <div className="flex-1 min-w-0">
+                                        <p className={`${themeClasses.textPrimary} font-medium text-sm truncate`}>
+                                          {item.name || 'Unknown Item'}
+                                        </p>
+                                        {item.quantity && (
+                                          <p className={`${themeClasses.textMuted} text-xs mt-0.5`}>
+                                            {item.quantity}
+                                          </p>
+                                        )}
+                                      </div>
+                                      {/* Delete ingredient button */}
+                                      <button
+                                        onClick={() => handleDeleteIngredient(log.id, itemIndex)}
+                                        disabled={processing}
+                                        className="ml-2 w-5 h-5 flex items-center justify-center rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 hover:border-red-500/50 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title={language === 'hebrew' ? 'מחק מרכיב' : 'Delete ingredient'}
+                                      >
+                                        <svg className="w-3 h-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center gap-3 flex-wrap text-xs">
+                                      {settings.showCalories && (
+                                        <span className="text-emerald-400 font-medium">{item.cals || 0} {language === 'hebrew' ? 'קל' : 'cal'}</span>
+                                      )}
+                                      {settings.showMacros && (
+                                        <>
+                                          <span className="text-purple-400 font-medium">{formatWeight(item.p || 0)} {language === 'hebrew' ? 'חלבון' : 'protein'}</span>
+                                          <span className="text-amber-400 font-medium">{formatWeight(item.f || 0)} {language === 'hebrew' ? 'שומן' : 'fat'}</span>
+                                          <span className="text-blue-400 font-medium">{formatWeight(item.c || 0)} {language === 'hebrew' ? 'פחמימות' : 'carbs'}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                                {/* Total for this log entry */}
+                                <div className={`${themeClasses.bgSecondary} rounded-lg lg:rounded-lg p-2.5 lg:p-2.5 border border-emerald-500/30 lg:border-emerald-500/30 mt-2 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 lg:from-transparent lg:to-transparent relative overflow-hidden rounded-xl lg:rounded-lg p-4 lg:p-2.5 mt-3 lg:mt-2 border-2 lg:border border-emerald-500/40 lg:border-emerald-500/30 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-emerald-500/15 lg:from-emerald-500/10 lg:to-teal-500/10 shadow-lg lg:shadow-none`}>
+                                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-teal-500/10 pointer-events-none rounded-xl lg:hidden" />
+                                  <div className="relative z-10">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 lg:flex lg:items-center lg:justify-between">
+                                      <p className={`${themeClasses.textPrimary} font-bold text-sm uppercase tracking-wider flex items-center gap-2 lg:text-xs lg:font-bold lg:uppercase lg:tracking-wide lg:flex lg:items-center lg:gap-0`}>
+                                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse lg:hidden"></span>
+                                        {language === 'hebrew' ? 'סה"כ' : 'Total'}
+                                      </p>
+                                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm lg:flex lg:items-center lg:gap-3 lg:text-xs">
+                                        {settings.showCalories && (
+                                          <div className="flex flex-col items-center sm:items-end lg:flex-row lg:items-center">
+                                            <span className="text-emerald-400 font-bold text-lg lg:text-base">{logCalories}</span>
+                                            <span className="text-emerald-500/70 text-xs font-medium lg:text-emerald-400 lg:ml-1 lg:font-bold">{language === 'hebrew' ? ' קל' : ' cal'}</span>
+                                          </div>
+                                        )}
+                                        {settings.showMacros && (
+                                          <>
+                                            <div className="flex flex-col items-center sm:items-end lg:flex-row lg:items-center">
+                                              <span className="text-purple-400 font-bold text-base">{formatWeight(logProtein)}</span>
+                                              <span className="text-purple-500/70 text-xs font-medium lg:text-purple-400 lg:ml-1 lg:font-bold">{language === 'hebrew' ? ' חלבון' : ' protein'}</span>
+                                            </div>
+                                            <div className="flex flex-col items-center sm:items-end lg:flex-row lg:items-center">
+                                              <span className="text-amber-400 font-bold text-base">{formatWeight(logFat)}</span>
+                                              <span className="text-amber-500/70 text-xs font-medium lg:text-amber-400 lg:ml-1 lg:font-bold">{language === 'hebrew' ? ' שומן' : ' fat'}</span>
+                                            </div>
+                                            <div className="flex flex-col items-center sm:items-end lg:flex-row lg:items-center">
+                                              <span className="text-blue-400 font-bold text-base">{formatWeight(logCarbs)}</span>
+                                              <span className="text-blue-500/70 text-xs font-medium lg:text-blue-400 lg:ml-1 lg:font-bold">{language === 'hebrew' ? ' פחמימות' : ' carbs'}</span>
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <p className={`${themeClasses.textPrimary} font-medium text-sm`}>
+                                    {language === 'hebrew' ? 'רשומת מזון' : 'Food Entry'}
+                              </p>
+                              {log.image_url && (
+                                    <div className="w-6 h-6 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded flex items-center justify-center border border-emerald-500/30">
+                                      <svg className="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd"/>
                                   </svg>
                       </div>
                               )}
                             </div>
-                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-3 text-xs">
                               {settings.showCalories && (
-                              <span className="text-emerald-400 font-medium">{log.total_calories || 0} {language === 'hebrew' ? 'קל' : 'cal'}</span>
+                                    <span className="text-emerald-400 font-medium">{logCalories} {language === 'hebrew' ? 'קל' : 'cal'}</span>
                               )}
                               {settings.showMacros && (
                                 <>
-                                  <span className="text-red-400 font-medium">{formatWeight(log.total_protein_g || 0)} {language === 'hebrew' ? 'חלבון' : 'protein'}</span>
-                                  <span className="text-blue-400 font-medium">{formatWeight(log.total_carbs_g || 0)} {language === 'hebrew' ? 'פחמימות' : 'carbs'}</span>
-                                  <span className="text-amber-400 font-medium">{formatWeight(log.total_fat_g || 0)} {language === 'hebrew' ? 'שומן' : 'fat'}</span>
+                                      <span className="text-purple-400 font-medium">{formatWeight(logProtein)} {language === 'hebrew' ? 'חלבון' : 'protein'}</span>
+                                      <span className="text-amber-400 font-medium">{formatWeight(logFat)} {language === 'hebrew' ? 'שומן' : 'fat'}</span>
+                                      <span className="text-blue-400 font-medium">{formatWeight(logCarbs)} {language === 'hebrew' ? 'פחמימות' : 'carbs'}</span>
                                 </>
                               )}
                             </div>
-                            <p className={`${themeClasses.textMuted} text-xs mt-2`}>
-                              {language === 'hebrew' ? 'נרשם ב' : 'Logged at'} {new Date(log.created_at).toLocaleTimeString()}
-                            </p>
+                              </div>
+                            )}
                           </div>
                         </div>
-                    </div>
-                  ))}
+                      </div>
+                      );
+                    })}
+                    
+                    {/* Total summary for this meal category - only show if more than 1 meal */}
+                    {mealLogs.length > 1 && (() => {
+                      let mealTotalCalories = 0;
+                      let mealTotalProtein = 0;
+                      let mealTotalCarbs = 0;
+                      let mealTotalFat = 0;
+                      
+                      mealLogs.forEach((log) => {
+                        if (log.food_items) {
+                          try {
+                            const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+                            if (Array.isArray(foodItems)) {
+                              mealTotalCalories += foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
+                              mealTotalProtein += foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
+                              mealTotalCarbs += foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
+                              mealTotalFat += foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
+                            }
+                          } catch (e) {
+                            // Fallback to old columns
+                            mealTotalCalories += log.total_calories || 0;
+                            mealTotalProtein += log.total_protein_g || 0;
+                            mealTotalCarbs += log.total_carbs_g || 0;
+                            mealTotalFat += log.total_fat_g || 0;
+                          }
+                        } else {
+                          // Fallback to old columns
+                          mealTotalCalories += log.total_calories || 0;
+                          mealTotalProtein += log.total_protein_g || 0;
+                          mealTotalCarbs += log.total_carbs_g || 0;
+                          mealTotalFat += log.total_fat_g || 0;
+                        }
+                      });
+                      
+                      return (
+                        <div className={`${themeClasses.bgSecondary} rounded-xl lg:rounded-xl p-4 lg:p-4 border-2 border-emerald-500/40 lg:border-2 lg:border-emerald-500/40 mt-4 bg-gradient-to-r from-emerald-500/15 to-teal-500/15 lg:from-emerald-500/15 lg:to-teal-500/15 shadow-lg lg:shadow-lg relative overflow-hidden rounded-2xl lg:rounded-xl p-5 lg:p-4 border-2 lg:border-2 border-emerald-500/50 lg:border-emerald-500/40 bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-emerald-500/20 lg:from-emerald-500/15 lg:to-teal-500/15 shadow-xl lg:shadow-lg`}>
+                          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/15 via-transparent to-teal-500/15 pointer-events-none rounded-2xl lg:hidden" />
+                          <div className="relative z-10">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 lg:flex lg:items-center lg:justify-between">
+                              <div className="flex items-center gap-2 lg:gap-2">
+                                <div className={`w-8 h-8 lg:w-8 lg:h-8 bg-gradient-to-br ${getMealColor(meal)} rounded-lg lg:rounded-lg flex items-center justify-center lg:shadow-lg w-12 h-12 rounded-xl shadow-lg`}>
+                                  <span className="text-lg lg:text-lg text-2xl">{getMealIcon(meal)}</span>
+                                </div>
+                                <p className={`${themeClasses.textPrimary} font-bold text-sm uppercase tracking-wide lg:text-sm lg:font-bold lg:uppercase lg:tracking-wide text-base`}>
+                                  {mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal} {language === 'hebrew' ? 'סה"כ' : 'Total'}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm lg:flex lg:items-center lg:gap-4 lg:text-sm flex-wrap items-center gap-4 sm:gap-6">
+                                {settings.showCalories && (
+                                  <span className="text-emerald-400 font-bold lg:text-emerald-400 lg:font-bold flex flex-col items-center sm:items-end text-xl">
+                                    <span className="lg:inline">{Math.round(mealTotalCalories)}</span>
+                                    <span className="text-emerald-500/70 text-xs font-medium lg:text-emerald-400 lg:ml-1 lg:font-bold lg:inline">{language === 'hebrew' ? ' קל' : ' cal'}</span>
+                                  </span>
+                                )}
+                                {settings.showMacros && (
+                                  <>
+                                    <span className="text-purple-400 font-bold lg:text-purple-400 lg:font-bold flex flex-col items-center sm:items-end text-lg">
+                                      <span className="lg:inline">{formatWeight(mealTotalProtein)}</span>
+                                      <span className="text-purple-500/70 text-xs font-medium lg:text-purple-400 lg:ml-1 lg:font-bold lg:inline">{language === 'hebrew' ? ' חלבון' : ' protein'}</span>
+                                    </span>
+                                    <span className="text-amber-400 font-bold lg:text-amber-400 lg:font-bold flex flex-col items-center sm:items-end text-lg">
+                                      <span className="lg:inline">{formatWeight(mealTotalFat)}</span>
+                                      <span className="text-amber-500/70 text-xs font-medium lg:text-amber-400 lg:ml-1 lg:font-bold lg:inline">{language === 'hebrew' ? ' שומן' : ' fat'}</span>
+                                    </span>
+                                    <span className="text-blue-400 font-bold lg:text-blue-400 lg:font-bold flex flex-col items-center sm:items-end text-lg">
+                                      <span className="lg:inline">{formatWeight(mealTotalCarbs)}</span>
+                                      <span className="text-blue-500/70 text-xs font-medium lg:text-blue-400 lg:ml-1 lg:font-bold lg:inline">{language === 'hebrew' ? ' פחמימות' : ' carbs'}</span>
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                 </div>
               ) : (
                   <div className="text-center py-8">
@@ -3018,7 +3812,8 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
                     <p className={`${themeClasses.textMuted} text-sm mt-2`}>{t.profile.dailyLogTab.addFirstEntry}</p>
                   </div>
               )}
-            </div>
+                </div>
+              </div>
           );
         })}
         </div>
@@ -3134,7 +3929,7 @@ const PricingTab = ({ themeClasses, user, language }) => {
   const filteredProducts = getFilteredProducts();
 
   return (
-    <div className={`${themeClasses.bgPrimary} min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
+    <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
       {/* Header */}
       <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp">
         <div className="flex items-center mb-8">
@@ -3307,6 +4102,7 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [messagesContainerRef, setMessagesContainerRef] = useState(null);
+  const [isUserAtBottom, setIsUserAtBottom] = useState(true); // Track if user is at bottom of chat
 
   useEffect(() => {
     const loadMessages = async () => {
@@ -3325,14 +4121,20 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
           // Transform database messages to UI format
           const transformedMessages = (data || []).map(msg => ({
             id: msg.id,
-            message: msg.role === 'assistant' ? (msg.message || '') : (msg.content || ''),
+            role: msg.role,
+            message: msg.message,
+            content: msg.content,
+            attachments: msg.attachments,
             sender: msg.role === 'user' ? 'user' : 'bot',
             timestamp: new Date(msg.created_at),
             created_at: msg.created_at
           }));
           
+          // Filter valid messages
+          const validMessages = filterValidMessages(transformedMessages);
+          
           // Sort messages by timestamp (oldest first for chat display)
-          const sortedMessages = transformedMessages.sort((a, b) => a.timestamp - b.timestamp);
+          const sortedMessages = validMessages.sort((a, b) => a.timestamp - b.timestamp);
           
           setMessages(sortedMessages);
           
@@ -3355,11 +4157,16 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
   }, [userCode]);
 
   // Auto-refresh messages every 5 seconds when messages tab is active
+  // Only refresh if user is at bottom of chat
   useEffect(() => {
-    if (activeTab !== 'messages' || !userCode) return;
+    if (activeTab !== 'messages' || !userCode || !isUserAtBottom) return;
 
     const refreshMessages = async () => {
       try {
+        // Capture scroll position before refresh
+        const prevScrollTop = messagesContainerRef ? messagesContainerRef.scrollTop : 0;
+        const prevScrollHeight = messagesContainerRef ? messagesContainerRef.scrollHeight : 0;
+
         const { data, error } = await getChatMessages(userCode);
         
         if (error) {
@@ -3368,14 +4175,20 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
           // Transform database messages to UI format
           const transformedMessages = (data || []).map(msg => ({
             id: msg.id,
-            message: msg.role === 'assistant' ? (msg.message || '') : (msg.content || ''),
+            role: msg.role,
+            message: msg.message,
+            content: msg.content,
+            attachments: msg.attachments,
             sender: msg.role === 'user' ? 'user' : 'bot',
             timestamp: new Date(msg.created_at),
             created_at: msg.created_at
           }));
           
+          // Filter valid messages
+          const validMessages = filterValidMessages(transformedMessages);
+          
           // Sort messages by timestamp (oldest first for chat display)
-          const sortedMessages = transformedMessages.sort((a, b) => a.timestamp - b.timestamp);
+          const sortedMessages = validMessages.sort((a, b) => a.timestamp - b.timestamp);
           
           // Only update if messages have changed
           const currentMessageIds = messages.map(m => m.id).sort();
@@ -3391,6 +4204,15 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
             
             // Update hasMoreMessages
             setHasMoreMessages(sortedMessages.length >= 20);
+
+            // Auto-scroll to bottom since user is at bottom
+            if (messagesContainerRef && isUserAtBottom) {
+              setTimeout(() => {
+                if (messagesContainerRef) {
+                  messagesContainerRef.scrollTop = messagesContainerRef.scrollHeight;
+                }
+              }, 100);
+            }
           }
         }
       } catch (err) {
@@ -3398,12 +4220,12 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
       }
     };
 
-    // Set up interval for auto-refresh
+    // Set up interval for auto-refresh (only if user is at bottom)
     const interval = setInterval(refreshMessages, 5000); // 5 seconds
 
     // Cleanup interval on unmount or tab change
     return () => clearInterval(interval);
-  }, [activeTab, userCode, messages]);
+  }, [activeTab, userCode, messages, messagesContainerRef, isUserAtBottom]);
 
   // Function to scroll to bottom with multiple attempts
   const scrollToBottom = () => {
@@ -3422,23 +4244,31 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
     }
   };
 
+  // Check if user is near bottom of scroll (within 100px)
+  const isNearBottom = () => {
+    if (!messagesContainerRef) return true;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef;
+    return scrollHeight - scrollTop - clientHeight < 100;
+  };
+
   // Scroll to bottom when messages change (but not when loading more)
   useEffect(() => {
     if (!isLoadingMore && messages.length > 0) {
       // Only scroll to bottom if we're not in the middle of loading more messages
       const isInitialLoad = messages.length <= 20; // Assume initial load if 20 or fewer messages
-      if (isInitialLoad) {
+      // Only auto-scroll if user is already at the bottom
+      if (isInitialLoad && isUserAtBottom) {
         setTimeout(scrollToBottom, 100);
       }
     }
-  }, [messages.length, isLoadingMore]);
+  }, [messages.length, isLoadingMore, messagesContainerRef, isUserAtBottom]);
 
-  // Scroll to bottom when loading completes (only for initial load)
+  // Scroll to bottom when loading completes (only for initial load and if at bottom)
   useEffect(() => {
-    if (!isLoading && messages.length > 0 && messages.length <= 20) {
+    if (!isLoading && messages.length > 0 && messages.length <= 20 && isUserAtBottom) {
       setTimeout(scrollToBottom, 200);
     }
-  }, [isLoading, messages.length]);
+  }, [isLoading, messages.length, messagesContainerRef, isUserAtBottom]);
 
   // Scroll to bottom when component mounts and messages are loaded (only for initial load)
   useEffect(() => {
@@ -3480,14 +4310,20 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
         // Transform database messages to UI format
         const transformedOlderMessages = olderMsgs.map(msg => ({
           id: msg.id,
-          message: msg.role === 'assistant' ? (msg.message || '') : (msg.content || ''),
+          role: msg.role,
+          message: msg.message,
+          content: msg.content,
+          attachments: msg.attachments,
           sender: msg.role === 'user' ? 'user' : 'bot',
           timestamp: new Date(msg.created_at),
           created_at: msg.created_at
         }));
         
+        // Filter valid messages
+        const validOlderMessages = filterValidMessages(transformedOlderMessages);
+        
         // Sort messages by timestamp (oldest first for chat display)
-        const sortedOlderMessages = transformedOlderMessages.sort((a, b) => a.timestamp - b.timestamp);
+        const sortedOlderMessages = validOlderMessages.sort((a, b) => a.timestamp - b.timestamp);
         
         // Prepend older messages to the beginning of the array
         setMessages(prev => {
@@ -3529,19 +4365,189 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
     }
   };
 
-  // Function to handle scroll to top
+  // Function to handle scroll - update isUserAtBottom state
   const handleScroll = (e) => {
-    const { scrollTop } = e.target;
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const nearBottom = distanceFromBottom < 100; // Within 100px of bottom
+    setIsUserAtBottom(nearBottom);
+    
+    // Auto-load more messages when scrolling to top
     if (scrollTop <= 50 && hasMoreMessages && !isLoadingMore && userCode && firstMessageId) {
       console.log('🔄 Auto-loading more messages at top...');
       handleLoadMore();
     }
   };
 
-  // Function to render message content with images
-  const renderMessageContent = (message) => {
+  // Filter valid messages (same logic as Chat.jsx)
+  const filterValidMessages = (messages) => {
+    return messages.filter(msg => {
+      // Show assistant messages only if message is not null
+      if (msg.role === 'assistant') {
+        return msg.message !== null && msg.message !== undefined;
+      }
+      // Show user messages
+      if (msg.role === 'user') {
+        return true;
+      }
+      // Show system messages only if they contain specific content
+      if (msg.role === 'system') {
+        const content = msg.content || msg.message || '';
+        return content.includes('ANALYZED FOOD CONTEXT') || content.includes('Image URL');
+      }
+      // Filter out other roles
+      return false;
+    });
+  };
+
+  // Format message time (same logic as Chat.jsx)
+  const formatMessageTime = (dateString) => {
+    if (!dateString) return '';
+    
+    const now = new Date();
+    const messageDate = new Date(dateString);
+    const diffMs = now - messageDate;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    // "Just now" for < 1 minute
+    if (diffMins < 1) {
+      return language === 'hebrew' ? 'עכשיו' : 'Just now';
+    }
+    
+    // "X min ago" for < 1 hour
+    if (diffMins < 60) {
+      return language === 'hebrew' ? `לפני ${diffMins} דקות` : `${diffMins} min ago`;
+    }
+    
+    // Time only if today
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const messageDay = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate());
+    
+    if (messageDay.getTime() === today.getTime()) {
+      return formatChatTime(dateString);
+    }
+    
+    // "Yesterday + time" if yesterday
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (messageDay.getTime() === yesterday.getTime()) {
+      const timeStr = formatChatTime(dateString);
+      return language === 'hebrew' ? `אתמול ${timeStr}` : `Yesterday ${timeStr}`;
+    }
+    
+    // Full date + time if older
+    const dateStr = language === 'hebrew'
+      ? messageDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
+      : messageDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const timeStr = formatChatTime(dateString);
+    return `${dateStr} ${timeStr}`;
+  };
+
+  // Check if should show date separator
+  const shouldShowDateSeparator = (currentMsg, previousMsg) => {
+    if (!previousMsg) return true;
+    
+    const currentDate = new Date(currentMsg.timestamp);
+    const previousDate = new Date(previousMsg.timestamp);
+    
+    const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+    const previousDay = new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate());
+    
+    return currentDay.getTime() !== previousDay.getTime();
+  };
+
+  // Function to render message content with attachments and formatting (same logic as Chat.jsx)
+  const renderMessageContent = (msg) => {
+    // Get content from message or content field
+    let content = msg.message || msg.content || '';
+    
+    // Parse JSON if message starts with {
+    if (content.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed.response_text) {
+          content = parsed.response_text;
+        }
+        // Remove buttons from parsed JSON - don't render them
+        if (parsed.buttons) {
+          delete parsed.buttons;
+        }
+      } catch (e) {
+        // Not valid JSON, use as is
+      }
+    }
+    
+    // Remove any button-related content from the text
+    // Remove WhatsApp button patterns like [Button Text] or button: patterns
+    content = content.replace(/\[.*?\]/g, ''); // Remove [button text] patterns
+    content = content.replace(/button:\s*[^\n]+/gi, ''); // Remove button: patterns
+    content = content.trim();
+    
+    // Handle attachments if they exist
+    if (msg.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
+      return (
+        <div className="space-y-2">
+          {msg.attachments.map((attachment, idx) => {
+            const url = attachment.url || attachment;
+            const type = attachment.type || attachment.mime_type || '';
+            
+            if (type.startsWith('image/') || url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i)) {
+              return (
+                <img
+                  key={idx}
+                  src={url}
+                  alt="Attachment"
+                  className="max-w-full h-auto rounded-lg mt-2 shadow-md cursor-pointer"
+                  style={{ maxHeight: '300px' }}
+                  onClick={() => window.open(url, '_blank')}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              );
+            } else if (type.startsWith('video/') || url.match(/\.(mp4|webm|ogg)(\?|$)/i)) {
+              return (
+                <video
+                  key={idx}
+                  src={url}
+                  controls
+                  className="max-w-full h-auto rounded-lg mt-2"
+                  style={{ maxHeight: '300px' }}
+                />
+              );
+            } else if (type.startsWith('audio/') || url.match(/\.(mp3|wav|ogg)(\?|$)/i)) {
+              return (
+                <audio
+                  key={idx}
+                  src={url}
+                  controls
+                  className="w-full mt-2"
+                />
+              );
+            } else {
+              return (
+                <a
+                  key={idx}
+                  href={url}
+                  download
+                  className="block text-blue-400 hover:text-blue-300 underline mt-2"
+                >
+                  {language === 'hebrew' ? 'הורד קובץ' : 'Download file'}
+                </a>
+              );
+            }
+          })}
+          {content && (
+            <div className="whitespace-pre-wrap break-words">{content}</div>
+          )}
+        </div>
+      );
+    }
+    
+    // Handle legacy image URLs in text
     const urlRegex = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?[^\s]*)?)/gi;
-    const parts = message.split(urlRegex);
+    const parts = content.split(urlRegex);
     
     return parts.map((part, index) => {
       if (urlRegex.test(part)) {
@@ -3550,15 +4556,16 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
             key={index}
             src={part}
             alt="Food analysis image"
-            className="max-w-full h-auto rounded-lg mt-2 shadow-md"
-            style={{ maxHeight: '200px' }}
+            className="max-w-full h-auto rounded-lg mt-2 shadow-md cursor-pointer"
+            style={{ maxHeight: '300px' }}
+            onClick={() => window.open(part, '_blank')}
             onError={(e) => {
               e.target.style.display = 'none';
             }}
           />
         );
       }
-      return part;
+      return <span key={index} className="whitespace-pre-wrap break-words">{part}</span>;
     });
   };
 
@@ -3612,26 +4619,10 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
     }
   };
 
-  // Group messages by date
-  const groupMessagesByDate = (messages) => {
-    const groups = {};
-    
-    messages.forEach(message => {
-      const date = new Date(message.timestamp);
-      const dateKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString().split('T')[0];
-      
-      if (!groups[dateKey]) {
-        groups[dateKey] = [];
-      }
-      groups[dateKey].push(message);
-    });
-    
-    return groups;
-  };
 
   if (isLoading) {
     return (
-      <div className={`${themeClasses.bgPrimary} min-h-screen p-8 animate-fadeIn`}>
+      <div className={`min-h-screen p-8 animate-fadeIn`}>
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
@@ -3643,7 +4634,7 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
   }
 
   return (
-    <div className={`${themeClasses.bgPrimary} min-h-screen animate-fadeIn`}>
+    <div className={`min-h-screen animate-fadeIn`}>
       {/* Header Section */}
       <div className="p-4 sm:p-6 pb-4 animate-slideInUp">
         <div className="flex items-center">
@@ -3653,8 +4644,15 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
             </svg>
           </div>
     <div>
-            <h2 className={`${themeClasses.textPrimary} text-3xl font-bold tracking-tight`}>{t.profile.messagesTab.title}</h2>
-            <p className={`${themeClasses.textSecondary} text-base mt-1`}>{t.profile.messagesTab.subtitle}</p>
+            <h2 className={`${themeClasses.textPrimary} text-3xl font-bold tracking-tight`}>
+              {language === 'hebrew' ? 'הודעות מ-WhatsApp' : 'Messages from WhatsApp'}
+            </h2>
+            <p className={`${themeClasses.textSecondary} text-base mt-1`}>
+              {language === 'hebrew' 
+                ? 'צפייה בהודעות מהבוט שלכם ב-WhatsApp. כדי לשלוח הודעה, פנו לבוט ישירות ב-WhatsApp.'
+                : 'View messages from your WhatsApp bot. To send a message, contact the bot directly on WhatsApp.'
+              }
+            </p>
           </div>
         </div>
       </div>
@@ -3662,19 +4660,46 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
       {/* Messages */}
       <div 
         ref={setMessagesContainerRef}
-        className={`${themeClasses.bgCard} rounded-t-2xl p-4 sm:p-6 h-full overflow-y-auto shadow-xl shadow-purple-500/10 animate-slideInUp`} 
+        className={`p-4 sm:p-6 h-full overflow-y-auto animate-slideInUp custom-scrollbar`} 
         style={{ animationDelay: '0.2s', height: 'calc(100vh - 200px)' }}
         onScroll={handleScroll}
       >
         {messages.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-purple-500/25">
-                      <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd"/>
+                    <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/25">
+                      <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
                       </svg>
                     </div>
-                    <p className={`${themeClasses.textSecondary} text-lg font-medium`}>{t.profile.messagesTab.startConversation}</p>
-                    <p className={`${themeClasses.textMuted} text-sm mt-2`}>Ask me anything about your nutrition and fitness journey!</p>
+                    <h3 className={`${themeClasses.textPrimary} text-2xl font-bold mb-4`}>
+                      {language === 'hebrew' ? 'אין הודעות עדיין' : 'No Messages Yet'}
+                    </h3>
+                    <p className={`${themeClasses.textSecondary} text-lg mb-6`}>
+                      {language === 'hebrew' 
+                        ? 'ההודעות שלכם מהבוט ב-WhatsApp יופיעו כאן.'
+                        : 'Your messages from the WhatsApp bot will appear here.'
+                      }
+                    </p>
+                    <div className={`${themeClasses.bgSecondary} rounded-xl p-6 max-w-md mx-auto border-l-4 border-green-500`}>
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <svg className="w-6 h-6 text-green-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                          </svg>
+                        </div>
+                        <div className="flex-1 text-left">
+                          <h4 className={`${themeClasses.textPrimary} font-semibold text-lg mb-2`}>
+                            {language === 'hebrew' ? 'שלחו הודעה ב-WhatsApp' : 'Send a Message on WhatsApp'}
+                          </h4>
+                          <p className={`${themeClasses.textSecondary} text-sm`}>
+                            {language === 'hebrew'
+                              ? 'כדי לשלוח הודעה לבוט, פתחו את WhatsApp ופנו לבוט ישירות. ההודעות יופיעו כאן לאחר מכן.'
+                              : 'To send a message to the bot, open WhatsApp and contact the bot directly. Messages will appear here afterwards.'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -3698,40 +4723,43 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
                       </div>
                     )}
                     
-                    {Object.entries(groupMessagesByDate(messages)).map(([dateKey, dateMessages]) => (
-                      <div key={dateKey}>
-                        {/* Date Header */}
+                    {messages.map((message, index) => (
+                      <div key={message.id}>
+                        {/* Date Separator */}
+                        {shouldShowDateSeparator(message, messages[index - 1]) && (
                         <div className="flex items-center justify-center my-4">
                           <div className={`${themeClasses.bgSecondary} ${themeClasses.textSecondary} px-3 py-1 rounded-full text-xs font-medium`}>
-                            {formatChatDate(dateMessages[0].timestamp)}
+                              {formatChatDate(message.timestamp)}
                           </div>
                         </div>
+                        )}
                         
-                        {/* Messages for this date */}
-                        {dateMessages.map((message, index) => (
-                          <div
-                            key={message.id}
-                            className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} animate-slideInUp mb-3`}
-                            style={{ animationDelay: `${0.3 + index * 0.1}s` }}
+                        {/* Message */}
+                        <div
+                          className={`mb-2 flex animate-slideInUp`}
+                          style={{ 
+                            animationDelay: `${0.3 + index * 0.1}s`,
+                            justifyContent: message.sender === 'user' ? 'flex-end' : 'flex-start',
+                            direction: message.sender === 'user' ? 'ltr' : 'ltr'
+                          }}
                           >
                             <div
-                              className={`max-w-[85%] sm:max-w-xs lg:max-w-md px-3 sm:px-4 py-2 sm:py-3 rounded-2xl shadow-lg ${
+                              className={`max-w-[85%] sm:max-w-xs lg:max-w-md px-3 sm:px-4 py-2 sm:py-3 rounded-2xl shadow-lg relative ${
                                 message.sender === 'user'
-                                  ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white'
+                                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white'
                                   : `${themeClasses.bgSecondary} ${themeClasses.textPrimary} border ${themeClasses.borderPrimary}`
                               }`}
                             >
-                              <div className="text-sm leading-relaxed">
-                                {renderMessageContent(message.message)}
+                              <div className="text-sm leading-relaxed pr-12">
+                                {renderMessageContent(message)}
                               </div>
-                              <p className={`text-xs mt-2 ${
+                              <p className={`text-xs mt-1 absolute bottom-1 right-2 ${
                                 message.sender === 'user' ? 'text-emerald-100' : themeClasses.textMuted
                               }`}>
-                                {formatChatTime(message.timestamp)}
+                                {formatMessageTime(message.created_at)}
                               </p>
                             </div>
                           </div>
-                        ))}
                       </div>
                     ))}
               </div>

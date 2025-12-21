@@ -34,7 +34,7 @@ function Navigation() {
 
   return (
     <header className={`sticky top-0 z-50 ${isDarkMode ? themeClasses.bgHeader : 'bg-gradient-to-r from-emerald-500 to-teal-600'} shadow-xl border-b ${themeClasses.borderPrimary} backdrop-blur-sm`}>
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav data-tour="nav" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           {/* Logo Section */}
           <div className="flex items-center">
@@ -48,9 +48,10 @@ function Navigation() {
           </div>
 
           {/* Navigation Links */}
-          <div className={`hidden lg:flex items-center ${language === 'hebrew' ? 'space-x-reverse space-x-1' : 'space-x-1'} ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} rounded-2xl p-2.5 backdrop-blur-sm border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} shadow-lg`}>
+          <div data-tour="nav-links" className={`hidden lg:flex items-center ${language === 'hebrew' ? 'space-x-reverse space-x-1' : 'space-x-1'} ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} rounded-2xl p-2.5 backdrop-blur-sm border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} shadow-lg`}>
             <Link 
               to="/" 
+              data-tour="nav-home"
               className={`px-3 py-1 rounded-lg font-medium text-sm transition-all duration-300 ${
                 isActive('/') 
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-lg shadow-emerald-500/25' 
@@ -61,6 +62,7 @@ function Navigation() {
             </Link>
             <Link 
               to="/knowledge" 
+              data-tour="nav-knowledge"
               className={`px-3 py-1 rounded-lg font-medium text-sm whitespace-nowrap transition-all duration-300 ${
                 isActive('/knowledge') 
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-lg shadow-emerald-500/25' 
@@ -71,6 +73,7 @@ function Navigation() {
             </Link>
             <Link 
               to="/recipes" 
+              data-tour="nav-recipes"
               className={`px-3 py-1 rounded-lg font-medium text-sm transition-all duration-300 ${
                 isActive('/recipes') 
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-lg shadow-emerald-500/25' 
@@ -81,6 +84,7 @@ function Navigation() {
             </Link>
             <Link 
               to="/about" 
+              data-tour="nav-about"
               className={`px-3 py-1 rounded-lg font-medium text-sm transition-all duration-300 ${
                 isActive('/about') 
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-lg shadow-emerald-500/25' 
@@ -130,6 +134,7 @@ function Navigation() {
                 {/* Profile Button */}
                 <Link 
                   to="/profile"
+                  data-tour="profile-button"
                   className={`w-10 h-10 ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm`}
                   title={language === 'hebrew' ? 'פרופיל' : 'Profile'}
                 >
@@ -162,6 +167,7 @@ function Navigation() {
               </>
             ) : (
               <>
+                <div data-tour="auth-buttons" className="flex items-center gap-2">
                 <Link to="/login" className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 whitespace-nowrap">
                   {t.buttons.login}
                 </Link>
@@ -172,6 +178,7 @@ function Navigation() {
                 <Link to="/signup" className={`${isDarkMode ? themeClasses.bgCard : 'bg-white/95'} ${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} hover:${isDarkMode ? themeClasses.bgSecondary : 'bg-white'} backdrop-blur-sm whitespace-nowrap`}>
                   {t.buttons.signup}
                 </Link>
+                </div>
               </>
             )}
           </div>
@@ -224,6 +231,7 @@ function Navigation() {
           <div className={`lg:hidden ${isDarkMode ? themeClasses.bgCard : 'bg-white'} border-t ${isDarkMode ? themeClasses.borderPrimary : 'border-gray-200'} shadow-lg`}>
             <div className="px-4 py-4 space-y-3">
               {/* Navigation Links */}
+              <div data-tour="nav-links" className="space-y-3">
               <Link 
                 to="/" 
                 onClick={closeMobileMenu}
@@ -268,6 +276,7 @@ function Navigation() {
               >
                 {language === 'hebrew' ? 'אודות' : t.nav.about}
               </Link>
+              </div>
 
               {/* Divider */}
               <div className={`border-t ${isDarkMode ? themeClasses.borderPrimary : 'border-gray-200'} my-3`}></div>
@@ -292,6 +301,7 @@ function Navigation() {
                   {/* Profile Button */}
                   <Link 
                     to="/profile"
+                    data-tour="profile-button"
                     onClick={closeMobileMenu}
                     className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${isDarkMode ? themeClasses.bgSecondary + ' ' + themeClasses.textPrimary : 'bg-gray-50 text-gray-800'} hover:bg-emerald-50 hover:text-emerald-600 text-center`}
                   >
@@ -308,6 +318,7 @@ function Navigation() {
                 </>
               ) : (
                 <>
+                  <div data-tour="auth-buttons" className="space-y-3">
                   <Link 
                     to="/login" 
                     onClick={closeMobileMenu}
@@ -322,6 +333,7 @@ function Navigation() {
                   >
                     {t.buttons.signup}
                   </Link>
+                  </div>
                 </>
               )}
             </div>
