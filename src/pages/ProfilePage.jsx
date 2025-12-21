@@ -295,11 +295,34 @@ const ProfilePage = () => {
         console.log('Loading profile data for user:', user.id);
       }
       
+      // First, load from clients table (primary database) to get user_code
       const { data, error } = await supabase
         .from('clients')
         .select('*')
         .eq('user_id', user.id)
         .single();
+      
+      // Then, try to load from chat_users table (secondary database) if user_code exists
+      let chatUserData = null;
+      const userCode = data?.user_code || profileData.userCode;
+      if (supabaseSecondary && userCode) {
+        try {
+          const { data: chatUser, error: chatUserError } = await supabaseSecondary
+            .from('chat_users')
+            .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language')
+            .eq('user_code', userCode)
+            .single();
+          
+          if (!chatUserError && chatUser) {
+            chatUserData = chatUser;
+            if (process.env.NODE_ENV === 'development') {
+              console.log('Profile data loaded from chat_users:', chatUserData);
+            }
+          }
+        } catch (chatError) {
+          console.error('Error loading from chat_users:', chatError);
+        }
+      }
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
         console.error('Detailed error loading profile:', {
@@ -311,12 +334,30 @@ const ProfilePage = () => {
         return;
       }
 
-      if (data) {
+      if (data || chatUserData) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('Profile data loaded:', data);
+          console.log('Profile data loaded from clients:', data);
         }
+        
+        // Use chat_users data for health information if available, otherwise use clients data
+        const healthData = chatUserData ? {
+          // Extract dietary_preferences from client_preference (can be object with dietary_preferences key, or direct value)
+          dietaryPreferences: typeof chatUserData.client_preference === 'object' && chatUserData.client_preference !== null
+            ? (chatUserData.client_preference.dietary_preferences || chatUserData.client_preference || '')
+            : (chatUserData.client_preference || ''),
+          foodAllergies: chatUserData.food_allergies || '',
+          medicalConditions: chatUserData.medical_conditions || ''
+        } : {
+          dietaryPreferences: data?.dietary_preferences || '',
+          foodAllergies: data?.food_allergies || '',
+          medicalConditions: data?.medical_conditions || ''
+        };
+        
+        // Use chat_users data for other fields if available, otherwise use clients data
+        const profileSource = chatUserData || data;
+        
         // Split full_name into firstName and lastName
-        const nameParts = (data.full_name || '').split(' ');
+        const nameParts = ((chatUserData?.full_name || data?.full_name) || '').split(' ');
         const firstName = nameParts[0] || '';
         const lastName = nameParts.slice(1).join(' ') || '';
         
@@ -324,26 +365,27 @@ const ProfilePage = () => {
           ...prev,
           firstName: firstName,
           lastName: lastName,
-          email: data.email || user.email || '',
-          phone: data.phone || '',
+          email: (chatUserData?.email || data?.email || user.email) || '',
+          phone: (chatUserData?.phone_number || data?.phone) || '',
           newsletter: false,
           status: 'active',
-          birthDate: data.birth_date || '',
-          age: data.age ? data.age.toString() : '',
-          gender: data.gender || '',
-          dietaryPreferences: data.dietary_preferences || '',
-          foodAllergies: data.food_allergies || '',
-          medicalConditions: data.medical_conditions || '',
-          userCode: data.user_code || '',
-          region: data.region || '',
-          city: data.city || '',
-          timezone: data.timezone || '',
-          userLanguage: data.user_language || '',
+          birthDate: (chatUserData?.date_of_birth || data?.birth_date) || '',
+          age: (chatUserData?.age || data?.age) ? (chatUserData?.age || data?.age).toString() : '',
+          gender: (chatUserData?.gender || data?.gender) || '',
+          dietaryPreferences: healthData.dietaryPreferences,
+          foodAllergies: healthData.foodAllergies,
+          medicalConditions: healthData.medicalConditions,
+          userCode: data?.user_code || prev.userCode || '',
+          region: (chatUserData?.region || data?.region) || '',
+          city: (chatUserData?.city || data?.city) || '',
+          timezone: (chatUserData?.timezone || data?.timezone) || '',
+          userLanguage: (chatUserData?.language || data?.user_language) || '',
           companyId: prev.companyId || ''
         }));
 
         // Sync web language immediately after loading profile
-        if (data.user_language) {
+        const userLang = chatUserData?.language || data?.user_language;
+        if (userLang) {
           const languageMap = {
             'en': 'english',
             'he': 'hebrew',
@@ -351,7 +393,7 @@ const ProfilePage = () => {
             'hebrew': 'hebrew'
           };
           
-          const webLanguage = languageMap[data.user_language.toLowerCase()] || 'english';
+          const webLanguage = languageMap[userLang.toLowerCase()] || 'english';
           
           // Only change if different from current language
           if (language !== webLanguage) {
@@ -532,9 +574,9 @@ const ProfilePage = () => {
                 age: dataToSave.age,
                 gender: dataToSave.gender,
                 date_of_birth: dataToSave.birth_date,
-                food_allergies: dataToSave.food_allergies,
-                food_limitations: dataToSave.dietary_preferences, // Map dietary_preferences to food_limitations
-                medical_conditions: dataToSave.medical_conditions,
+                food_allergies: dataToSave.food_allergies, // text field
+                client_preference: dataToSave.dietary_preferences || null, // jsonb field - save value directly
+                medical_conditions: dataToSave.medical_conditions, // text field
                 language: dataToSave.user_language, // Map user_language to language
                 updated_at: dataToSave.updated_at
               };
@@ -660,7 +702,7 @@ const ProfilePage = () => {
       id: 'messages', 
       label: t.profile.tabs.messages,
       icon: '💬',
-      description: language === 'hebrew' ? 'תקשורת עם הדיאטנית שלך' : 'Communication with your dietitian'
+      description: language === 'hebrew' ? 'תקשורת עם הדיאטנית AI שלך' : 'Communication with your AI dietitian'
     },
     { 
       id: 'pricing', 
@@ -672,7 +714,7 @@ const ProfilePage = () => {
       id: 'settings', 
       label: language === 'hebrew' ? 'הגדרות' : 'Settings',
       icon: '⚙️',
-      description: language === 'hebrew' ? 'התאם אישית את האפליקציה' : 'Customize your app experience'
+      description: language === 'hebrew' ? 'התאם אישית את האתר' : 'Customize your website experience'
     }
   ];
 
@@ -747,7 +789,7 @@ const ProfilePage = () => {
   return (
     <div className={`min-h-screen ${themeClasses.bgPrimary} flex flex-col lg:flex-row language-transition language-text-transition`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Sidebar Navigation - Desktop */}
-      <div data-tour="profile-sidebar" className={`hidden lg:block lg:w-80 ${themeClasses.bgCard} ${themeClasses.shadowCard} border-r-2 ${themeClasses.borderPrimary} relative overflow-hidden`} style={{
+      <div data-tour="profile-sidebar" className={`hidden lg:block ${language === 'english' ? 'lg:w-96' : 'lg:w-80'} ${themeClasses.bgCard} ${themeClasses.shadowCard} border-r-2 ${themeClasses.borderPrimary} relative overflow-hidden flex flex-col`} style={{
         borderLeft: '3px solid',
         borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
         boxShadow: isDarkMode 
@@ -781,11 +823,21 @@ const ProfilePage = () => {
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 ${themeClasses.textPrimary}`}>
                 <span className="text-sm">🏠</span>
               </div>
-              <div className="flex-1 text-left">
-                <div className={`font-semibold ${themeClasses.textPrimary} text-sm`}>
+              <div className="flex-1 text-left min-w-0 overflow-hidden">
+                <div className={`font-semibold ${themeClasses.textPrimary} text-sm`} style={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
                   {language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}
                 </div>
-                <div className={`text-xs ${themeClasses.textMuted}`}>
+                <div className={`text-xs ${themeClasses.textMuted}`} style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  wordBreak: 'break-word'
+                }}>
                   {language === 'hebrew' ? 'חזור לעמוד הראשי' : 'Go back to the main homepage'}
                 </div>
               </div>
@@ -794,7 +846,7 @@ const ProfilePage = () => {
         </div>
 
         {/* Navigation Items */}
-        <div className="p-4 relative" id="nav-container">
+        <div className="p-4 relative flex-1 overflow-y-auto overflow-x-hidden" id="nav-container">
           {/* Sliding Indicator */}
           <div 
             className="absolute left-0 w-1 bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-500 rounded-r-full shadow-lg shadow-emerald-500/50 z-10 transition-all duration-500 ease-out"
@@ -843,15 +895,25 @@ const ProfilePage = () => {
                 }`}>
                   <span className="text-lg">{tab.icon}</span>
                 </div>
-                <div className="flex-1 text-left">
+                <div className="flex-1 text-left min-w-0 overflow-hidden">
                   <div className={`font-semibold transition-colors duration-300 ${
                     activeTab === tab.id ? themeClasses.textPrimary : themeClasses.textSecondary
-                  }`}>
+                  }`} style={{ 
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
                     {tab.label}
                   </div>
                   <div className={`text-sm transition-colors duration-300 ${
                     activeTab === tab.id ? themeClasses.textSecondary : themeClasses.textMuted
-                  }`}>
+                  }`} style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    wordBreak: 'break-word'
+                  }}>
                     {tab.description}
                   </div>
                 </div>
@@ -1134,7 +1196,7 @@ const ProfilePage = () => {
             <MyPlanTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} clientRegion={profileData.region} />
           )}
           {activeTab === 'dailyLog' && (
-            <DailyLogTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} />
+            <DailyLogTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} clientRegion={profileData.region} />
           )}
           {activeTab === 'messages' && (
             <MessagesTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} activeTab={activeTab} language={language} />
@@ -1277,10 +1339,10 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
             </div>
             <div>
               <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>
-                Location Information
+                {language === 'hebrew' ? 'מידע מיקום' : 'Location Information'}
               </h3>
               <p className={`${themeClasses.textSecondary} text-xs sm:text-sm`}>
-                Help us provide location-specific recommendations
+                {language === 'hebrew' ? 'עזרו לנו לספק המלצות מותאמות למיקום' : 'Help us provide location-specific recommendations'}
               </p>
             </div>
           </div>
@@ -1288,98 +1350,98 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                Region
+                {language === 'hebrew' ? 'אזור' : 'Region'}
               </label>
               <select
                 value={profileData.region}
                 onChange={(e) => onInputChange('region', e.target.value)}
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800`}
               >
-                <option value="">Select Region</option>
-                <option value="Israel">Israel</option>
-                <option value="North America">North America</option>
-                <option value="South America">South America</option>
-                <option value="Europe">Europe</option>
-                <option value="Asia">Asia</option>
-                <option value="Africa">Africa</option>
-                <option value="Oceania">Oceania</option>
-                <option value="Middle East">Middle East</option>
-                <option value="Caribbean">Caribbean</option>
-                <option value="Central America">Central America</option>
-                <option value="Other">Other</option>
+                <option value="">{language === 'hebrew' ? 'בחר אזור' : 'Select Region'}</option>
+                <option value="Israel">{language === 'hebrew' ? 'ישראל' : 'Israel'}</option>
+                <option value="North America">{language === 'hebrew' ? 'צפון אמריקה' : 'North America'}</option>
+                <option value="South America">{language === 'hebrew' ? 'דרום אמריקה' : 'South America'}</option>
+                <option value="Europe">{language === 'hebrew' ? 'אירופה' : 'Europe'}</option>
+                <option value="Asia">{language === 'hebrew' ? 'אסיה' : 'Asia'}</option>
+                <option value="Africa">{language === 'hebrew' ? 'אפריקה' : 'Africa'}</option>
+                <option value="Oceania">{language === 'hebrew' ? 'אוקיאניה' : 'Oceania'}</option>
+                <option value="Middle East">{language === 'hebrew' ? 'המזרח התיכון' : 'Middle East'}</option>
+                <option value="Caribbean">{language === 'hebrew' ? 'הקריביים' : 'Caribbean'}</option>
+                <option value="Central America">{language === 'hebrew' ? 'מרכז אמריקה' : 'Central America'}</option>
+                <option value="Other">{language === 'hebrew' ? 'אחר' : 'Other'}</option>
               </select>
             </div>
 
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                City
+                {language === 'hebrew' ? 'עיר' : 'City'}
               </label>
               <input
                 type="text"
                 value={profileData.city}
                 onChange={(e) => onInputChange('city', e.target.value)}
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800`}
-                placeholder="Tel Aviv"
+                placeholder={language === 'hebrew' ? 'תל אביב' : 'Tel Aviv'}
               />
             </div>
 
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                Timezone
+                {language === 'hebrew' ? 'אזור זמן' : 'Timezone'}
               </label>
               <select
                 value={profileData.timezone}
                 onChange={(e) => onInputChange('timezone', e.target.value)}
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800`}
               >
-                <option value="">Select Timezone</option>
-                <optgroup label="Israel & Middle East">
-                  <option value="Asia/Jerusalem">Asia/Jerusalem (Israel)</option>
-                  <option value="Asia/Dubai">Asia/Dubai (UAE)</option>
-                  <option value="Asia/Riyadh">Asia/Riyadh (Saudi Arabia)</option>
-                  <option value="Asia/Tehran">Asia/Tehran (Iran)</option>
+                <option value="">{language === 'hebrew' ? 'בחר אזור זמן' : 'Select Timezone'}</option>
+                <optgroup label={language === 'hebrew' ? 'ישראל והמזרח התיכון' : 'Israel & Middle East'}>
+                  <option value="Asia/Jerusalem">{language === 'hebrew' ? 'ירושלים (ישראל)' : 'Asia/Jerusalem (Israel)'}</option>
+                  <option value="Asia/Dubai">{language === 'hebrew' ? 'דובאי (איחוד האמירויות)' : 'Asia/Dubai (UAE)'}</option>
+                  <option value="Asia/Riyadh">{language === 'hebrew' ? 'ריאד (ערב הסעודית)' : 'Asia/Riyadh (Saudi Arabia)'}</option>
+                  <option value="Asia/Tehran">{language === 'hebrew' ? 'טהרן (איראן)' : 'Asia/Tehran (Iran)'}</option>
                 </optgroup>
-                <optgroup label="Europe">
-                  <option value="Europe/London">Europe/London (GMT)</option>
-                  <option value="Europe/Paris">Europe/Paris (CET)</option>
-                  <option value="Europe/Berlin">Europe/Berlin (CET)</option>
-                  <option value="Europe/Rome">Europe/Rome (CET)</option>
-                  <option value="Europe/Madrid">Europe/Madrid (CET)</option>
-                  <option value="Europe/Amsterdam">Europe/Amsterdam (CET)</option>
-                  <option value="Europe/Moscow">Europe/Moscow (MSK)</option>
+                <optgroup label={language === 'hebrew' ? 'אירופה' : 'Europe'}>
+                  <option value="Europe/London">{language === 'hebrew' ? 'לונדון (GMT)' : 'Europe/London (GMT)'}</option>
+                  <option value="Europe/Paris">{language === 'hebrew' ? 'פריז (CET)' : 'Europe/Paris (CET)'}</option>
+                  <option value="Europe/Berlin">{language === 'hebrew' ? 'ברלין (CET)' : 'Europe/Berlin (CET)'}</option>
+                  <option value="Europe/Rome">{language === 'hebrew' ? 'רומא (CET)' : 'Europe/Rome (CET)'}</option>
+                  <option value="Europe/Madrid">{language === 'hebrew' ? 'מדריד (CET)' : 'Europe/Madrid (CET)'}</option>
+                  <option value="Europe/Amsterdam">{language === 'hebrew' ? 'אמסטרדם (CET)' : 'Europe/Amsterdam (CET)'}</option>
+                  <option value="Europe/Moscow">{language === 'hebrew' ? 'מוסקבה (MSK)' : 'Europe/Moscow (MSK)'}</option>
                 </optgroup>
-                <optgroup label="North America">
-                  <option value="America/New_York">America/New_York (EST)</option>
-                  <option value="America/Chicago">America/Chicago (CST)</option>
-                  <option value="America/Denver">America/Denver (MST)</option>
-                  <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
-                  <option value="America/Toronto">America/Toronto (EST)</option>
-                  <option value="America/Vancouver">America/Vancouver (PST)</option>
+                <optgroup label={language === 'hebrew' ? 'צפון אמריקה' : 'North America'}>
+                  <option value="America/New_York">{language === 'hebrew' ? 'ניו יורק (EST)' : 'America/New_York (EST)'}</option>
+                  <option value="America/Chicago">{language === 'hebrew' ? 'שיקגו (CST)' : 'America/Chicago (CST)'}</option>
+                  <option value="America/Denver">{language === 'hebrew' ? 'דנבר (MST)' : 'America/Denver (MST)'}</option>
+                  <option value="America/Los_Angeles">{language === 'hebrew' ? 'לוס אנג\'לס (PST)' : 'America/Los_Angeles (PST)'}</option>
+                  <option value="America/Toronto">{language === 'hebrew' ? 'טורונטו (EST)' : 'America/Toronto (EST)'}</option>
+                  <option value="America/Vancouver">{language === 'hebrew' ? 'ונקובר (PST)' : 'America/Vancouver (PST)'}</option>
                 </optgroup>
-                <optgroup label="Asia">
-                  <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
-                  <option value="Asia/Shanghai">Asia/Shanghai (CST)</option>
-                  <option value="Asia/Hong_Kong">Asia/Hong_Kong (HKT)</option>
-                  <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
-                  <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-                  <option value="Asia/Seoul">Asia/Seoul (KST)</option>
-                  <option value="Asia/Bangkok">Asia/Bangkok (ICT)</option>
+                <optgroup label={language === 'hebrew' ? 'אסיה' : 'Asia'}>
+                  <option value="Asia/Tokyo">{language === 'hebrew' ? 'טוקיו (JST)' : 'Asia/Tokyo (JST)'}</option>
+                  <option value="Asia/Shanghai">{language === 'hebrew' ? 'שנחאי (CST)' : 'Asia/Shanghai (CST)'}</option>
+                  <option value="Asia/Hong_Kong">{language === 'hebrew' ? 'הונג קונג (HKT)' : 'Asia/Hong_Kong (HKT)'}</option>
+                  <option value="Asia/Singapore">{language === 'hebrew' ? 'סינגפור (SGT)' : 'Asia/Singapore (SGT)'}</option>
+                  <option value="Asia/Kolkata">{language === 'hebrew' ? 'קולקטה (IST)' : 'Asia/Kolkata (IST)'}</option>
+                  <option value="Asia/Seoul">{language === 'hebrew' ? 'סיאול (KST)' : 'Asia/Seoul (KST)'}</option>
+                  <option value="Asia/Bangkok">{language === 'hebrew' ? 'בנגקוק (ICT)' : 'Asia/Bangkok (ICT)'}</option>
                 </optgroup>
-                <optgroup label="Oceania">
-                  <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
-                  <option value="Australia/Melbourne">Australia/Melbourne (AEST)</option>
-                  <option value="Australia/Perth">Australia/Perth (AWST)</option>
-                  <option value="Pacific/Auckland">Pacific/Auckland (NZST)</option>
+                <optgroup label={language === 'hebrew' ? 'אוקיאניה' : 'Oceania'}>
+                  <option value="Australia/Sydney">{language === 'hebrew' ? 'סידני (AEST)' : 'Australia/Sydney (AEST)'}</option>
+                  <option value="Australia/Melbourne">{language === 'hebrew' ? 'מלבורן (AEST)' : 'Australia/Melbourne (AEST)'}</option>
+                  <option value="Australia/Perth">{language === 'hebrew' ? 'פרת (AWST)' : 'Australia/Perth (AWST)'}</option>
+                  <option value="Pacific/Auckland">{language === 'hebrew' ? 'אוקלנד (NZST)' : 'Pacific/Auckland (NZST)'}</option>
                 </optgroup>
-                <optgroup label="South America">
-                  <option value="America/Sao_Paulo">America/Sao_Paulo (BRT)</option>
-                  <option value="America/Buenos_Aires">America/Buenos_Aires (ART)</option>
-                  <option value="America/Lima">America/Lima (PET)</option>
+                <optgroup label={language === 'hebrew' ? 'דרום אמריקה' : 'South America'}>
+                  <option value="America/Sao_Paulo">{language === 'hebrew' ? 'סאו פאולו (BRT)' : 'America/Sao_Paulo (BRT)'}</option>
+                  <option value="America/Buenos_Aires">{language === 'hebrew' ? 'בואנוס איירס (ART)' : 'America/Buenos_Aires (ART)'}</option>
+                  <option value="America/Lima">{language === 'hebrew' ? 'לימה (PET)' : 'America/Lima (PET)'}</option>
                 </optgroup>
-                <optgroup label="Africa">
-                  <option value="Africa/Cairo">Africa/Cairo (EET)</option>
-                  <option value="Africa/Johannesburg">Africa/Johannesburg (SAST)</option>
-                  <option value="Africa/Lagos">Africa/Lagos (WAT)</option>
+                <optgroup label={language === 'hebrew' ? 'אפריקה' : 'Africa'}>
+                  <option value="Africa/Cairo">{language === 'hebrew' ? 'קהיר (EET)' : 'Africa/Cairo (EET)'}</option>
+                  <option value="Africa/Johannesburg">{language === 'hebrew' ? 'יוהנסבורג (SAST)' : 'Africa/Johannesburg (SAST)'}</option>
+                  <option value="Africa/Lagos">{language === 'hebrew' ? 'לאגוס (WAT)' : 'Africa/Lagos (WAT)'}</option>
                 </optgroup>
               </select>
             </div>
@@ -1387,7 +1449,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
 
           <div className="mt-6">
             <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-              {language === 'hebrew' ? 'חברה (לא חובה)' : 'Company (optional)'}
+              {language === 'hebrew' ? 'חברה' : 'Company'}
             </label>
             {companyError && (
               <p className="text-red-500 text-xs mb-2">
@@ -1398,7 +1460,8 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               value={profileData.companyId || ''}
               onChange={(e) => onInputChange('companyId', e.target.value)}
               className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
-              disabled={isLoadingCompanies || (!isLoadingCompanies && companyOptions.length === 0)}
+              disabled={true}
+              readOnly={true}
             >
               <option value="">{language === 'hebrew' ? 'ללא חברה' : 'No company'}</option>
               {companyOptions.map((company) => (
@@ -1417,41 +1480,8 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 {language === 'hebrew' ? 'לא נמצאו חברות זמינות' : 'No companies available'}
               </p>
             )}
-            <p className={`${themeClasses.textMuted} text-xs mt-2`}>
-              {language === 'hebrew'
-                ? 'בחירת חברה תחבר אותך אוטומטית למנהל החברה בצ׳אט.'
-                : 'Selecting a company automatically assigns you to that company’s manager in chat.'}
-            </p>
           </div>
 
-          {/* Preferred Language */}
-          <div className="mt-6">
-            <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-              Preferred Language
-            </label>
-            <select
-              value={profileData.userLanguage}
-              onChange={(e) => onInputChange('userLanguage', e.target.value)}
-              className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800`}
-            >
-              <option value="">Select Language</option>
-              <option value="en">English</option>
-              <option value="he">עברית (Hebrew)</option>
-              <option value="es">Español (Spanish)</option>
-              <option value="fr">Français (French)</option>
-              <option value="de">Deutsch (German)</option>
-              <option value="it">Italiano (Italian)</option>
-              <option value="pt">Português (Portuguese)</option>
-              <option value="ru">Русский (Russian)</option>
-              <option value="ar">العربية (Arabic)</option>
-              <option value="zh">中文 (Chinese)</option>
-              <option value="ja">日本語 (Japanese)</option>
-              <option value="ko">한국어 (Korean)</option>
-            </select>
-            <p className={`${themeClasses.textMuted} text-xs mt-1`}>
-              This will be used for chat interactions and meal plan communications
-            </p>
-          </div>
         </div>
 
         {/* Health Information */}
@@ -1462,10 +1492,10 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
             </div>
             <div>
               <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>
-                Health Information
+                {language === 'hebrew' ? 'מידע בריאותי' : 'Health Information'}
               </h3>
               <p className={`${themeClasses.textSecondary} text-xs sm:text-sm`}>
-                Optional - provide your health details if relevant
+                {language === 'hebrew' ? 'אופציונלי - ספקו פרטי בריאות אם רלוונטי' : 'Optional - provide your health details if relevant'}
               </p>
             </div>
           </div>
@@ -1473,40 +1503,40 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
           <div className="space-y-4 sm:space-y-6">
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-3`}>
-                Dietary Preferences
+                {language === 'hebrew' ? 'העדפות תזונתיות' : 'Dietary Preferences'}
               </label>
               <textarea
                 value={profileData.dietaryPreferences}
                 onChange={(e) => onInputChange('dietaryPreferences', e.target.value)}
                 rows={3}
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
-                placeholder="e.g., Vegetarian, Vegan, Gluten-free, Mediterranean diet..."
+                placeholder={language === 'hebrew' ? 'לדוגמה: צמחוני, טבעוני, ללא גלוטן, דיאטה ים תיכונית...' : 'e.g., Vegetarian, Vegan, Gluten-free, Mediterranean diet...'}
               />
             </div>
 
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-3`}>
-                Food Allergies
+                {language === 'hebrew' ? 'אלרגיות למזון' : 'Food Allergies'}
               </label>
               <textarea
                 value={profileData.foodAllergies}
                 onChange={(e) => onInputChange('foodAllergies', e.target.value)}
                 rows={3}
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
-                placeholder="e.g., Nuts, Shellfish, Dairy, Soy..."
+                placeholder={language === 'hebrew' ? 'לדוגמה: אגוזים, פירות ים, חלב, סויה...' : 'e.g., Nuts, Shellfish, Dairy, Soy...'}
               />
             </div>
 
             <div>
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-3`}>
-                Medical Conditions
+                {language === 'hebrew' ? 'מצבים רפואיים' : 'Medical Conditions'}
               </label>
               <textarea
                 value={profileData.medicalConditions}
                 onChange={(e) => onInputChange('medicalConditions', e.target.value)}
                 rows={3}
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
-                placeholder="e.g., Diabetes, Hypertension, Heart condition..."
+                placeholder={language === 'hebrew' ? 'לדוגמה: סוכרת, יתר לחץ דם, בעיות לב...' : 'e.g., Diabetes, Hypertension, Heart condition...'}
               />
             </div>
           </div>
@@ -2730,7 +2760,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 };
 
 // Daily Log Tab Component
-const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
+const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const { settings } = useSettings();
   const { isDarkMode } = useTheme();
   const [foodLogs, setFoodLogs] = useState([]);
@@ -2742,6 +2772,8 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
   const [showAddFood, setShowAddFood] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [isAddIngredientModalVisible, setIsAddIngredientModalVisible] = useState(false);
+  const [selectedMealForIngredient, setSelectedMealForIngredient] = useState(null);
   
   // Helper function to format numbers with decimal places
   const formatNumber = (num) => {
@@ -3087,6 +3119,134 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
     }
   };
 
+  // Open add ingredient modal
+  const handleOpenAddIngredient = (mealCategory) => {
+    setSelectedMealForIngredient(mealCategory);
+    setIsAddIngredientModalVisible(true);
+  };
+
+  // Add ingredient to food log
+  const handleAddIngredient = async (ingredient) => {
+    if (!selectedMealForIngredient || !userCode) return;
+
+    try {
+      setProcessing(true);
+
+      // Convert ingredient format from AddIngredientModal to food_items format
+      // Structure must match: { c, f, p, cals, name, quantity }
+      const foodItem = {
+        c: Number(ingredient.carbs || 0),
+        f: Number(ingredient.fat || 0),
+        p: Number(ingredient.protein || 0),
+        cals: Number(ingredient.calories || 0),
+        name: ingredient.item || ingredient.name || 'Unknown Item',
+        quantity: ingredient.household_measure || `${ingredient['portionSI(gram)'] || 0}g`
+      };
+
+      console.log('Converted food item:', JSON.stringify(foodItem, null, 2));
+
+      // Find the most recent food log entry for this meal category and date
+      const existingLogs = groupedLogs[selectedMealForIngredient] || [];
+      const mostRecentLog = existingLogs.length > 0 ? existingLogs[0] : null; // Most recent is first (ordered by created_at desc)
+
+      if (mostRecentLog) {
+        // Add ingredient to existing log
+        let foodItems = [];
+        if (mostRecentLog.food_items) {
+          try {
+            foodItems = typeof mostRecentLog.food_items === 'string' 
+              ? JSON.parse(mostRecentLog.food_items) 
+              : mostRecentLog.food_items;
+          } catch (e) {
+            console.error('Error parsing food_items:', e);
+            foodItems = [];
+          }
+        }
+
+        // Add new food item
+        foodItems.push(foodItem);
+
+        // Recalculate totals
+        const newCalories = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
+        const newProtein = foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
+        const newCarbs = foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
+        const newFat = foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
+
+        // Update the food log
+        const { error } = await updateFoodLog(mostRecentLog.id, {
+          food_items: foodItems,
+          total_calories: newCalories,
+          total_protein_g: newProtein,
+          total_carbs_g: newCarbs,
+          total_fat_g: newFat
+        });
+
+        if (error) {
+          console.error('Error updating food log:', error);
+          alert(
+            language === 'hebrew'
+              ? 'שגיאה בהוספת המרכיב'
+              : 'Error adding ingredient'
+          );
+        } else {
+          // Reload food logs
+          const { data: foodLogsData, error: foodLogsError } = await getFoodLogs(userCode, selectedDate);
+          if (!foodLogsError) {
+            setFoodLogs(foodLogsData || []);
+          }
+          alert(
+            language === 'hebrew'
+              ? 'המרכיב נוסף בהצלחה'
+              : 'Ingredient added successfully'
+          );
+        }
+      } else {
+        // Create new food log entry
+        const newFoodLog = {
+          meal_label: selectedMealForIngredient,
+          food_items: [foodItem],
+          log_date: selectedDate
+        };
+
+        console.log('Creating new food log with data:', JSON.stringify(newFoodLog, null, 2));
+        console.log('User code:', userCode);
+        console.log('Selected date:', selectedDate);
+
+        const { data: createdLog, error } = await createFoodLog(userCode, newFoodLog);
+
+        if (error) {
+          console.error('Error creating food log:', error);
+          console.error('Error details:', JSON.stringify(error, null, 2));
+          alert(
+            language === 'hebrew'
+              ? `שגיאה ביצירת רשומה חדשה: ${error.message || 'Unknown error'}`
+              : `Error creating new log entry: ${error.message || 'Unknown error'}`
+          );
+        } else {
+          // Reload food logs
+          const { data: foodLogsData, error: foodLogsError } = await getFoodLogs(userCode, selectedDate);
+          if (!foodLogsError) {
+            setFoodLogs(foodLogsData || []);
+          }
+          alert(
+            language === 'hebrew'
+              ? 'המרכיב נוסף בהצלחה'
+              : 'Ingredient added successfully'
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Unexpected error adding ingredient:', err);
+      alert(
+        language === 'hebrew'
+          ? 'שגיאה בהוספת המרכיב'
+          : 'Error adding ingredient'
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   // Calculate totals from food logs using food_items JSON column
   const totalCalories = foodLogs.reduce((sum, log) => {
     let logCalories = 0;
@@ -3153,9 +3313,10 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
   }, 0);
 
   // Get meals from meal plan, or fallback to default meals
+  // Always add "other" as the last meal regardless of how many meals exist
   const meals = mealPlanMeals.length > 0 
-    ? mealPlanMeals.map(meal => meal.meal) // Extract meal categories from meal plan
-    : ['breakfast', 'lunch', 'dinner', 'snacks']; // Fallback to default
+    ? [...mealPlanMeals.map(meal => meal.meal), 'other'] // Extract meal categories from meal plan and add "other"
+    : ['breakfast', 'lunch', 'dinner', 'snacks', 'other']; // Fallback to default with "other"
   
   // Create a map of meal category to meal title
   const mealTitleMap = mealPlanMeals.reduce((acc, meal) => {
@@ -3168,10 +3329,27 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
   }, {});
 
   // Group food logs by meal
+  // If a meal_label doesn't match any meal category, add it to "other"
   const groupedLogs = meals.reduce((acc, meal) => {
-    acc[meal] = foodLogs.filter(log => log.meal_label.toLowerCase() === meal.toLowerCase());
+    acc[meal] = [];
     return acc;
   }, {});
+
+  // Group all food logs
+  foodLogs.forEach(log => {
+    const logMealLabel = (log.meal_label || '').toLowerCase();
+    const matchedMeal = meals.find(meal => meal.toLowerCase() === logMealLabel);
+    
+    if (matchedMeal) {
+      // Add to the matched meal category
+      groupedLogs[matchedMeal].push(log);
+    } else {
+      // If no match found, add to "other"
+      if (groupedLogs['other']) {
+        groupedLogs['other'].push(log);
+      }
+    }
+  });
 
   if (loading || isTranslating) {
   return (
@@ -3476,6 +3654,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
               if (name.includes('lunch') || name.includes('צהריים')) return '☀️';
               if (name.includes('dinner') || name.includes('ערב')) return '🌙';
               if (name.includes('snack') || name.includes('חטיף')) return '🍎';
+              if (name === 'other' || name.includes('אחר')) return '🍽️';
               return '🍽️';
             };
 
@@ -3485,6 +3664,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
               if (name.includes('lunch') || name.includes('צהריים')) return 'from-orange-500 to-red-500';
               if (name.includes('dinner') || name.includes('ערב')) return 'from-blue-500 to-purple-500';
               if (name.includes('snack') || name.includes('חטיף')) return 'from-purple-500 to-pink-500';
+              if (name === 'other' || name.includes('אחר')) return 'from-emerald-500 to-teal-500';
               return 'from-emerald-500 to-teal-500';
             };
 
@@ -3531,6 +3711,17 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
                       {mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal}
                     </h4>
                   </div>
+                  {/* Add Ingredient Button */}
+                  <button
+                    onClick={() => handleOpenAddIngredient(meal)}
+                    disabled={processing}
+                    className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500 rounded-full flex items-center justify-center hover:bg-emerald-600 transition-colors shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={language === 'hebrew' ? 'הוסף מרכיב' : 'Add ingredient'}
+                  >
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
                 </div>
 
                 {mealLogs.length > 0 ? (
@@ -3837,6 +4028,18 @@ const DailyLogTab = ({ themeClasses, t, userCode, language }) => {
         })}
         </div>
       </div>
+
+      {/* Add Ingredient Modal */}
+      <AddIngredientModal
+        visible={isAddIngredientModalVisible}
+        onClose={() => {
+          setIsAddIngredientModalVisible(false);
+          setSelectedMealForIngredient(null);
+        }}
+        onAddIngredient={handleAddIngredient}
+        mealName={selectedMealForIngredient ? (mealTitleMap[selectedMealForIngredient] || t.profile.dailyLogTab.meals[selectedMealForIngredient] || selectedMealForIngredient) : null}
+        clientRegion={clientRegion}
+      />
     </div>
   );
 };

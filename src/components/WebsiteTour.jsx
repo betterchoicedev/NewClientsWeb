@@ -84,86 +84,167 @@ const WebsiteTour = () => {
   }, []);
 
   // Home page tour steps configuration
-  const getHomeTourSteps = () => [
-    {
-      target: 'theme-toggle',
-      title: language === 'hebrew' ? 'כפתור מצב כהה/בהיר' : 'Dark/Light Mode Button',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו להחליף בין מצב כהה למצב בהיר. לחצו על הכפתור כדי לשנות את ערכת הנושא של האתר.'
-        : 'Here you can switch between dark and light mode. Click the button to change the website theme.',
-      position: 'bottom'
-    },
-    {
-      target: 'language-toggle',
-      title: language === 'hebrew' ? 'כפתור שפה' : 'Language Button',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו להחליף בין עברית לאנגלית. לחצו על הכפתור כדי לשנות את שפת הממשק.'
-        : 'Here you can switch between Hebrew and English. Click the button to change the interface language.',
-      position: 'bottom'
-    },
-    {
-      target: 'mobile-menu-button',
-      title: language === 'hebrew' ? 'כפתור תפריט' : 'Menu Button',
-      description: language === 'hebrew'
-        ? 'זהו כפתור התפריט. לחצו עליו כדי לפתוח את תפריט הניווט. התפריט יופיע ויאפשר לכם לגשת לכל חלקי האתר.'
-        : 'This is the menu button. Click it to open the navigation menu. The menu will appear and allow you to access all parts of the website.',
-      position: 'bottom'
-    },
-    {
-      target: 'nav-links',
-      title: language === 'hebrew' ? 'קישורי ניווט' : 'Navigation Links',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו לנווט בין הדפים השונים: בית, ידע והשראה, מתכונים, אודות. השתמשו בתפריט זה כדי לגשת לכל חלקי האתר.'
-        : 'Here you can navigate between different pages: Home, Knowledge & Inspiration, Recipes, About. Use this menu to access all parts of the website.',
-      position: 'bottom',
-      requiresMenu: true
-    },
-    {
-      target: 'nav-home',
-      title: language === 'hebrew' ? 'כפתור בית' : 'Home Button',
-      description: language === 'hebrew'
-        ? 'כפתור זה מוביל לדף הבית הראשי של האתר. כאן תוכלו לראות את כל המידע הכללי על Better Choice, התכונות העיקריות, תוכניות המנוי, ועוד.'
-        : 'This button takes you to the main homepage of the website. Here you can see all general information about Better Choice, main features, subscription plans, and more.',
-      position: 'bottom',
-      requiresMenu: true
-    },
-    {
-      target: 'nav-knowledge',
-      title: language === 'hebrew' ? 'כפתור ידע והשראה' : 'Knowledge & Inspiration Button',
-      description: language === 'hebrew'
-        ? 'כפתור זה מוביל לדף הידע וההשראה. כאן תוכלו למצוא מאמרים, טיפים, ומידע מקצועי על תזונה, כושר, ואורח חיים בריא.'
-        : 'This button takes you to the Knowledge & Inspiration page. Here you can find articles, tips, and professional information about nutrition, fitness, and healthy living.',
-      position: 'bottom',
-      requiresMenu: true
-    },
-    {
-      target: 'nav-recipes',
-      title: language === 'hebrew' ? 'כפתור מתכונים' : 'Recipes Button',
-      description: language === 'hebrew'
-        ? 'כפתור זה מוביל לדף המתכונים. כאן תוכלו למצוא מתכונים בריאים וטעימים, מותאמים אישית לפי המטרות וההעדפות שלכם.'
-        : 'This button takes you to the Recipes page. Here you can find healthy and delicious recipes, personalized according to your goals and preferences.',
-      position: 'bottom',
-      requiresMenu: true
-    },
-    {
-      target: 'nav-about',
-      title: language === 'hebrew' ? 'כפתור אודות' : 'About Button',
-      description: language === 'hebrew'
-        ? 'כפתור זה מוביל לדף האודות. כאן תוכלו ללמוד עוד על Better Choice, הצוות שלנו, המטרות שלנו, והסיפור שלנו.'
-        : 'This button takes you to the About page. Here you can learn more about Better Choice, our team, our goals, and our story.',
-      position: 'bottom',
-      requiresMenu: true
-    },
-    {
-      target: 'auth-buttons',
-      title: language === 'hebrew' ? 'כפתורי התחברות והרשמה' : 'Login & Signup Buttons',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו להתחבר לחשבון הקיים שלכם או להירשם לחשבון חדש. לחצו על "התחבר" כדי להתחבר או על "הרשם" כדי ליצור חשבון חדש.'
-        : 'Here you can log in to your existing account or sign up for a new account. Click "Login" to sign in or "Signup" to create a new account.',
-      position: 'bottom',
-      requiresMenu: true
+  const getHomeTourSteps = () => {
+    if (isMobile) {
+      // Mobile tour steps
+      return [
+        {
+          target: 'theme-toggle',
+          title: language === 'hebrew' ? 'כפתור מצב כהה/בהיר' : 'Dark/Light Mode Button',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו להחליף בין מצב כהה למצב בהיר. לחצו על הכפתור כדי לשנות את ערכת הנושא של האתר.'
+            : 'Here you can switch between dark and light mode. Click the button to change the website theme.',
+          position: 'bottom'
+        },
+        {
+          target: 'language-toggle',
+          title: language === 'hebrew' ? 'כפתור שפה' : 'Language Button',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו להחליף בין עברית לאנגלית. לחצו על הכפתור כדי לשנות את שפת הממשק.'
+            : 'Here you can switch between Hebrew and English. Click the button to change the interface language.',
+          position: 'bottom'
+        },
+        {
+          target: 'mobile-menu-button',
+          title: language === 'hebrew' ? 'כפתור תפריט' : 'Menu Button',
+          description: language === 'hebrew'
+            ? 'זהו כפתור התפריט. לחצו עליו כדי לפתוח את תפריט הניווט. התפריט יופיע ויאפשר לכם לגשת לכל חלקי האתר.'
+            : 'This is the menu button. Click it to open the navigation menu. The menu will appear and allow you to access all parts of the website.',
+          position: 'bottom'
+        },
+        {
+          target: 'nav-links',
+          title: language === 'hebrew' ? 'קישורי ניווט' : 'Navigation Links',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו לנווט בין הדפים השונים: בית, ידע והשראה, מתכונים, אודות. השתמשו בתפריט זה כדי לגשת לכל חלקי האתר.'
+            : 'Here you can navigate between different pages: Home, Knowledge & Inspiration, Recipes, About. Use this menu to access all parts of the website.',
+          position: 'bottom',
+          requiresMenu: true
+        },
+        {
+          target: 'nav-home',
+          title: language === 'hebrew' ? 'כפתור בית' : 'Home Button',
+          description: language === 'hebrew'
+            ? 'כפתור זה מוביל לדף הבית הראשי של האתר. כאן תוכלו לראות את כל המידע הכללי על Better Choice, התכונות העיקריות, תוכניות המנוי, ועוד.'
+            : 'This button takes you to the main homepage of the website. Here you can see all general information about Better Choice, main features, subscription plans, and more.',
+          position: 'bottom',
+          requiresMenu: true
+        },
+        {
+          target: 'nav-knowledge',
+          title: language === 'hebrew' ? 'כפתור ידע והשראה' : 'Knowledge & Inspiration Button',
+          description: language === 'hebrew'
+            ? 'כפתור זה מוביל לדף הידע וההשראה. כאן תוכלו למצוא מאמרים, טיפים, ומידע מקצועי על תזונה, כושר, ואורח חיים בריא.'
+            : 'This button takes you to the Knowledge & Inspiration page. Here you can find articles, tips, and professional information about nutrition, fitness, and healthy living.',
+          position: 'bottom',
+          requiresMenu: true
+        },
+        {
+          target: 'nav-recipes',
+          title: language === 'hebrew' ? 'כפתור מתכונים' : 'Recipes Button',
+          description: language === 'hebrew'
+            ? 'כפתור זה מוביל לדף המתכונים. כאן תוכלו למצוא מתכונים בריאים וטעימים, מותאמים אישית לפי המטרות וההעדפות שלכם.'
+            : 'This button takes you to the Recipes page. Here you can find healthy and delicious recipes, personalized according to your goals and preferences.',
+          position: 'bottom',
+          requiresMenu: true
+        },
+        {
+          target: 'nav-about',
+          title: language === 'hebrew' ? 'כפתור אודות' : 'About Button',
+          description: language === 'hebrew'
+            ? 'כפתור זה מוביל לדף האודות. כאן תוכלו ללמוד עוד על Better Choice, הצוות שלנו, המטרות שלנו, והסיפור שלנו.'
+            : 'This button takes you to the About page. Here you can learn more about Better Choice, our team, our goals, and our story.',
+          position: 'bottom',
+          requiresMenu: true
+        },
+        {
+          target: 'auth-buttons',
+          title: language === 'hebrew' ? 'כפתורי התחברות והרשמה' : 'Login & Signup Buttons',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו להתחבר לחשבון הקיים שלכם או להירשם לחשבון חדש. לחצו על "התחבר" כדי להתחבר או על "הרשם" כדי ליצור חשבון חדש.'
+            : 'Here you can log in to your existing account or sign up for a new account. Click "Login" to sign in or "Signup" to create a new account.',
+          position: 'bottom',
+          requiresMenu: true
+        }
+      ];
+     } else {
+       // Desktop tour steps (no mobile menu button, no requiresMenu)
+       return [
+         {
+           target: 'nav',
+           title: language === 'hebrew' ? 'סרגל הניווט' : 'Navigation Bar',
+           description: language === 'hebrew'
+             ? 'זהו סרגל הניווט הראשי של האתר. כאן תוכלו למצוא את כל הקישורים והכפתורים החשובים: קישורי ניווט לדפים השונים, כפתורי ערכת נושא ושפה, וכפתורי התחברות.'
+             : 'This is the main navigation bar of the website. Here you can find all the important links and buttons: navigation links to different pages, theme and language buttons, and login buttons.',
+           position: 'bottom'
+         },
+         {
+           target: 'theme-toggle',
+           title: language === 'hebrew' ? 'כפתור מצב כהה/בהיר' : 'Dark/Light Mode Button',
+           description: language === 'hebrew'
+             ? 'כאן תוכלו להחליף בין מצב כהה למצב בהיר. לחצו על הכפתור כדי לשנות את ערכת הנושא של האתר.'
+             : 'Here you can switch between dark and light mode. Click the button to change the website theme.',
+           position: 'bottom'
+         },
+        {
+          target: 'language-toggle',
+          title: language === 'hebrew' ? 'כפתור שפה' : 'Language Button',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו להחליף בין עברית לאנגלית. לחצו על הכפתור כדי לשנות את שפת הממשק.'
+            : 'Here you can switch between Hebrew and English. Click the button to change the interface language.',
+          position: 'bottom'
+        },
+        {
+          target: 'nav-links',
+          title: language === 'hebrew' ? 'קישורי ניווט' : 'Navigation Links',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו לנווט בין הדפים השונים: בית, ידע והשראה, מתכונים, אודות. השתמשו בתפריט זה כדי לגשת לכל חלקי האתר.'
+            : 'Here you can navigate between different pages: Home, Knowledge & Inspiration, Recipes, About. Use this menu to access all parts of the website.',
+          position: 'bottom'
+        },
+        {
+          target: 'nav-home',
+          title: language === 'hebrew' ? 'כפתור בית' : 'Home Button',
+          description: language === 'hebrew'
+            ? 'כפתור זה מוביל לדף הבית הראשי של האתר. כאן תוכלו לראות את כל המידע הכללי על Better Choice, התכונות העיקריות, תוכניות המנוי, ועוד.'
+            : 'This button takes you to the main homepage of the website. Here you can see all general information about Better Choice, main features, subscription plans, and more.',
+          position: 'bottom'
+        },
+        {
+          target: 'nav-knowledge',
+          title: language === 'hebrew' ? 'כפתור ידע והשראה' : 'Knowledge & Inspiration Button',
+          description: language === 'hebrew'
+            ? 'כפתור זה מוביל לדף הידע וההשראה. כאן תוכלו למצוא מאמרים, טיפים, ומידע מקצועי על תזונה, כושר, ואורח חיים בריא.'
+            : 'This button takes you to the Knowledge & Inspiration page. Here you can find articles, tips, and professional information about nutrition, fitness, and healthy living.',
+          position: 'bottom'
+        },
+        {
+          target: 'nav-recipes',
+          title: language === 'hebrew' ? 'כפתור מתכונים' : 'Recipes Button',
+          description: language === 'hebrew'
+            ? 'כפתור זה מוביל לדף המתכונים. כאן תוכלו למצוא מתכונים בריאים וטעימים, מותאמים אישית לפי המטרות וההעדפות שלכם.'
+            : 'This button takes you to the Recipes page. Here you can find healthy and delicious recipes, personalized according to your goals and preferences.',
+          position: 'bottom'
+        },
+        {
+          target: 'nav-about',
+          title: language === 'hebrew' ? 'כפתור אודות' : 'About Button',
+          description: language === 'hebrew'
+            ? 'כפתור זה מוביל לדף האודות. כאן תוכלו ללמוד עוד על Better Choice, הצוות שלנו, המטרות שלנו, והסיפור שלנו.'
+            : 'This button takes you to the About page. Here you can learn more about Better Choice, our team, our goals, and our story.',
+          position: 'bottom'
+        },
+        {
+          target: 'auth-buttons',
+          title: language === 'hebrew' ? 'כפתורי התחברות והרשמה' : 'Login & Signup Buttons',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו להתחבר לחשבון הקיים שלכם או להירשם לחשבון חדש. לחצו על "התחבר" כדי להתחבר או על "הרשם" כדי ליצור חשבון חדש.'
+            : 'Here you can log in to your existing account or sign up for a new account. Click "Login" to sign in or "Signup" to create a new account.',
+          position: 'bottom'
+        }
+      ];
     }
-  ];
+  };
 
   // Check if we're on mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
@@ -220,8 +301,8 @@ const WebsiteTour = () => {
           target: 'messages-tab',
           title: language === 'hebrew' ? 'כרטיסיית הודעות' : 'Messages Tab',
           description: language === 'hebrew'
-            ? 'כאן תוכלו לתקשר עם הדיאטנית שלכם. שלחו שאלות, קבלו עצות, ועקבו אחר ההתקדמות שלכם. כל ההודעות נשמרות כאן.'
-            : 'Here you can communicate with your dietitian. Send questions, receive advice, and track your progress. All messages are saved here.',
+            ? 'כאן תוכלו לתקשר עם הדיאטנית AI שלכם. שלחו שאלות, קבלו עצות, ועקבו אחר ההתקדמות שלכם דרך WhatsApp.'
+            : 'Here you can communicate with your AI dietitian. Send questions, receive advice, and track your progress via WhatsApp.',
           position: 'right',
           requiresDrawer: true
         },
@@ -238,8 +319,8 @@ const WebsiteTour = () => {
           target: 'settings-tab',
           title: language === 'hebrew' ? 'כרטיסיית הגדרות' : 'Settings Tab',
           description: language === 'hebrew'
-            ? 'כאן תוכלו להתאים אישית את ההגדרות של הפרופיל שלכם: תצוגת קלוריות ומקרו, יחידות מדידה, שפה, ומצב כהה.'
-            : 'Here you can customize your profile settings: display calories and macros, measurement units, language, and dark mode.',
+            ? 'כאן תוכלו להתאים אישית את ההגדרות של האתר שלכם: תצוגת קלוריות ומקרו, יחידות מדידה, שפה, ומצב כהה.'
+            : 'Here you can customize your website settings: display calories and macros, measurement units, language, and dark mode.',
           position: 'right',
           requiresDrawer: true
         }
@@ -284,8 +365,8 @@ const WebsiteTour = () => {
         target: 'messages-tab',
         title: language === 'hebrew' ? 'כרטיסיית הודעות' : 'Messages Tab',
         description: language === 'hebrew'
-          ? 'כאן תוכלו לתקשר עם הדיאטנית שלכם. שלחו שאלות, קבלו עצות, ועקבו אחר ההתקדמות שלכם. כל ההודעות נשמרות כאן.'
-          : 'Here you can communicate with your dietitian. Send questions, receive advice, and track your progress. All messages are saved here.',
+          ? 'כאן תוכלו לתקשר עם הדיאטנית הבינה המלאכותית שלכם. שלחו שאלות, קבלו עצות, ועקבו אחר ההתקדמות שלכם דרך WhatsApp.'
+          : 'Here you can communicate with your AI dietitian. Send questions, receive advice, and track your progress via WhatsApp.',
         position: 'bottom'
       },
       {
@@ -300,8 +381,8 @@ const WebsiteTour = () => {
         target: 'settings-tab',
         title: language === 'hebrew' ? 'כרטיסיית הגדרות' : 'Settings Tab',
         description: language === 'hebrew'
-          ? 'כאן תוכלו להתאים אישית את ההגדרות של הפרופיל שלכם: תצוגת קלוריות ומקרו, יחידות מדידה, שפה, ומצב כהה.'
-          : 'Here you can customize your profile settings: display calories and macros, measurement units, language, and dark mode.',
+          ? 'כאן תוכלו להתאים אישית את ההגדרות של האתר שלכם: תצוגת קלוריות ומקרו, יחידות מדידה, שפה, ומצב כהה.'
+          : 'Here you can customize your website settings: display calories and macros, measurement units, language, and dark mode.',
         position: 'bottom'
       },
       {
@@ -380,12 +461,16 @@ const WebsiteTour = () => {
   // Handle element highlighting
   useEffect(() => {
     // Don't highlight anything on welcome screen
-    if (!isOpen || currentStep < 0 || currentStep >= tourSteps.length) {
+    if (!isOpen || currentStep < 0 || !tourSteps || currentStep >= tourSteps.length) {
       setHighlightedElement(null);
       return;
     }
 
     const step = tourSteps[currentStep];
+    if (!step) {
+      setHighlightedElement(null);
+      return;
+    }
     
     // Open mobile drawer if step requires it and drawer is not already open
     if (step.requiresDrawer) {
@@ -582,31 +667,53 @@ const WebsiteTour = () => {
         }
       } else if (allElements.length > 0) {
         // For mobile, prefer elements that are visible on mobile (not hidden by lg:hidden)
-        if (isMobileView && allElements.length > 1) {
-          // Look for element in mobile controls section
-          // Mobile controls are in a div with "lg:hidden" class
+        // For desktop, prefer elements that are NOT in mobile sections (not in lg:hidden containers)
+        if (allElements.length > 1) {
           for (const el of allElements) {
-            // Check if element is in a container with lg:hidden class (mobile section)
             let parent = el.parentElement;
+            let isInMobileSection = false;
+            
+            // Check if element is in a mobile section (lg:hidden)
             while (parent && parent !== document.body) {
               const classes = parent.className;
-              // Check if parent has lg:hidden (mobile section)
               if (typeof classes === 'string' && classes.includes('lg:hidden')) {
-                // Verify it's actually visible (not hidden by other means)
-                const style = window.getComputedStyle(parent);
-                if (style.display !== 'none' && style.visibility !== 'hidden') {
-                  element = el;
-                  break;
-                }
+                isInMobileSection = true;
+                break;
               }
               parent = parent.parentElement;
             }
-            if (element) break;
+            
+            // On mobile, prefer elements in mobile sections
+            // On desktop, prefer elements NOT in mobile sections
+            if (isMobileView && isInMobileSection) {
+              const style = window.getComputedStyle(el);
+              if (style.display !== 'none' && style.visibility !== 'hidden') {
+                element = el;
+                break;
+              }
+            } else if (!isMobileView && !isInMobileSection) {
+              // Desktop: prefer elements not in mobile sections
+              const style = window.getComputedStyle(el);
+              if (style.display !== 'none' && style.visibility !== 'hidden') {
+                element = el;
+                break;
+              }
+            }
           }
         }
-        // Fallback to first element
+        // Fallback to first visible element
         if (!element) {
-          element = allElements[0];
+          for (const el of allElements) {
+            const style = window.getComputedStyle(el);
+            if (style.display !== 'none' && style.visibility !== 'hidden') {
+              element = el;
+              break;
+            }
+          }
+          // If still no element, just use first one
+          if (!element) {
+            element = allElements[0];
+          }
         }
       }
       
@@ -737,7 +844,8 @@ const WebsiteTour = () => {
     if (!highlightedElement) return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
 
     const rect = highlightedElement.getBoundingClientRect();
-    const step = tourSteps[currentStep];
+    const step = tourSteps && tourSteps[currentStep] ? tourSteps[currentStep] : null;
+    if (!step) return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
     const tooltipHeight = 320; // Increased to account for content
     const tooltipWidth = Math.min(450, window.innerWidth * 0.9);
     const spacing = 20;
@@ -1033,7 +1141,7 @@ const WebsiteTour = () => {
     return null;
   }
 
-  const currentStepData = showWelcome ? null : tourSteps[currentStep];
+  const currentStepData = showWelcome ? null : (tourSteps && tourSteps[currentStep] ? tourSteps[currentStep] : null);
 
   // Get blur overlay regions (everything except highlighted element)
   const getBlurRegions = () => {
@@ -1245,7 +1353,7 @@ const WebsiteTour = () => {
               </button>
             </div>
           </div>
-        ) : (
+        ) : currentStepData ? (
           /* Tour Tooltip */
           <>
             <div className={`${themeClasses.bgCard} rounded-2xl shadow-2xl border-2 border-emerald-500/50 p-6 relative`}>
@@ -1333,7 +1441,7 @@ const WebsiteTour = () => {
               </div>
             )}
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -199,25 +199,26 @@ export const createFoodLog = async (userCode, foodLogData) => {
       return { data: null, error: { message: 'User not found' } };
     }
 
-    // Create food log entry
+    // Create food log entry - ensure all required fields have valid values
+    const insertData = {
+      user_id: userData.id,
+      meal_label: foodLogData.meal_label,
+      food_items: foodLogData.food_items || [],
+      log_date: foodLogData.log_date || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    };
+
+    console.log('Inserting food log data:', JSON.stringify(insertData, null, 2));
+
     const { data, error } = await supabaseSecondary
       .from('food_logs')
-      .insert([{
-        user_id: userData.id,
-        meal_label: foodLogData.meal_label,
-        food_items: foodLogData.food_items,
-        image_url: foodLogData.image_url,
-        total_calories: foodLogData.total_calories,
-        total_protein_g: foodLogData.total_protein_g,
-        total_carbs_g: foodLogData.total_carbs_g,
-        total_fat_g: foodLogData.total_fat_g,
-        log_date: foodLogData.log_date || new Date().toISOString().split('T')[0],
-        created_at: new Date().toISOString()
-      }])
+      .insert([insertData])
       .select();
 
     if (error) {
       console.error('Error creating food log:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      console.error('Failed insert data:', JSON.stringify(insertData, null, 2));
       return { data: null, error };
     }
 

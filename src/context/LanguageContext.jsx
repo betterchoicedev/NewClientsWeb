@@ -714,7 +714,8 @@ const translations = {
           breakfast: "ארוחת בוקר",
           lunch: "ארוחת צהריים",
           dinner: "ארוחת ערב",
-          snacks: "חטיפים"
+          snacks: "חטיפים",
+          other: "אחר"
         },
         noEntries: "אין רשומות היום",
         addFirstEntry: "הוסף את המזון הראשון שלך היום!"
@@ -1459,7 +1460,8 @@ const translations = {
           breakfast: "Breakfast",
           lunch: "Lunch",
           dinner: "Dinner",
-          snacks: "Snacks"
+          snacks: "Snacks",
+          other: "Other"
         },
         noEntries: "No entries today",
         addFirstEntry: "Add your first food entry today!"

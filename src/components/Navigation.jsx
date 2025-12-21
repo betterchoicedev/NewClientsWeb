@@ -156,12 +156,13 @@ function Navigation() {
                 <Link 
                   to="/profile"
                   data-tour="profile-button"
-                  className={`w-10 h-10 ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm`}
+                  className={`${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} ${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm whitespace-nowrap flex items-center gap-2`}
                   title={language === 'hebrew' ? 'פרופיל' : 'Profile'}
                 >
-                  <svg className={`w-5 h-5 ${isDarkMode ? themeClasses.textPrimary : 'text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
+                  <svg className={`w-4 h-4 ${isDarkMode ? themeClasses.textPrimary : 'text-gray-600'} flex-shrink-0`} fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
                   </svg>
+                  <span>{language === 'hebrew' ? 'פרופיל' : 'Profile'}</span>
                 </Link>
                 
                 {/* Separator */}
