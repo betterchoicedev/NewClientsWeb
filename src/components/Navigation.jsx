@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,25 @@ function Navigation() {
   const { isDarkMode, toggleTheme, themeClasses } = useTheme();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Listen for tour events to open/close mobile menu
+  useEffect(() => {
+    const handleOpenMobileMenu = () => {
+      setMobileMenuOpen(true);
+    };
+
+    const handleCloseMobileMenu = () => {
+      setMobileMenuOpen(false);
+    };
+
+    window.addEventListener('openMobileMenu', handleOpenMobileMenu);
+    window.addEventListener('closeMobileMenu', handleCloseMobileMenu);
+
+    return () => {
+      window.removeEventListener('openMobileMenu', handleOpenMobileMenu);
+      window.removeEventListener('closeMobileMenu', handleCloseMobileMenu);
+    };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -100,6 +119,7 @@ function Navigation() {
             {/* Theme Toggle */}
             <button 
               onClick={toggleTheme}
+              data-tour="theme-toggle"
               className={`w-10 h-10 ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm`}
               title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
@@ -117,6 +137,7 @@ function Navigation() {
             {/* Language Toggle */}
             <button 
               onClick={toggleLanguage}
+              data-tour="language-toggle"
               className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 rounded-xl flex items-center justify-center transition-all duration-300 text-white font-semibold text-sm"
             >
               {language === 'hebrew' ? 'EN' : 'ע'}
@@ -188,6 +209,7 @@ function Navigation() {
             {/* Theme Toggle - Mobile */}
             <button 
               onClick={toggleTheme}
+              data-tour="theme-toggle"
               className={`w-10 h-10 ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm`}
               title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
@@ -205,6 +227,7 @@ function Navigation() {
             {/* Language Toggle - Mobile */}
             <button 
               onClick={toggleLanguage}
+              data-tour="language-toggle"
               className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 rounded-xl flex items-center justify-center transition-all duration-300 text-white font-semibold text-sm"
             >
               {language === 'hebrew' ? 'EN' : 'ע'}
@@ -213,6 +236,7 @@ function Navigation() {
             {/* Mobile Menu Button */}
             <button 
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              data-tour="mobile-menu-button"
               className={`w-10 h-10 ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm`}
             >
               <svg className={`w-5 h-5 ${isDarkMode ? themeClasses.textPrimary : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -234,6 +258,7 @@ function Navigation() {
               <div data-tour="nav-links" className="space-y-3">
               <Link 
                 to="/" 
+                data-tour="nav-home"
                 onClick={closeMobileMenu}
                 className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${
                   isActive('/') 
@@ -245,6 +270,7 @@ function Navigation() {
               </Link>
               <Link 
                 to="/knowledge" 
+                data-tour="nav-knowledge"
                 onClick={closeMobileMenu}
                 className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${
                   isActive('/knowledge') 
@@ -256,6 +282,7 @@ function Navigation() {
               </Link>
               <Link 
                 to="/recipes" 
+                data-tour="nav-recipes"
                 onClick={closeMobileMenu}
                 className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${
                   isActive('/recipes') 
@@ -267,6 +294,7 @@ function Navigation() {
               </Link>
               <Link 
                 to="/about" 
+                data-tour="nav-about"
                 onClick={closeMobileMenu}
                 className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${
                   isActive('/about') 

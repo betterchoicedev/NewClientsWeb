@@ -86,20 +86,37 @@ const WebsiteTour = () => {
   // Home page tour steps configuration
   const getHomeTourSteps = () => [
     {
-      target: 'nav',
-      title: language === 'hebrew' ? 'תפריט הניווט' : 'Navigation Menu',
-      description: language === 'hebrew' 
-        ? 'זהו תפריט הניווט הראשי של האתר. כאן תוכלו למצוא את כל האפשרויות לניווט באתר, כולל דפים שונים, כפתורי התחברות והרשמה, והגדרות נוספות.'
-        : 'This is the main navigation menu of the website. Here you can find all navigation options, including different pages, login and signup buttons, and additional settings.',
+      target: 'theme-toggle',
+      title: language === 'hebrew' ? 'כפתור מצב כהה/בהיר' : 'Dark/Light Mode Button',
+      description: language === 'hebrew'
+        ? 'כאן תוכלו להחליף בין מצב כהה למצב בהיר. לחצו על הכפתור כדי לשנות את ערכת הנושא של האתר.'
+        : 'Here you can switch between dark and light mode. Click the button to change the website theme.',
+      position: 'bottom'
+    },
+    {
+      target: 'language-toggle',
+      title: language === 'hebrew' ? 'כפתור שפה' : 'Language Button',
+      description: language === 'hebrew'
+        ? 'כאן תוכלו להחליף בין עברית לאנגלית. לחצו על הכפתור כדי לשנות את שפת הממשק.'
+        : 'Here you can switch between Hebrew and English. Click the button to change the interface language.',
+      position: 'bottom'
+    },
+    {
+      target: 'mobile-menu-button',
+      title: language === 'hebrew' ? 'כפתור תפריט' : 'Menu Button',
+      description: language === 'hebrew'
+        ? 'זהו כפתור התפריט. לחצו עליו כדי לפתוח את תפריט הניווט. התפריט יופיע ויאפשר לכם לגשת לכל חלקי האתר.'
+        : 'This is the menu button. Click it to open the navigation menu. The menu will appear and allow you to access all parts of the website.',
       position: 'bottom'
     },
     {
       target: 'nav-links',
       title: language === 'hebrew' ? 'קישורי ניווט' : 'Navigation Links',
-      description: language === 'hebrew' 
+      description: language === 'hebrew'
         ? 'כאן תוכלו לנווט בין הדפים השונים: בית, ידע והשראה, מתכונים, אודות. השתמשו בתפריט זה כדי לגשת לכל חלקי האתר.'
         : 'Here you can navigate between different pages: Home, Knowledge & Inspiration, Recipes, About. Use this menu to access all parts of the website.',
-      position: 'bottom'
+      position: 'bottom',
+      requiresMenu: true
     },
     {
       target: 'nav-home',
@@ -107,7 +124,8 @@ const WebsiteTour = () => {
       description: language === 'hebrew'
         ? 'כפתור זה מוביל לדף הבית הראשי של האתר. כאן תוכלו לראות את כל המידע הכללי על Better Choice, התכונות העיקריות, תוכניות המנוי, ועוד.'
         : 'This button takes you to the main homepage of the website. Here you can see all general information about Better Choice, main features, subscription plans, and more.',
-      position: 'bottom'
+      position: 'bottom',
+      requiresMenu: true
     },
     {
       target: 'nav-knowledge',
@@ -115,7 +133,8 @@ const WebsiteTour = () => {
       description: language === 'hebrew'
         ? 'כפתור זה מוביל לדף הידע וההשראה. כאן תוכלו למצוא מאמרים, טיפים, ומידע מקצועי על תזונה, כושר, ואורח חיים בריא.'
         : 'This button takes you to the Knowledge & Inspiration page. Here you can find articles, tips, and professional information about nutrition, fitness, and healthy living.',
-      position: 'bottom'
+      position: 'bottom',
+      requiresMenu: true
     },
     {
       target: 'nav-recipes',
@@ -123,7 +142,8 @@ const WebsiteTour = () => {
       description: language === 'hebrew'
         ? 'כפתור זה מוביל לדף המתכונים. כאן תוכלו למצוא מתכונים בריאים וטעימים, מותאמים אישית לפי המטרות וההעדפות שלכם.'
         : 'This button takes you to the Recipes page. Here you can find healthy and delicious recipes, personalized according to your goals and preferences.',
-      position: 'bottom'
+      position: 'bottom',
+      requiresMenu: true
     },
     {
       target: 'nav-about',
@@ -131,7 +151,8 @@ const WebsiteTour = () => {
       description: language === 'hebrew'
         ? 'כפתור זה מוביל לדף האודות. כאן תוכלו ללמוד עוד על Better Choice, הצוות שלנו, המטרות שלנו, והסיפור שלנו.'
         : 'This button takes you to the About page. Here you can learn more about Better Choice, our team, our goals, and our story.',
-      position: 'bottom'
+      position: 'bottom',
+      requiresMenu: true
     },
     {
       target: 'auth-buttons',
@@ -139,77 +160,160 @@ const WebsiteTour = () => {
       description: language === 'hebrew'
         ? 'כאן תוכלו להתחבר לחשבון הקיים שלכם או להירשם לחשבון חדש. לחצו על "התחבר" כדי להתחבר או על "הרשם" כדי ליצור חשבון חדש.'
         : 'Here you can log in to your existing account or sign up for a new account. Click "Login" to sign in or "Signup" to create a new account.',
-      position: 'bottom'
+      position: 'bottom',
+      requiresMenu: true
     }
   ];
 
+  // Check if we're on mobile
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Profile page tour steps configuration
-  const getProfileTourSteps = () => [
-    {
-      target: 'profile-sidebar',
-      title: language === 'hebrew' ? 'תפריט הפרופיל' : 'Profile Menu',
-      description: language === 'hebrew'
-        ? 'זהו תפריט הניווט של הפרופיל שלכם. כאן תוכלו לגשת לכל חלקי הפרופיל: פרטים אישיים, תוכנית התזונה, יומן יומי, הודעות, תוכניות מנוי והגדרות.'
-        : 'This is your profile navigation menu. Here you can access all parts of your profile: personal information, meal plan, daily log, messages, subscription plans, and settings.',
-      position: 'right'
-    },
-    {
-      target: 'profile-tab',
-      title: language === 'hebrew' ? 'כרטיסיית פרופיל' : 'Profile Tab',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו לנהל את הפרטים האישיים שלכם: שם, אימייל, טלפון, תאריך לידה, מיקום, והעדפות בריאות. כל המידע הזה עוזר לנו להתאים את התוכנית שלכם.'
-        : 'Here you can manage your personal information: name, email, phone, birth date, location, and health preferences. This information helps us personalize your plan.',
-      position: 'bottom'
-    },
-    {
-      target: 'myplan-tab',
-      title: language === 'hebrew' ? 'כרטיסיית תוכנית תזונה' : 'Meal Plan Tab',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו לראות את תוכנית התזונה היומית שלכם. תראו את כל הארוחות, המרכיבים, והערכים התזונתיים. תוכלו גם לערוך את התוכנית ולהוסיף מרכיבים.'
-        : 'Here you can view your daily meal plan. You\'ll see all meals, ingredients, and nutritional values. You can also edit the plan and add ingredients.',
-      position: 'bottom'
-    },
-    {
-      target: 'dailylog-tab',
-      title: language === 'hebrew' ? 'כרטיסיית יומן יומי' : 'Daily Log Tab',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו לעקוב אחר צריכת המזון היומית שלכם. רשמו מה אכלתם בכל ארוחה ועקבו אחר הקלוריות והמקרו-נוטריינטים שלכם.'
-        : 'Here you can track your daily food intake. Log what you ate at each meal and track your calories and macronutrients.',
-      position: 'bottom'
-    },
-    {
-      target: 'messages-tab',
-      title: language === 'hebrew' ? 'כרטיסיית הודעות' : 'Messages Tab',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו לתקשר עם הדיאטנית שלכם. שלחו שאלות, קבלו עצות, ועקבו אחר ההתקדמות שלכם. כל ההודעות נשמרות כאן.'
-        : 'Here you can communicate with your dietitian. Send questions, receive advice, and track your progress. All messages are saved here.',
-      position: 'bottom'
-    },
-    {
-      target: 'pricing-tab',
-      title: language === 'hebrew' ? 'כרטיסיית תוכניות מנוי' : 'Subscription Plans Tab',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו לראות ולבחור מתוך תוכניות המנוי השונות שלנו. כל תוכנית כוללת תכונות שונות ומחירים שונים.'
-        : 'Here you can view and choose from our different subscription plans. Each plan includes different features and pricing.',
-      position: 'bottom'
-    },
-    {
-      target: 'settings-tab',
-      title: language === 'hebrew' ? 'כרטיסיית הגדרות' : 'Settings Tab',
-      description: language === 'hebrew'
-        ? 'כאן תוכלו להתאים אישית את ההגדרות של הפרופיל שלכם: תצוגת קלוריות ומקרו, יחידות מדידה, שפה, ומצב כהה.'
-        : 'Here you can customize your profile settings: display calories and macros, measurement units, language, and dark mode.',
-      position: 'bottom'
-    },
-    {
-      target: 'profile-home-button',
-      title: language === 'hebrew' ? 'כפתור חזרה לבית' : 'Return to Home Button',
-      description: language === 'hebrew'
-        ? 'כפתור זה מחזיר אתכם לדף הבית הראשי של האתר.'
-        : 'This button returns you to the main homepage of the website.',
-      position: 'bottom'
+  const getProfileTourSteps = () => {
+    // Mobile-specific tour steps
+    if (isMobile) {
+      return [
+        {
+          target: 'mobile-menu-button',
+          title: language === 'hebrew' ? 'כפתור תפריט' : 'Menu Button',
+          description: language === 'hebrew'
+            ? 'זהו כפתור התפריט. לחצו עליו כדי לפתוח את תפריט הניווט. התפריט יופיע מהצד ויאפשר לכם לגשת לכל חלקי הפרופיל.'
+            : 'This is the menu button. Click it to open the navigation menu. The menu will slide in from the side and allow you to access all parts of your profile.',
+          position: 'bottom'
+        },
+        {
+          target: 'profile-tab',
+          title: language === 'hebrew' ? 'כרטיסיית פרופיל' : 'Profile Tab',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו לנהל את הפרטים האישיים שלכם: שם, אימייל, טלפון, תאריך לידה, מיקום, והעדפות בריאות. כל המידע הזה עוזר לנו להתאים את התוכנית שלכם.'
+            : 'Here you can manage your personal information: name, email, phone, birth date, location, and health preferences. This information helps us personalize your plan.',
+          position: 'right',
+          requiresDrawer: true
+        },
+        {
+          target: 'myplan-tab',
+          title: language === 'hebrew' ? 'כרטיסיית תוכנית תזונה' : 'Meal Plan Tab',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו לראות את תוכנית התזונה היומית שלכם. תראו את כל הארוחות, המרכיבים, והערכים התזונתיים. תוכלו גם לערוך את התוכנית ולהוסיף מרכיבים.'
+            : 'Here you can view your daily meal plan. You\'ll see all meals, ingredients, and nutritional values. You can also edit the plan and add ingredients.',
+          position: 'right',
+          requiresDrawer: true
+        },
+        {
+          target: 'dailylog-tab',
+          title: language === 'hebrew' ? 'כרטיסיית יומן יומי' : 'Daily Log Tab',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו לעקוב אחר צריכת המזון היומית שלכם. רשמו מה אכלתם בכל ארוחה ועקבו אחר הקלוריות והמקרו-נוטריינטים שלכם.'
+            : 'Here you can track your daily food intake. Log what you ate at each meal and track your calories and macronutrients.',
+          position: 'right',
+          requiresDrawer: true
+        },
+        {
+          target: 'messages-tab',
+          title: language === 'hebrew' ? 'כרטיסיית הודעות' : 'Messages Tab',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו לתקשר עם הדיאטנית שלכם. שלחו שאלות, קבלו עצות, ועקבו אחר ההתקדמות שלכם. כל ההודעות נשמרות כאן.'
+            : 'Here you can communicate with your dietitian. Send questions, receive advice, and track your progress. All messages are saved here.',
+          position: 'right',
+          requiresDrawer: true
+        },
+        {
+          target: 'pricing-tab',
+          title: language === 'hebrew' ? 'כרטיסיית תוכניות מנוי' : 'Subscription Plans Tab',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו לראות ולבחור מתוך תוכניות המנוי השונות שלנו. כל תוכנית כוללת תכונות שונות ומחירים שונים.'
+            : 'Here you can view and choose from our different subscription plans. Each plan includes different features and pricing.',
+          position: 'right',
+          requiresDrawer: true
+        },
+        {
+          target: 'settings-tab',
+          title: language === 'hebrew' ? 'כרטיסיית הגדרות' : 'Settings Tab',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו להתאים אישית את ההגדרות של הפרופיל שלכם: תצוגת קלוריות ומקרו, יחידות מדידה, שפה, ומצב כהה.'
+            : 'Here you can customize your profile settings: display calories and macros, measurement units, language, and dark mode.',
+          position: 'right',
+          requiresDrawer: true
+        }
+      ];
     }
-  ];
+    
+    // Desktop tour steps
+    return [
+      {
+        target: 'profile-sidebar',
+        title: language === 'hebrew' ? 'תפריט הפרופיל' : 'Profile Menu',
+        description: language === 'hebrew'
+          ? 'זהו תפריט הניווט של הפרופיל שלכם. כאן תוכלו לגשת לכל חלקי הפרופיל: פרטים אישיים, תוכנית התזונה, יומן יומי, הודעות, תוכניות מנוי והגדרות.'
+          : 'This is your profile navigation menu. Here you can access all parts of your profile: personal information, meal plan, daily log, messages, subscription plans, and settings.',
+        position: 'right'
+      },
+      {
+        target: 'profile-tab',
+        title: language === 'hebrew' ? 'כרטיסיית פרופיל' : 'Profile Tab',
+        description: language === 'hebrew'
+          ? 'כאן תוכלו לנהל את הפרטים האישיים שלכם: שם, אימייל, טלפון, תאריך לידה, מיקום, והעדפות בריאות. כל המידע הזה עוזר לנו להתאים את התוכנית שלכם.'
+          : 'Here you can manage your personal information: name, email, phone, birth date, location, and health preferences. This information helps us personalize your plan.',
+        position: 'bottom'
+      },
+      {
+        target: 'myplan-tab',
+        title: language === 'hebrew' ? 'כרטיסיית תוכנית תזונה' : 'Meal Plan Tab',
+        description: language === 'hebrew'
+          ? 'כאן תוכלו לראות את תוכנית התזונה היומית שלכם. תראו את כל הארוחות, המרכיבים, והערכים התזונתיים. תוכלו גם לערוך את התוכנית ולהוסיף מרכיבים.'
+          : 'Here you can view your daily meal plan. You\'ll see all meals, ingredients, and nutritional values. You can also edit the plan and add ingredients.',
+        position: 'bottom'
+      },
+      {
+        target: 'dailylog-tab',
+        title: language === 'hebrew' ? 'כרטיסיית יומן יומי' : 'Daily Log Tab',
+        description: language === 'hebrew'
+          ? 'כאן תוכלו לעקוב אחר צריכת המזון היומית שלכם. רשמו מה אכלתם בכל ארוחה ועקבו אחר הקלוריות והמקרו-נוטריינטים שלכם.'
+          : 'Here you can track your daily food intake. Log what you ate at each meal and track your calories and macronutrients.',
+        position: 'bottom'
+      },
+      {
+        target: 'messages-tab',
+        title: language === 'hebrew' ? 'כרטיסיית הודעות' : 'Messages Tab',
+        description: language === 'hebrew'
+          ? 'כאן תוכלו לתקשר עם הדיאטנית שלכם. שלחו שאלות, קבלו עצות, ועקבו אחר ההתקדמות שלכם. כל ההודעות נשמרות כאן.'
+          : 'Here you can communicate with your dietitian. Send questions, receive advice, and track your progress. All messages are saved here.',
+        position: 'bottom'
+      },
+      {
+        target: 'pricing-tab',
+        title: language === 'hebrew' ? 'כרטיסיית תוכניות מנוי' : 'Subscription Plans Tab',
+        description: language === 'hebrew'
+          ? 'כאן תוכלו לראות ולבחור מתוך תוכניות המנוי השונות שלנו. כל תוכנית כוללת תכונות שונות ומחירים שונים.'
+          : 'Here you can view and choose from our different subscription plans. Each plan includes different features and pricing.',
+        position: 'bottom'
+      },
+      {
+        target: 'settings-tab',
+        title: language === 'hebrew' ? 'כרטיסיית הגדרות' : 'Settings Tab',
+        description: language === 'hebrew'
+          ? 'כאן תוכלו להתאים אישית את ההגדרות של הפרופיל שלכם: תצוגת קלוריות ומקרו, יחידות מדידה, שפה, ומצב כהה.'
+          : 'Here you can customize your profile settings: display calories and macros, measurement units, language, and dark mode.',
+        position: 'bottom'
+      },
+      {
+        target: 'profile-home-button',
+        title: language === 'hebrew' ? 'כפתור חזרה לבית' : 'Return to Home Button',
+        description: language === 'hebrew'
+          ? 'כפתור זה מחזיר אתכם לדף הבית הראשי של האתר.'
+          : 'This button returns you to the main homepage of the website.',
+        position: 'bottom'
+      }
+    ];
+  };
 
   // Get tour steps based on current page
   const getTourSteps = () => {
@@ -283,42 +387,350 @@ const WebsiteTour = () => {
 
     const step = tourSteps[currentStep];
     
+    // Open mobile drawer if step requires it and drawer is not already open
+    if (step.requiresDrawer) {
+      // Check if drawer is already open
+      const drawers = document.querySelectorAll('[class*="fixed"][class*="z-50"]');
+      let drawerOpen = false;
+      for (const drawer of drawers) {
+        const style = window.getComputedStyle(drawer);
+        if (style.opacity !== '0' && style.pointerEvents !== 'none') {
+          const hasNavTabs = drawer.querySelector('[data-tour*="-tab"]');
+          if (hasNavTabs) {
+            drawerOpen = true;
+            break;
+          }
+        }
+      }
+      
+      if (!drawerOpen) {
+        // Dispatch custom event to open drawer
+        window.dispatchEvent(new CustomEvent('openMobileDrawer'));
+      }
+    }
+    
+    // Open mobile menu if step requires it
+    if (step.requiresMenu) {
+      // Check if mobile menu is already open
+      // The mobile menu container has lg:hidden class and is conditionally rendered
+      const mobileMenuContainer = document.querySelector('.lg\\:hidden[class*="border-t"]');
+      let isMenuOpen = false;
+      
+      if (mobileMenuContainer) {
+        const style = window.getComputedStyle(mobileMenuContainer);
+        isMenuOpen = style.display !== 'none' && style.visibility !== 'hidden';
+      }
+      
+      // Also check by looking for nav-links in mobile menu
+      const allNavLinks = document.querySelectorAll('[data-tour="nav-links"]');
+      for (const navLinks of allNavLinks) {
+        let parent = navLinks.parentElement;
+        while (parent && parent !== document.body) {
+          const classes = parent.className;
+          if (typeof classes === 'string' && classes.includes('lg:hidden')) {
+            const style = window.getComputedStyle(parent);
+            if (style.display !== 'none' && style.visibility !== 'hidden') {
+              isMenuOpen = true;
+              break;
+            }
+          }
+          parent = parent.parentElement;
+        }
+        if (isMenuOpen) break;
+      }
+      
+      if (!isMenuOpen) {
+        // Dispatch custom event to open mobile menu
+        window.dispatchEvent(new CustomEvent('openMobileMenu'));
+      }
+    }
+    
+    // Function to check if drawer is open
+    const isDrawerOpen = () => {
+      if (!step.requiresDrawer) return true; // Not a drawer step, consider "open"
+      // Look for the drawer container - it has fixed positioning and z-50
+      const drawers = document.querySelectorAll('[class*="fixed"][class*="z-50"]');
+      for (const drawer of drawers) {
+        const style = window.getComputedStyle(drawer);
+        // Check if it's the mobile drawer (has opacity transition and is visible)
+        if (style.opacity !== '0' && style.pointerEvents !== 'none') {
+          // Check if it contains navigation tabs (our target elements)
+          const hasNavTabs = drawer.querySelector('[data-tour*="-tab"]');
+          if (hasNavTabs) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    
+    // Function to check if mobile menu is open
+    const isMenuOpen = () => {
+      if (!step.requiresMenu) return true; // Not a menu step, consider "open"
+      
+      // Check if mobile menu container is visible
+      const mobileMenuContainer = document.querySelector('.lg\\:hidden[class*="border-t"]');
+      if (mobileMenuContainer) {
+        const style = window.getComputedStyle(mobileMenuContainer);
+        if (style.display !== 'none' && style.visibility !== 'hidden') {
+          return true;
+        }
+      }
+      
+      // Also check by looking for nav-links in mobile menu
+      const allNavLinks = document.querySelectorAll('[data-tour="nav-links"]');
+      for (const navLinks of allNavLinks) {
+        let parent = navLinks.parentElement;
+        while (parent && parent !== document.body) {
+          const classes = parent.className;
+          if (typeof classes === 'string' && classes.includes('lg:hidden')) {
+            const style = window.getComputedStyle(parent);
+            if (style.display !== 'none' && style.visibility !== 'hidden') {
+              return true;
+            }
+          }
+          parent = parent.parentElement;
+        }
+      }
+      
+      return false;
+    };
+    
     // Function to find and highlight element
     const findAndHighlight = () => {
-      // Find element using data-tour attribute
-      const element = document.querySelector(`[data-tour="${step.target}"]`);
+      // If step requires drawer, make sure it's open first
+      if (step.requiresDrawer && !isDrawerOpen()) {
+        console.log(`Drawer not open yet for step: ${step.target}`);
+        return false;
+      }
       
-      console.log(`Looking for element with data-tour="${step.target}":`, element);
+      // If step requires menu, make sure it's open first
+      if (step.requiresMenu && !isMenuOpen()) {
+        console.log(`Menu not open yet for step: ${step.target}`);
+        return false;
+      }
+      
+      // Find element using data-tour attribute
+      // Try all elements with this attribute (there might be duplicates in desktop/mobile)
+      const allElements = document.querySelectorAll(`[data-tour="${step.target}"]`);
+      let element = null;
+      
+      // Check if we're on mobile
+      const isMobileView = window.innerWidth < 1024;
+      
+      // If step requires drawer, prefer element inside the drawer
+      if (step.requiresDrawer && allElements.length > 0) {
+        // Find the drawer container
+        const drawers = document.querySelectorAll('[class*="fixed"][class*="z-50"]');
+        for (const drawer of drawers) {
+          const style = window.getComputedStyle(drawer);
+          if (style.opacity !== '0' && style.pointerEvents !== 'none') {
+            // Look for element inside this drawer
+            const drawerElement = drawer.querySelector(`[data-tour="${step.target}"]`);
+            if (drawerElement) {
+              element = drawerElement;
+              break;
+            }
+          }
+        }
+        // Fallback to first element if not found in drawer
+        if (!element && allElements.length > 0) {
+          element = allElements[0];
+        }
+      } else if (step.requiresMenu && allElements.length > 0) {
+        // If step requires menu, prefer element inside the mobile menu
+        // Find the mobile menu container (has lg:hidden and border-t classes)
+        const mobileMenuContainer = document.querySelector('.lg\\:hidden[class*="border-t"]');
+        
+        if (mobileMenuContainer) {
+          const style = window.getComputedStyle(mobileMenuContainer);
+          if (style.display !== 'none' && style.visibility !== 'hidden') {
+            // Look for element inside the mobile menu
+            const menuElement = mobileMenuContainer.querySelector(`[data-tour="${step.target}"]`);
+            if (menuElement) {
+              element = menuElement;
+            }
+          }
+        }
+        
+        // Also try finding by checking nav-links parent
+        if (!element) {
+          const allNavLinks = document.querySelectorAll('[data-tour="nav-links"]');
+          for (const navLinks of allNavLinks) {
+            let parent = navLinks.parentElement;
+            while (parent && parent !== document.body) {
+              const classes = parent.className;
+              if (typeof classes === 'string' && classes.includes('lg:hidden')) {
+                const style = window.getComputedStyle(parent);
+                if (style.display !== 'none' && style.visibility !== 'hidden') {
+                  const menuElement = parent.querySelector(`[data-tour="${step.target}"]`);
+                  if (menuElement) {
+                    element = menuElement;
+                    break;
+                  }
+                }
+              }
+              parent = parent.parentElement;
+            }
+            if (element) break;
+          }
+        }
+        
+        // Fallback to first element if not found in menu
+        if (!element && allElements.length > 0) {
+          element = allElements[0];
+        }
+      } else if (allElements.length > 0) {
+        // For mobile, prefer elements that are visible on mobile (not hidden by lg:hidden)
+        if (isMobileView && allElements.length > 1) {
+          // Look for element in mobile controls section
+          // Mobile controls are in a div with "lg:hidden" class
+          for (const el of allElements) {
+            // Check if element is in a container with lg:hidden class (mobile section)
+            let parent = el.parentElement;
+            while (parent && parent !== document.body) {
+              const classes = parent.className;
+              // Check if parent has lg:hidden (mobile section)
+              if (typeof classes === 'string' && classes.includes('lg:hidden')) {
+                // Verify it's actually visible (not hidden by other means)
+                const style = window.getComputedStyle(parent);
+                if (style.display !== 'none' && style.visibility !== 'hidden') {
+                  element = el;
+                  break;
+                }
+              }
+              parent = parent.parentElement;
+            }
+            if (element) break;
+          }
+        }
+        // Fallback to first element
+        if (!element) {
+          element = allElements[0];
+        }
+      }
+      
+      console.log(`Looking for element with data-tour="${step.target}":`, element, `Found ${allElements.length} total`);
 
       if (element) {
-        // Scroll element into view
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setHighlightedElement(element);
-        return true;
+        // Check if element is visible (not hidden by drawer animation)
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        const isVisible = rect.width > 0 && rect.height > 0 && 
+                         style.opacity !== '0' &&
+                         style.visibility !== 'hidden' &&
+                         style.display !== 'none';
+        
+        console.log(`Element visibility check:`, { 
+          width: rect.width, 
+          height: rect.height, 
+          opacity: style.opacity, 
+          visibility: style.visibility, 
+          display: style.display,
+          isVisible 
+        });
+        
+        if (isVisible) {
+          // Scroll element into view - use block: 'center' for drawer elements
+          element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          
+          // Also try scrolling the drawer container if element is inside one
+          let parent = element.parentElement;
+          while (parent && parent !== document.body) {
+            const parentStyle = window.getComputedStyle(parent);
+            if (parentStyle.overflowY === 'auto' || parentStyle.overflowY === 'scroll') {
+              // Scroll within the scrollable container
+              const containerRect = parent.getBoundingClientRect();
+              const elementRect = element.getBoundingClientRect();
+              const scrollTop = parent.scrollTop + (elementRect.top - containerRect.top) - (containerRect.height / 2) + (elementRect.height / 2);
+              parent.scrollTo({ top: scrollTop, behavior: 'smooth' });
+              break;
+            }
+            parent = parent.parentElement;
+          }
+          
+          // Wait for smooth scroll animation to complete (typically 300-500ms)
+          // Then set the highlighted element so tooltip position is calculated correctly
+          setTimeout(() => {
+            // Re-check element is still visible after scroll
+            const newRect = element.getBoundingClientRect();
+            if (newRect.width > 0 && newRect.height > 0) {
+              setHighlightedElement(element);
+            }
+          }, 600); // Wait for scroll animation + buffer
+          
+          return true;
+        }
       }
       return false;
     };
 
-    // Try immediately
-    if (!findAndHighlight()) {
-      // Fallback: try multiple times with increasing delays (in case page is still loading)
-      let attempts = 0;
-      const maxAttempts = 5;
-      
-      const tryFind = () => {
-        attempts++;
-        if (findAndHighlight() || attempts >= maxAttempts) {
-          if (attempts >= maxAttempts) {
-            console.warn(`Could not find element with data-tour="${step.target}" after ${maxAttempts} attempts`);
+    // If step requires drawer or menu, wait for it to fully open and render
+    // The handleNext function already ensures drawer/menu is ready, but we add a small buffer
+    const delay = step.requiresDrawer ? 300 : (step.requiresMenu ? 400 : 0);
+
+    setTimeout(() => {
+      // Try immediately
+      if (!findAndHighlight()) {
+        // Fallback: try multiple times with increasing delays (in case page is still loading)
+        let attempts = 0;
+        const maxAttempts = 20; // Increased attempts for drawer elements
+        
+        const tryFind = () => {
+          attempts++;
+          const found = findAndHighlight();
+          if (found || attempts >= maxAttempts) {
+            if (attempts >= maxAttempts && !found) {
+              console.warn(`Could not find element with data-tour="${step.target}" after ${maxAttempts} attempts`);
+              // Try one more time with a longer delay
+              setTimeout(() => {
+                const lastTry = findAndHighlight();
+                if (!lastTry) {
+                  console.error(`Final attempt failed for element with data-tour="${step.target}"`);
+                }
+              }, 500);
+            }
+            return;
           }
-          return;
-        }
-        setTimeout(tryFind, 500);
-      };
-      
-      setTimeout(tryFind, 500);
-    }
+          // Shorter interval for faster retries
+          setTimeout(tryFind, 100);
+        };
+        
+        setTimeout(tryFind, 100);
+      }
+    }, delay);
   }, [currentStep, isOpen, tourSteps]);
+
+  // Recalculate tooltip position on scroll
+  useEffect(() => {
+    if (!highlightedElement || showWelcome) return;
+    
+    let scrollTimeout;
+    const handleScroll = () => {
+      // Debounce scroll events
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        // Force tooltip position recalculation by updating key
+        setTooltipKey(prev => prev + 1);
+      }, 100);
+    };
+    
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Also listen for scroll events on scrollable containers
+    const scrollableContainers = document.querySelectorAll('[style*="overflow"], [class*="overflow"]');
+    scrollableContainers.forEach(container => {
+      container.addEventListener('scroll', handleScroll, { passive: true });
+    });
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      scrollableContainers.forEach(container => {
+        container.removeEventListener('scroll', handleScroll);
+      });
+      clearTimeout(scrollTimeout);
+    };
+  }, [highlightedElement, showWelcome]);
 
   // Calculate position for tooltip
   const getTooltipPosition = () => {
@@ -333,51 +745,129 @@ const WebsiteTour = () => {
     const viewportHeight = window.innerHeight;
     const padding = 20; // Padding from viewport edges
 
-    let top, left, transform;
+    // Check if element is inside a drawer (mobile navigation)
+    let isInDrawer = false;
+    let drawerDirection = 'ltr';
+    if (step.requiresDrawer) {
+      // Find the drawer container (fixed overlay)
+      const drawerContainers = document.querySelectorAll('[class*="fixed"][class*="z-50"]');
+      for (const container of drawerContainers) {
+        const style = window.getComputedStyle(container);
+        if (style.opacity !== '0' && style.pointerEvents !== 'none' && container.contains(highlightedElement)) {
+          isInDrawer = true;
+          // Find the actual drawer panel inside the container
+          const drawerPanel = container.querySelector('[class*="absolute"][class*="top-0"][class*="h-full"]');
+          if (drawerPanel) {
+            const panelClasses = drawerPanel.className;
+            // Check if drawer is on right (RTL) or left (LTR)
+            if (panelClasses.includes('right-0')) {
+              drawerDirection = 'rtl';
+            } else if (panelClasses.includes('left-0')) {
+              drawerDirection = 'ltr';
+            }
+          }
+          break;
+        }
+      }
+    }
 
-    // Try preferred position first
-    switch (step.position) {
-      case 'top':
-        if (rect.top - tooltipHeight - spacing > padding) {
-          top = `${rect.top - tooltipHeight - spacing}px`;
-          left = `${rect.left + rect.width / 2}px`;
-          transform = 'translate(-50%, -100%)';
-        } else {
-          // Fallback to bottom if no space on top
-          top = `${rect.bottom + spacing}px`;
-          left = `${rect.left + rect.width / 2}px`;
-          transform = 'translate(-50%, 0)';
-        }
-        break;
-      case 'bottom':
-        if (rect.bottom + tooltipHeight + spacing < viewportHeight - padding) {
-          top = `${rect.bottom + spacing}px`;
-          left = `${rect.left + rect.width / 2}px`;
-          transform = 'translate(-50%, 0)';
-        } else {
-          // Fallback to top if no space on bottom
-          top = `${rect.top - tooltipHeight - spacing}px`;
-          left = `${rect.left + rect.width / 2}px`;
-          transform = 'translate(-50%, -100%)';
-        }
-        break;
-      case 'right':
-        if (rect.right + tooltipWidth + spacing < viewportWidth - padding) {
+    let top, left, transform;
+    
+    // Check if we're on mobile
+    const isMobileView = window.innerWidth < 1024;
+
+    // Special handling for drawer elements
+    if (isInDrawer) {
+      // For drawer elements, position tooltip to the right of drawer (LTR) or left (RTL)
+      // Use more spacing to avoid overlap
+      const drawerSpacing = 30;
+      
+      if (drawerDirection === 'rtl') {
+        // Drawer is on right, position tooltip to the left of the element
+        const leftPosition = rect.left - tooltipWidth - drawerSpacing;
+        if (leftPosition > padding) {
           top = `${rect.top + rect.height / 2}px`;
-          left = `${rect.right + spacing}px`;
+          left = `${leftPosition}px`;
           transform = 'translate(0, -50%)';
         } else {
-          // Fallback to left if no space on right
-          top = `${rect.top + rect.height / 2}px`;
-          left = `${rect.left - tooltipWidth - spacing}px`;
-          transform = 'translate(-100%, -50%)';
+          // Not enough space on left, position below
+          top = `${rect.bottom + drawerSpacing}px`;
+          left = `${rect.left + rect.width / 2}px`;
+          transform = 'translate(-50%, 0)';
         }
-        break;
-      default:
-        // Default to bottom
-        top = `${rect.bottom + spacing}px`;
+      } else {
+        // Drawer is on left, position tooltip to the right of the element
+        const rightPosition = rect.right + drawerSpacing;
+        if (rightPosition + tooltipWidth < viewportWidth - padding) {
+          top = `${rect.top + rect.height / 2}px`;
+          left = `${rightPosition}px`;
+          transform = 'translate(0, -50%)';
+        } else {
+          // Not enough space on right, position below
+          top = `${rect.bottom + drawerSpacing}px`;
+          left = `${rect.left + rect.width / 2}px`;
+          transform = 'translate(-50%, 0)';
+        }
+      }
+    } else if (isMobileView && (step.target === 'theme-toggle' || step.target === 'language-toggle' || step.target === 'mobile-menu-button')) {
+      // Special positioning for mobile header buttons (top right corner)
+      // Position tooltip below the button, centered
+      const buttonSpacing = 15;
+      if (rect.bottom + tooltipHeight + buttonSpacing < viewportHeight - padding) {
+        top = `${rect.bottom + buttonSpacing}px`;
         left = `${rect.left + rect.width / 2}px`;
         transform = 'translate(-50%, 0)';
+      } else {
+        // Not enough space below, position above
+        top = `${rect.top - tooltipHeight - buttonSpacing}px`;
+        left = `${rect.left + rect.width / 2}px`;
+        transform = 'translate(-50%, -100%)';
+      }
+    } else {
+      // Try preferred position first for non-drawer elements
+      switch (step.position) {
+        case 'top':
+          if (rect.top - tooltipHeight - spacing > padding) {
+            top = `${rect.top - tooltipHeight - spacing}px`;
+            left = `${rect.left + rect.width / 2}px`;
+            transform = 'translate(-50%, -100%)';
+          } else {
+            // Fallback to bottom if no space on top
+            top = `${rect.bottom + spacing}px`;
+            left = `${rect.left + rect.width / 2}px`;
+            transform = 'translate(-50%, 0)';
+          }
+          break;
+        case 'bottom':
+          if (rect.bottom + tooltipHeight + spacing < viewportHeight - padding) {
+            top = `${rect.bottom + spacing}px`;
+            left = `${rect.left + rect.width / 2}px`;
+            transform = 'translate(-50%, 0)';
+          } else {
+            // Fallback to top if no space on bottom
+            top = `${rect.top - tooltipHeight - spacing}px`;
+            left = `${rect.left + rect.width / 2}px`;
+            transform = 'translate(-50%, -100%)';
+          }
+          break;
+        case 'right':
+          if (rect.right + tooltipWidth + spacing < viewportWidth - padding) {
+            top = `${rect.top + rect.height / 2}px`;
+            left = `${rect.right + spacing}px`;
+            transform = 'translate(0, -50%)';
+          } else {
+            // Fallback to left if no space on right
+            top = `${rect.top + rect.height / 2}px`;
+            left = `${rect.left - tooltipWidth - spacing}px`;
+            transform = 'translate(-100%, -50%)';
+          }
+          break;
+        default:
+          // Default to bottom
+          top = `${rect.bottom + spacing}px`;
+          left = `${rect.left + rect.width / 2}px`;
+          transform = 'translate(-50%, 0)';
+      }
     }
 
     // Ensure tooltip stays within viewport horizontally
@@ -415,7 +905,63 @@ const WebsiteTour = () => {
 
   const handleNext = () => {
     if (currentStep < tourSteps.length - 1) {
-      setCurrentStep(currentStep + 1);
+      const nextStep = tourSteps[currentStep + 1];
+      // If next step requires drawer, open it and wait for it to be ready
+      if (nextStep && nextStep.requiresDrawer) {
+        // Dispatch event to open drawer
+        window.dispatchEvent(new CustomEvent('openMobileDrawer'));
+        
+        // Wait for drawer to open and be ready
+        const checkDrawerReady = (attempts = 0) => {
+          const drawers = document.querySelectorAll('[class*="fixed"][class*="z-50"]');
+          let drawerReady = false;
+          
+          for (const drawer of drawers) {
+            const style = window.getComputedStyle(drawer);
+            if (style.opacity !== '0' && style.pointerEvents !== 'none') {
+              const hasNavTabs = drawer.querySelector('[data-tour*="-tab"]');
+              if (hasNavTabs) {
+                drawerReady = true;
+                break;
+              }
+            }
+          }
+          
+          if (drawerReady || attempts >= 10) {
+            // Drawer is ready or we've tried enough times, proceed to next step
+            setCurrentStep(currentStep + 1);
+          } else {
+            // Check again after a short delay
+            setTimeout(() => checkDrawerReady(attempts + 1), 100);
+          }
+        };
+        
+        // Start checking after initial delay
+        setTimeout(() => checkDrawerReady(), 200);
+      } else if (nextStep && nextStep.requiresMenu) {
+        // If next step requires menu, open it and wait for it to be ready
+        window.dispatchEvent(new CustomEvent('openMobileMenu'));
+        
+        // Wait for menu to open and be ready
+        const checkMenuReady = (attempts = 0) => {
+          const mobileMenuLinks = document.querySelector('[data-tour="nav-links"]');
+          const isMenuOpen = mobileMenuLinks && 
+            window.getComputedStyle(mobileMenuLinks.parentElement).display !== 'none';
+          
+          if (isMenuOpen || attempts >= 10) {
+            // Menu is ready or we've tried enough times, proceed to next step
+            setCurrentStep(currentStep + 1);
+          } else {
+            // Check again after a short delay
+            setTimeout(() => checkMenuReady(attempts + 1), 100);
+          }
+        };
+        
+        // Start checking after initial delay
+        setTimeout(() => checkMenuReady(), 200);
+      } else {
+        setCurrentStep(currentStep + 1);
+      }
     } else {
       handleFinish();
     }
@@ -423,7 +969,38 @@ const WebsiteTour = () => {
 
   const handlePrevious = () => {
     if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
+      const previousStep = tourSteps[currentStep - 1];
+      const currentStepData = tourSteps[currentStep];
+      
+      // If current step requires drawer but previous doesn't, close it
+      if (currentStepData && currentStepData.requiresDrawer) {
+        if (!previousStep || !previousStep.requiresDrawer) {
+          window.dispatchEvent(new CustomEvent('closeMobileDrawer'));
+        }
+      }
+      
+      // If current step requires menu but previous doesn't, close it
+      if (currentStepData && currentStepData.requiresMenu) {
+        if (!previousStep || !previousStep.requiresMenu) {
+          window.dispatchEvent(new CustomEvent('closeMobileMenu'));
+        }
+      }
+      
+      // If previous step requires drawer, open it
+      if (previousStep && previousStep.requiresDrawer) {
+        window.dispatchEvent(new CustomEvent('openMobileDrawer'));
+        setTimeout(() => {
+          setCurrentStep(currentStep - 1);
+        }, 400);
+      } else if (previousStep && previousStep.requiresMenu) {
+        // If previous step requires menu, open it
+        window.dispatchEvent(new CustomEvent('openMobileMenu'));
+        setTimeout(() => {
+          setCurrentStep(currentStep - 1);
+        }, 400);
+      } else {
+        setCurrentStep(currentStep - 1);
+      }
     }
   };
 
@@ -433,6 +1010,12 @@ const WebsiteTour = () => {
 
   const handleFinish = () => {
     setIsOpen(false);
+    // Close mobile drawer if it was opened by tour
+    if (isProfilePage && isMobile) {
+      window.dispatchEvent(new CustomEvent('closeMobileDrawer'));
+    }
+    // Close mobile menu if it was opened by tour
+    window.dispatchEvent(new CustomEvent('closeMobileMenu'));
     if (isProfilePage) {
       localStorage.setItem('profileTourCompleted', 'true');
     } else {
@@ -520,7 +1103,7 @@ const WebsiteTour = () => {
       {blurRegions.map((region, index) => (
         <div
           key={index}
-          className="absolute bg-black/60 backdrop-blur-md transition-opacity duration-300 pointer-events-none"
+          className="absolute bg-black/40 backdrop-blur-sm transition-opacity duration-300 pointer-events-none"
           style={region}
         />
       ))}

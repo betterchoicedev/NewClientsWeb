@@ -711,6 +711,24 @@ const ProfilePage = () => {
     return () => clearTimeout(timeoutId);
   }, [activeTab]);
 
+  // Listen for tour to open/close mobile drawer
+  useEffect(() => {
+    const handleOpenDrawer = () => {
+      setIsMobileNavOpen(true);
+    };
+
+    const handleCloseDrawer = () => {
+      setIsMobileNavOpen(false);
+    };
+
+    window.addEventListener('openMobileDrawer', handleOpenDrawer);
+    window.addEventListener('closeMobileDrawer', handleCloseDrawer);
+    return () => {
+      window.removeEventListener('openMobileDrawer', handleOpenDrawer);
+      window.removeEventListener('closeMobileDrawer', handleCloseDrawer);
+    };
+  }, []);
+
   if (!isAuthenticated) {
     return (
       <div className={`min-h-screen ${themeClasses.bgPrimary} flex items-center justify-center`}>
@@ -909,6 +927,7 @@ const ProfilePage = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <button
+                  data-tour="mobile-menu-button"
                   onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
                   className={`mr-3 p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
                   aria-label={language === 'hebrew' ? 'תפריט' : 'Menu'}
