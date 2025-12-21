@@ -738,33 +738,99 @@ const WebsiteTour = () => {
         });
         
         if (isVisible) {
-          // Scroll element into view - use block: 'center' for drawer elements
-          element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-          
-          // Also try scrolling the drawer container if element is inside one
-          let parent = element.parentElement;
-          while (parent && parent !== document.body) {
-            const parentStyle = window.getComputedStyle(parent);
-            if (parentStyle.overflowY === 'auto' || parentStyle.overflowY === 'scroll') {
-              // Scroll within the scrollable container
-              const containerRect = parent.getBoundingClientRect();
-              const elementRect = element.getBoundingClientRect();
-              const scrollTop = parent.scrollTop + (elementRect.top - containerRect.top) - (containerRect.height / 2) + (elementRect.height / 2);
-              parent.scrollTo({ top: scrollTop, behavior: 'smooth' });
-              break;
+          // On mobile with menu-required steps, avoid scrolling the window
+          // Only scroll within the menu container if needed
+          if (isMobileView && step.requiresMenu) {
+            // Check if element is already visible in viewport (with some margin)
+            const elementRect = element.getBoundingClientRect();
+            const viewportHeight = window.innerHeight;
+            const margin = 100; // Margin from viewport edges to account for tooltip
+            
+            const isElementVisible = elementRect.top >= margin && 
+                                   elementRect.bottom <= viewportHeight - margin;
+            
+            if (isElementVisible) {
+              // Element is already visible, set highlighted element immediately
+              // Use a small delay to ensure menu animations are complete
+              setTimeout(() => {
+                setHighlightedElement(element);
+              }, 100);
+              return true;
             }
-            parent = parent.parentElement;
+            
+            // Find the scrollable menu container and scroll within it only
+            let parent = element.parentElement;
+            let scrolledInContainer = false;
+            while (parent && parent !== document.body) {
+              const parentStyle = window.getComputedStyle(parent);
+              if (parentStyle.overflowY === 'auto' || parentStyle.overflowY === 'scroll') {
+                // Scroll within the scrollable container
+                const containerRect = parent.getBoundingClientRect();
+                const scrollTop = parent.scrollTop + (elementRect.top - containerRect.top) - (containerRect.height / 2) + (elementRect.height / 2);
+                
+                // Save current window scroll position before scrolling container
+                const savedScrollY = window.scrollY;
+                
+                parent.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
+                scrolledInContainer = true;
+                
+                // Ensure window doesn't scroll (body is already position:fixed, but double-check)
+                // Set highlighted element after container scroll, with shorter delay for mobile
+                setTimeout(() => {
+                  // If window scroll changed, restore it (though it shouldn't with position:fixed)
+                  if (window.scrollY !== savedScrollY) {
+                    window.scrollTo(0, savedScrollY);
+                  }
+                  
+                  // Re-check element is still visible after scroll
+                  const newRect = element.getBoundingClientRect();
+                  if (newRect.width > 0 && newRect.height > 0) {
+                    setHighlightedElement(element);
+                  }
+                }, 350); // Shorter delay for mobile menu steps
+                break;
+              }
+              parent = parent.parentElement;
+            }
+            
+            // If we didn't scroll in a container, set highlighted element immediately
+            // Don't call scrollIntoView on mobile for menu elements to avoid window scroll
+            if (!scrolledInContainer) {
+              setTimeout(() => {
+                setHighlightedElement(element);
+              }, 100);
+              return true;
+            }
+          } else {
+            // For non-menu steps or desktop, use normal scrollIntoView
+            // Scroll element into view - use block: 'center' for drawer elements
+            element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            
+            // Also try scrolling the drawer container if element is inside one
+            let parent = element.parentElement;
+            while (parent && parent !== document.body) {
+              const parentStyle = window.getComputedStyle(parent);
+              if (parentStyle.overflowY === 'auto' || parentStyle.overflowY === 'scroll') {
+                // Scroll within the scrollable container
+                const containerRect = parent.getBoundingClientRect();
+                const elementRect = element.getBoundingClientRect();
+                const scrollTop = parent.scrollTop + (elementRect.top - containerRect.top) - (containerRect.height / 2) + (elementRect.height / 2);
+                parent.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                break;
+              }
+              parent = parent.parentElement;
+            }
+            
+            // Wait for smooth scroll animation to complete (typically 300-500ms)
+            // Then set the highlighted element so tooltip position is calculated correctly
+            setTimeout(() => {
+              // Re-check element is still visible after scroll
+              const newRect = element.getBoundingClientRect();
+              if (newRect.width > 0 && newRect.height > 0) {
+                setHighlightedElement(element);
+              }
+            }, 600); // Wait for scroll animation + buffer
           }
-          
-          // Wait for smooth scroll animation to complete (typically 300-500ms)
-          // Then set the highlighted element so tooltip position is calculated correctly
-          setTimeout(() => {
-            // Re-check element is still visible after scroll
-            const newRect = element.getBoundingClientRect();
-            if (newRect.width > 0 && newRect.height > 0) {
-              setHighlightedElement(element);
-            }
-          }, 600); // Wait for scroll animation + buffer
           
           return true;
         }
@@ -886,35 +952,104 @@ const WebsiteTour = () => {
 
     // Special handling for drawer elements
     if (isInDrawer) {
-      // For drawer elements, position tooltip to the right of drawer (LTR) or left (RTL)
-      // Use more spacing to avoid overlap
+      // For drawer elements, position tooltip to avoid covering the highlighted tab
+      // Priority: side positioning > above > below (but ensure tab is always visible)
       const drawerSpacing = 30;
+      const tabHeight = rect.height;
       
       if (drawerDirection === 'rtl') {
-        // Drawer is on right, position tooltip to the left of the element
+        // Drawer is on right, try to position tooltip to the left of the element
         const leftPosition = rect.left - tooltipWidth - drawerSpacing;
-        if (leftPosition > padding) {
-          top = `${rect.top + rect.height / 2}px`;
+        // Check if tooltip fits on left and won't go off-screen vertically
+        const verticalCenter = rect.top + rect.height / 2;
+        const tooltipTopWhenCentered = verticalCenter - tooltipHeight / 2;
+        const tooltipBottomWhenCentered = verticalCenter + tooltipHeight / 2;
+        
+        if (leftPosition > padding && tooltipTopWhenCentered >= padding && tooltipBottomWhenCentered <= viewportHeight - padding) {
+          // Position to the left, vertically centered
+          top = `${verticalCenter}px`;
           left = `${leftPosition}px`;
           transform = 'translate(0, -50%)';
         } else {
-          // Not enough space on left, position below
-          top = `${rect.bottom + drawerSpacing}px`;
-          left = `${rect.left + rect.width / 2}px`;
-          transform = 'translate(-50%, 0)';
+          // Not enough space on left, try above the tab
+          const topPosition = rect.top - tooltipHeight - drawerSpacing;
+          if (topPosition > padding) {
+            // Position above the tab, ensure it doesn't go off-screen horizontally
+            let tooltipLeft = rect.left + rect.width / 2;
+            const tooltipLeftMin = tooltipWidth / 2 + padding;
+            const tooltipLeftMax = viewportWidth - tooltipWidth / 2 - padding;
+            if (tooltipLeft < tooltipLeftMin) tooltipLeft = tooltipLeftMin;
+            if (tooltipLeft > tooltipLeftMax) tooltipLeft = tooltipLeftMax;
+            
+            top = `${topPosition}px`;
+            left = `${tooltipLeft}px`;
+            transform = 'translate(-50%, -100%)';
+          } else {
+            // Not enough space above, position below but ensure tab remains visible
+            // Position tooltip below with enough spacing so tab is not covered
+            let bottomPosition = rect.bottom + drawerSpacing + tabHeight;
+            // Ensure tooltip doesn't go off-screen at bottom
+            if (bottomPosition + tooltipHeight > viewportHeight - padding) {
+              bottomPosition = viewportHeight - tooltipHeight - padding;
+            }
+            
+            let tooltipLeft = rect.left + rect.width / 2;
+            const tooltipLeftMin = tooltipWidth / 2 + padding;
+            const tooltipLeftMax = viewportWidth - tooltipWidth / 2 - padding;
+            if (tooltipLeft < tooltipLeftMin) tooltipLeft = tooltipLeftMin;
+            if (tooltipLeft > tooltipLeftMax) tooltipLeft = tooltipLeftMax;
+            
+            top = `${bottomPosition}px`;
+            left = `${tooltipLeft}px`;
+            transform = 'translate(-50%, 0)';
+          }
         }
       } else {
-        // Drawer is on left, position tooltip to the right of the element
+        // Drawer is on left, try to position tooltip to the right of the element
         const rightPosition = rect.right + drawerSpacing;
-        if (rightPosition + tooltipWidth < viewportWidth - padding) {
-          top = `${rect.top + rect.height / 2}px`;
+        // Check if tooltip fits on right and won't go off-screen vertically
+        const verticalCenter = rect.top + rect.height / 2;
+        const tooltipTopWhenCentered = verticalCenter - tooltipHeight / 2;
+        const tooltipBottomWhenCentered = verticalCenter + tooltipHeight / 2;
+        
+        if (rightPosition + tooltipWidth < viewportWidth - padding && tooltipTopWhenCentered >= padding && tooltipBottomWhenCentered <= viewportHeight - padding) {
+          // Position to the right, vertically centered
+          top = `${verticalCenter}px`;
           left = `${rightPosition}px`;
           transform = 'translate(0, -50%)';
         } else {
-          // Not enough space on right, position below
-          top = `${rect.bottom + drawerSpacing}px`;
-          left = `${rect.left + rect.width / 2}px`;
-          transform = 'translate(-50%, 0)';
+          // Not enough space on right, try above the tab
+          const topPosition = rect.top - tooltipHeight - drawerSpacing;
+          if (topPosition > padding) {
+            // Position above the tab, ensure it doesn't go off-screen horizontally
+            let tooltipLeft = rect.left + rect.width / 2;
+            const tooltipLeftMin = tooltipWidth / 2 + padding;
+            const tooltipLeftMax = viewportWidth - tooltipWidth / 2 - padding;
+            if (tooltipLeft < tooltipLeftMin) tooltipLeft = tooltipLeftMin;
+            if (tooltipLeft > tooltipLeftMax) tooltipLeft = tooltipLeftMax;
+            
+            top = `${topPosition}px`;
+            left = `${tooltipLeft}px`;
+            transform = 'translate(-50%, -100%)';
+          } else {
+            // Not enough space above, position below but ensure tab remains visible
+            // Position tooltip below with enough spacing so tab is not covered
+            let bottomPosition = rect.bottom + drawerSpacing + tabHeight;
+            // Ensure tooltip doesn't go off-screen at bottom
+            if (bottomPosition + tooltipHeight > viewportHeight - padding) {
+              bottomPosition = viewportHeight - tooltipHeight - padding;
+            }
+            
+            let tooltipLeft = rect.left + rect.width / 2;
+            const tooltipLeftMin = tooltipWidth / 2 + padding;
+            const tooltipLeftMax = viewportWidth - tooltipWidth / 2 - padding;
+            if (tooltipLeft < tooltipLeftMin) tooltipLeft = tooltipLeftMin;
+            if (tooltipLeft > tooltipLeftMax) tooltipLeft = tooltipLeftMax;
+            
+            top = `${bottomPosition}px`;
+            left = `${tooltipLeft}px`;
+            transform = 'translate(-50%, 0)';
+          }
         }
       }
     } else if (isMobileView && (step.target === 'theme-toggle' || step.target === 'language-toggle' || step.target === 'mobile-menu-button')) {
@@ -933,6 +1068,11 @@ const WebsiteTour = () => {
       }
     } else {
       // Try preferred position first for non-drawer elements
+      // For mobile menu-required steps, prefer positioning above if element is low in viewport
+      const isMenuStepOnMobile = isMobileView && step.requiresMenu;
+      const elementCenterY = rect.top + rect.height / 2;
+      const viewportCenterY = viewportHeight / 2;
+      
       switch (step.position) {
         case 'top':
           if (rect.top - tooltipHeight - spacing > padding) {
@@ -947,7 +1087,25 @@ const WebsiteTour = () => {
           }
           break;
         case 'bottom':
-          if (rect.bottom + tooltipHeight + spacing < viewportHeight - padding) {
+          // For mobile menu steps with element in lower half of viewport, prefer positioning above
+          if (isMenuStepOnMobile && elementCenterY > viewportCenterY) {
+            // Check if we can position above
+            if (rect.top - tooltipHeight - spacing > padding) {
+              top = `${rect.top - tooltipHeight - spacing}px`;
+              left = `${rect.left + rect.width / 2}px`;
+              transform = 'translate(-50%, -100%)';
+            } else if (rect.bottom + tooltipHeight + spacing < viewportHeight - padding) {
+              // Fallback to below if no space above
+              top = `${rect.bottom + spacing}px`;
+              left = `${rect.left + rect.width / 2}px`;
+              transform = 'translate(-50%, 0)';
+            } else {
+              // Not enough space either way, position at top of viewport
+              top = `${padding}px`;
+              left = `${rect.left + rect.width / 2}px`;
+              transform = 'translate(-50%, 0)';
+            }
+          } else if (rect.bottom + tooltipHeight + spacing < viewportHeight - padding) {
             top = `${rect.bottom + spacing}px`;
             left = `${rect.left + rect.width / 2}px`;
             transform = 'translate(-50%, 0)';
@@ -980,24 +1138,99 @@ const WebsiteTour = () => {
 
     // Ensure tooltip stays within viewport horizontally
     const leftValue = parseFloat(left);
-    const minLeft = tooltipWidth / 2 + padding;
-    const maxLeft = viewportWidth - tooltipWidth / 2 - padding;
+    let finalLeft = leftValue;
+    let finalTransform = transform;
     
-    if (leftValue < minLeft) {
-      left = `${minLeft}px`;
-      transform = transform.replace(/translate\([^)]+\)/, 'translate(-50%, 0)');
-    } else if (leftValue > maxLeft) {
-      left = `${maxLeft}px`;
-      transform = transform.replace(/translate\([^)]+\)/, 'translate(-50%, 0)');
+    // Calculate actual tooltip bounds based on transform
+    let tooltipLeftBound = leftValue;
+    let tooltipRightBound = leftValue;
+    
+    if (transform.includes('translate(-50%')) {
+      // Centered horizontally
+      tooltipLeftBound = leftValue - tooltipWidth / 2;
+      tooltipRightBound = leftValue + tooltipWidth / 2;
+    } else if (transform.includes('translate(-100%')) {
+      // Aligned to right edge of tooltip
+      tooltipLeftBound = leftValue - tooltipWidth;
+      tooltipRightBound = leftValue;
+    } else {
+      // Aligned to left edge of tooltip (translate(0) or no transform)
+      tooltipLeftBound = leftValue;
+      tooltipRightBound = leftValue + tooltipWidth;
     }
+    
+    // Adjust if tooltip goes off-screen horizontally
+    if (tooltipLeftBound < padding) {
+      const adjustment = padding - tooltipLeftBound;
+      finalLeft = leftValue + adjustment;
+      // Change to centered if we had to adjust
+      if (!finalTransform.includes('translate(-50%')) {
+        finalTransform = finalTransform.replace(/translate\([^)]+\)/, 'translate(-50%, 0)');
+      }
+    } else if (tooltipRightBound > viewportWidth - padding) {
+      const adjustment = tooltipRightBound - (viewportWidth - padding);
+      finalLeft = leftValue - adjustment;
+      // Change to centered if we had to adjust
+      if (!finalTransform.includes('translate(-50%')) {
+        finalTransform = finalTransform.replace(/translate\([^)]+\)/, 'translate(-50%, 0)');
+      }
+    }
+    
+    left = `${finalLeft}px`;
+    transform = finalTransform;
 
     // Ensure tooltip stays within viewport vertically
     const topValue = parseFloat(top);
-    if (topValue < padding) {
-      top = `${padding}px`;
-    } else if (topValue + tooltipHeight > viewportHeight - padding) {
-      top = `${viewportHeight - tooltipHeight - padding}px`;
+    let finalTop = topValue;
+    
+    // Determine vertical alignment from transform string
+    // Our transforms: 'translate(0, -50%)', 'translate(-50%, -100%)', 'translate(-50%, 0)', 'translate(-100%, -50%)'
+    let verticalAlign = 'top'; // 'top', 'center', 'bottom'
+    
+    if (transform.includes('translate(0, -50%)') || transform.includes('translate(-100%, -50%)') || transform.includes('translate(-50%, -50%)')) {
+      verticalAlign = 'center';
+    } else if (transform.includes('translate(-50%, -100%)')) {
+      verticalAlign = 'bottom';
     }
+    
+    // Calculate actual tooltip bounds based on vertical alignment
+    let tooltipTopBound = topValue;
+    let tooltipBottomBound = topValue;
+    
+    if (verticalAlign === 'center') {
+      // Vertically centered
+      tooltipTopBound = topValue - tooltipHeight / 2;
+      tooltipBottomBound = topValue + tooltipHeight / 2;
+    } else if (verticalAlign === 'bottom') {
+      // Aligned to bottom edge of tooltip
+      tooltipTopBound = topValue - tooltipHeight;
+      tooltipBottomBound = topValue;
+    } else {
+      // Aligned to top edge of tooltip (default)
+      tooltipTopBound = topValue;
+      tooltipBottomBound = topValue + tooltipHeight;
+    }
+    
+    // Adjust if tooltip goes off-screen vertically
+    if (tooltipTopBound < padding) {
+      if (verticalAlign === 'center') {
+        finalTop = padding + tooltipHeight / 2;
+      } else if (verticalAlign === 'bottom') {
+        finalTop = padding + tooltipHeight;
+      } else {
+        finalTop = padding;
+      }
+    } else if (tooltipBottomBound > viewportHeight - padding) {
+      if (verticalAlign === 'center') {
+        finalTop = viewportHeight - padding - tooltipHeight / 2;
+      } else if (verticalAlign === 'bottom') {
+        finalTop = viewportHeight - padding;
+      } else {
+        finalTop = viewportHeight - padding - tooltipHeight;
+      }
+    }
+    
+    top = `${finalTop}px`;
 
     return { top, left, transform };
   };
