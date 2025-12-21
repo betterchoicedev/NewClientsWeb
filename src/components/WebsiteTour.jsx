@@ -912,7 +912,7 @@ const WebsiteTour = () => {
     const rect = highlightedElement.getBoundingClientRect();
     const step = tourSteps && tourSteps[currentStep] ? tourSteps[currentStep] : null;
     if (!step) return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
-    const tooltipHeight = 320; // Increased to account for content
+    const tooltipHeight = 380; // Increased to account for content and buttons (Finish, Previous, Skip)
     const tooltipWidth = Math.min(450, window.innerWidth * 0.9);
     const spacing = 20;
     const viewportWidth = window.innerWidth;
@@ -1075,23 +1075,32 @@ const WebsiteTour = () => {
       
       switch (step.position) {
         case 'top':
-          if (rect.top - tooltipHeight - spacing > padding) {
-            top = `${rect.top - tooltipHeight - spacing}px`;
+          const topPositionForTop = rect.top - tooltipHeight - spacing;
+          if (topPositionForTop >= padding) {
+            // Enough space above
+            top = `${topPositionForTop}px`;
             left = `${rect.left + rect.width / 2}px`;
             transform = 'translate(-50%, -100%)';
-          } else {
+          } else if (rect.bottom + tooltipHeight + spacing < viewportHeight - padding) {
             // Fallback to bottom if no space on top
             top = `${rect.bottom + spacing}px`;
             left = `${rect.left + rect.width / 2}px`;
             transform = 'translate(-50%, 0)';
+          } else {
+            // Not enough space either way, position in center
+            top = `${viewportHeight / 2}px`;
+            left = `${rect.left + rect.width / 2}px`;
+            transform = 'translate(-50%, -50%)';
           }
           break;
         case 'bottom':
           // For mobile menu steps with element in lower half of viewport, prefer positioning above
           if (isMenuStepOnMobile && elementCenterY > viewportCenterY) {
-            // Check if we can position above
-            if (rect.top - tooltipHeight - spacing > padding) {
-              top = `${rect.top - tooltipHeight - spacing}px`;
+            // Check if we can position above - ensure full tooltip fits
+            const topPosition = rect.top - tooltipHeight - spacing;
+            if (topPosition >= padding) {
+              // Enough space above, position there
+              top = `${topPosition}px`;
               left = `${rect.left + rect.width / 2}px`;
               transform = 'translate(-50%, -100%)';
             } else if (rect.bottom + tooltipHeight + spacing < viewportHeight - padding) {
@@ -1100,20 +1109,30 @@ const WebsiteTour = () => {
               left = `${rect.left + rect.width / 2}px`;
               transform = 'translate(-50%, 0)';
             } else {
-              // Not enough space either way, position at top of viewport
-              top = `${padding}px`;
+              // Not enough space either way, position in center of viewport
+              top = `${viewportHeight / 2}px`;
               left = `${rect.left + rect.width / 2}px`;
-              transform = 'translate(-50%, 0)';
+              transform = 'translate(-50%, -50%)';
             }
           } else if (rect.bottom + tooltipHeight + spacing < viewportHeight - padding) {
+            // Position below if there's enough space
             top = `${rect.bottom + spacing}px`;
             left = `${rect.left + rect.width / 2}px`;
             transform = 'translate(-50%, 0)';
           } else {
-            // Fallback to top if no space on bottom
-            top = `${rect.top - tooltipHeight - spacing}px`;
-            left = `${rect.left + rect.width / 2}px`;
-            transform = 'translate(-50%, -100%)';
+            // Not enough space below, try above but check if it fits
+            const topPosition = rect.top - tooltipHeight - spacing;
+            if (topPosition >= padding) {
+              // Enough space above
+              top = `${topPosition}px`;
+              left = `${rect.left + rect.width / 2}px`;
+              transform = 'translate(-50%, -100%)';
+            } else {
+              // Not enough space above either, position in center of viewport
+              top = `${viewportHeight / 2}px`;
+              left = `${rect.left + rect.width / 2}px`;
+              transform = 'translate(-50%, -50%)';
+            }
           }
           break;
         case 'right':
