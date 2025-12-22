@@ -28,14 +28,30 @@ function WhatsAppRegisterPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Helper function to validate phone number (accepts with or without spaces/dashes)
+  // Helper function to clean phone number (only keeps numbers and optional leading +)
+  const cleanPhoneNumber = (phone) => {
+    if (!phone) return '';
+    // First normalize phone number (remove spaces, dashes, etc.)
+    let normalized = normalizePhoneForDatabase(phone);
+    // Strip all non-numeric characters except leading +
+    const cleaned = normalized.replace(/[^\d+]/g, '');
+    // Ensure + is only at the start if present
+    const hasLeadingPlus = cleaned.startsWith('+');
+    const digitsOnly = hasLeadingPlus ? cleaned.substring(1) : cleaned;
+    // Remove any + characters that aren't at the start
+    const cleanDigits = digitsOnly.replace(/\+/g, '');
+    // Reconstruct with + only at the start if it was there originally
+    return hasLeadingPlus ? `+${cleanDigits}` : cleanDigits;
+  };
+
+  // Helper function to validate phone number (only accepts numbers)
   const validatePhoneNumber = (phone) => {
     if (!phone) return false;
-    // Normalize phone number (remove spaces, dashes, etc.) for validation
-    const normalized = normalizePhoneForDatabase(phone);
-    // Validate: must start with + and have 10-15 digits after the +
+    // Clean the phone number first (removes all non-numeric except leading +)
+    const cleaned = cleanPhoneNumber(phone);
+    // Validate: must have optional + followed by 10-15 digits
     const phoneRegex = /^\+?\d{10,15}$/;
-    return phoneRegex.test(normalized);
+    return phoneRegex.test(cleaned);
   };
 
   // Redirect if already authenticated
@@ -51,10 +67,17 @@ function WhatsAppRegisterPage() {
       // Decode URL-encoded characters
       const decodedPhone = decodeURIComponent(phoneNumber);
       
-      // Validate phone number format (accepts with or without spaces/dashes)
+      // Check if the parameter contains any numbers - if not, redirect to home
+      if (!/\d/.test(decodedPhone)) {
+        navigate('/');
+        return;
+      }
+      
+      // Clean and validate phone number (only accepts numbers)
       if (validatePhoneNumber(decodedPhone)) {
-        // Store the formatted phone (with spaces/dashes if present)
-        setPhone(decodedPhone);
+        // Store the cleaned phone number (only numbers, with optional leading +)
+        const cleanedPhone = cleanPhoneNumber(decodedPhone);
+        setPhone(cleanedPhone);
         setPhoneError('');
       } else {
         setPhoneError(
@@ -64,13 +87,10 @@ function WhatsAppRegisterPage() {
         );
       }
     } else {
-      setPhoneError(
-        language === 'hebrew' 
-          ? 'מספר טלפון לא סופק. אנא השתמש בקישור מה-WhatsApp או הירשם דרך העמוד הרגיל.' 
-          : 'No phone number provided. Please use the link from WhatsApp or register through the regular signup page.'
-      );
+      // No phone number parameter - redirect to home
+      navigate('/');
     }
-  }, [phoneNumber, language]);
+  }, [phoneNumber, language, navigate]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;

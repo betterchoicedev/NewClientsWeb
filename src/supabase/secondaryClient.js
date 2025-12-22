@@ -996,3 +996,29 @@ export const debugMealPlans = async (userCode) => {
     return { data: null, error };
   }
 };
+
+// WEIGHT LOGS
+export const getWeightLogs = async (userCode) => {
+  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
+  
+  try {
+    console.log('Fetching weight logs for userCode:', userCode);
+    
+    // Fetch weight logs using user_code directly (since the table has user_code column)
+    const { data, error } = await supabaseSecondary
+      .from('weight_logs')
+      .select('*')
+      .eq('user_code', userCode)
+      .order('measurement_date', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching weight logs:', error);
+      return { data: null, error };
+    }
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Unexpected error fetching weight logs:', error);
+    return { data: null, error };
+  }
+};

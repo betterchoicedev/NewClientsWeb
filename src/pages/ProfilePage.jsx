@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useStripe } from '../context/StripeContext';
 import { useSettings } from '../context/SettingsContext';
 import { supabase, supabaseSecondary } from '../supabase/supabaseClient';
-import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, getChatMessages, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany } from '../supabase/secondaryClient';
+import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, getChatMessages, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany, getWeightLogs } from '../supabase/secondaryClient';
 import { normalizePhoneForDatabase } from '../supabase/auth';
 import { getAllProducts, getProductsByCategory, getProduct } from '../config/stripe-products';
 import PricingCard from '../components/PricingCard';
@@ -104,7 +104,8 @@ const getClientMealPlan = async (userCode) => {
 };
 
 const ProfilePage = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
+  const navigate = useNavigate();
   const { language, t, direction, toggleLanguage, isTransitioning } = useLanguage();
   const { isDarkMode, toggleTheme, themeClasses } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
@@ -242,6 +243,13 @@ const ProfilePage = () => {
       setOnboardingCompleted(false);
     }
   };
+
+  // Redirect to home page if not authenticated (only after auth loading is complete)
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      navigate('/');
+    }
+  }, [isAuthenticated, loading, navigate]);
 
   // Load profile data on component mount
   useEffect(() => {
@@ -772,24 +780,13 @@ const ProfilePage = () => {
   }, []);
 
   if (!isAuthenticated) {
-    return (
-      <div className={`min-h-screen ${themeClasses.bgPrimary} flex items-center justify-center`}>
-        <div className={`${themeClasses.bgCard} ${themeClasses.shadowCard} rounded-lg p-8 max-w-md w-full mx-4`}>
-          <h2 className={`${themeClasses.textPrimary} text-2xl font-bold text-center mb-4`}>
-            {t.buttons.login}
-          </h2>
-          <p className={`${themeClasses.textSecondary} text-center`}>
-            Please log in to access your profile.
-          </p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
     <div className={`min-h-screen ${themeClasses.bgPrimary} flex flex-col lg:flex-row language-transition language-text-transition`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Sidebar Navigation - Desktop */}
-      <div data-tour="profile-sidebar" className={`hidden lg:block ${language === 'english' ? 'lg:w-96' : 'lg:w-80'} ${themeClasses.bgCard} ${themeClasses.shadowCard} border-r-2 ${themeClasses.borderPrimary} relative overflow-hidden flex flex-col`} style={{
+      <div data-tour="profile-sidebar" className={`hidden lg:block ${language === 'english' ? 'lg:w-96' : 'lg:w-80'} ${themeClasses.bgCard} ${themeClasses.shadowCard} border-r-2 ${themeClasses.borderPrimary} relative overflow-hidden flex flex-col`} dir={direction} style={{
         borderLeft: '3px solid',
         borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
         boxShadow: isDarkMode 
@@ -803,10 +800,10 @@ const ProfilePage = () => {
         <div className="p-6 border-b-2 border-emerald-500/20 relative z-10">
           <div className="flex items-center mb-4">
             <div className="relative">
-              <img src="/favicon.ico" alt="BetterChoice Logo" className="w-12 h-12 mr-3 rounded-lg shadow-lg ring-2 ring-emerald-500/20" />
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse" />
+              <img src="/favicon.ico" alt="BetterChoice Logo" className={`w-12 h-12 rounded-lg shadow-lg ring-2 ring-emerald-500/20 ${direction === 'rtl' ? 'ml-3' : 'mr-3'}`} />
+              <div className={`absolute -top-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse ${direction === 'rtl' ? '-left-1' : '-right-1'}`} />
             </div>
-            <div>
+            <div className={direction === 'rtl' ? 'text-right' : 'text-left'}>
               <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
               <p className={`${themeClasses.textSecondary} text-sm`}>{t.profile.title}</p>
             </div>
@@ -818,12 +815,12 @@ const ProfilePage = () => {
             <Link 
               to="/"
               data-tour="profile-home-button"
-              className={`w-full flex items-center p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md`}
+              className={`w-full flex items-center p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}
             >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 ${themeClasses.textPrimary}`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-emerald-500/20 to-teal-500/20 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'ml-3' : 'mr-3'}`}>
                 <span className="text-sm">🏠</span>
               </div>
-              <div className="flex-1 text-left min-w-0 overflow-hidden">
+              <div className={`flex-1 min-w-0 overflow-hidden ${direction === 'rtl' ? 'text-right' : 'text-left'}`}>
                 <div className={`font-semibold ${themeClasses.textPrimary} text-sm`} style={{
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
@@ -882,20 +879,20 @@ const ProfilePage = () => {
                     }
                   }, 0);
                 }}
-                className={`w-full flex items-center p-4 rounded-xl transition-all duration-300 relative ${
+                className={`w-full flex items-center p-4 rounded-xl transition-all duration-300 relative ${direction === 'rtl' ? 'flex-row-reverse' : ''} ${
                   activeTab === tab.id
                     ? `${themeClasses.bgSecondary} ${themeClasses.shadowCard} scale-[1.02]`
                     : `hover:${themeClasses.bgSecondary} hover:scale-[1.01]`
                 }`}
               >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mr-4 transition-all duration-300 ${
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${direction === 'rtl' ? 'ml-4' : 'mr-4'} ${
                   activeTab === tab.id 
                     ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/50 scale-110' 
                     : `${themeClasses.bgSecondary} ${themeClasses.textPrimary}`
                 }`}>
                   <span className="text-lg">{tab.icon}</span>
                 </div>
-                <div className="flex-1 text-left min-w-0 overflow-hidden">
+                <div className={`flex-1 min-w-0 overflow-hidden ${direction === 'rtl' ? 'text-right' : 'text-left'}`}>
                   <div className={`font-semibold transition-colors duration-300 ${
                     activeTab === tab.id ? themeClasses.textPrimary : themeClasses.textSecondary
                   }`} style={{ 
@@ -918,7 +915,7 @@ const ProfilePage = () => {
                   </div>
                 </div>
                 {activeTab === tab.id && (
-                  <div className="absolute right-2 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                  <div className={`absolute w-2 h-2 bg-emerald-500 rounded-full animate-pulse ${direction === 'rtl' ? 'left-2' : 'right-2'}`} />
                 )}
               </button>
             ))}
@@ -985,21 +982,24 @@ const ProfilePage = () => {
         
         <div className="relative z-10">
           {/* Header Section */}
-          <div className="p-4 pb-3 border-b-2 border-emerald-500/20">
-            <div className="flex items-center justify-between">
+          <div className="p-4 pb-3 border-b-2 border-emerald-500/20 relative">
+            <div className="flex items-center justify-center relative">
+              {/* Menu button - positioned absolutely on the left */}
+              <button
+                data-tour="mobile-menu-button"
+                onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
+                className={`absolute left-0 p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
+                aria-label={language === 'hebrew' ? 'תפריט' : 'Menu'}
+              >
+                <div className="w-6 h-6 flex flex-col justify-center gap-1.5">
+                  <span className={`block h-0.5 w-6 ${themeClasses.textPrimary} transition-all duration-300 ${isMobileNavOpen ? 'rotate-45 translate-y-2' : ''}`} style={{ backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)' }}></span>
+                  <span className={`block h-0.5 w-6 ${themeClasses.textPrimary} transition-all duration-300 ${isMobileNavOpen ? 'opacity-0' : 'opacity-100'}`} style={{ backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)' }}></span>
+                  <span className={`block h-0.5 w-6 ${themeClasses.textPrimary} transition-all duration-300 ${isMobileNavOpen ? '-rotate-45 -translate-y-2' : ''}`} style={{ backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)' }}></span>
+                </div>
+              </button>
+              
+              {/* Centered logo and text */}
               <div className="flex items-center">
-                <button
-                  data-tour="mobile-menu-button"
-                  onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
-                  className={`mr-3 p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
-                  aria-label={language === 'hebrew' ? 'תפריט' : 'Menu'}
-                >
-                  <div className="w-6 h-6 flex flex-col justify-center gap-1.5">
-                    <span className={`block h-0.5 w-6 ${themeClasses.textPrimary} transition-all duration-300 ${isMobileNavOpen ? 'rotate-45 translate-y-2' : ''}`} style={{ backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)' }}></span>
-                    <span className={`block h-0.5 w-6 ${themeClasses.textPrimary} transition-all duration-300 ${isMobileNavOpen ? 'opacity-0' : 'opacity-100'}`} style={{ backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)' }}></span>
-                    <span className={`block h-0.5 w-6 ${themeClasses.textPrimary} transition-all duration-300 ${isMobileNavOpen ? '-rotate-45 -translate-y-2' : ''}`} style={{ backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.9)' }}></span>
-                  </div>
-                </button>
                 <div className="relative">
                   <img src="/favicon.ico" alt="BetterChoice Logo" className="w-12 h-12 mr-3 rounded-xl shadow-lg ring-2 ring-emerald-500/20" />
                   <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse shadow-lg shadow-emerald-500/50" />
@@ -1010,9 +1010,10 @@ const ProfilePage = () => {
                 </div>
               </div>
               
+              {/* Home button - positioned absolutely on the right */}
               <Link 
                 to="/"
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/20 ${themeClasses.textPrimary} text-sm font-medium`}
+                className={`absolute right-0 flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/20 ${themeClasses.textPrimary} text-sm font-medium`}
               >
                 <span className="text-base">🏠</span>
                 <span className="hidden sm:inline">{language === 'hebrew' ? 'בית' : 'Home'}</span>
@@ -1196,7 +1197,7 @@ const ProfilePage = () => {
             <MyPlanTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} clientRegion={profileData.region} />
           )}
           {activeTab === 'dailyLog' && (
-            <DailyLogTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} clientRegion={profileData.region} />
+            <DailyLogTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} clientRegion={profileData.region} direction={direction} />
           )}
           {activeTab === 'messages' && (
             <MessagesTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} activeTab={activeTab} language={language} />
@@ -1222,6 +1223,558 @@ const ProfilePage = () => {
 };
 
 // Profile Tab Component
+// Weight Progress Component
+const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode }) => {
+  const [weightLogs, setWeightLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState('weight'); // 'weight', 'body_fat', 'waist', 'hip', etc.
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+  const [timePeriod, setTimePeriod] = useState('all'); // '1m', '3m', '6m', 'all'
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    const loadWeightLogs = async () => {
+      if (!userCode) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      const { data, error } = await getWeightLogs(userCode);
+      
+      if (error) {
+        console.error('Error loading weight logs:', error);
+        setWeightLogs([]);
+      } else {
+        setWeightLogs(data || []);
+      }
+      setLoading(false);
+    };
+
+    loadWeightLogs();
+  }, [userCode]);
+
+  // Reset hovered point and trigger animation when time period or metric changes
+  useEffect(() => {
+    setHoveredPoint(null);
+    setIsTransitioning(true);
+    const timer = setTimeout(() => {
+      setIsTransitioning(false);
+    }, 400); // Match animation duration
+    return () => clearTimeout(timer);
+  }, [timePeriod, selectedMetric]);
+
+  // Format date for display (short format)
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return language === 'hebrew' 
+      ? date.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
+      : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Format date for tooltip (full format)
+  const formatDateFull = (dateString) => {
+    const date = new Date(dateString);
+    return language === 'hebrew'
+      ? date.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })
+      : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  };
+
+  // Get chart data points with time period filtering
+  const getChartData = () => {
+    if (!weightLogs || weightLogs.length === 0) return [];
+
+    let filteredLogs = [...weightLogs];
+
+    // Filter by time period
+    if (timePeriod !== 'all') {
+      const now = new Date();
+      const cutoffDate = new Date();
+      
+      switch (timePeriod) {
+        case '1m':
+          cutoffDate.setMonth(now.getMonth() - 1);
+          break;
+        case '3m':
+          cutoffDate.setMonth(now.getMonth() - 3);
+          break;
+        case '6m':
+          cutoffDate.setMonth(now.getMonth() - 6);
+          break;
+        default:
+          break;
+      }
+      
+      filteredLogs = weightLogs.filter(log => {
+        const logDate = new Date(log.measurement_date);
+        return logDate >= cutoffDate;
+      });
+    }
+
+    return filteredLogs.map(log => ({
+      date: formatDate(log.measurement_date),
+      dateFull: log.measurement_date,
+      weight: log.weight_kg,
+      bodyFat: log.body_fat_percentage,
+      waist: log.waist_circumference_cm,
+      hip: log.hip_circumference_cm,
+      arm: log.arm_circumference_cm,
+      neck: log.neck_circumference_cm
+    }));
+  };
+
+  const chartData = getChartData();
+
+  // Helper function to get value for selected metric
+  const getMetricValue = (d) => {
+    switch(selectedMetric) {
+      case 'weight': return d.weight;
+      case 'body_fat': return d.bodyFat;
+      case 'waist': return d.waist;
+      case 'hip': return d.hip;
+      case 'arm': return d.arm;
+      case 'neck': return d.neck;
+      default: return d.weight;
+    }
+  };
+
+  // Calculate min/max for Y-axis
+  const getYAxisRange = () => {
+    if (chartData.length === 0) return { min: 0, max: 100 };
+    
+    const values = chartData.map(d => getMetricValue(d)).filter(v => v != null);
+
+    if (values.length === 0) return { min: 0, max: 100 };
+    
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const padding = (max - min) * 0.1 || 1;
+    
+    return { min: Math.max(0, min - padding), max: max + padding };
+  };
+
+  const { min, max } = getYAxisRange();
+  const range = max - min || 1;
+
+  // Get current value for selected metric
+  const getCurrentValue = () => {
+    if (chartData.length === 0) return null;
+    const latest = chartData[chartData.length - 1];
+    return getMetricValue(latest);
+  };
+
+  // Get metric unit
+  const getMetricUnit = () => {
+    switch(selectedMetric) {
+      case 'weight': return 'kg';
+      case 'body_fat': return '%';
+      case 'waist':
+      case 'hip':
+      case 'arm':
+      case 'neck': return 'cm';
+      default: return 'kg';
+    }
+  };
+
+  // Get metric label
+  const getMetricLabel = () => {
+    switch(selectedMetric) {
+      case 'weight': return language === 'hebrew' ? 'משקל' : 'Weight';
+      case 'body_fat': return language === 'hebrew' ? 'אחוז שומן' : 'Body Fat';
+      case 'waist': return language === 'hebrew' ? 'היקף מותניים' : 'Waist';
+      case 'hip': return language === 'hebrew' ? 'היקף ירכיים' : 'Hip';
+      case 'arm': return language === 'hebrew' ? 'היקף זרוע' : 'Arm';
+      case 'neck': return language === 'hebrew' ? 'היקף צוואר' : 'Neck';
+      default: return language === 'hebrew' ? 'משקל' : 'Weight';
+    }
+  };
+
+  const currentValue = getCurrentValue();
+
+  // Handle point hover
+  const handlePointMouseEnter = (d, index, value, x, y) => {
+    setHoveredPoint({ index, data: d, value, x, y });
+  };
+
+  const handlePointMouseLeave = () => {
+    setHoveredPoint(null);
+  };
+
+  // Handle mouse move over chart area to find closest point
+  const handleChartMouseMove = (e) => {
+    if (chartData.length === 0) return;
+    
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const svgPoint = svg.createSVGPoint();
+    svgPoint.x = e.clientX;
+    svgPoint.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    if (ctm) {
+      svgPoint.x = (e.clientX - rect.left) * (800 / rect.width);
+      svgPoint.y = (e.clientY - rect.top) * (200 / rect.height);
+    }
+    
+    const mouseX = svgPoint.x;
+    const chartWidth = 700;
+    const chartStartX = 40;
+    const chartEndX = chartStartX + chartWidth;
+    
+    // Only process if mouse is within chart area
+    if (mouseX < chartStartX || mouseX > chartEndX) {
+      setHoveredPoint(null);
+      return;
+    }
+    
+    // Find closest data point based on X position
+    let closestIndex = 0;
+    let minDistance = Infinity;
+    
+    chartData.forEach((d, index) => {
+      const value = getMetricValue(d);
+      if (value == null) return;
+      
+      const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
+      const distance = Math.abs(mouseX - x);
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = index;
+      }
+    });
+    
+    // Get the closest point's data
+    const closestData = chartData[closestIndex];
+    const closestValue = getMetricValue(closestData);
+    if (closestValue == null) return;
+    
+    const normalizedValue = closestValue - min;
+    const ratio = normalizedValue / range;
+    const x = chartStartX + (closestIndex / (chartData.length - 1 || 1)) * chartWidth;
+    const y = 180 - (ratio * 160);
+    
+    setHoveredPoint({ index: closestIndex, data: closestData, value: closestValue, x, y });
+  };
+
+  const handleChartMouseLeave = () => {
+    setHoveredPoint(null);
+  };
+
+  if (loading) {
+    return (
+      <div className={`${themeClasses.bgCard} rounded-2xl p-6 mb-6 animate-pulse`}>
+        <div className="h-48 bg-gray-700 rounded-lg"></div>
+      </div>
+    );
+  }
+
+  if (chartData.length === 0) {
+    return null; // Don't show if no data
+  }
+
+  return (
+    <div className={`${themeClasses.bgCard} rounded-2xl p-6 mb-6 shadow-lg border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className={`${themeClasses.textPrimary} text-xl font-bold`}>
+            {language === 'hebrew' ? 'מעקב משקל והתקדמות' : 'Weight & Progress Tracking'}
+          </h3>
+          {currentValue != null && (
+            <p className={`${themeClasses.textSecondary} text-sm mt-1`}>
+              {language === 'hebrew' ? 'ערך נוכחי: ' : 'Current: '}
+              <span className="font-semibold">
+                {currentValue.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
+              </span>
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className={`px-4 py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:${themeClasses.bgPrimary} transition-colors text-sm font-medium`}
+        >
+          {expanded 
+            ? (language === 'hebrew' ? 'סגור' : 'Hide Options')
+            : (language === 'hebrew' ? 'מידות נוספות' : 'More Measurements')
+          }
+        </button>
+      </div>
+
+      {/* Time Period Filter */}
+      <div className="flex gap-2 mb-4">
+        {[
+          { key: '1m', label: language === 'hebrew' ? 'חודש 1' : '1 Month' },
+          { key: '3m', label: language === 'hebrew' ? '3 חודשים' : '3 Months' },
+          { key: '6m', label: language === 'hebrew' ? '6 חודשים' : '6 Months' },
+          { key: 'all', label: language === 'hebrew' ? 'כל הזמן' : 'All Time' }
+        ].map(period => (
+          <button
+            key={period.key}
+            onClick={() => setTimePeriod(period.key)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              timePeriod === period.key
+                ? 'bg-emerald-500 text-white'
+                : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
+            }`}
+          >
+            {period.label}
+          </button>
+        ))}
+      </div>
+
+      {expanded && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            { key: 'weight', label: language === 'hebrew' ? 'משקל' : 'Weight', unit: 'kg' },
+            { key: 'body_fat', label: language === 'hebrew' ? 'אחוז שומן' : 'Body Fat', unit: '%' },
+            { key: 'waist', label: language === 'hebrew' ? 'היקף מותניים' : 'Waist', unit: 'cm' },
+            { key: 'hip', label: language === 'hebrew' ? 'היקף ירכיים' : 'Hip', unit: 'cm' },
+            { key: 'arm', label: language === 'hebrew' ? 'היקף זרוע' : 'Arm', unit: 'cm' },
+            { key: 'neck', label: language === 'hebrew' ? 'היקף צוואר' : 'Neck', unit: 'cm' }
+          ].map(metric => (
+            <button
+              key={metric.key}
+              onClick={() => setSelectedMetric(metric.key)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                selectedMetric === metric.key
+                  ? 'bg-emerald-500 text-white'
+                  : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
+              }`}
+            >
+              {metric.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Simple Line Chart */}
+      <div className="relative h-64 w-full overflow-hidden">
+        <div
+          style={{
+            opacity: isTransitioning ? 0.5 : 1,
+            transform: isTransitioning ? 'scale(0.97)' : 'scale(1)',
+            transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
+          <svg 
+            className="w-full h-full" 
+            viewBox="0 0 800 200" 
+            preserveAspectRatio="none"
+            onMouseMove={handleChartMouseMove}
+            onMouseLeave={handleChartMouseLeave}
+          >
+          {/* Y-axis labels */}
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+            const value = min + (range * ratio);
+            const y = 200 - (ratio * 180);
+            return (
+              <text
+                key={ratio}
+                x="5"
+                y={y + 4}
+                className={`text-xs ${themeClasses.textSecondary}`}
+                fill="currentColor"
+              >
+                {value.toFixed(selectedMetric === 'weight' ? 1 : selectedMetric === 'body_fat' ? 1 : 0)}
+              </text>
+            );
+          })}
+
+          {/* Grid lines */}
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+            const y = 200 - (ratio * 180);
+            return (
+              <line
+                key={ratio}
+                x1="40"
+                y1={y}
+                x2="740"
+                y2={y}
+                stroke={isDarkMode ? 'rgba(100, 100, 100, 0.2)' : 'rgba(200, 200, 200, 0.3)'}
+                strokeWidth="1"
+              />
+            );
+          })}
+
+          {/* Data line */}
+          {chartData.length > 0 && (() => {
+            const chartWidth = 700; // Reduced from 760 to give more space on right
+            const points = chartData
+              .map((d, index) => {
+                const value = getMetricValue(d) || 0;
+                const normalizedValue = value - min;
+                const ratio = normalizedValue / range;
+                const x = 40 + (index / (chartData.length - 1 || 1)) * chartWidth;
+                const y = 180 - (ratio * 160);
+                return `${x},${y}`;
+              })
+              .filter(p => p !== null)
+              .join(' ');
+
+            if (!points) return null;
+
+            return (
+              <polyline
+                points={points}
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  opacity: isTransitioning ? 0 : 1,
+                  transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+                }}
+              />
+            );
+          })()}
+
+          {/* Data points */}
+          {chartData.map((d, index) => {
+            const value = getMetricValue(d);
+            if (value == null) return null;
+            const normalizedValue = value - min;
+            const ratio = normalizedValue / range;
+            const chartWidth = 700; // Reduced from 760 to give 60px padding on right
+            const x = 40 + (index / (chartData.length - 1 || 1)) * chartWidth;
+            const y = 180 - (ratio * 160);
+            const isHovered = hoveredPoint && hoveredPoint.index === index;
+            // Stagger animation delay for cascading effect
+            const animationDelay = isTransitioning ? 0 : (index * 0.015);
+            return (
+              <circle
+                key={`point-${index}`}
+                cx={x}
+                cy={y}
+                r={isHovered ? "6" : "4"}
+                fill="#10b981"
+                className="transition-all cursor-pointer"
+                style={{ 
+                  transition: `r 0.2s, opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) ${animationDelay}s`,
+                  opacity: isTransitioning ? 0 : 1
+                }}
+                onMouseEnter={() => handlePointMouseEnter(d, index, value, x, y)}
+                onMouseLeave={handlePointMouseLeave}
+              />
+            );
+          }).filter(Boolean)}
+
+          {/* Tooltip */}
+          {hoveredPoint && (() => {
+            const tooltipWidth = 140;
+            const tooltipHeight = 50;
+            const padding = 10;
+            const chartRightBound = 740; // 40 (left padding) + 700 (chart width)
+            
+            // Calculate tooltip X position (keep within bounds)
+            let tooltipX = hoveredPoint.x - (tooltipWidth / 2);
+            if (tooltipX < padding) {
+              tooltipX = padding;
+            } else if (tooltipX + tooltipWidth > chartRightBound - padding) {
+              tooltipX = chartRightBound - tooltipWidth - padding;
+            }
+            
+            // Center of tooltip rectangle (for text alignment)
+            const tooltipCenterX = tooltipX + (tooltipWidth / 2);
+            
+            // Calculate tooltip Y position (above or below point)
+            let tooltipY = hoveredPoint.y - tooltipHeight - 10; // Try above first
+            let textY1 = tooltipY + 18; // Date text position
+            let textY2 = tooltipY + 35; // Value text position
+            
+            // If tooltip would go above the chart, position it below
+            if (tooltipY < padding) {
+              tooltipY = hoveredPoint.y + 15;
+              textY1 = tooltipY + 18;
+              textY2 = tooltipY + 35;
+            }
+            
+            // Ensure tooltip doesn't go below the chart
+            if (tooltipY + tooltipHeight > 200 - padding) {
+              tooltipY = 200 - tooltipHeight - padding;
+              textY1 = tooltipY + 18;
+              textY2 = tooltipY + 35;
+            }
+            
+            return (
+              <g
+                style={{
+                  opacity: isTransitioning ? 0 : 1,
+                  transition: 'opacity 0.2s ease-in-out'
+                }}
+              >
+                {/* Vertical line at hovered point */}
+                <line
+                  x1={hoveredPoint.x}
+                  y1="20"
+                  x2={hoveredPoint.x}
+                  y2="180"
+                  stroke="#10b981"
+                  strokeWidth="1"
+                  strokeDasharray="4,4"
+                  opacity="0.5"
+                />
+                {/* Tooltip background */}
+                <rect
+                  x={tooltipX}
+                  y={tooltipY}
+                  width={tooltipWidth}
+                  height={tooltipHeight}
+                  rx="6"
+                  fill={isDarkMode ? "rgba(30, 41, 59, 0.98)" : "rgba(255, 255, 255, 0.98)"}
+                  stroke="#10b981"
+                  strokeWidth="2"
+                  filter="drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))"
+                />
+                {/* Tooltip text - Date */}
+                <text
+                  x={tooltipCenterX}
+                  y={textY1}
+                  textAnchor="middle"
+                  className={`text-xs font-semibold ${themeClasses.textPrimary}`}
+                  fill="currentColor"
+                >
+                  {formatDateFull(hoveredPoint.data.dateFull)}
+                </text>
+                {/* Tooltip text - Value */}
+                <text
+                  x={tooltipCenterX}
+                  y={textY2}
+                  textAnchor="middle"
+                  className="text-base font-bold"
+                  fill="#10b981"
+                >
+                  {hoveredPoint.value?.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* X-axis labels */}
+          {chartData.length > 0 && chartData.map((d, index) => {
+            if (index % Math.ceil(chartData.length / 6) !== 0 && index !== chartData.length - 1) return null;
+            const chartWidth = 700; // Match the chart width used for data points
+            const x = 40 + (index / (chartData.length - 1 || 1)) * chartWidth;
+            return (
+              <text
+                key={index}
+                x={x}
+                y="195"
+                className={`text-xs ${themeClasses.textSecondary}`}
+                fill="currentColor"
+                textAnchor="middle"
+              >
+                {d.date}
+              </text>
+            );
+          })}
+        </svg>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, errorMessage, themeClasses, t, companyOptions, isLoadingCompanies, companyError, language, onboardingCompleted = false }) => {
   // Helper function to check if a field should be shown (if onboarding not completed, only show non-null fields)
   const shouldShowField = (fieldValue) => {
@@ -2760,7 +3313,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 };
 
 // Daily Log Tab Component
-const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
+const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direction }) => {
   const { settings } = useSettings();
   const { isDarkMode } = useTheme();
   const [foodLogs, setFoodLogs] = useState([]);
@@ -3030,12 +3583,6 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         return;
       }
 
-      // Recalculate totals
-      const newCalories = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
-      const newProtein = foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
-      const newCarbs = foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
-      const newFat = foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
-
       // Preserve the original format - if it was an array, keep it as an array
       // Supabase JSONB will handle the conversion automatically
       // Don't stringify it - pass the array directly
@@ -3044,10 +3591,6 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       // Update the food log
       const { error } = await updateFoodLog(logId, {
         food_items: foodItemsToSave,
-        total_calories: newCalories || 0,
-        total_protein_g: newProtein || 0,
-        total_carbs_g: newCarbs || 0,
-        total_fat_g: newFat || 0,
         meal_label: log.meal_label || 'snacks',
         image_url: log.image_url || null,
         log_date: log.log_date || selectedDate
@@ -3166,19 +3709,9 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         // Add new food item
         foodItems.push(foodItem);
 
-        // Recalculate totals
-        const newCalories = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
-        const newProtein = foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
-        const newCarbs = foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
-        const newFat = foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
-
         // Update the food log
         const { error } = await updateFoodLog(mostRecentLog.id, {
-          food_items: foodItems,
-          total_calories: newCalories,
-          total_protein_g: newProtein,
-          total_carbs_g: newCarbs,
-          total_fat_g: newFat
+          food_items: foodItems
         });
 
         if (error) {
@@ -3412,6 +3945,14 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 
   return (
     <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
+      {/* Weight Progress Component */}
+      <WeightProgressComponent 
+        userCode={userCode} 
+        themeClasses={themeClasses} 
+        language={language}
+        isDarkMode={isDarkMode}
+      />
+      
       {/* Date Selector Section */}
       <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
         borderLeft: '3px solid',
@@ -3445,7 +3986,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
               onClick={() => navigateWeek('prev')}
               className={`w-10 h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300`}
             >
-              <svg className={`w-5 h-5 ${themeClasses.textPrimary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-5 h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
@@ -3453,7 +3994,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
               onClick={() => navigateWeek('next')}
               className={`w-10 h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300`}
             >
-              <svg className={`w-5 h-5 ${themeClasses.textPrimary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-5 h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -3494,147 +4035,325 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         </div>
       </div>
 
-      {/* Macro Summary Section */}
-      <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
-        animationDelay: '0.3s',
-        borderLeft: '3px solid',
-        borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
-        borderRight: '2px solid',
-        borderRightColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
-        borderTop: '2px solid',
-        borderTopColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
-        borderBottom: '2px solid',
-        borderBottomColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.15)',
-        boxShadow: isDarkMode 
-          ? 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)' 
-          : 'inset 1px 0 0 rgba(16, 185, 129, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-      }}>
-        {/* Decorative gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none rounded-xl" />
-        <div className="relative z-10">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center">
-            <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center mr-3">
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/>
-              </svg>
-            </div>
-            <h3 className={`${themeClasses.textPrimary} text-2xl font-bold`}>
+      {/* Macro Summary Section - Apple Style PAI */}
+      <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp" style={{ animationDelay: '0.3s' }}>
+        <div className={`${themeClasses.bgCard} rounded-3xl p-8 sm:p-12 shadow-2xl border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <h3 className={`${themeClasses.textPrimary} text-xl sm:text-2xl font-semibold`}>
               {language === 'hebrew' ? 'סיכום מקרו' : 'Macro Summary'}
             </h3>
+            <div className={`${themeClasses.textSecondary} text-sm sm:text-base`}>
+              {overallPercent}% {language === 'hebrew' ? 'הושלם' : 'complete'}
+            </div>
           </div>
-          <div className={`${themeClasses.textSecondary} text-lg font-medium`}>
-            {overallPercent}% {language === 'hebrew' ? 'הושלם' : 'complete'}
-          </div>
-        </div>
 
-        {/* Macro Cards */}
-        <div className={`grid gap-4 sm:gap-6 ${
-          settings.showCalories && settings.showMacros 
-            ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' 
-            : settings.showCalories || settings.showMacros
-            ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-            : 'grid-cols-1 sm:grid-cols-2'
-        }`}>
-          {/* Calories Card */}
-          {settings.showCalories && (
-          <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.4s' }}>
-            <div className="flex items-center mb-4">
-              <div className="w-4 h-4 bg-emerald-500 rounded-full mr-3"></div>
-              <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
-                {language === 'hebrew' ? 'קלוריות' : 'Calories'}
-              </h4>
+          {/* Circular Score Display */}
+          <div className="flex flex-col items-center justify-center py-8">
+            {/* Two Concentric Circles - Apple Style */}
+            <div className="relative w-64 h-64 sm:w-80 sm:h-80 mb-8">
+              <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 280 280">
+                {/* Outer Circle Background (Calories) */}
+                <circle
+                  cx="140"
+                  cy="140"
+                  r="120"
+                  fill="none"
+                  stroke={isDarkMode ? 'rgba(100, 100, 100, 0.15)' : 'rgba(200, 200, 200, 0.2)'}
+                  strokeWidth="16"
+                />
+                
+                {/* Inner Circle Background (Macros) */}
+                <circle
+                  cx="140"
+                  cy="140"
+                  r="100"
+                  fill="none"
+                  stroke={isDarkMode ? 'rgba(100, 100, 100, 0.15)' : 'rgba(200, 200, 200, 0.2)'}
+                  strokeWidth="16"
+                />
+                
+                {/* Outer Circle - Calories Progress */}
+                {settings.showCalories && (() => {
+                  const outerRadius = 120;
+                  const outerCircumference = 2 * Math.PI * outerRadius;
+                  
+                  // Split into normal portion (0-100%) and overflow (>100%)
+                  const caloriesNormalLength = Math.min(caloriesPercent, 100) / 100 * outerCircumference;
+                  const caloriesOverflowLength = caloriesPercent > 100 ? ((caloriesPercent - 100) / 100) * outerCircumference : 0;
+                  
+                  return (
+                    <>
+                      {/* Normal portion (0-100%) - regular green */}
+                      {caloriesNormalLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={outerRadius}
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="16"
+                          strokeLinecap="round"
+                          strokeDasharray={`${caloriesNormalLength} ${outerCircumference}`}
+                          strokeDashoffset={0}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                      {/* Overflow portion (>100%) - darker green, overlapping itself */}
+                      {caloriesOverflowLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={outerRadius}
+                          fill="none"
+                          stroke="#059669"
+                          strokeWidth="16"
+                          strokeLinecap="round"
+                          strokeDasharray={`${caloriesOverflowLength} ${outerCircumference}`}
+                          strokeDashoffset={0}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                    </>
+                  );
+                })()}
+                
+                {/* Inner Circle - Macros (3 segments, each 120 degrees) */}
+                {settings.showMacros && (() => {
+                  const innerRadius = 100;
+                  const circumference = 2 * Math.PI * innerRadius;
+                  const segmentLength = circumference / 3; // 120 degrees each
+                  
+                  // Calculate lengths for each macro
+                  const proteinNormalLength = Math.min(proteinPercent, 100) / 100 * segmentLength;
+                  const proteinOverflowLength = proteinPercent > 100 ? (proteinPercent - 100) / 100 * segmentLength : 0;
+                  
+                  const carbsNormalLength = Math.min(carbsPercent, 100) / 100 * segmentLength;
+                  const carbsOverflowLength = carbsPercent > 100 ? (carbsPercent - 100) / 100 * segmentLength : 0;
+                  
+                  const fatNormalLength = Math.min(fatPercent, 100) / 100 * segmentLength;
+                  const fatOverflowLength = fatPercent > 100 ? (fatPercent - 100) / 100 * segmentLength : 0;
+                  
+                  return (
+                    <>
+                      {/* Step 1: Render all normal portions (0-100%) */}
+                      {proteinNormalLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={innerRadius}
+                          fill="none"
+                          stroke="#a855f7"
+                          strokeWidth="16"
+                          strokeLinecap="round"
+                          strokeDasharray={`${proteinNormalLength} ${circumference}`}
+                          strokeDashoffset="0"
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                      {carbsNormalLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={innerRadius}
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="16"
+                          strokeLinecap="round"
+                          strokeDasharray={`${carbsNormalLength} ${circumference}`}
+                          strokeDashoffset={-segmentLength}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                      {fatNormalLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={innerRadius}
+                          fill="none"
+                          stroke="#f59e0b"
+                          strokeWidth="16"
+                          strokeLinecap="round"
+                          strokeDasharray={`${fatNormalLength} ${circumference}`}
+                          strokeDashoffset={-segmentLength * 2}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                      
+                      {/* Step 2: Render all overflow borders (next segment's color) - rendered together so they're all visible */}
+                      {proteinOverflowLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={innerRadius}
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="20"
+                          strokeLinecap="round"
+                          strokeDasharray={`${proteinOverflowLength} ${circumference}`}
+                          strokeDashoffset={0 - proteinNormalLength}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                      {carbsOverflowLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={innerRadius}
+                          fill="none"
+                          stroke="#f59e0b"
+                          strokeWidth="20"
+                          strokeLinecap="round"
+                          strokeDasharray={`${carbsOverflowLength} ${circumference}`}
+                          strokeDashoffset={-segmentLength - carbsNormalLength}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                      {fatOverflowLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={innerRadius}
+                          fill="none"
+                          stroke="#a855f7"
+                          strokeWidth="20"
+                          strokeLinecap="round"
+                          strokeDasharray={`${fatOverflowLength} ${circumference}`}
+                          strokeDashoffset={0}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                      
+                      {/* Step 3: Render all overflow main arcs (own color) - rendered on top */}
+                      {proteinOverflowLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={innerRadius}
+                          fill="none"
+                          stroke="#a855f7"
+                          strokeWidth="16"
+                          strokeLinecap="round"
+                          strokeDasharray={`${proteinOverflowLength} ${circumference}`}
+                          strokeDashoffset={0 - proteinNormalLength}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                      {carbsOverflowLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={innerRadius}
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="16"
+                          strokeLinecap="round"
+                          strokeDasharray={`${carbsOverflowLength} ${circumference}`}
+                          strokeDashoffset={-segmentLength - carbsNormalLength}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                      {fatOverflowLength > 0 && (
+                        <circle
+                          cx="140"
+                          cy="140"
+                          r={innerRadius}
+                          fill="none"
+                          stroke="#f59e0b"
+                          strokeWidth="16"
+                          strokeLinecap="round"
+                          strokeDasharray={`${fatOverflowLength} ${circumference}`}
+                          strokeDashoffset={0}
+                          opacity={1}
+                          className="transition-all duration-1000 ease-out"
+                        />
+                      )}
+                    </>
+                  );
+                })()}
+              </svg>
+              
+              {/* Center Score */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className={`${themeClasses.textPrimary} text-7xl sm:text-8xl font-extralight mb-3 tracking-tight`}>
+                  {totalCalories.toLocaleString()}
+                </div>
+              </div>
             </div>
-            <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
-                {totalCalories.toLocaleString()} / {dailyGoals.calories.toLocaleString()}
-            </div>
-            <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
-              <div 
-                className="bg-emerald-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(caloriesPercent, 100)}%` }}
-              ></div>
-            </div>
-            <div className="text-emerald-400 text-sm font-medium">{caloriesPercent}%</div>
-          </div>
-          )}
 
-          {/* Protein Card */}
-          {settings.showMacros && (
-          <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.5s' }}>
-            <div className="flex items-center mb-4">
-              <div className="w-4 h-4 bg-purple-500 rounded-full mr-3"></div>
-              <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
-                {language === 'hebrew' ? 'חלבון' : 'Protein'}
-              </h4>
+            {/* Macro Details - Minimal List */}
+            <div className="w-full max-w-md space-y-3 mt-4">
+              {settings.showCalories && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full mr-3"></div>
+                    <span className={`${themeClasses.textSecondary} text-sm`}>
+                      {language === 'hebrew' ? 'קלוריות' : 'Calories'}
+                    </span>
+                  </div>
+                  <span className={`${themeClasses.textPrimary} text-sm font-medium`}>
+                    {totalCalories.toLocaleString()} / {dailyGoals.calories.toLocaleString()}
+                  </span>
+                </div>
+              )}
+              
+              {settings.showMacros && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
+                      <span className={`${themeClasses.textSecondary} text-sm`}>
+                        {language === 'hebrew' ? 'חלבון' : 'Protein'}
+                      </span>
+                    </div>
+                    <span className={`${themeClasses.textPrimary} text-sm font-medium`}>
+                      {formatWeight(totalProtein)} / {formatWeight(dailyGoals.protein)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
+                      <span className={`${themeClasses.textSecondary} text-sm`}>
+                        {language === 'hebrew' ? 'פחמימות' : 'Carbs'}
+                      </span>
+                    </div>
+                    <span className={`${themeClasses.textPrimary} text-sm font-medium`}>
+                      {formatWeight(totalCarbs)} / {formatWeight(dailyGoals.carbs)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="w-3 h-3 bg-amber-500 rounded-full mr-3"></div>
+                      <span className={`${themeClasses.textSecondary} text-sm`}>
+                        {language === 'hebrew' ? 'שומן' : 'Fat'}
+                      </span>
+                    </div>
+                    <span className={`${themeClasses.textPrimary} text-sm font-medium`}>
+                      {formatWeight(totalFat)} / {formatWeight(dailyGoals.fat)}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
-            <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
-                {formatWeight(totalProtein)} / {formatWeight(dailyGoals.protein)}
-            </div>
-            <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
-              <div 
-                className="bg-purple-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(proteinPercent, 100)}%` }}
-              ></div>
-            </div>
-            <div className="text-purple-400 text-sm font-medium">{proteinPercent}%</div>
           </div>
-          )}
-
-          {/* Fat Card */}
-          {settings.showMacros && (
-          <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.6s' }}>
-            <div className="flex items-center mb-4">
-              <div className="w-4 h-4 bg-amber-500 rounded-full mr-3"></div>
-              <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
-                {language === 'hebrew' ? 'שומן' : 'Fat'}
-              </h4>
-            </div>
-            <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
-                {formatWeight(totalFat)} / {formatWeight(dailyGoals.fat)}
-            </div>
-            <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
-              <div 
-                className="bg-amber-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(fatPercent, 100)}%` }}
-              ></div>
-            </div>
-            <div className="text-amber-400 text-sm font-medium">{fatPercent}%</div>
-          </div>
-          )}
-
-          {/* Carbs Card */}
-          {settings.showMacros && (
-          <div className={`${themeClasses.bgCard} rounded-2xl p-6 shadow-lg animate-bounceIn`} style={{ animationDelay: '0.7s' }}>
-            <div className="flex items-center mb-4">
-              <div className="w-4 h-4 bg-blue-500 rounded-full mr-3"></div>
-              <h4 className={`${themeClasses.textPrimary} text-lg font-semibold`}>
-                {language === 'hebrew' ? 'פחמימות' : 'Carbs'}
-              </h4>
-            </div>
-            <div className={`${themeClasses.textPrimary} text-2xl font-bold mb-2`}>
-              {formatWeight(totalCarbs)} / {formatWeight(dailyGoals.carbs)}
-            </div>
-            <div className="w-full bg-slate-700 rounded-full h-3 mb-2">
-              <div 
-                className="bg-blue-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(carbsPercent, 100)}%` }}
-              ></div>
-            </div>
-            <div className="text-blue-400 text-sm font-medium">{carbsPercent}%</div>
-          </div>
-          )}
-        </div>
         </div>
       </div>
 
       {/* Meals Section */}
       <div className="mt-12 animate-slideInUp" style={{ animationDelay: '0.8s' }}>
         <div className="flex items-center mb-8">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mr-4 shadow-lg shadow-blue-500/25">
-            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/>
-            </svg>
-          </div>
           <div>
             <h3 className={`${themeClasses.textPrimary} text-2xl font-bold tracking-tight`}>
               {language === 'hebrew' ? 'ארוחות' : 'Meals'}

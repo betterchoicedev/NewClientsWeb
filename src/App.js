@@ -15,6 +15,7 @@ import PaymentCancelPage from './pages/PaymentCancelPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
 import AccessibilityStatementPage from './pages/AccessibilityStatementPage';
+import NotFoundPage from './pages/NotFoundPage';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -53,7 +54,7 @@ function App() {
                   <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                   <Route path="/terms" element={<TermsOfServicePage />} />
                   <Route path="/accessibility-statement" element={<AccessibilityStatementPage />} />
-                  <Route path="/:phoneNumber" element={<WhatsAppRegisterPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
                 </Routes>
               </div>
             </Router>
