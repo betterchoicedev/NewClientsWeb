@@ -30,7 +30,7 @@ function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/');
+      navigate('/profile');
     }
   }, [isAuthenticated, navigate]);
 
@@ -166,8 +166,8 @@ function LoginPage() {
           }
         }
 
-        // Navigate to home page
-        navigate('/');
+        // Navigate to profile page
+        navigate('/profile');
       }
     } catch (err) {
       setError(language === 'hebrew' ? 'אירעה שגיאה בהתחברות' : 'An error occurred during login');

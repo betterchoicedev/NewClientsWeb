@@ -7,7 +7,7 @@ import { useStripe } from '../context/StripeContext';
 import { useSettings } from '../context/SettingsContext';
 import { supabase, supabaseSecondary } from '../supabase/supabaseClient';
 import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, getChatMessages, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany, getWeightLogs } from '../supabase/secondaryClient';
-import { normalizePhoneForDatabase } from '../supabase/auth';
+import { normalizePhoneForDatabase, signOut } from '../supabase/auth';
 import { getAllProducts, getProductsByCategory, getProduct } from '../config/stripe-products';
 import PricingCard from '../components/PricingCard';
 import OnboardingModal from '../components/OnboardingModal';
@@ -142,6 +142,8 @@ const ProfilePage = () => {
   const [indicatorPosition, setIndicatorPosition] = useState({ top: 0, height: 0 });
   const tabRefs = useRef({});
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isModalAnimating, setIsModalAnimating] = useState(false);
 
   const loadCompanyOptions = useCallback(async () => {
     if (!supabaseSecondary) return;
@@ -687,6 +689,22 @@ const ProfilePage = () => {
     saveProfileData();
   };
 
+  const handleLogout = async () => {
+    try {
+      const { error } = await signOut();
+      if (error) {
+        console.error('Logout error:', error);
+        setErrorMessage(language === 'hebrew' ? 'שגיאה בהתנתקות' : 'Error logging out');
+      } else {
+        // Navigate to homepage after successful logout
+        navigate('/');
+      }
+    } catch (err) {
+      console.error('Logout error:', err);
+      setErrorMessage(language === 'hebrew' ? 'שגיאה בהתנתקות' : 'Error logging out');
+    }
+  };
+
   const tabs = [
     { 
       id: 'profile', 
@@ -784,7 +802,40 @@ const ProfilePage = () => {
   }
 
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary} flex flex-col lg:flex-row language-transition language-text-transition`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
+    <>
+      <style>{`
+        @keyframes modalPopUp {
+          0% {
+            transform: scale(0.7) translateY(20px);
+            opacity: 0;
+          }
+          50% {
+            transform: scale(1.05) translateY(-5px);
+            opacity: 0.9;
+          }
+          100% {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+          }
+        }
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        @keyframes flicker {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.3;
+          }
+        }
+      `}</style>
+      <div className={`min-h-screen ${themeClasses.bgPrimary} flex flex-col lg:flex-row language-transition language-text-transition`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Sidebar Navigation - Desktop */}
       <div data-tour="profile-sidebar" className={`hidden lg:block ${language === 'english' ? 'lg:w-96' : 'lg:w-80'} ${themeClasses.bgCard} ${themeClasses.shadowCard} border-r-2 ${themeClasses.borderPrimary} relative overflow-hidden flex flex-col`} dir={direction} style={{
         borderLeft: '3px solid',
@@ -798,46 +849,26 @@ const ProfilePage = () => {
         
         {/* Header */}
         <div className="p-6 border-b-2 border-emerald-500/20 relative z-10">
-          <div className="flex items-center mb-4">
-            <div className="relative">
-              <img src="/favicon.ico" alt="BetterChoice Logo" className={`w-12 h-12 rounded-lg shadow-lg ring-2 ring-emerald-500/20 ${direction === 'rtl' ? 'ml-3' : 'mr-3'}`} />
-              <div className={`absolute -top-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse ${direction === 'rtl' ? '-left-1' : '-right-1'}`} />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="relative">
+                <img src="/favicon.ico" alt="BetterChoice Logo" className={`w-12 h-12 rounded-lg shadow-lg ring-2 ring-emerald-500/20 ${direction === 'rtl' ? 'ml-3' : 'mr-3'}`} />
+                <div className={`absolute -top-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse ${direction === 'rtl' ? '-left-1' : '-right-1'}`} />
+              </div>
+              <div className={direction === 'rtl' ? 'text-right' : 'text-left'}>
+                <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
+                <p className={`${themeClasses.textSecondary} text-sm`}>{t.profile.title}</p>
+              </div>
             </div>
-            <div className={direction === 'rtl' ? 'text-right' : 'text-left'}>
-              <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
-              <p className={`${themeClasses.textSecondary} text-sm`}>{t.profile.title}</p>
-            </div>
-          </div>
-          
-          {/* Control Buttons */}
-          <div className="space-y-3">
-            {/* Go Back to Home */}
+            
+            {/* Go Back to Home - Small Button */}
             <Link 
               to="/"
               data-tour="profile-home-button"
-              className={`w-full flex items-center p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}
+              className={`flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-300 hover:scale-110 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md`}
+              title={language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}
             >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-emerald-500/20 to-teal-500/20 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'ml-3' : 'mr-3'}`}>
-                <span className="text-sm">🏠</span>
-              </div>
-              <div className={`flex-1 min-w-0 overflow-hidden ${direction === 'rtl' ? 'text-right' : 'text-left'}`}>
-                <div className={`font-semibold ${themeClasses.textPrimary} text-sm`} style={{
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
-                }}>
-                  {language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}
-                </div>
-                <div className={`text-xs ${themeClasses.textMuted}`} style={{
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  wordBreak: 'break-word'
-                }}>
-                  {language === 'hebrew' ? 'חזור לעמוד הראשי' : 'Go back to the main homepage'}
-                </div>
-              </div>
+              <span className="text-lg">🏠</span>
             </Link>
           </div>
         </div>
@@ -924,41 +955,77 @@ const ProfilePage = () => {
 
         {/* Bottom Controls */}
         <div className="p-6 border-t-2 border-emerald-500/20 relative z-10">
-          <div className="flex items-center justify-between">
-            {/* Language Control */}
-            <div className="flex items-center">
-              <button 
-                onClick={toggleLanguage}
-                className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40`}
-              >
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
-                  </svg>
-                  <span className="text-blue-400 text-sm font-medium">{language === 'hebrew' ? 'עב' : 'En'}</span>
-                </div>
-              </button>
-              <span className={`${themeClasses.textSecondary} text-sm ml-3`}>Language</span>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              {/* Language Control */}
+              <div className="flex items-center">
+                <button 
+                  onClick={toggleLanguage}
+                  className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40`}
+                >
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
+                    </svg>
+                    <span className="text-blue-400 text-sm font-medium">{language === 'hebrew' ? 'עב' : 'En'}</span>
+                  </div>
+                </button>
+                <span className={`${themeClasses.textSecondary} text-sm ml-3`}>Language</span>
+              </div>
+
+              {/* Theme Control */}
+              <div className="flex items-center">
+                <button 
+                  onClick={toggleTheme}
+                  className={`${themeClasses.bgCard} border-2 border-emerald-500/30 rounded-full p-3 hover:${themeClasses.bgSecondary} transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-110`}
+                >
+                  {isDarkMode ? (
+                    <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd"/>
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                    </svg>
+                  )}
+                </button>
+                <span className={`${themeClasses.textSecondary} text-sm ml-3`}>Theme</span>
+              </div>
             </div>
 
-            {/* Theme Control */}
-            <div className="flex items-center">
-              <button 
-                onClick={toggleTheme}
-                className={`${themeClasses.bgCard} border-2 border-emerald-500/30 rounded-full p-3 hover:${themeClasses.bgSecondary} transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-110`}
-              >
-                {isDarkMode ? (
-                  <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd"/>
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
-                  </svg>
-                )}
-              </button>
-              <span className={`${themeClasses.textSecondary} text-sm ml-3`}>Theme</span>
-            </div>
+            {/* Logout Button */}
+            <button
+              onClick={() => {
+                setIsModalAnimating(true);
+                setShowLogoutConfirm(true);
+                setTimeout(() => setIsModalAnimating(false), 600);
+              }}
+              className={`w-full flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''} p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-95 ${themeClasses.bgSecondary} border border-red-500/20 hover:border-red-500/40 hover:shadow-md`}
+            >
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-red-500/20 to-pink-500/20 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'ml-3' : 'mr-3'}`}>
+                <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </div>
+              <div className={`flex-1 min-w-0 overflow-hidden ${direction === 'rtl' ? 'text-right' : 'text-left'}`}>
+                <div className={`font-semibold text-red-500 text-sm`} style={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {language === 'hebrew' ? 'התנתק' : 'Logout'}
+                </div>
+                <div className={`text-xs ${themeClasses.textMuted}`} style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  wordBreak: 'break-word'
+                }}>
+                  {language === 'hebrew' ? 'התנתק מהחשבון שלך' : 'Sign out of your account'}
+                </div>
+              </div>
+            </button>
           </div>
         </div>
       </div>
@@ -983,12 +1050,12 @@ const ProfilePage = () => {
         <div className="relative z-10">
           {/* Header Section */}
           <div className="p-4 pb-3 border-b-2 border-emerald-500/20 relative">
-            <div className="flex items-center justify-center relative">
-              {/* Menu button - positioned absolutely on the left */}
+            <div className="flex items-center justify-between relative">
+              {/* Menu button */}
               <button
                 data-tour="mobile-menu-button"
                 onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
-                className={`absolute left-0 p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
+                className={`p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
                 aria-label={language === 'hebrew' ? 'תפריט' : 'Menu'}
               >
                 <div className="w-6 h-6 flex flex-col justify-center gap-1.5">
@@ -999,24 +1066,24 @@ const ProfilePage = () => {
               </button>
               
               {/* Centered logo and text */}
-              <div className="flex items-center">
+              <div className="flex items-center flex-1 justify-center">
                 <div className="relative">
-                  <img src="/favicon.ico" alt="BetterChoice Logo" className="w-12 h-12 mr-3 rounded-xl shadow-lg ring-2 ring-emerald-500/20" />
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse shadow-lg shadow-emerald-500/50" />
+                  <img src="/favicon.ico" alt="BetterChoice Logo" className={`w-12 h-12 ${direction === 'rtl' ? 'ml-3' : 'mr-3'} rounded-xl shadow-lg ring-2 ring-emerald-500/20`} />
+                  <div className={`absolute -top-1 ${direction === 'rtl' ? '-left-1' : '-right-1'} w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse shadow-lg shadow-emerald-500/50`} />
                 </div>
-                <div>
+                <div className={direction === 'rtl' ? 'text-right' : 'text-left'}>
                   <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
                   <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
                 </div>
               </div>
               
-              {/* Home button - positioned absolutely on the right */}
+              {/* Home button - small icon button */}
               <Link 
                 to="/"
-                className={`absolute right-0 flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/20 ${themeClasses.textPrimary} text-sm font-medium`}
+                className={`flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-300 hover:scale-110 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md`}
+                title={language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}
               >
-                <span className="text-base">🏠</span>
-                <span className="hidden sm:inline">{language === 'hebrew' ? 'בית' : 'Home'}</span>
+                <span className="text-lg">🏠</span>
               </Link>
             </div>
           </div>
@@ -1059,7 +1126,7 @@ const ProfilePage = () => {
           <div className="relative z-10 h-full flex flex-col">
             {/* Header in drawer */}
             <div className="p-4 pb-3 border-b-2 border-emerald-500/20">
-              <div className={`flex items-center justify-between mb-4 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+              <div className={`flex items-center justify-between ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                 <div className={`flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
                   <div className="relative">
                     <img src="/favicon.ico" alt="BetterChoice Logo" className={`w-12 h-12 ${direction === 'rtl' ? 'ml-3' : 'mr-3'} rounded-xl shadow-lg ring-2 ring-emerald-500/20`} />
@@ -1070,25 +1137,27 @@ const ProfilePage = () => {
                     <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setIsMobileNavOpen(false)}
-                  className={`p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
-                  aria-label={language === 'hebrew' ? 'סגור' : 'Close'}
-                >
-                  <svg className={`w-6 h-6 ${themeClasses.textPrimary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Home button - small icon button */}
+                  <Link 
+                    to="/"
+                    onClick={() => setIsMobileNavOpen(false)}
+                    className={`flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-300 hover:scale-110 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md`}
+                    title={language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}
+                  >
+                    <span className="text-lg">🏠</span>
+                  </Link>
+                  <button
+                    onClick={() => setIsMobileNavOpen(false)}
+                    className={`p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
+                    aria-label={language === 'hebrew' ? 'סגור' : 'Close'}
+                  >
+                    <svg className={`w-6 h-6 ${themeClasses.textPrimary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              
-              <Link 
-                to="/"
-                onClick={() => setIsMobileNavOpen(false)}
-                className={`w-full flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''} gap-2 px-3 py-2.5 rounded-xl transition-all duration-300 hover:scale-[1.02] ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/20 ${themeClasses.textPrimary} text-sm font-medium`}
-              >
-                <span className="text-base">🏠</span>
-                <span>{language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}</span>
-              </Link>
             </div>
 
             {/* Mobile Tab Navigation */}
@@ -1125,32 +1194,55 @@ const ProfilePage = () => {
             </div>
 
             {/* Theme and Language Controls - Mobile */}
-            <div className="flex items-center justify-between px-4 py-3 border-t-2 border-emerald-500/20 bg-gradient-to-b from-transparent to-emerald-500/5">
-              <button 
-                onClick={toggleLanguage}
-                className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl px-4 py-2.5 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40 active:scale-95`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
-                  </svg>
-                  <span className="text-blue-400 text-sm font-semibold">{language === 'hebrew' ? 'עב' : 'En'}</span>
-                </div>
-              </button>
+            <div className="px-4 py-3 border-t-2 border-emerald-500/20 bg-gradient-to-b from-transparent to-emerald-500/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <button 
+                  onClick={toggleLanguage}
+                  className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl px-4 py-2.5 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40 active:scale-95`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
+                    </svg>
+                    <span className="text-blue-400 text-sm font-semibold">{language === 'hebrew' ? 'עב' : 'En'}</span>
+                  </div>
+                </button>
 
-              <button 
-                onClick={toggleTheme}
-                className={`${themeClasses.bgCard} border-2 border-emerald-500/30 rounded-full p-2.5 hover:${themeClasses.bgSecondary} transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-110 active:scale-95`}
+                <button 
+                  onClick={toggleTheme}
+                  className={`${themeClasses.bgCard} border-2 border-emerald-500/30 rounded-full p-2.5 hover:${themeClasses.bgSecondary} transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-110 active:scale-95`}
+                >
+                  {isDarkMode ? (
+                    <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd"/>
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+
+              {/* Logout Button - Mobile */}
+              <button
+                onClick={() => {
+                  setIsModalAnimating(true);
+                  setShowLogoutConfirm(true);
+                  setIsMobileNavOpen(false);
+                  setTimeout(() => setIsModalAnimating(false), 600);
+                }}
+                className={`w-full flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''} gap-3 px-4 py-3 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-95 ${themeClasses.bgSecondary} border border-red-500/20 hover:border-red-500/40 hover:shadow-lg`}
               >
-                {isDarkMode ? (
-                  <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd"/>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-red-500/20 to-pink-500/20">
+                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                   </svg>
-                ) : (
-                  <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
-                  </svg>
-                )}
+                </div>
+                <div className={`flex-1 ${direction === 'rtl' ? 'text-right' : 'text-left'}`}>
+                  <div className="text-sm font-semibold text-red-500">{language === 'hebrew' ? 'התנתק' : 'Logout'}</div>
+                  <div className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>{language === 'hebrew' ? 'התנתק מהחשבון שלך' : 'Sign out of your account'}</div>
+                </div>
               </button>
             </div>
           </div>
@@ -1217,8 +1309,76 @@ const ProfilePage = () => {
           user={user}
           userCode={userCode}
         />
+
+        {/* Logout Confirmation Modal */}
+        {showLogoutConfirm && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              {/* Background overlay */}
+              <div 
+                className={`fixed inset-0 bg-gray-900 backdrop-blur-sm transition-opacity duration-300 ${
+                  isModalAnimating ? 'bg-opacity-0 animate-[fadeIn_0.3s_ease-out_forwards]' : 'bg-opacity-75'
+                }`}
+                aria-hidden="true"
+                onClick={() => setShowLogoutConfirm(false)}
+              ></div>
+
+              {/* Center modal */}
+              <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+              {/* Modal panel */}
+              <div className={`inline-block align-bottom ${themeClasses.bgCard} rounded-2xl text-left overflow-hidden shadow-2xl transform sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border-2 border-emerald-500/30`} dir={direction} style={{
+                animation: isModalAnimating ? 'modalPopUp 0.5s ease-out forwards' : 'none',
+                transform: isModalAnimating ? 'scale(0.7) translateY(20px)' : 'scale(1) translateY(0)',
+                opacity: isModalAnimating ? 0 : 1,
+                transition: isModalAnimating ? 'none' : 'all 0.3s ease-out'
+              }}>
+                {/* Header with Gradient */}
+                <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-8 text-center">
+                  <div className="text-5xl mb-3">🚪</div>
+                  <h3 className="text-2xl font-bold text-white mb-2" id="modal-title">
+                    {language === 'hebrew' ? 'התנתקות?' : 'Logout?'}
+                  </h3>
+                  <p className="text-emerald-100 text-sm">
+                    {language === 'hebrew' 
+                      ? 'האם אתה בטוח שברצונך להתנתק?' 
+                      : 'Are you sure you want to logout?'}
+                  </p>
+                </div>
+
+                {/* Modal Content */}
+                <div className="px-6 py-6">
+                  <p className={`${themeClasses.textSecondary} mb-6 text-center`}>
+                    {language === 'hebrew' 
+                      ? 'תתנתק מהחשבון שלך ותועבר לעמוד הבית.' 
+                      : 'You will be logged out and redirected to the homepage.'}
+                  </p>
+
+                  {/* Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white py-3 px-6 rounded-xl font-bold hover:from-emerald-600 hover:to-teal-600 focus:outline-none focus:ring-4 focus:ring-emerald-300 dark:focus:ring-emerald-800 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-emerald-500/50"
+                    >
+                      {language === 'hebrew' ? 'כן, התנתק' : 'Yes, Logout'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowLogoutConfirm(false)}
+                      className={`flex-1 ${themeClasses.btnSecondary} py-3 px-6 rounded-xl font-semibold transition-all duration-300 hover:scale-105 border border-emerald-500/20 hover:border-emerald-500/40`}
+                    >
+                      {language === 'hebrew' ? 'ביטול' : 'Cancel'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
+    </>
   );
 };
 
@@ -1233,6 +1393,8 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
   const [timePeriod, setTimePeriod] = useState('all'); // '1m', '3m', '6m', 'all'
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showAverage, setShowAverage] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const loadWeightLogs = async () => {
@@ -1255,6 +1417,60 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
 
     loadWeightLogs();
   }, [userCode]);
+
+  // Check for mobile device and portrait orientation
+  useEffect(() => {
+    const checkOrientation = () => {
+      const width = window.innerWidth || window.screen.width;
+      const height = window.innerHeight || window.screen.height;
+      
+      // Check if mobile device (width or height less than 768px)
+      const isMobileDevice = width < 768 || height < 768;
+      setIsMobile(isMobileDevice);
+      
+      // Check if portrait (height > width) - opposite of landscape
+      const isPortraitMode = height > width;
+      
+      // Show message if mobile AND portrait (ask to rotate to landscape)
+      const shouldShowMessage = isMobileDevice && isPortraitMode;
+      
+      setIsLandscape(shouldShowMessage);
+    };
+
+    // Check immediately
+    checkOrientation();
+    
+    // Use multiple event listeners for better compatibility
+    const handleResize = () => {
+      setTimeout(checkOrientation, 100);
+    };
+    
+    const handleOrientationChange = () => {
+      setTimeout(checkOrientation, 200);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleOrientationChange);
+    
+    // Also use media query listener if available
+    if (window.matchMedia) {
+      const mediaQuery = window.matchMedia('(orientation: portrait)');
+      const handleMediaChange = () => {
+        setTimeout(checkOrientation, 100);
+      };
+      
+      if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', handleMediaChange);
+      } else if (mediaQuery.addListener) {
+        mediaQuery.addListener(handleMediaChange);
+      }
+    }
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleOrientationChange);
+    };
+  }, []);
 
   // Reset hovered point and trigger animation when time period or metric changes
   useEffect(() => {
@@ -1486,15 +1702,29 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
   }
 
   return (
-    <div className={`${themeClasses.bgCard} rounded-2xl p-6 mb-6 shadow-lg border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className={`${themeClasses.textPrimary} text-xl font-bold`}>
+    <div className={`${themeClasses.bgCard} rounded-2xl p-3 sm:p-4 md:p-6 mb-6 shadow-lg border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+      {/* Mobile Note - Suggest using computer */}
+      {isMobile && (
+        <div className={`${themeClasses.bgSecondary} rounded-lg p-3 mb-4 border border-emerald-500/20`}>
+          <div className="flex items-start gap-2">
+            <span className="text-lg">💻</span>
+            <p className={`${themeClasses.textSecondary} text-xs sm:text-sm flex-1`}>
+              {language === 'hebrew' 
+                ? 'לצפייה טובה יותר, פתח את האתר במחשב' 
+                : 'For better viewing, open the website on a computer'}
+            </p>
+          </div>
+        </div>
+      )}
+      
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>
             {language === 'hebrew' ? 'מעקב משקל והתקדמות' : 'Weight & Progress Tracking'}
           </h3>
-          <div className="flex gap-4 mt-1">
+          <div className="flex flex-wrap gap-2 sm:gap-4 mt-1">
             {currentValue != null && (
-              <p className={`${themeClasses.textSecondary} text-sm`}>
+              <p className={`${themeClasses.textSecondary} text-xs sm:text-sm whitespace-nowrap`}>
                 {language === 'hebrew' ? 'ערך נוכחי: ' : 'Current: '}
                 <span className="font-semibold">
                   {currentValue.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
@@ -1502,7 +1732,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
               </p>
             )}
             {averageValue != null && (
-              <p className={`${themeClasses.textSecondary} text-sm`}>
+              <p className={`${themeClasses.textSecondary} text-xs sm:text-sm whitespace-nowrap`}>
                 {language === 'hebrew' ? 'ממוצע: ' : 'Average: '}
                 <span className="font-semibold">
                   {averageValue.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
@@ -1513,7 +1743,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
         </div>
         <button
           onClick={() => setExpanded(!expanded)}
-          className={`px-4 py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:${themeClasses.bgPrimary} transition-colors text-sm font-medium`}
+          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:${themeClasses.bgPrimary} transition-colors text-xs sm:text-sm font-medium whitespace-nowrap flex-shrink-0`}
         >
           {expanded 
             ? (language === 'hebrew' ? 'סגור' : 'Hide Options')
@@ -1523,7 +1753,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
       </div>
 
       {/* Time Period Filter */}
-      <div className="flex gap-2 mb-4 items-center">
+      <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4 items-center">
         {[
           { key: '1m', label: language === 'hebrew' ? 'חודש 1' : '1 Month' },
           { key: '3m', label: language === 'hebrew' ? '3 חודשים' : '3 Months' },
@@ -1533,7 +1763,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
           <button
             key={period.key}
             onClick={() => setTimePeriod(period.key)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
               timePeriod === period.key
                 ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/40'
                 : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
@@ -1544,7 +1774,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
         ))}
         <button
           onClick={() => setShowAverage(!showAverage)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ml-auto ${
+          className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
             showAverage
               ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/40'
               : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
@@ -1580,7 +1810,25 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
         </div>
       )}
 
+      {/* Portrait Orientation Message - Ask to rotate to landscape */}
+      {isLandscape && (
+        <div className={`${themeClasses.bgCard} rounded-xl p-8 mb-6 border-2 border-emerald-500/50 shadow-xl`} style={{ minHeight: '200px' }}>
+          <div className="flex flex-col items-center justify-center text-center h-full">
+            <div className="text-6xl mb-4 animate-bounce">📱</div>
+            <h3 className={`${themeClasses.textPrimary} text-xl sm:text-2xl font-bold mb-3`}>
+              {language === 'hebrew' ? 'סובב את הטלפון' : 'Rotate Your Phone'}
+            </h3>
+            <p className={`${themeClasses.textSecondary} text-base sm:text-lg max-w-md`}>
+              {language === 'hebrew' 
+                ? 'אנא סובב את הטלפון שלך למצב אופקי (Landscape) כדי לראות את הגרף' 
+                : 'Please rotate your phone to landscape mode (horizontal) to view the chart'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Simple Line & Area Chart */}
+      {!isLandscape && (
       <div className="relative h-64 w-full overflow-hidden rounded-xl bg-gradient-to-b from-slate-900/40 via-slate-900/10 to-slate-900/40">
         <div
           style={{
@@ -1862,6 +2110,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
         </svg>
         </div>
       </div>
+      )}
     </div>
   );
 };
@@ -1875,6 +2124,8 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
   const [timePeriod, setTimePeriod] = useState('all'); // '1m', '3m', '6m', 'all'
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showAverage, setShowAverage] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const loadFoodLogs = async () => {
@@ -1897,6 +2148,60 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
 
     loadFoodLogs();
   }, [userCode]);
+
+  // Check for mobile device and portrait orientation
+  useEffect(() => {
+    const checkOrientation = () => {
+      const width = window.innerWidth || window.screen.width;
+      const height = window.innerHeight || window.screen.height;
+      
+      // Check if mobile device (width or height less than 768px)
+      const isMobileDevice = width < 768 || height < 768;
+      setIsMobile(isMobileDevice);
+      
+      // Check if portrait (height > width) - opposite of landscape
+      const isPortraitMode = height > width;
+      
+      // Show message if mobile AND portrait (ask to rotate to landscape)
+      const shouldShowMessage = isMobileDevice && isPortraitMode;
+      
+      setIsLandscape(shouldShowMessage);
+    };
+
+    // Check immediately
+    checkOrientation();
+    
+    // Use multiple event listeners for better compatibility
+    const handleResize = () => {
+      setTimeout(checkOrientation, 100);
+    };
+    
+    const handleOrientationChange = () => {
+      setTimeout(checkOrientation, 200);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleOrientationChange);
+    
+    // Also use media query listener if available
+    if (window.matchMedia) {
+      const mediaQuery = window.matchMedia('(orientation: portrait)');
+      const handleMediaChange = () => {
+        setTimeout(checkOrientation, 100);
+      };
+      
+      if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', handleMediaChange);
+      } else if (mediaQuery.addListener) {
+        mediaQuery.addListener(handleMediaChange);
+      }
+    }
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleOrientationChange);
+    };
+  }, []);
 
   // Reset hovered point and trigger animation when time period or metric changes
   useEffect(() => {
@@ -2168,15 +2473,29 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
   }
 
   return (
-    <div className={`${themeClasses.bgCard} rounded-2xl p-6 mb-6 shadow-lg border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className={`${themeClasses.textPrimary} text-xl font-bold`}>
+    <div className={`${themeClasses.bgCard} rounded-2xl p-3 sm:p-4 md:p-6 mb-6 shadow-lg border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+      {/* Mobile Note - Suggest using computer */}
+      {isMobile && (
+        <div className={`${themeClasses.bgSecondary} rounded-lg p-3 mb-4 border border-emerald-500/20`}>
+          <div className="flex items-start gap-2">
+            <span className="text-lg">💻</span>
+            <p className={`${themeClasses.textSecondary} text-xs sm:text-sm flex-1`}>
+              {language === 'hebrew' 
+                ? 'לצפייה טובה יותר, פתח את האתר במחשב' 
+                : 'For better viewing, open the website on a computer'}
+            </p>
+          </div>
+        </div>
+      )}
+      
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>
             {language === 'hebrew' ? 'מעקב תזונה' : 'Nutrition Tracking'}
           </h3>
-          <div className="flex gap-4 mt-1">
+          <div className="flex flex-wrap gap-2 sm:gap-4 mt-1">
             {currentValue != null && (
-              <p className={`${themeClasses.textSecondary} text-sm`}>
+              <p className={`${themeClasses.textSecondary} text-xs sm:text-sm whitespace-nowrap`}>
                 {language === 'hebrew' ? 'ערך נוכחי: ' : 'Current: '}
                 <span className="font-semibold">
                   {Math.round(currentValue)} {getMetricUnit()}
@@ -2184,7 +2503,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
               </p>
             )}
             {averageValue != null && (
-              <p className={`${themeClasses.textSecondary} text-sm`}>
+              <p className={`${themeClasses.textSecondary} text-xs sm:text-sm whitespace-nowrap`}>
                 {language === 'hebrew' ? 'ממוצע: ' : 'Average: '}
                 <span className="font-semibold">
                   {Math.round(averageValue)} {getMetricUnit()}
@@ -2196,7 +2515,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
       </div>
 
       {/* Time Period Filter */}
-      <div className="flex gap-2 mb-4 items-center">
+      <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4 items-center">
         {[
           { key: '1m', label: language === 'hebrew' ? 'חודש 1' : '1 Month' },
           { key: '3m', label: language === 'hebrew' ? '3 חודשים' : '3 Months' },
@@ -2206,7 +2525,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
           <button
             key={period.key}
             onClick={() => setTimePeriod(period.key)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
               timePeriod === period.key
                 ? 'bg-emerald-500 text-white'
                 : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
@@ -2217,7 +2536,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
         ))}
         <button
           onClick={() => setShowAverage(!showAverage)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ml-auto ${
+          className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
             showAverage
               ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/40'
               : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
@@ -2228,7 +2547,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
       </div>
 
       {/* Metric Selector */}
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-3 sm:mb-4 flex flex-wrap gap-1.5 sm:gap-2">
         {[
           { key: 'calories', label: language === 'hebrew' ? 'קלוריות' : 'Calories', color: '#10b981' },
           { key: 'protein', label: language === 'hebrew' ? 'חלבון' : 'Protein', color: '#a855f7' },
@@ -2238,7 +2557,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
           <button
             key={metric.key}
             onClick={() => setSelectedMetric(metric.key)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
               selectedMetric === metric.key
                 ? 'text-white'
                 : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
@@ -2250,7 +2569,25 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
         ))}
       </div>
 
+      {/* Portrait Orientation Message - Ask to rotate to landscape */}
+      {isLandscape && (
+        <div className={`${themeClasses.bgCard} rounded-xl p-8 mb-6 border-2 border-emerald-500/50 shadow-xl`} style={{ minHeight: '200px' }}>
+          <div className="flex flex-col items-center justify-center text-center h-full">
+            <div className="text-6xl mb-4 animate-bounce">📱</div>
+            <h3 className={`${themeClasses.textPrimary} text-xl sm:text-2xl font-bold mb-3`}>
+              {language === 'hebrew' ? 'סובב את הטלפון' : 'Rotate Your Phone'}
+            </h3>
+            <p className={`${themeClasses.textSecondary} text-base sm:text-lg max-w-md`}>
+              {language === 'hebrew' 
+                ? 'אנא סובב את הטלפון שלך למצב אופקי (Landscape) כדי לראות את הגרף' 
+                : 'Please rotate your phone to landscape mode (horizontal) to view the chart'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Simple Line & Area Chart */}
+      {!isLandscape && (
       <div className="relative h-64 w-full overflow-hidden rounded-xl bg-gradient-to-b from-slate-900/40 via-slate-900/10 to-slate-900/40">
         <div
           style={{
@@ -2520,6 +2857,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
         </svg>
         </div>
       </div>
+      )}
     </div>
   );
 };
@@ -4204,6 +4542,7 @@ const MacroSummaryCircles = ({
                 strokeDashoffset={0}
                 opacity={1}
                 className="transition-all duration-1000 ease-out"
+                style={{ animation: 'flicker 1.5s ease-in-out infinite' }}
               />
             )}
             {/* Invisible hover area for calories */}
@@ -4284,6 +4623,7 @@ const MacroSummaryCircles = ({
                 strokeDashoffset={0 - proteinNormalLength}
                 opacity={1}
                 className="transition-all duration-1000 ease-out"
+                style={{ animation: 'flicker 1.5s ease-in-out infinite' }}
               />
             )}
             {carbsOverflowLength > 0 && (
@@ -4299,6 +4639,7 @@ const MacroSummaryCircles = ({
                 strokeDashoffset={-segmentLength - carbsNormalLength}
                 opacity={1}
                 className="transition-all duration-1000 ease-out"
+                style={{ animation: 'flicker 1.5s ease-in-out infinite' }}
               />
             )}
             {fatOverflowLength > 0 && (
@@ -4314,6 +4655,7 @@ const MacroSummaryCircles = ({
                 strokeDashoffset={0}
                 opacity={1}
                 className="transition-all duration-1000 ease-out"
+                style={{ animation: 'flicker 1.5s ease-in-out infinite' }}
               />
             )}
             
@@ -4331,6 +4673,7 @@ const MacroSummaryCircles = ({
                 strokeDashoffset={0 - proteinNormalLength}
                 opacity={1}
                 className="transition-all duration-1000 ease-out"
+                style={{ animation: 'flicker 1.5s ease-in-out infinite' }}
               />
             )}
             {carbsOverflowLength > 0 && (
@@ -4346,6 +4689,7 @@ const MacroSummaryCircles = ({
                 strokeDashoffset={-segmentLength - carbsNormalLength}
                 opacity={1}
                 className="transition-all duration-1000 ease-out"
+                style={{ animation: 'flicker 1.5s ease-in-out infinite' }}
               />
             )}
             {fatOverflowLength > 0 && (
@@ -4361,6 +4705,7 @@ const MacroSummaryCircles = ({
                 strokeDashoffset={0}
                 opacity={1}
                 className="transition-all duration-1000 ease-out"
+                style={{ animation: 'flicker 1.5s ease-in-out infinite' }}
               />
             )}
 
@@ -5132,10 +5477,10 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
   return (
     <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
       {/* Sub-tabs Navigation */}
-      <div className={`mb-6 flex gap-2 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+      <div className={`mb-4 sm:mb-6 flex gap-1 sm:gap-2 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
         <button
           onClick={() => setActiveSubTab('dailyLog')}
-          className={`px-6 py-3 font-semibold transition-all duration-300 border-b-2 ${
+          className={`px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-300 border-b-2 ${
             activeSubTab === 'dailyLog'
               ? `${themeClasses.textPrimary} border-emerald-500`
               : `${themeClasses.textSecondary} border-transparent hover:border-emerald-500/50`
@@ -5145,7 +5490,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         </button>
         <button
           onClick={() => setActiveSubTab('analytics')}
-          className={`px-6 py-3 font-semibold transition-all duration-300 border-b-2 ${
+          className={`px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-300 border-b-2 ${
             activeSubTab === 'analytics'
               ? `${themeClasses.textPrimary} border-emerald-500`
               : `${themeClasses.textSecondary} border-transparent hover:border-emerald-500/50`
@@ -5178,7 +5523,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
       {activeSubTab === 'dailyLog' && (
         <>
       {/* Date Selector Section */}
-      <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
+      <div className="mb-6 sm:mb-8 md:mb-10 lg:mb-12 animate-slideInUp relative rounded-xl p-3 sm:p-4 md:p-6" style={{
         borderLeft: '3px solid',
         borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
         borderRight: '2px solid',
@@ -5194,67 +5539,69 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         {/* Decorative gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none rounded-xl" />
         <div className="relative z-10">
-        <div className="mb-8">
-          <h2 className={`${themeClasses.textPrimary} text-3xl font-bold tracking-tight mb-2`}>
+        <div className="mb-4 sm:mb-6 md:mb-8">
+          <h2 className={`${themeClasses.textPrimary} text-xl sm:text-2xl md:text-3xl font-bold tracking-tight mb-1 sm:mb-2`}>
             {dayNames[selectedDateObj.getDay()]}, {monthNames[selectedDateObj.getMonth()]} {selectedDateObj.getDate()}
           </h2>
-          <p className={`${themeClasses.textSecondary} text-base`}>
+          <p className={`${themeClasses.textSecondary} text-xs sm:text-sm md:text-base`}>
             {language === 'hebrew' ? 'בחר תאריך כדי לראות את יומן התזונה שלך' : 'Choose a date to view your nutrition log'}
           </p>
         </div>
 
         {/* Navigation Controls */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button 
               onClick={() => navigateWeek('prev')}
-              className={`w-10 h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300`}
+              className={`w-8 h-8 sm:w-10 sm:h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300 active:scale-95`}
             >
-              <svg className={`w-5 h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
             <button 
               onClick={() => navigateWeek('next')}
-              className={`w-10 h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300`}
+              className={`w-8 h-8 sm:w-10 sm:h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300 active:scale-95`}
             >
-              <svg className={`w-5 h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>
           <button 
             onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg transition-all duration-300 text-xs sm:text-sm active:scale-95"
           >
             {language === 'hebrew' ? 'היום' : 'Today'}
           </button>
         </div>
 
-        {/* Week Calendar */}
-        <div className="flex gap-3 mb-8">
-          {weekDates.map((date, index) => {
-            const isSelected = date.toISOString().split('T')[0] === selectedDate;
-            const dayName = dayNames[date.getDay()];
-            const dayNumber = date.getDate();
-            
-            return (
-        <button
-                key={index}
-                onClick={() => setSelectedDate(date.toISOString().split('T')[0])}
-                className={`flex-1 p-4 rounded-xl transition-all duration-300 ${
-                  isSelected 
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25' 
-                    : `${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} ${themeClasses.textSecondary}`
-                }`}
-              >
-                <div className="text-center">
-                  <div className="text-sm font-medium">{dayName}</div>
-                  <div className="text-lg font-bold mt-1">{dayNumber}</div>
-                </div>
-        </button>
-            );
-          })}
+        {/* Week Calendar - Scrollable on mobile */}
+        <div className="overflow-x-auto -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 mb-4 sm:mb-6 md:mb-8">
+          <div className="flex gap-2 sm:gap-3 min-w-max sm:min-w-0">
+            {weekDates.map((date, index) => {
+              const isSelected = date.toISOString().split('T')[0] === selectedDate;
+              const dayName = dayNames[date.getDay()];
+              const dayNumber = date.getDate();
+              
+              return (
+                <button
+                  key={index}
+                  onClick={() => setSelectedDate(date.toISOString().split('T')[0])}
+                  className={`flex-shrink-0 w-14 sm:w-16 md:flex-1 md:min-w-0 p-2 sm:p-3 md:p-4 rounded-xl transition-all duration-300 active:scale-95 ${
+                    isSelected 
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25' 
+                      : `${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} ${themeClasses.textSecondary}`
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="text-xs sm:text-sm font-medium">{dayName}</div>
+                    <div className="text-base sm:text-lg md:text-xl font-bold mt-0.5 sm:mt-1">{dayNumber}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
         </div>
       </div>
