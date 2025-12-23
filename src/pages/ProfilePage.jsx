@@ -1232,6 +1232,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [timePeriod, setTimePeriod] = useState('all'); // '1m', '3m', '6m', 'all'
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showAverage, setShowAverage] = useState(false);
 
   useEffect(() => {
     const loadWeightLogs = async () => {
@@ -1392,6 +1393,17 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
 
   const currentValue = getCurrentValue();
 
+  // Calculate average value for selected metric
+  const getAverageValue = () => {
+    if (chartData.length === 0) return null;
+    const values = chartData.map(d => getMetricValue(d)).filter(v => v != null);
+    if (values.length === 0) return null;
+    const sum = values.reduce((acc, val) => acc + val, 0);
+    return sum / values.length;
+  };
+
+  const averageValue = getAverageValue();
+
   // Handle point hover
   const handlePointMouseEnter = (d, index, value, x, y) => {
     setHoveredPoint({ index, data: d, value, x, y });
@@ -1418,7 +1430,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
     
     const mouseX = svgPoint.x;
     const chartWidth = 700;
-    const chartStartX = 40;
+    const chartStartX = 50;
     const chartEndX = chartStartX + chartWidth;
     
     // Only process if mouse is within chart area
@@ -1480,14 +1492,24 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
           <h3 className={`${themeClasses.textPrimary} text-xl font-bold`}>
             {language === 'hebrew' ? 'מעקב משקל והתקדמות' : 'Weight & Progress Tracking'}
           </h3>
-          {currentValue != null && (
-            <p className={`${themeClasses.textSecondary} text-sm mt-1`}>
-              {language === 'hebrew' ? 'ערך נוכחי: ' : 'Current: '}
-              <span className="font-semibold">
-                {currentValue.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
-              </span>
-            </p>
-          )}
+          <div className="flex gap-4 mt-1">
+            {currentValue != null && (
+              <p className={`${themeClasses.textSecondary} text-sm`}>
+                {language === 'hebrew' ? 'ערך נוכחי: ' : 'Current: '}
+                <span className="font-semibold">
+                  {currentValue.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
+                </span>
+              </p>
+            )}
+            {averageValue != null && (
+              <p className={`${themeClasses.textSecondary} text-sm`}>
+                {language === 'hebrew' ? 'ממוצע: ' : 'Average: '}
+                <span className="font-semibold">
+                  {averageValue.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
+                </span>
+              </p>
+            )}
+          </div>
         </div>
         <button
           onClick={() => setExpanded(!expanded)}
@@ -1501,7 +1523,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
       </div>
 
       {/* Time Period Filter */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 items-center">
         {[
           { key: '1m', label: language === 'hebrew' ? 'חודש 1' : '1 Month' },
           { key: '3m', label: language === 'hebrew' ? '3 חודשים' : '3 Months' },
@@ -1513,13 +1535,23 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
             onClick={() => setTimePeriod(period.key)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               timePeriod === period.key
-                ? 'bg-emerald-500 text-white'
+                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/40'
                 : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
             }`}
           >
             {period.label}
           </button>
         ))}
+        <button
+          onClick={() => setShowAverage(!showAverage)}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ml-auto ${
+            showAverage
+              ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/40'
+              : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
+          }`}
+        >
+          {language === 'hebrew' ? 'ממוצע' : 'Average'}
+        </button>
       </div>
 
       {expanded && (
@@ -1537,9 +1569,10 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
               onClick={() => setSelectedMetric(metric.key)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 selectedMetric === metric.key
-                  ? 'bg-emerald-500 text-white'
+                  ? 'text-white shadow-md shadow-emerald-500/40'
                   : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
               }`}
+              style={selectedMetric === metric.key ? { backgroundColor: '#10b981' } : {}}
             >
               {metric.label}
             </button>
@@ -1547,8 +1580,8 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
         </div>
       )}
 
-      {/* Simple Line Chart */}
-      <div className="relative h-64 w-full overflow-hidden">
+      {/* Simple Line & Area Chart */}
+      <div className="relative h-64 w-full overflow-hidden rounded-xl bg-gradient-to-b from-slate-900/40 via-slate-900/10 to-slate-900/40">
         <div
           style={{
             opacity: isTransitioning ? 0.5 : 1,
@@ -1575,7 +1608,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
                 className={`text-xs ${themeClasses.textSecondary}`}
                 fill="currentColor"
               >
-                {value.toFixed(selectedMetric === 'weight' ? 1 : selectedMetric === 'body_fat' ? 1 : 0)}
+                {value.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
               </text>
             );
           })}
@@ -1586,72 +1619,130 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
             return (
               <line
                 key={ratio}
-                x1="40"
+                x1="50"
                 y1={y}
-                x2="740"
+                x2="750"
                 y2={y}
-                stroke={isDarkMode ? 'rgba(100, 100, 100, 0.2)' : 'rgba(200, 200, 200, 0.3)'}
+                stroke={isDarkMode ? 'rgba(148, 163, 184, 0.15)' : 'rgba(148, 163, 184, 0.2)'}
                 strokeWidth="1"
+                strokeDasharray="4,6"
               />
             );
           })}
 
-          {/* Data line */}
-          {chartData.length > 0 && (() => {
-            const chartWidth = 700; // Reduced from 760 to give more space on right
-            const points = chartData
-              .map((d, index) => {
-                const value = getMetricValue(d) || 0;
-                const normalizedValue = value - min;
-                const ratio = normalizedValue / range;
-                const x = 40 + (index / (chartData.length - 1 || 1)) * chartWidth;
-                const y = 180 - (ratio * 160);
-                return `${x},${y}`;
-              })
-              .filter(p => p !== null)
-              .join(' ');
-
-            if (!points) return null;
-
+          {/* Average line */}
+          {showAverage && averageValue != null && (() => {
+            const normalizedValue = averageValue - min;
+            const ratio = normalizedValue / range;
+            const y = 180 - (ratio * 160);
             return (
-              <polyline
-                points={points}
-                fill="none"
-                stroke="#10b981"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{
-                  opacity: isTransitioning ? 0 : 1,
-                  transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-              />
+              <g>
+                <line
+                  x1="50"
+                  y1={y}
+                  x2="750"
+                  y2={y}
+                  stroke="#10b981"
+                  strokeWidth="2"
+                  strokeDasharray="6,4"
+                  opacity="0.6"
+                  style={{
+                    opacity: isTransitioning ? 0.3 : 0.6,
+                    transition: 'opacity 0.3s ease-in-out'
+                  }}
+                />
+                <text
+                  x="755"
+                  y={y + 4}
+                  className={`text-xs font-semibold`}
+                  fill="#10b981"
+                  opacity="0.8"
+                >
+                  Avg
+                </text>
+              </g>
             );
           })()}
 
-          {/* Data points */}
+          {/* Data line + soft area */}
+          {chartData.length > 1 && (() => {
+            const chartWidth = 700;
+            const linePoints = chartData
+              .map((d, index) => {
+                const value = getMetricValue(d);
+                if (value == null) return null;
+                const normalizedValue = value - min;
+                const ratio = normalizedValue / range;
+                const x = 50 + (index / (chartData.length - 1 || 1)) * chartWidth;
+                const y = 180 - (ratio * 160);
+                return { x, y };
+              })
+              .filter(p => p !== null);
+
+            if (linePoints.length < 2) return null;
+
+            const points = linePoints.map(p => `${p.x},${p.y}`).join(' ');
+            const areaPath = [
+              `M 50 180`,
+              ...linePoints.map(p => `L ${p.x} ${p.y}`),
+              `L 750 180`,
+              'Z'
+            ].join(' ');
+
+            return (
+              <>
+                <path
+                  d={areaPath}
+                  fill="#10b981"
+                  opacity={isDarkMode ? 0.14 : 0.18}
+                  style={{
+                    transition: 'opacity 0.3s ease-in-out'
+                  }}
+                />
+                <polyline
+                  points={points}
+                  fill="none"
+                  stroke="#10b981"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    opacity: isTransitioning ? 0.6 : 1,
+                    filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.5))',
+                    transition: 'opacity 0.3s ease-in-out'
+                  }}
+                />
+              </>
+            );
+          })()}
+
+          {/* Data points (sparser, with hover emphasis) */}
           {chartData.map((d, index) => {
             const value = getMetricValue(d);
             if (value == null) return null;
             const normalizedValue = value - min;
             const ratio = normalizedValue / range;
-            const chartWidth = 700; // Reduced from 760 to give 60px padding on right
-            const x = 40 + (index / (chartData.length - 1 || 1)) * chartWidth;
+            const chartWidth = 700;
+            const x = 50 + (index / (chartData.length - 1 || 1)) * chartWidth;
             const y = 180 - (ratio * 160);
             const isHovered = hoveredPoint && hoveredPoint.index === index;
-            // Stagger animation delay for cascading effect
-            const animationDelay = isTransitioning ? 0 : (index * 0.015);
+            const step = Math.max(1, Math.floor(chartData.length / 80));
+            const showPoint = isHovered || index % step === 0 || index === chartData.length - 1;
+            if (!showPoint) return null;
+
             return (
               <circle
                 key={`point-${index}`}
                 cx={x}
                 cy={y}
-                r={isHovered ? "6" : "4"}
+                r={isHovered ? 6 : 3}
                 fill="#10b981"
+                stroke={isDarkMode ? '#020617' : '#ffffff'}
+                strokeWidth={isHovered ? 3 : 2}
                 className="transition-all cursor-pointer"
                 style={{ 
-                  transition: `r 0.2s, opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) ${animationDelay}s`,
-                  opacity: isTransitioning ? 0 : 1
+                  transition: 'r 0.2s, opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                  opacity: isTransitioning ? 0.6 : 1
                 }}
                 onMouseEnter={() => handlePointMouseEnter(d, index, value, x, y)}
                 onMouseLeave={handlePointMouseLeave}
@@ -1664,7 +1755,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
             const tooltipWidth = 140;
             const tooltipHeight = 50;
             const padding = 10;
-            const chartRightBound = 740; // 40 (left padding) + 700 (chart width)
+            const chartRightBound = 750; // 50 (left padding) + 700 (chart width)
             
             // Calculate tooltip X position (keep within bounds)
             let tooltipX = hoveredPoint.x - (tooltipWidth / 2);
@@ -1754,7 +1845,665 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
           {chartData.length > 0 && chartData.map((d, index) => {
             if (index % Math.ceil(chartData.length / 6) !== 0 && index !== chartData.length - 1) return null;
             const chartWidth = 700; // Match the chart width used for data points
-            const x = 40 + (index / (chartData.length - 1 || 1)) * chartWidth;
+            const x = 50 + (index / (chartData.length - 1 || 1)) * chartWidth;
+            return (
+              <text
+                key={index}
+                x={x}
+                y="195"
+                className={`text-xs ${themeClasses.textSecondary}`}
+                fill="currentColor"
+                textAnchor="middle"
+              >
+                {d.date}
+              </text>
+            );
+          })}
+        </svg>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Food Log Progress Component
+const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode }) => {
+  const [foodLogs, setFoodLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMetric, setSelectedMetric] = useState('calories'); // 'calories', 'protein', 'carbs', 'fat'
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+  const [timePeriod, setTimePeriod] = useState('all'); // '1m', '3m', '6m', 'all'
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showAverage, setShowAverage] = useState(false);
+
+  useEffect(() => {
+    const loadFoodLogs = async () => {
+      if (!userCode) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      const { data, error } = await getFoodLogs(userCode); // Fetch all logs (no date filter)
+      
+      if (error) {
+        console.error('Error loading food logs:', error);
+        setFoodLogs([]);
+      } else {
+        setFoodLogs(data || []);
+      }
+      setLoading(false);
+    };
+
+    loadFoodLogs();
+  }, [userCode]);
+
+  // Reset hovered point and trigger animation when time period or metric changes
+  useEffect(() => {
+    setHoveredPoint(null);
+    setIsTransitioning(true);
+    const timer = setTimeout(() => {
+      setIsTransitioning(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [timePeriod, selectedMetric]);
+
+  // Format date for display (short format)
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return language === 'hebrew' 
+      ? date.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
+      : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Format date for tooltip (full format)
+  const formatDateFull = (dateString) => {
+    const date = new Date(dateString);
+    return language === 'hebrew'
+      ? date.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })
+      : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  };
+
+  // Aggregate food logs by date
+  const aggregateByDate = (logs) => {
+    const dailyTotals = {};
+    
+    logs.forEach(log => {
+      const date = log.log_date || log.created_at?.split('T')[0];
+      if (!date) return;
+      
+      if (!dailyTotals[date]) {
+        dailyTotals[date] = {
+          date,
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0
+        };
+      }
+      
+      // Sum up values from food_items array
+      if (log.food_items && Array.isArray(log.food_items)) {
+        log.food_items.forEach(item => {
+          dailyTotals[date].calories += item.cals || 0;
+          dailyTotals[date].protein += item.p || 0;
+          dailyTotals[date].carbs += item.c || 0;
+          dailyTotals[date].fat += item.f || 0;
+        });
+      }
+      
+      // Also add totals from the log itself if available (as fallback)
+      if (log.total_calories) dailyTotals[date].calories += log.total_calories;
+      if (log.total_protein_g) dailyTotals[date].protein += log.total_protein_g;
+      if (log.total_carbs_g) dailyTotals[date].carbs += log.total_carbs_g;
+      if (log.total_fat_g) dailyTotals[date].fat += log.total_fat_g;
+    });
+    
+    return Object.values(dailyTotals).sort((a, b) => new Date(a.date) - new Date(b.date));
+  };
+
+  // Get chart data points with time period filtering
+  const getChartData = () => {
+    if (!foodLogs || foodLogs.length === 0) return [];
+
+    const aggregated = aggregateByDate(foodLogs);
+    let filteredData = [...aggregated];
+
+    // Filter by time period
+    if (timePeriod !== 'all') {
+      const now = new Date();
+      const cutoffDate = new Date();
+      
+      switch (timePeriod) {
+        case '1m':
+          cutoffDate.setMonth(now.getMonth() - 1);
+          break;
+        case '3m':
+          cutoffDate.setMonth(now.getMonth() - 3);
+          break;
+        case '6m':
+          cutoffDate.setMonth(now.getMonth() - 6);
+          break;
+        default:
+          break;
+      }
+      
+      filteredData = aggregated.filter(d => {
+        const logDate = new Date(d.date);
+        return logDate >= cutoffDate;
+      });
+    }
+
+    return filteredData.map(d => ({
+      date: formatDate(d.date),
+      dateFull: d.date,
+      calories: d.calories,
+      protein: d.protein,
+      carbs: d.carbs,
+      fat: d.fat
+    }));
+  };
+
+  const chartData = getChartData();
+
+  // Helper function to get value for selected metric
+  const getMetricValue = (d) => {
+    switch(selectedMetric) {
+      case 'calories': return d.calories;
+      case 'protein': return d.protein;
+      case 'carbs': return d.carbs;
+      case 'fat': return d.fat;
+      default: return d.calories;
+    }
+  };
+
+  // Calculate min/max for Y-axis
+  const getYAxisRange = () => {
+    if (chartData.length === 0) return { min: 0, max: 100 };
+    
+    const values = chartData.map(d => getMetricValue(d)).filter(v => v != null && v > 0);
+
+    if (values.length === 0) return { min: 0, max: 100 };
+    
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const padding = (max - min) * 0.1 || 1;
+    
+    return { min: Math.max(0, min - padding), max: max + padding };
+  };
+
+  const { min, max } = getYAxisRange();
+  const range = max - min || 1;
+
+  // Get current value for selected metric
+  const getCurrentValue = () => {
+    if (chartData.length === 0) return null;
+    const latest = chartData[chartData.length - 1];
+    return getMetricValue(latest);
+  };
+
+  // Get metric unit
+  const getMetricUnit = () => {
+    switch(selectedMetric) {
+      case 'calories': return 'kcal';
+      case 'protein':
+      case 'carbs':
+      case 'fat': return 'g';
+      default: return 'kcal';
+    }
+  };
+
+  // Get metric label
+  const getMetricLabel = () => {
+    switch(selectedMetric) {
+      case 'calories': return language === 'hebrew' ? 'קלוריות' : 'Calories';
+      case 'protein': return language === 'hebrew' ? 'חלבון' : 'Protein';
+      case 'carbs': return language === 'hebrew' ? 'פחמימות' : 'Carbs';
+      case 'fat': return language === 'hebrew' ? 'שומן' : 'Fat';
+      default: return language === 'hebrew' ? 'קלוריות' : 'Calories';
+    }
+  };
+
+  // Get metric color
+  const getMetricColor = () => {
+    switch(selectedMetric) {
+      case 'calories': return '#10b981';
+      case 'protein': return '#a855f7';
+      case 'carbs': return '#3b82f6';
+      case 'fat': return '#f59e0b';
+      default: return '#10b981';
+    }
+  };
+
+  const currentValue = getCurrentValue();
+  const metricColor = getMetricColor();
+
+  // Calculate average value for selected metric
+  const getAverageValue = () => {
+    if (chartData.length === 0) return null;
+    const values = chartData.map(d => getMetricValue(d)).filter(v => v != null && v > 0);
+    if (values.length === 0) return null;
+    const sum = values.reduce((acc, val) => acc + val, 0);
+    return sum / values.length;
+  };
+
+  const averageValue = getAverageValue();
+
+  // Handle point hover
+  const handlePointMouseEnter = (d, index, value, x, y) => {
+    setHoveredPoint({ index, data: d, value, x, y });
+  };
+
+  const handlePointMouseLeave = () => {
+    setHoveredPoint(null);
+  };
+
+  // Handle mouse move over chart area to find closest point
+  const handleChartMouseMove = (e) => {
+    if (chartData.length === 0) return;
+    
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const svgPoint = svg.createSVGPoint();
+    svgPoint.x = e.clientX;
+    svgPoint.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    if (ctm) {
+      svgPoint.x = (e.clientX - rect.left) * (800 / rect.width);
+      svgPoint.y = (e.clientY - rect.top) * (200 / rect.height);
+    }
+    
+    const mouseX = svgPoint.x;
+    const chartStartX = 80;
+    const chartWidth = 680;
+    const chartEndX = chartStartX + chartWidth;
+    
+    if (mouseX < chartStartX || mouseX > chartEndX) {
+      setHoveredPoint(null);
+      return;
+    }
+    
+    let closestIndex = 0;
+    let minDistance = Infinity;
+    
+    chartData.forEach((d, index) => {
+      const value = getMetricValue(d);
+      if (value == null || value <= 0) return;
+      
+      const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
+      const distance = Math.abs(mouseX - x);
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = index;
+      }
+    });
+    
+    const closestData = chartData[closestIndex];
+    const closestValue = getMetricValue(closestData);
+    if (closestValue == null || closestValue <= 0) return;
+    
+    const normalizedValue = closestValue - min;
+    const ratio = normalizedValue / range;
+    const x = chartStartX + (closestIndex / (chartData.length - 1 || 1)) * chartWidth;
+    const y = 180 - (ratio * 160);
+    
+    setHoveredPoint({ index: closestIndex, data: closestData, value: closestValue, x, y });
+  };
+
+  const handleChartMouseLeave = () => {
+    setHoveredPoint(null);
+  };
+
+  if (loading) {
+    return (
+      <div className={`${themeClasses.bgCard} rounded-2xl p-6 mb-6 animate-pulse`}>
+        <div className="h-48 bg-gray-700 rounded-lg"></div>
+      </div>
+    );
+  }
+
+  if (chartData.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={`${themeClasses.bgCard} rounded-2xl p-6 mb-6 shadow-lg border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className={`${themeClasses.textPrimary} text-xl font-bold`}>
+            {language === 'hebrew' ? 'מעקב תזונה' : 'Nutrition Tracking'}
+          </h3>
+          <div className="flex gap-4 mt-1">
+            {currentValue != null && (
+              <p className={`${themeClasses.textSecondary} text-sm`}>
+                {language === 'hebrew' ? 'ערך נוכחי: ' : 'Current: '}
+                <span className="font-semibold">
+                  {Math.round(currentValue)} {getMetricUnit()}
+                </span>
+              </p>
+            )}
+            {averageValue != null && (
+              <p className={`${themeClasses.textSecondary} text-sm`}>
+                {language === 'hebrew' ? 'ממוצע: ' : 'Average: '}
+                <span className="font-semibold">
+                  {Math.round(averageValue)} {getMetricUnit()}
+                </span>
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Time Period Filter */}
+      <div className="flex gap-2 mb-4 items-center">
+        {[
+          { key: '1m', label: language === 'hebrew' ? 'חודש 1' : '1 Month' },
+          { key: '3m', label: language === 'hebrew' ? '3 חודשים' : '3 Months' },
+          { key: '6m', label: language === 'hebrew' ? '6 חודשים' : '6 Months' },
+          { key: 'all', label: language === 'hebrew' ? 'כל הזמן' : 'All Time' }
+        ].map(period => (
+          <button
+            key={period.key}
+            onClick={() => setTimePeriod(period.key)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              timePeriod === period.key
+                ? 'bg-emerald-500 text-white'
+                : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
+            }`}
+          >
+            {period.label}
+          </button>
+        ))}
+        <button
+          onClick={() => setShowAverage(!showAverage)}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ml-auto ${
+            showAverage
+              ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/40'
+              : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
+          }`}
+        >
+          {language === 'hebrew' ? 'ממוצע' : 'Average'}
+        </button>
+      </div>
+
+      {/* Metric Selector */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {[
+          { key: 'calories', label: language === 'hebrew' ? 'קלוריות' : 'Calories', color: '#10b981' },
+          { key: 'protein', label: language === 'hebrew' ? 'חלבון' : 'Protein', color: '#a855f7' },
+          { key: 'carbs', label: language === 'hebrew' ? 'פחמימות' : 'Carbs', color: '#3b82f6' },
+          { key: 'fat', label: language === 'hebrew' ? 'שומן' : 'Fat', color: '#f59e0b' }
+        ].map(metric => (
+          <button
+            key={metric.key}
+            onClick={() => setSelectedMetric(metric.key)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              selectedMetric === metric.key
+                ? 'text-white'
+                : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:${themeClasses.bgPrimary}`
+            }`}
+            style={selectedMetric === metric.key ? { backgroundColor: metric.color } : {}}
+          >
+            {metric.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Simple Line & Area Chart */}
+      <div className="relative h-64 w-full overflow-hidden rounded-xl bg-gradient-to-b from-slate-900/40 via-slate-900/10 to-slate-900/40">
+        <div
+          style={{
+            opacity: isTransitioning ? 0.5 : 1,
+            transform: isTransitioning ? 'scale(0.97)' : 'scale(1)',
+            transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
+          <svg 
+            className="w-full h-full" 
+            viewBox="0 0 800 200" 
+            preserveAspectRatio="none"
+            onMouseMove={handleChartMouseMove}
+            onMouseLeave={handleChartMouseLeave}
+          >
+            {/* Y-axis labels */}
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+              const value = min + (range * ratio);
+              const y = 200 - (ratio * 180);
+              return (
+                <text
+                  key={ratio}
+                  x="5"
+                  y={y + 4}
+                  className={`text-xs ${themeClasses.textSecondary}`}
+                  fill="currentColor"
+                >
+                  {Math.round(value).toLocaleString()} {getMetricUnit()}
+                </text>
+              );
+            })}
+
+            {/* Y-axis grid lines */}
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+              const y = 200 - (ratio * 180);
+              return (
+                <line
+                  key={ratio}
+                  x1="80"
+                  y1={y}
+                  x2="760"
+                  y2={y}
+                  stroke={isDarkMode ? 'rgba(148, 163, 184, 0.15)' : 'rgba(148, 163, 184, 0.2)'}
+                  strokeWidth="1"
+                  strokeDasharray="4,6"
+                />
+              );
+            })}
+
+            {/* Average line */}
+            {showAverage && averageValue != null && (() => {
+              const normalizedValue = averageValue - min;
+              const ratio = normalizedValue / range;
+              const y = 180 - (ratio * 160);
+              return (
+                <g>
+                  <line
+                    x1="80"
+                    y1={y}
+                    x2="760"
+                    y2={y}
+                    stroke={metricColor}
+                    strokeWidth="2"
+                    strokeDasharray="6,4"
+                    opacity="0.6"
+                    style={{
+                      opacity: isTransitioning ? 0.3 : 0.6,
+                      transition: 'opacity 0.3s ease-in-out'
+                    }}
+                  />
+                  <text
+                    x="765"
+                    y={y + 4}
+                    className={`text-xs font-semibold`}
+                    fill={metricColor}
+                    opacity="0.8"
+                  >
+                    Avg
+                  </text>
+                </g>
+              );
+            })()}
+
+            {/* Chart line + soft area */}
+            {chartData.length > 1 && (() => {
+              const chartStartX = 80;
+              const chartWidth = 680;
+              const linePoints = chartData
+                .map((d, index) => {
+                  const value = getMetricValue(d);
+                  if (value == null || value <= 0) return null;
+                  const normalizedValue = value - min;
+                  const ratio = normalizedValue / range;
+                  const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
+                  const y = 180 - (ratio * 160);
+                  return { x, y };
+                })
+                .filter(p => p !== null);
+
+              if (linePoints.length < 2) return null;
+
+              const points = linePoints.map(p => `${p.x},${p.y}`).join(' ');
+
+              const firstX = linePoints.length > 0 ? linePoints[0].x : chartStartX;
+              const areaPath = [
+                `M ${firstX} 180`,
+                ...linePoints.map(p => `L ${p.x} ${p.y}`),
+                `L ${chartStartX + chartWidth} 180`,
+                'Z'
+              ].join(' ');
+
+              return (
+                <>
+                  <path
+                    d={areaPath}
+                    fill={metricColor}
+                    opacity={isDarkMode ? 0.14 : 0.18}
+                    style={{
+                      transition: 'opacity 0.3s ease-in-out'
+                    }}
+                  />
+                  <polyline
+                    points={points}
+                    fill="none"
+                    stroke={metricColor}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      opacity: isTransitioning ? 0.6 : 1,
+                      filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.5))',
+                      transition: 'opacity 0.3s ease-in-out'
+                    }}
+                  />
+                </>
+              );
+            })()}
+
+            {/* Data points (show fewer for cleaner look) */}
+            {chartData.map((d, index) => {
+              const value = getMetricValue(d);
+              if (value == null || value <= 0) return null;
+              
+              const normalizedValue = value - min;
+              const ratio = normalizedValue / range;
+              const chartStartX = 80;
+              const chartWidth = 680;
+              const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
+              const y = 180 - (ratio * 160);
+              
+              const isHovered = hoveredPoint?.index === index;
+              const step = Math.max(1, Math.floor(chartData.length / 80)); // cap visible points
+              const showPoint = isHovered || index % step === 0 || index === chartData.length - 1;
+              if (!showPoint) return null;
+              
+              return (
+                <circle
+                  key={index}
+                  cx={x}
+                  cy={y}
+                  r={isHovered ? 6 : 3}
+                  fill={metricColor}
+                  stroke={isDarkMode ? '#020617' : '#ffffff'}
+                  strokeWidth={isHovered ? 3 : 2}
+                  className="cursor-pointer transition-all duration-200"
+                  onMouseEnter={() => handlePointMouseEnter(d, index, value, x, y)}
+                  onMouseLeave={handlePointMouseLeave}
+                  style={{
+                    opacity: isTransitioning ? 0.6 : 1,
+                    transition: 'opacity 0.3s ease-in-out, r 0.2s ease-in-out'
+                  }}
+                />
+              );
+            })}
+
+            {/* Tooltip */}
+            {hoveredPoint && (() => {
+            const { data, value, x, y } = hoveredPoint;
+            const tooltipWidth = 140;
+            const tooltipHeight = 60;
+            const padding = 10;
+            
+            let tooltipX = x - tooltipWidth / 2;
+            if (tooltipX < padding) tooltipX = padding;
+            if (tooltipX + tooltipWidth > 800 - padding) tooltipX = 800 - tooltipWidth - padding;
+            
+            let tooltipY = y - tooltipHeight - 15;
+            if (tooltipY < padding) tooltipY = y + 25;
+            
+            const tooltipCenterX = tooltipX + tooltipWidth / 2;
+            const textY1 = tooltipY + 18;
+            const textY2 = tooltipY + 35;
+            
+            if (tooltipY + tooltipHeight > 200 - padding) {
+              tooltipY = 200 - tooltipHeight - padding;
+            }
+            
+            return (
+              <g
+                style={{
+                  opacity: isTransitioning ? 0 : 1,
+                  transition: 'opacity 0.2s ease-in-out'
+                }}
+              >
+                <line
+                  x1={hoveredPoint.x}
+                  y1="20"
+                  x2={hoveredPoint.x}
+                  y2="180"
+                  stroke={metricColor}
+                  strokeWidth="1"
+                  strokeDasharray="4,4"
+                  opacity="0.5"
+                />
+                <rect
+                  x={tooltipX}
+                  y={tooltipY}
+                  width={tooltipWidth}
+                  height={tooltipHeight}
+                  rx="6"
+                  fill={isDarkMode ? "rgba(30, 41, 59, 0.98)" : "rgba(255, 255, 255, 0.98)"}
+                  stroke={metricColor}
+                  strokeWidth="2"
+                  filter="drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))"
+                />
+                <text
+                  x={tooltipCenterX}
+                  y={textY1}
+                  textAnchor="middle"
+                  className={`text-xs font-semibold ${themeClasses.textPrimary}`}
+                  fill="currentColor"
+                >
+                  {formatDateFull(data.dateFull)}
+                </text>
+                <text
+                  x={tooltipCenterX}
+                  y={textY2}
+                  textAnchor="middle"
+                  className="text-base font-bold"
+                  fill={metricColor}
+                >
+                  {Math.round(value)} {getMetricUnit()}
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* X-axis labels */}
+          {chartData.length > 0 && chartData.map((d, index) => {
+            if (index % Math.ceil(chartData.length / 6) !== 0 && index !== chartData.length - 1) return null;
+            const chartStartX = 80;
+            const chartWidth = 680;
+            const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
             return (
               <text
                 key={index}
@@ -3312,10 +4061,447 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   );
 };
 
+// Macro Summary Circles Component with Tooltips
+const MacroSummaryCircles = ({ 
+  totalCalories, totalProtein, totalCarbs, totalFat, 
+  dailyGoals, caloriesPercent, proteinPercent, carbsPercent, fatPercent,
+  settings, isDarkMode, themeClasses, language, formatWeight 
+}) => {
+  const [hoveredElement, setHoveredElement] = useState(null);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const svgRef = useRef(null);
+
+  const handleMouseMove = (e) => {
+    if (svgRef.current) {
+      const rect = svgRef.current.getBoundingClientRect();
+      setMousePosition({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredElement(null);
+  };
+
+  const getTooltipContent = () => {
+    if (!hoveredElement) return null;
+
+    switch (hoveredElement) {
+      case 'calories':
+        return {
+          label: language === 'hebrew' ? 'קלוריות' : 'Calories',
+          current: totalCalories.toLocaleString(),
+          target: dailyGoals.calories.toLocaleString(),
+          percent: caloriesPercent,
+          color: '#10b981'
+        };
+      case 'protein':
+        return {
+          label: language === 'hebrew' ? 'חלבון' : 'Protein',
+          current: formatWeight(totalProtein),
+          target: formatWeight(dailyGoals.protein),
+          percent: proteinPercent,
+          color: '#a855f7'
+        };
+      case 'carbs':
+        return {
+          label: language === 'hebrew' ? 'פחמימות' : 'Carbs',
+          current: formatWeight(totalCarbs),
+          target: formatWeight(dailyGoals.carbs),
+          percent: carbsPercent,
+          color: '#3b82f6'
+        };
+      case 'fat':
+        return {
+          label: language === 'hebrew' ? 'שומן' : 'Fat',
+          current: formatWeight(totalFat),
+          target: formatWeight(dailyGoals.fat),
+          percent: fatPercent,
+          color: '#f59e0b'
+        };
+      default:
+        return null;
+    }
+  };
+
+  const tooltipContent = getTooltipContent();
+
+  const outerRadius = 120;
+  const innerRadius = 100;
+  const outerCircumference = 2 * Math.PI * outerRadius;
+  const circumference = 2 * Math.PI * innerRadius;
+  const segmentLength = circumference / 3;
+
+  // Calculate lengths
+  const caloriesNormalLength = Math.min(caloriesPercent, 100) / 100 * outerCircumference;
+  const caloriesOverflowLength = caloriesPercent > 100 ? ((caloriesPercent - 100) / 100) * outerCircumference : 0;
+  const proteinNormalLength = Math.min(proteinPercent, 100) / 100 * segmentLength;
+  const proteinOverflowLength = proteinPercent > 100 ? (proteinPercent - 100) / 100 * segmentLength : 0;
+  const carbsNormalLength = Math.min(carbsPercent, 100) / 100 * segmentLength;
+  const carbsOverflowLength = carbsPercent > 100 ? (carbsPercent - 100) / 100 * segmentLength : 0;
+  const fatNormalLength = Math.min(fatPercent, 100) / 100 * segmentLength;
+  const fatOverflowLength = fatPercent > 100 ? (fatPercent - 100) / 100 * segmentLength : 0;
+
+  return (
+    <div className="relative w-64 h-64 sm:w-80 sm:h-80 mb-8">
+      <svg 
+        ref={svgRef}
+        className="transform -rotate-90 w-full h-full" 
+        viewBox="0 0 280 280"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
+        {/* Outer Circle Background (Calories) */}
+        <circle
+          cx="140"
+          cy="140"
+          r={outerRadius}
+          fill="none"
+          stroke={isDarkMode ? 'rgba(100, 100, 100, 0.15)' : 'rgba(200, 200, 200, 0.2)'}
+          strokeWidth="16"
+        />
+        
+        {/* Inner Circle Background (Macros) */}
+        <circle
+          cx="140"
+          cy="140"
+          r={innerRadius}
+          fill="none"
+          stroke={isDarkMode ? 'rgba(100, 100, 100, 0.15)' : 'rgba(200, 200, 200, 0.2)'}
+          strokeWidth="16"
+        />
+        
+        {/* Outer Circle - Calories Progress */}
+        {settings.showCalories && (
+          <>
+            {caloriesNormalLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={outerRadius}
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${caloriesNormalLength} ${outerCircumference}`}
+                strokeDashoffset={0}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            {caloriesOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={outerRadius}
+                fill="none"
+                stroke="#059669"
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${caloriesOverflowLength} ${outerCircumference}`}
+                strokeDashoffset={0}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            {/* Invisible hover area for calories */}
+            <circle
+              cx="140"
+              cy="140"
+              r={outerRadius}
+              fill="none"
+              stroke="transparent"
+              strokeWidth="24"
+              className="cursor-pointer"
+              onMouseEnter={() => setHoveredElement('calories')}
+            />
+          </>
+        )}
+        
+        {/* Inner Circle - Macros */}
+        {settings.showMacros && (
+          <>
+            {/* Step 1: Render all normal portions (0-100%) */}
+            {proteinNormalLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="#a855f7"
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${proteinNormalLength} ${circumference}`}
+                strokeDashoffset="0"
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            {carbsNormalLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${carbsNormalLength} ${circumference}`}
+                strokeDashoffset={-segmentLength}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            {fatNormalLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="#f59e0b"
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${fatNormalLength} ${circumference}`}
+                strokeDashoffset={-segmentLength * 2}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            
+            {/* Step 2: Render all overflow borders */}
+            {proteinOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="20"
+                strokeLinecap="round"
+                strokeDasharray={`${proteinOverflowLength} ${circumference}`}
+                strokeDashoffset={0 - proteinNormalLength}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            {carbsOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="#f59e0b"
+                strokeWidth="20"
+                strokeLinecap="round"
+                strokeDasharray={`${carbsOverflowLength} ${circumference}`}
+                strokeDashoffset={-segmentLength - carbsNormalLength}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            {fatOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="#a855f7"
+                strokeWidth="20"
+                strokeLinecap="round"
+                strokeDasharray={`${fatOverflowLength} ${circumference}`}
+                strokeDashoffset={0}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            
+            {/* Step 3: Render all overflow main arcs */}
+            {proteinOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="#a855f7"
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${proteinOverflowLength} ${circumference}`}
+                strokeDashoffset={0 - proteinNormalLength}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            {carbsOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${carbsOverflowLength} ${circumference}`}
+                strokeDashoffset={-segmentLength - carbsNormalLength}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            {fatOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="#f59e0b"
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${fatOverflowLength} ${circumference}`}
+                strokeDashoffset={0}
+                opacity={1}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+
+            {/* Invisible hover areas for macros - normal portions */}
+            {proteinNormalLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="transparent"
+                strokeWidth="24"
+                strokeDasharray={`${proteinNormalLength} ${circumference}`}
+                strokeDashoffset="0"
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredElement('protein')}
+              />
+            )}
+            {carbsNormalLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="transparent"
+                strokeWidth="24"
+                strokeDasharray={`${carbsNormalLength} ${circumference}`}
+                strokeDashoffset={-segmentLength}
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredElement('carbs')}
+              />
+            )}
+            {fatNormalLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="transparent"
+                strokeWidth="24"
+                strokeDasharray={`${fatNormalLength} ${circumference}`}
+                strokeDashoffset={-segmentLength * 2}
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredElement('fat')}
+              />
+            )}
+            {/* Invisible hover areas for macros - overflow portions */}
+            {proteinOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="transparent"
+                strokeWidth="24"
+                strokeDasharray={`${proteinOverflowLength} ${circumference}`}
+                strokeDashoffset={0 - proteinNormalLength}
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredElement('protein')}
+              />
+            )}
+            {carbsOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="transparent"
+                strokeWidth="24"
+                strokeDasharray={`${carbsOverflowLength} ${circumference}`}
+                strokeDashoffset={-segmentLength - carbsNormalLength}
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredElement('carbs')}
+              />
+            )}
+            {fatOverflowLength > 0 && (
+              <circle
+                cx="140"
+                cy="140"
+                r={innerRadius}
+                fill="none"
+                stroke="transparent"
+                strokeWidth="24"
+                strokeDasharray={`${fatOverflowLength} ${circumference}`}
+                strokeDashoffset={0}
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredElement('fat')}
+              />
+            )}
+          </>
+        )}
+      </svg>
+      
+      {/* Center Score */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+        <div className={`${themeClasses.textPrimary} text-7xl sm:text-8xl font-extralight mb-3 tracking-tight`}>
+          {totalCalories.toLocaleString()}
+        </div>
+      </div>
+
+      {/* Tooltip */}
+      {tooltipContent && (
+        <div
+          className="absolute z-50 pointer-events-none"
+          style={{
+            left: `${mousePosition.x + 15}px`,
+            top: `${mousePosition.y - 50}px`,
+            transform: 'translateY(-50%)'
+          }}
+        >
+          <div
+            className={`${isDarkMode ? 'bg-slate-800' : 'bg-white'} rounded-lg shadow-xl border-2 p-3 min-w-[160px]`}
+            style={{ borderColor: tooltipContent.color }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: tooltipContent.color }}
+              />
+              <span className={`${themeClasses.textPrimary} font-semibold text-sm`}>
+                {tooltipContent.label}
+              </span>
+            </div>
+            <div className={`${themeClasses.textPrimary} text-lg font-bold mb-1`}>
+              {tooltipContent.current} / {tooltipContent.target}
+            </div>
+            <div className={`${themeClasses.textSecondary} text-xs`}>
+              {tooltipContent.percent}% {language === 'hebrew' ? 'הושלם' : 'complete'}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Daily Log Tab Component
 const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direction }) => {
   const { settings } = useSettings();
   const { isDarkMode } = useTheme();
+  const [activeSubTab, setActiveSubTab] = useState('dailyLog'); // 'dailyLog' or 'analytics'
   const [foodLogs, setFoodLogs] = useState([]);
   const [mealPlanTargets, setMealPlanTargets] = useState(null);
   const [mealPlanMeals, setMealPlanMeals] = useState([]);
@@ -3945,14 +5131,52 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
 
   return (
     <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
-      {/* Weight Progress Component */}
-      <WeightProgressComponent 
-        userCode={userCode} 
-        themeClasses={themeClasses} 
-        language={language}
-        isDarkMode={isDarkMode}
-      />
-      
+      {/* Sub-tabs Navigation */}
+      <div className={`mb-6 flex gap-2 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+        <button
+          onClick={() => setActiveSubTab('dailyLog')}
+          className={`px-6 py-3 font-semibold transition-all duration-300 border-b-2 ${
+            activeSubTab === 'dailyLog'
+              ? `${themeClasses.textPrimary} border-emerald-500`
+              : `${themeClasses.textSecondary} border-transparent hover:border-emerald-500/50`
+          }`}
+        >
+          {language === 'hebrew' ? 'יומן יומי' : 'Daily Log'}
+        </button>
+        <button
+          onClick={() => setActiveSubTab('analytics')}
+          className={`px-6 py-3 font-semibold transition-all duration-300 border-b-2 ${
+            activeSubTab === 'analytics'
+              ? `${themeClasses.textPrimary} border-emerald-500`
+              : `${themeClasses.textSecondary} border-transparent hover:border-emerald-500/50`
+          }`}
+        >
+          {language === 'hebrew' ? 'אנליטיקה' : 'Analytics'}
+        </button>
+      </div>
+
+      {/* Analytics Sub-tab Content */}
+      {activeSubTab === 'analytics' && (
+        <>
+          <WeightProgressComponent 
+            userCode={userCode} 
+            themeClasses={themeClasses} 
+            language={language}
+            isDarkMode={isDarkMode}
+          />
+          
+          <FoodLogProgressComponent 
+            userCode={userCode} 
+            themeClasses={themeClasses} 
+            language={language}
+            isDarkMode={isDarkMode}
+          />
+        </>
+      )}
+
+      {/* Daily Log Sub-tab Content */}
+      {activeSubTab === 'dailyLog' && (
+        <>
       {/* Date Selector Section */}
       <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
         borderLeft: '3px solid',
@@ -3998,14 +5222,14 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
-        </div>
+          </div>
           <button 
             onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300"
           >
             {language === 'hebrew' ? 'היום' : 'Today'}
           </button>
-      </div>
+        </div>
 
         {/* Week Calendar */}
         <div className="flex gap-3 mb-8">
@@ -4051,245 +5275,22 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
           {/* Circular Score Display */}
           <div className="flex flex-col items-center justify-center py-8">
             {/* Two Concentric Circles - Apple Style */}
-            <div className="relative w-64 h-64 sm:w-80 sm:h-80 mb-8">
-              <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 280 280">
-                {/* Outer Circle Background (Calories) */}
-                <circle
-                  cx="140"
-                  cy="140"
-                  r="120"
-                  fill="none"
-                  stroke={isDarkMode ? 'rgba(100, 100, 100, 0.15)' : 'rgba(200, 200, 200, 0.2)'}
-                  strokeWidth="16"
-                />
-                
-                {/* Inner Circle Background (Macros) */}
-                <circle
-                  cx="140"
-                  cy="140"
-                  r="100"
-                  fill="none"
-                  stroke={isDarkMode ? 'rgba(100, 100, 100, 0.15)' : 'rgba(200, 200, 200, 0.2)'}
-                  strokeWidth="16"
-                />
-                
-                {/* Outer Circle - Calories Progress */}
-                {settings.showCalories && (() => {
-                  const outerRadius = 120;
-                  const outerCircumference = 2 * Math.PI * outerRadius;
-                  
-                  // Split into normal portion (0-100%) and overflow (>100%)
-                  const caloriesNormalLength = Math.min(caloriesPercent, 100) / 100 * outerCircumference;
-                  const caloriesOverflowLength = caloriesPercent > 100 ? ((caloriesPercent - 100) / 100) * outerCircumference : 0;
-                  
-                  return (
-                    <>
-                      {/* Normal portion (0-100%) - regular green */}
-                      {caloriesNormalLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={outerRadius}
-                          fill="none"
-                          stroke="#10b981"
-                          strokeWidth="16"
-                          strokeLinecap="round"
-                          strokeDasharray={`${caloriesNormalLength} ${outerCircumference}`}
-                          strokeDashoffset={0}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                      {/* Overflow portion (>100%) - darker green, overlapping itself */}
-                      {caloriesOverflowLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={outerRadius}
-                          fill="none"
-                          stroke="#059669"
-                          strokeWidth="16"
-                          strokeLinecap="round"
-                          strokeDasharray={`${caloriesOverflowLength} ${outerCircumference}`}
-                          strokeDashoffset={0}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                    </>
-                  );
-                })()}
-                
-                {/* Inner Circle - Macros (3 segments, each 120 degrees) */}
-                {settings.showMacros && (() => {
-                  const innerRadius = 100;
-                  const circumference = 2 * Math.PI * innerRadius;
-                  const segmentLength = circumference / 3; // 120 degrees each
-                  
-                  // Calculate lengths for each macro
-                  const proteinNormalLength = Math.min(proteinPercent, 100) / 100 * segmentLength;
-                  const proteinOverflowLength = proteinPercent > 100 ? (proteinPercent - 100) / 100 * segmentLength : 0;
-                  
-                  const carbsNormalLength = Math.min(carbsPercent, 100) / 100 * segmentLength;
-                  const carbsOverflowLength = carbsPercent > 100 ? (carbsPercent - 100) / 100 * segmentLength : 0;
-                  
-                  const fatNormalLength = Math.min(fatPercent, 100) / 100 * segmentLength;
-                  const fatOverflowLength = fatPercent > 100 ? (fatPercent - 100) / 100 * segmentLength : 0;
-                  
-                  return (
-                    <>
-                      {/* Step 1: Render all normal portions (0-100%) */}
-                      {proteinNormalLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={innerRadius}
-                          fill="none"
-                          stroke="#a855f7"
-                          strokeWidth="16"
-                          strokeLinecap="round"
-                          strokeDasharray={`${proteinNormalLength} ${circumference}`}
-                          strokeDashoffset="0"
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                      {carbsNormalLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={innerRadius}
-                          fill="none"
-                          stroke="#3b82f6"
-                          strokeWidth="16"
-                          strokeLinecap="round"
-                          strokeDasharray={`${carbsNormalLength} ${circumference}`}
-                          strokeDashoffset={-segmentLength}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                      {fatNormalLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={innerRadius}
-                          fill="none"
-                          stroke="#f59e0b"
-                          strokeWidth="16"
-                          strokeLinecap="round"
-                          strokeDasharray={`${fatNormalLength} ${circumference}`}
-                          strokeDashoffset={-segmentLength * 2}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                      
-                      {/* Step 2: Render all overflow borders (next segment's color) - rendered together so they're all visible */}
-                      {proteinOverflowLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={innerRadius}
-                          fill="none"
-                          stroke="#3b82f6"
-                          strokeWidth="20"
-                          strokeLinecap="round"
-                          strokeDasharray={`${proteinOverflowLength} ${circumference}`}
-                          strokeDashoffset={0 - proteinNormalLength}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                      {carbsOverflowLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={innerRadius}
-                          fill="none"
-                          stroke="#f59e0b"
-                          strokeWidth="20"
-                          strokeLinecap="round"
-                          strokeDasharray={`${carbsOverflowLength} ${circumference}`}
-                          strokeDashoffset={-segmentLength - carbsNormalLength}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                      {fatOverflowLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={innerRadius}
-                          fill="none"
-                          stroke="#a855f7"
-                          strokeWidth="20"
-                          strokeLinecap="round"
-                          strokeDasharray={`${fatOverflowLength} ${circumference}`}
-                          strokeDashoffset={0}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                      
-                      {/* Step 3: Render all overflow main arcs (own color) - rendered on top */}
-                      {proteinOverflowLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={innerRadius}
-                          fill="none"
-                          stroke="#a855f7"
-                          strokeWidth="16"
-                          strokeLinecap="round"
-                          strokeDasharray={`${proteinOverflowLength} ${circumference}`}
-                          strokeDashoffset={0 - proteinNormalLength}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                      {carbsOverflowLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={innerRadius}
-                          fill="none"
-                          stroke="#3b82f6"
-                          strokeWidth="16"
-                          strokeLinecap="round"
-                          strokeDasharray={`${carbsOverflowLength} ${circumference}`}
-                          strokeDashoffset={-segmentLength - carbsNormalLength}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                      {fatOverflowLength > 0 && (
-                        <circle
-                          cx="140"
-                          cy="140"
-                          r={innerRadius}
-                          fill="none"
-                          stroke="#f59e0b"
-                          strokeWidth="16"
-                          strokeLinecap="round"
-                          strokeDasharray={`${fatOverflowLength} ${circumference}`}
-                          strokeDashoffset={0}
-                          opacity={1}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      )}
-                    </>
-                  );
-                })()}
-              </svg>
-              
-              {/* Center Score */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className={`${themeClasses.textPrimary} text-7xl sm:text-8xl font-extralight mb-3 tracking-tight`}>
-                  {totalCalories.toLocaleString()}
-                </div>
-              </div>
-            </div>
+            <MacroSummaryCircles
+              totalCalories={totalCalories}
+              totalProtein={totalProtein}
+              totalCarbs={totalCarbs}
+              totalFat={totalFat}
+              dailyGoals={dailyGoals}
+              caloriesPercent={caloriesPercent}
+              proteinPercent={proteinPercent}
+              carbsPercent={carbsPercent}
+              fatPercent={fatPercent}
+              settings={settings}
+              isDarkMode={isDarkMode}
+              themeClasses={themeClasses}
+              language={language}
+              formatWeight={formatWeight}
+            />
 
             {/* Macro Details - Minimal List */}
             <div className="w-full max-w-md space-y-3 mt-4">
@@ -4747,6 +5748,8 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         })}
         </div>
       </div>
+        </>
+      )}
 
       {/* Add Ingredient Modal */}
       <AddIngredientModal
