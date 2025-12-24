@@ -4858,6 +4858,10 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
   const [isTranslating, setIsTranslating] = useState(false);
   const [isAddIngredientModalVisible, setIsAddIngredientModalVisible] = useState(false);
   const [selectedMealForIngredient, setSelectedMealForIngredient] = useState(null);
+  const [isEditPortionModalVisible, setIsEditPortionModalVisible] = useState(false);
+  const [editingIngredient, setEditingIngredient] = useState(null);
+  const [editingLogId, setEditingLogId] = useState(null);
+  const [editingItemIndex, setEditingItemIndex] = useState(null);
   
   // Helper function to format numbers with decimal places
   const formatNumber = (num) => {
@@ -5305,6 +5309,140 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         language === 'hebrew'
           ? 'שגיאה בהוספת המרכיב'
           : 'Error adding ingredient'
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Handle edit ingredient portion
+  const handleEditIngredient = (logId, itemIndex, item) => {
+    // Convert food item format to ingredient format expected by IngredientPortionModal
+    // Extract grams from quantity string (e.g., "100g" -> 100)
+    // Daily log only uses grams, no household measure
+    const quantityStr = item.quantity || '100g';
+    const gramsMatch = quantityStr.toString().match(/(\d+(?:\.\d+)?)/);
+    const grams = gramsMatch ? parseFloat(gramsMatch[1]) : 100;
+    
+    // Calculate original 100g values to properly scale nutrition
+    const originalScale = grams / 100;
+    const original100gCalories = (item.cals || 0) / originalScale;
+    const original100gProtein = (item.p || 0) / originalScale;
+    const original100gCarbs = (item.c || 0) / originalScale;
+    const original100gFat = (item.f || 0) / originalScale;
+    
+    // Create ingredient object in the format expected by IngredientPortionModal
+    // Daily log only uses grams, so household_measure is empty
+    const ingredient = {
+      item: item.name || 'Unknown Item',
+      name: item.name || 'Unknown Item',
+      'portionSI(gram)': grams,
+      household_measure: '', // Daily log doesn't use household measure
+      calories: item.cals || 0,
+      protein: item.p || 0,
+      carbs: item.c || 0,
+      fat: item.f || 0,
+      // Store original 100g values for proper scaling
+      _original100gCalories: original100gCalories,
+      _original100gProtein: original100gProtein,
+      _original100gCarbs: original100gCarbs,
+      _original100gFat: original100gFat
+    };
+    
+    setEditingLogId(logId);
+    setEditingItemIndex(itemIndex);
+    setEditingIngredient(ingredient);
+    setIsEditPortionModalVisible(true);
+  };
+
+  // Handle update ingredient portion
+  const handleUpdateIngredientPortion = async ({ quantity: quantityNum, householdMeasure }) => {
+    if (editingLogId === null || editingItemIndex === null || !editingIngredient) return;
+
+    try {
+      setProcessing(true);
+      
+      // Find the log entry
+      const log = foodLogs.find(l => l.id === editingLogId);
+      if (!log) return;
+
+      // Parse food_items
+      let foodItems = [];
+      if (log.food_items) {
+        try {
+          foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+        } catch (e) {
+          console.error('Error parsing food_items:', e);
+          return;
+        }
+      }
+
+      // Get the old ingredient
+      const oldItem = foodItems[editingItemIndex];
+      if (!oldItem) return;
+
+      // Calculate new nutrition values
+      // Use original 100g values if available, otherwise calculate from current values
+      const originalScale = (editingIngredient['portionSI(gram)'] || 100) / 100;
+      const original100gCalories = editingIngredient._original100gCalories || (oldItem.cals || 0) / originalScale;
+      const original100gProtein = editingIngredient._original100gProtein || (oldItem.p || 0) / originalScale;
+      const original100gCarbs = editingIngredient._original100gCarbs || (oldItem.c || 0) / originalScale;
+      const original100gFat = editingIngredient._original100gFat || (oldItem.f || 0) / originalScale;
+
+      // Calculate new values with the new quantity
+      // Daily log only uses grams, so always save as "Xg" format
+      const newScale = quantityNum / 100;
+      const updatedItem = {
+        ...oldItem,
+        cals: Math.round(original100gCalories * newScale),
+        p: Math.round(original100gProtein * newScale * 10) / 10,
+        c: Math.round(original100gCarbs * newScale * 10) / 10,
+        f: Math.round(original100gFat * newScale * 10) / 10,
+        quantity: `${quantityNum}g` // Daily log always uses grams format
+      };
+
+      // Update the item in the array
+      foodItems[editingItemIndex] = updatedItem;
+
+      // Update the food log
+      const { error } = await updateFoodLog(editingLogId, {
+        food_items: foodItems,
+        meal_label: log.meal_label || 'snacks',
+        image_url: log.image_url || null,
+        log_date: log.log_date || selectedDate
+      });
+
+      if (error) {
+        console.error('Error updating food log:', error);
+        alert(
+          language === 'hebrew'
+            ? 'שגיאה בעדכון המרכיב'
+            : 'Error updating ingredient'
+        );
+      } else {
+        // Reload food logs
+        const { data: foodLogsData, error: foodLogsError } = await getFoodLogs(userCode, selectedDate);
+        if (!foodLogsError) {
+          setFoodLogs(foodLogsData || []);
+        }
+        alert(
+          language === 'hebrew'
+            ? 'המרכיב עודכן בהצלחה'
+            : 'Ingredient updated successfully'
+        );
+      }
+
+      // Close modal and reset
+      setIsEditPortionModalVisible(false);
+      setEditingIngredient(null);
+      setEditingLogId(null);
+      setEditingItemIndex(null);
+    } catch (err) {
+      console.error('Unexpected error updating ingredient:', err);
+      alert(
+        language === 'hebrew'
+          ? 'שגיאה בעדכון המרכיב'
+          : 'Error updating ingredient'
       );
     } finally {
       setProcessing(false);
@@ -5905,17 +6043,30 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                                           </p>
                                         )}
                                       </div>
-                                      {/* Delete ingredient button */}
-                                      <button
-                                        onClick={() => handleDeleteIngredient(log.id, itemIndex)}
-                                        disabled={processing}
-                                        className="ml-2 w-5 h-5 flex items-center justify-center rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 hover:border-red-500/50 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title={language === 'hebrew' ? 'מחק מרכיב' : 'Delete ingredient'}
-                                      >
-                                        <svg className="w-3 h-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                      </button>
+                                      <div className="flex items-center gap-1 ml-2">
+                                        {/* Edit ingredient button */}
+                                        <button
+                                          onClick={() => handleEditIngredient(log.id, itemIndex, item)}
+                                          disabled={processing}
+                                          className="w-5 h-5 flex items-center justify-center rounded bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 hover:border-blue-500/50 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          title={language === 'hebrew' ? 'ערוך כמות' : 'Edit portion'}
+                                        >
+                                          <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                          </svg>
+                                        </button>
+                                        {/* Delete ingredient button */}
+                                        <button
+                                          onClick={() => handleDeleteIngredient(log.id, itemIndex)}
+                                          disabled={processing}
+                                          className="w-5 h-5 flex items-center justify-center rounded bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 hover:border-red-500/50 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                          title={language === 'hebrew' ? 'מחק מרכיב' : 'Delete ingredient'}
+                                        >
+                                          <svg className="w-3 h-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                          </svg>
+                                        </button>
+                                      </div>
                                     </div>
                                     <div className="flex items-center gap-3 flex-wrap text-xs">
                                       {settings.showCalories && (
@@ -6108,6 +6259,21 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         onAddIngredient={handleAddIngredient}
         mealName={selectedMealForIngredient ? (mealTitleMap[selectedMealForIngredient] || t.profile.dailyLogTab.meals[selectedMealForIngredient] || selectedMealForIngredient) : null}
         clientRegion={clientRegion}
+      />
+
+      {/* Edit Ingredient Portion Modal */}
+      <IngredientPortionModal
+        visible={isEditPortionModalVisible}
+        onClose={() => {
+          setIsEditPortionModalVisible(false);
+          setEditingIngredient(null);
+          setEditingLogId(null);
+          setEditingItemIndex(null);
+        }}
+        onConfirm={handleUpdateIngredientPortion}
+        ingredient={editingIngredient}
+        clientRegion={clientRegion}
+        hideHouseholdMeasure={true}
       />
     </div>
   );

@@ -37,7 +37,7 @@ const convertMeasurementWithAI = async (ingredient, fromMeasurement, toType, tar
   }
 };
 
-const IngredientPortionModal = ({ visible, onClose, onConfirm, ingredient, clientRegion }) => {
+const IngredientPortionModal = ({ visible, onClose, onConfirm, ingredient, clientRegion, hideHouseholdMeasure = false }) => {
   const { language, t } = useLanguage();
   const { themeClasses } = useTheme();
   const [quantity, setQuantity] = useState(100);
@@ -207,47 +207,51 @@ const IngredientPortionModal = ({ visible, onClose, onConfirm, ingredient, clien
                   min="1"
                   className={`flex-1 px-4 py-3 rounded-lg border-2 ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
                 />
-                <button
-                  onClick={handleConvertToHousehold}
-                  disabled={convertingMeasure || !quantity || quantity <= 0}
-                  className={`px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap`}
-                  title={language === 'hebrew' ? 'המר למידה ביתית' : 'Convert to household measure'}
-                >
-                  {convertingMeasure ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  ) : (
-                    <span className="text-sm">→ {language === 'hebrew' ? 'ביתית' : 'Household'}</span>
-                  )}
-                </button>
+                {!hideHouseholdMeasure && (
+                  <button
+                    onClick={handleConvertToHousehold}
+                    disabled={convertingMeasure || !quantity || quantity <= 0}
+                    className={`px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap`}
+                    title={language === 'hebrew' ? 'המר למידה ביתית' : 'Convert to household measure'}
+                  >
+                    {convertingMeasure ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <span className="text-sm">→ {language === 'hebrew' ? 'ביתית' : 'Household'}</span>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
-            <div>
-              <label className={`${themeClasses.textPrimary} block text-sm font-semibold mb-2`}>
-                {language === 'hebrew' ? 'מידה ביתית' : 'Household Measure'}
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={householdMeasure}
-                  onChange={(e) => setHouseholdMeasure(e.target.value)}
-                  placeholder={language === 'hebrew' ? 'לדוגמה: 1 כוס, 2 כפות' : 'e.g., 1 cup, 2 tbsp'}
-                  className={`flex-1 px-4 py-3 rounded-lg border-2 ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
-                />
-                <button
-                  onClick={handleConvertToGrams}
-                  disabled={convertingMeasure || !householdMeasure || !householdMeasure.trim()}
-                  className={`px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap`}
-                  title={language === 'hebrew' ? 'המר לגרם' : 'Convert to grams'}
-                >
-                  {convertingMeasure ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  ) : (
-                    <span className="text-sm">→ {language === 'hebrew' ? 'גרם' : 'Grams'}</span>
-                  )}
-                </button>
+            {!hideHouseholdMeasure && (
+              <div>
+                <label className={`${themeClasses.textPrimary} block text-sm font-semibold mb-2`}>
+                  {language === 'hebrew' ? 'מידה ביתית' : 'Household Measure'}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={householdMeasure}
+                    onChange={(e) => setHouseholdMeasure(e.target.value)}
+                    placeholder={language === 'hebrew' ? 'לדוגמה: 1 כוס, 2 כפות' : 'e.g., 1 cup, 2 tbsp'}
+                    className={`flex-1 px-4 py-3 rounded-lg border-2 ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
+                  />
+                  <button
+                    onClick={handleConvertToGrams}
+                    disabled={convertingMeasure || !householdMeasure || !householdMeasure.trim()}
+                    className={`px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap`}
+                    title={language === 'hebrew' ? 'המר לגרם' : 'Convert to grams'}
+                  >
+                    {convertingMeasure ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <span className="text-sm">→ {language === 'hebrew' ? 'גרם' : 'Grams'}</span>
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Current vs New Nutrition */}
             <div className={`${themeClasses.bgSecondary} rounded-lg p-4`}>
