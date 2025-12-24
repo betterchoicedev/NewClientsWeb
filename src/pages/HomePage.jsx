@@ -23,6 +23,19 @@ function HomePage() {
     message: ''
   });
   const [isSubmittingContact, setIsSubmittingContact] = useState(false);
+  
+  // Chat mode state (photo, voice, text)
+  const [chatMode, setChatMode] = useState('photo');
+  
+  // Chat animation state
+  const [chatAnimation, setChatAnimation] = useState({
+    showImage: false,
+    showVoiceMessage: false,
+    showTextMessage: false,
+    showTyping: false,
+    showBotMessage: false,
+    showButtons: false
+  });
 
   // Format price based on currency
   const formatPrice = (priceILS, priceUSD) => {
@@ -84,7 +97,7 @@ function HomePage() {
       }
 
       alert(language === 'hebrew' ? 
-        'הודעתך נשלחה בהצלחה! נחזור אליך בהקדם.' : 
+        'ההודעה נשלחה בהצלחה! נחזור בהקדם.' : 
         'Your message has been sent successfully! We will get back to you soon.'
       );
       
@@ -99,7 +112,7 @@ function HomePage() {
     } catch (error) {
       console.error('Error sending contact message:', error);
       alert(language === 'hebrew' ? 
-        'שגיאה בשליחת ההודעה. אנא נסה שוב או צור קשר בטלפון.' : 
+        'שגיאה בשליחת ההודעה. אפשר לנסות שוב או ליצור קשר בטלפון.' : 
         'Error sending message. Please try again or contact us by phone.'
       );
     } finally {
@@ -115,6 +128,164 @@ function HomePage() {
     };
   }, []);
 
+  // Chat animation sequence
+  useEffect(() => {
+    // Reset animation
+    setChatAnimation({
+      showImage: false,
+      showVoiceMessage: false,
+      showTextMessage: false,
+      showTyping: false,
+      showBotMessage: false,
+      showButtons: false
+    });
+
+    let timers = [];
+    let loopTimer;
+
+    if (chatMode === 'photo') {
+      // Photo mode animation
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showImage: true }));
+      }, 500));
+
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showTyping: true }));
+      }, 2000));
+
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showTyping: false, showBotMessage: true }));
+      }, 3500));
+
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showButtons: true }));
+      }, 4500));
+
+      // Loop animation every 15 seconds
+      loopTimer = setInterval(() => {
+        setChatAnimation({
+          showImage: false,
+          showVoiceMessage: false,
+          showTextMessage: false,
+          showTyping: false,
+          showBotMessage: false,
+          showButtons: false
+        });
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showImage: true }));
+        }, 500);
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showTyping: true }));
+        }, 2000);
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showTyping: false, showBotMessage: true }));
+        }, 3500);
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showButtons: true }));
+        }, 15000);
+      }, 15000);
+    } else if (chatMode === 'voice') {
+      // Voice mode animation
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showVoiceMessage: true }));
+      }, 500));
+
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showTyping: true }));
+      }, 2500));
+
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showTyping: false, showBotMessage: true }));
+      }, 4000));
+
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showButtons: true }));
+      }, 5000));
+
+      // Loop animation every 16 seconds
+      loopTimer = setInterval(() => {
+        setChatAnimation({
+          showImage: false,
+          showVoiceMessage: false,
+          showTextMessage: false,
+          showTyping: false,
+          showBotMessage: false,
+          showButtons: false
+        });
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showVoiceMessage: true }));
+        }, 500);
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showTyping: true }));
+        }, 2500);
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showTyping: false, showBotMessage: true }));
+        }, 4000);
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showButtons: true }));
+        }, 5000);
+      }, 16000);
+    } else if (chatMode === 'text') {
+      // Text mode animation
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showTextMessage: true }));
+      }, 500));
+
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showTyping: true }));
+      }, 2000));
+
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showTyping: false, showBotMessage: true }));
+      }, 3500));
+
+      timers.push(setTimeout(() => {
+        setChatAnimation(prev => ({ ...prev, showButtons: true }));
+      }, 4500));
+
+      // Loop animation every 15 seconds
+      loopTimer = setInterval(() => {
+        setChatAnimation({
+          showImage: false,
+          showVoiceMessage: false,
+          showTextMessage: false,
+          showTyping: false,
+          showBotMessage: false,
+          showButtons: false
+        });
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showTextMessage: true }));
+        }, 500);
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showTyping: true }));
+        }, 2000);
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showTyping: false, showBotMessage: true }));
+        }, 3500);
+
+        setTimeout(() => {
+          setChatAnimation(prev => ({ ...prev, showButtons: true }));
+        }, 4500);
+      }, 15000);
+    }
+
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+      if (loopTimer) clearInterval(loopTimer);
+    };
+  }, [chatMode]);
+
   return (
     <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition flex flex-col`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Navigation */}
@@ -123,472 +294,886 @@ function HomePage() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
         {/* Hero Section */}
-        <section data-tour="hero-section" className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className={`text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold ${themeClasses.textPrimary} mb-4 sm:mb-6`}>
-              <span className="bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">{t.hero.welcome}</span>
+        <section data-tour="hero-section" className={`py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8 ${isDarkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800' : 'bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+          <div className="max-w-5xl mx-auto text-center">
+            <h1 className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6 sm:mb-8`}>
+              <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                {language === 'hebrew' ? 'BetterChoice AI' : 'BetterChoice AI'}
+              </span>
               <br />
-              <span className="bg-gradient-to-r from-green-500 to-teal-600 bg-clip-text text-transparent">{t.hero.subtitle}</span>
-              <br />
-              <span className="bg-gradient-to-r from-green-500 to-teal-600 bg-clip-text text-transparent">{t.hero.description}</span>
-              <br />
-              <span className="bg-gradient-to-r from-purple-500 to-orange-600 bg-clip-text text-transparent">{t.hero.mainDescription}</span>
-            </h2>
-            <p className={`text-base sm:text-lg md:text-xl lg:text-2xl ${themeClasses.textSecondary} mb-6 sm:mb-8 md:mb-10 leading-relaxed px-2`}>
-              {t.hero.fullDescription}
+              <span className={`${themeClasses.textPrimary} text-3xl sm:text-4xl md:text-5xl lg:text-6xl`}>
+                {language === 'hebrew' ? 'תזונה שתפורה עבורך' : 'Nutrition Tailored to You'}
+              </span>
+            </h1>
+            
+            {/* Value Prop Line */}
+            <p className={`text-xl sm:text-2xl md:text-3xl font-bold ${isDarkMode ? 'text-green-400' : 'text-green-600'} mb-6 sm:mb-8 leading-relaxed max-w-4xl mx-auto px-2`}>
+              {language === 'hebrew' 
+                ? 'שואלים - ומקבלים תשובה מותאמת ומבוססת לך.'
+                : 'Just Ask - and get an answer tailored TO YOU.'}
             </p>
-            <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8 md:mb-10">
-              {t.hero.features.map((feature, index) => (
-                <div key={index} className="flex items-start px-2">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                  <p className={`text-sm sm:text-base md:text-lg ${themeClasses.textSecondary} text-left`}>{feature}</p>
-                </div>
-              ))}
-            </div>
+            <p className={`text-lg sm:text-xl md:text-2xl ${themeClasses.textSecondary} mb-8 sm:mb-10 leading-relaxed max-w-4xl mx-auto px-2`}>
+              {language === 'hebrew' 
+                ? 'תזונה, כושר ויומן מזון וכושר - הכל בצ\'אט AI אחד.'
+                : 'Nutrition & fitness Planner , Follow up Journal - all in one AI chat.'}
+            </p>
+            <p className={`text-base sm:text-lg md:text-xl ${themeClasses.textSecondary} mb-8 sm:mb-10 leading-relaxed max-w-3xl mx-auto px-2`}>
+              {language === 'hebrew'
+                ? ' טכנולוגיה חכמה משולבת עם דיאטניות קלינית עבור הדרכה יומיומית פשוטה, מדויקת ויעילה - המובילה לשינוי אמיתי ולאורח חיים מאוזן.'
+                : 'smart technology combined with clinical dietitian to provide simple, accurate, and effective daily guidance - leading to real change and a balanced lifestyle.'}
+            </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-6 sm:mb-8 px-2">
               <button 
                 onClick={() => {
                   if (!isAuthenticated) {
                     window.location.href = '/login';
                   } else {
-                    // Handle authenticated user action
-                    console.log('User is authenticated - handle join today action');
+                    window.location.href = '/profile';
                   }
                 }}
-                className={`${themeClasses.btnPrimary} text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full text-base sm:text-lg font-semibold transform hover:-translate-y-1 transition-all duration-300 ${themeClasses.shadowCard} ${themeClasses.shadowHover} flex items-center justify-center w-full sm:w-auto`}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-8 sm:px-10 py-4 sm:py-5 rounded-full text-lg sm:text-xl font-semibold transform hover:-translate-y-1 transition-all duration-300 shadow-xl hover:shadow-2xl flex items-center justify-center w-full sm:w-auto"
               >
-                <span className="mr-2">✨</span>
-                {t.hero.buttons.joinToday}
-                <span className="ml-2">←</span>
+                <span className="mr-2">🤖</span>
+                {language === 'hebrew' ? 'התחל עכשיו' : 'Get Started'}
+                <span className="ml-2">→</span>
               </button>
-              <button 
+             
+            </div>
+            {/* Low-risk CTA */}
+            <div className="text-center mb-8 sm:mb-10">
+              
+            </div>
+            {/* Trust micro-copy */}
+           
+            {/* Scroll indicator arrow */}
+            <div className="flex flex-col items-center mt-8 mb-4">
+              <button
                 onClick={() => {
-                  alert(language === 'hebrew' ? 'תכונה זו נמצאת בפיתוח - בקרוב!' : 'This feature is currently in development - coming soon!');
+                  const chatSection = document.getElementById('chat-preview-section');
+                  if (chatSection) {
+                    chatSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
                 }}
-                className={`border-2 border-gray-400 ${isDarkMode ? 'text-gray-400 hover:bg-gray-600 hover:text-white' : 'text-gray-500 hover:bg-gray-500 hover:text-white'} px-6 sm:px-8 py-3 sm:py-4 rounded-full text-base sm:text-lg font-semibold transition-all duration-300 flex items-center justify-center relative w-full sm:w-auto`}
+                className="flex flex-col items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity duration-300 group"
+                aria-label={language === 'hebrew' ? 'גלול למטה' : 'Scroll down'}
               >
-                <span className="mr-2">🏋️</span>
-                {t.hero.buttons.joinGym}
-                <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                  {language === 'hebrew' ? 'בפיתוח' : 'Dev'}
+                <p className={`text-sm font-medium transition-colors ${
+                  isDarkMode 
+                    ? 'text-gray-300 group-hover:text-white' 
+                    : 'text-gray-600 group-hover:text-gray-900'
+                }`}>
+                  {language === 'hebrew' ? 'המשך לגלול' : 'Keep scrolling'}
+                </p>
+                <div className="animate-bounce-down">
+                  <svg 
+                    width="32" 
+                    height="32" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke={isDarkMode ? 'white' : 'black'} 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                    className="opacity-60 group-hover:opacity-100 transition-opacity"
+                  >
+                    <path d="M12 5v14M19 12l-7 7-7-7" />
+                  </svg>
+                </div>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Chat Preview Section */}
+        <section id="chat-preview-section" className={`py-8 sm:py-12 ${isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* WhatsApp-style container */}
+            <div className={`${isDarkMode ? 'bg-gray-900' : 'bg-[#e5ddd5]'} rounded-2xl shadow-2xl overflow-hidden`} style={{
+              backgroundImage: isDarkMode ? 'none' : 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'grid\' width=\'100\' height=\'100\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M 100 0 L 0 0 0 100\' fill=\'none\' stroke=\'%23d4d4d4\' stroke-width=\'0.5\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'100\' height=\'100\' fill=\'url(%23grid)\'/%3E%3C/svg%3E")',
+              backgroundSize: '50px 50px'
+            }}>
+              {/* WhatsApp header */}
+              <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-[#075e54]'} px-4 py-3`}>
+                {/* Mode buttons */}
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setChatMode('photo')}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      chatMode === 'photo'
+                        ? 'bg-green-500 text-white shadow-md'
+                        : isDarkMode
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-white/20 text-white/80 hover:bg-white/30'
+                    }`}
+                  >
+                    📷 {language === 'hebrew' ? 'תמונה' : 'Photo'}
+                  </button>
+                  <button
+                    onClick={() => setChatMode('voice')}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      chatMode === 'voice'
+                        ? 'bg-green-500 text-white shadow-md'
+                        : isDarkMode
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-white/20 text-white/80 hover:bg-white/30'
+                    }`}
+                  >
+                    🎤 {language === 'hebrew' ? 'קול/טקסט' : 'Voice/Text'}
+                  </button>
+                  <button
+                    onClick={() => setChatMode('text')}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      chatMode === 'text'
+                        ? 'bg-green-500 text-white shadow-md'
+                        : isDarkMode
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-white/20 text-white/80 hover:bg-white/30'
+                    }`}
+                  >
+                    💬 {language === 'hebrew' ? 'טקסט' : 'Text'}
+                  </button>
+                </div>
+                {/* Bot info */}
+                <div className="flex items-center">
+                  <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center mr-3">
+                    <span className="text-white text-xl">🤖</span>
+                  </div>
+                  <div>
+                    <p className={`${isDarkMode ? 'text-gray-100' : 'text-white'} font-semibold`}>BetterChoice AI</p>
+                    <p className={`${isDarkMode ? 'text-gray-400' : 'text-green-100'} text-xs`}>
+                      {language === 'hebrew' ? 'מקוון' : 'online'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Chat messages */}
+              <div className="p-4 space-y-3 min-h-[500px] relative">
+                {/* Photo Mode */}
+                {chatMode === 'photo' && (
+                  <>
+                    {/* User sends image */}
+                    <div 
+                      className={`flex justify-end transition-all duration-500 ${
+                        chatAnimation.showImage 
+                          ? 'opacity-100 translate-x-0' 
+                          : 'opacity-0 translate-x-4'
+                      }`}
+                      style={{
+                        animation: chatAnimation.showImage ? 'slideInRight 0.5s ease-out' : 'none'
+                      }}
+                    >
+                      <div className="max-w-[75%]">
+                        <div className={`${isDarkMode ? 'bg-green-700' : 'bg-[#dcf8c6]'} rounded-lg rounded-tr-none p-2 shadow-sm`}>
+                          <img 
+                            src="/Porcupine-Meatballs-Fork.jpg" 
+                            alt={language === 'hebrew' ? 'ארוחה' : 'Meal'}
+                            className="rounded-lg w-full h-auto max-h-64 object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'block';
+                            }}
+                          />
+                          <div style={{display: 'none'}} className={`${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-lg p-8 text-center`}>
+                            <span className="text-4xl">🍽️</span>
+                          </div>
+                        </div>
+                        <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mt-1 text-right`}>
+                          {language === 'hebrew' ? '14:32' : '2:32 PM'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Typing indicator */}
+                    {chatAnimation.showTyping && (
+                      <div 
+                        className="flex justify-start animate-fadeIn"
+                        style={{
+                          animation: 'fadeIn 0.3s ease-in'
+                        }}
+                      >
+                        <div className={`${isDarkMode ? 'bg-gray-700' : 'bg-white'} rounded-lg rounded-tl-none p-3 shadow-sm`}>
+                          <div className="flex space-x-1">
+                            <div className={`w-2 h-2 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'} rounded-full animate-bounce`} style={{ animationDelay: '0ms' }}></div>
+                            <div className={`w-2 h-2 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'} rounded-full animate-bounce`} style={{ animationDelay: '150ms' }}></div>
+                            <div className={`w-2 h-2 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'} rounded-full animate-bounce`} style={{ animationDelay: '300ms' }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Bot response - Photo mode */}
+                    {chatAnimation.showBotMessage && (
+                      <div 
+                        className={`flex justify-start transition-all duration-500 ${
+                          chatAnimation.showBotMessage 
+                            ? 'opacity-100 translate-x-0' 
+                            : 'opacity-0 -translate-x-4'
+                        }`}
+                        style={{
+                          animation: chatAnimation.showBotMessage ? 'slideInLeft 0.5s ease-out' : 'none'
+                        }}
+                      >
+                        <div className="max-w-[85%]">
+                          <div className={`${isDarkMode ? 'bg-gray-700' : 'bg-white'} rounded-lg rounded-tl-none p-4 shadow-sm`}>
+                            <div className={`${isDarkMode ? 'text-gray-100' : 'text-gray-800'} text-sm space-y-2`}>
+                              <div>
+                                <span className="font-semibold">*{language === 'hebrew' ? 'ציון' : 'Rating'}*</span>: 8/10
+                              </div>
+                              <div>
+                                <span className="font-semibold">*{language === 'hebrew' ? 'סיבה' : 'Reason'}*</span>: {language === 'hebrew' 
+                                  ? 'עשירה מאוד בקלוריות, פחמימות פשוטות ושומן. חסרה בירקות.'
+                                  : 'Very rich in calories, simple carbohydrates and fat. Lacking vegetables.'}
+                              </div>
+                              <div>
+                                <span className="font-semibold">*{language === 'hebrew' ? 'התאמה לתוכנית' : 'Plan Match'}*</span>: 😊 {language === 'hebrew' ? 'בחירה טובה' : 'Good choice'}
+                              </div>
+                              <div className="pt-2 border-t border-gray-300">
+                                <span className="font-semibold">📊 *{language === 'hebrew' ? 'ניתוח' : 'Analysis'}*</span>:
+                                <div className="mt-2 text-xs space-y-1 font-mono">
+                                  <div>{language === 'hebrew' ? 'סה״כ' : 'Total'}: 1202 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 60{language === 'hebrew' ? 'ג' : 'g'} {language === 'hebrew' ? 'חלבון' : 'protein'} | 126{language === 'hebrew' ? 'ג' : 'g'} {language === 'hebrew' ? 'פחמימה' : 'carbs'} | 44{language === 'hebrew' ? 'ג' : 'g'} {language === 'hebrew' ? 'שומן' : 'fat'}</div>
+                                  <div>1. {language === 'hebrew' ? 'קציצות ברוטב עגבניות (כ-5 קציצות (240ג) עם 175ג רוטב)' : 'Meatballs in tomato sauce (~5 meatballs (240g) with 175g sauce)'}: 812 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 52 {language === 'hebrew' ? 'חלבון' : 'protein'} 42 {language === 'hebrew' ? 'פחמימה' : 'carbs'} 43 {language === 'hebrew' ? 'שומן' : 'fat'}</div>
+                                  <div>2. {language === 'hebrew' ? 'אורז לבן (כ-300ג)' : 'White rice (~300g)'}: 390 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 8 {language === 'hebrew' ? 'חלבון' : 'protein'} 84 {language === 'hebrew' ? 'פחמימה' : 'carbs'} 1 {language === 'hebrew' ? 'שומן' : 'fat'}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Action buttons - Photo mode */}
+                          <div 
+                            className={`mt-3 space-y-2 transition-all duration-500 ${
+                              chatAnimation.showButtons 
+                                ? 'opacity-100 translate-y-0' 
+                                : 'opacity-0 translate-y-4'
+                            }`}
+                            style={{
+                              animation: chatAnimation.showButtons ? 'slideUp 0.5s ease-out' : 'none'
+                            }}
+                          >
+                            <button className={`w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2`}>
+                              <span>📝</span>
+                              <span>{language === 'hebrew' ? 'תתעד ארוחה זו' : 'Log this meal'}</span>
+                            </button>
+                            <button className={`w-full bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2`}>
+                              <span>📝</span>
+                              <span>{language === 'hebrew' ? 'תתעד עם חצי מנת אורז' : 'Log with half portion of rice'}</span>
+                            </button>
+                            <button className={`w-full bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 hover:from-green-600 hover:via-emerald-600 hover:to-green-700 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2`}>
+                              <span>✨</span>
+                              <span>{language === 'hebrew' ? 'איך להפוך את הארוחה ל-BetterChoice?' : 'How to make this meal BetterChoice?'}</span>
+                            </button>
+                          </div>
+                          
+                          <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mt-1`}>
+                            {language === 'hebrew' ? '14:33' : '2:33 PM'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Voice Mode */}
+                {chatMode === 'voice' && (
+                  <>
+                    {/* User sends voice message */}
+                    <div 
+                      className={`flex justify-end transition-all duration-500 ${
+                        chatAnimation.showVoiceMessage 
+                          ? 'opacity-100 translate-x-0' 
+                          : 'opacity-0 translate-x-4'
+                      }`}
+                      style={{
+                        animation: chatAnimation.showVoiceMessage ? 'slideInRight 0.5s ease-out' : 'none'
+                      }}
+                    >
+                      <div className="max-w-[75%]">
+                        <div className={`${isDarkMode ? 'bg-green-700' : 'bg-[#dcf8c6]'} rounded-lg rounded-tr-none p-3 shadow-sm flex items-center gap-3`}>
+                          <div className="flex items-center gap-1">
+                            <div className="w-1 h-4 bg-green-600 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                            <div className="w-1 h-6 bg-green-600 rounded-full animate-pulse" style={{ animationDelay: '100ms' }}></div>
+                            <div className="w-1 h-5 bg-green-600 rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></div>
+                            <div className="w-1 h-7 bg-green-600 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                            <div className="w-1 h-4 bg-green-600 rounded-full animate-pulse" style={{ animationDelay: '400ms' }}></div>
+                            <div className="w-1 h-6 bg-green-600 rounded-full animate-pulse" style={{ animationDelay: '500ms' }}></div>
+                          </div>
+                          <span className="text-xs font-medium">0:05</span>
+                          <span className="text-lg">🎤</span>
+                        </div>
+                        <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mt-1 text-right`}>
+                          {language === 'hebrew' ? '14:32' : '2:32 PM'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Typing indicator */}
+                    {chatAnimation.showTyping && (
+                      <div 
+                        className="flex justify-start animate-fadeIn"
+                        style={{
+                          animation: 'fadeIn 0.3s ease-in'
+                        }}
+                      >
+                        <div className={`${isDarkMode ? 'bg-gray-700' : 'bg-white'} rounded-lg rounded-tl-none p-3 shadow-sm`}>
+                          <div className="flex space-x-1">
+                            <div className={`w-2 h-2 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'} rounded-full animate-bounce`} style={{ animationDelay: '0ms' }}></div>
+                            <div className={`w-2 h-2 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'} rounded-full animate-bounce`} style={{ animationDelay: '150ms' }}></div>
+                            <div className={`w-2 h-2 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'} rounded-full animate-bounce`} style={{ animationDelay: '300ms' }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Bot response - Voice mode */}
+                    {chatAnimation.showBotMessage && (
+                      <div 
+                        className={`flex justify-start transition-all duration-500 ${
+                          chatAnimation.showBotMessage 
+                            ? 'opacity-100 translate-x-0' 
+                            : 'opacity-0 -translate-x-4'
+                        }`}
+                        style={{
+                          animation: chatAnimation.showBotMessage ? 'slideInLeft 0.5s ease-out' : 'none'
+                        }}
+                      >
+                        <div className="max-w-[85%]">
+                          <div className={`${isDarkMode ? 'bg-gray-700' : 'bg-white'} rounded-lg rounded-tl-none p-4 shadow-sm`}>
+                            <div className={`${isDarkMode ? 'text-gray-100' : 'text-gray-800'} text-sm space-y-2`}>
+                              <div>
+                                <span className="font-semibold">*{language === 'hebrew' ? 'ציון' : 'Rating'}*</span>: 6/10
+                              </div>
+                              <div>
+                                <span className="font-semibold">*{language === 'hebrew' ? 'סיבה' : 'Reason'}*</span>: {language === 'hebrew' 
+                                  ? 'עשיר מאוד בקלוריות ושומן, בעיקר בגלל כמות גדולה מאוד של גבינת שמנת.'
+                                  : 'Very rich in calories and fat, mainly due to a very large amount of cream cheese.'}
+                              </div>
+                              <div>
+                                <span className="font-semibold">*{language === 'hebrew' ? 'התאמה לתוכנית' : 'Plan Match'}*</span>: ❌ {language === 'hebrew' ? 'בחירה גרועה' : 'Poor choice'}
+                              </div>
+                              <div className="pt-2 border-t border-gray-300">
+                                <span className="font-semibold">📊 *{language === 'hebrew' ? 'ניתוח' : 'Analysis'}*</span>:
+                                <div className="mt-2 text-xs space-y-1 font-mono">
+                                  <div>{language === 'hebrew' ? 'סה״כ' : 'Total'}: 1020 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 43{language === 'hebrew' ? 'ג' : 'g'} {language === 'hebrew' ? 'חלבון' : 'protein'} | 67{language === 'hebrew' ? 'ג' : 'g'} {language === 'hebrew' ? 'פחמימה' : 'carbs'} | 70{language === 'hebrew' ? 'ג' : 'g'} {language === 'hebrew' ? 'שומן' : 'fat'}</div>
+                                  <div>1. {language === 'hebrew' ? 'טוסט חיטה מלאה עם גבינת שמנת (כ-230ג)' : 'Whole wheat toast with cream cheese (~230g)'}: 720 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 25 {language === 'hebrew' ? 'חלבון' : 'protein'} 65 {language === 'hebrew' ? 'פחמימה' : 'carbs'} 45 {language === 'hebrew' ? 'שומן' : 'fat'}</div>
+                                  <div>2. {language === 'hebrew' ? 'חביתה פשוטה (כ-200ג)' : 'Simple omelet (~200g)'}: 300 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 18 {language === 'hebrew' ? 'חלבון' : 'protein'} 2 {language === 'hebrew' ? 'פחמימה' : 'carbs'} 25 {language === 'hebrew' ? 'שומן' : 'fat'}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Action buttons - Voice mode */}
+                          <div 
+                            className={`mt-3 space-y-2 transition-all duration-500 ${
+                              chatAnimation.showButtons 
+                                ? 'opacity-100 translate-y-0' 
+                                : 'opacity-0 translate-y-4'
+                            }`}
+                            style={{
+                              animation: chatAnimation.showButtons ? 'slideUp 0.5s ease-out' : 'none'
+                            }}
+                          >
+                            <button className={`w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2`}>
+                              <span>📝</span>
+                              <span>{language === 'hebrew' ? 'תתעד ארוחה זו' : 'Log this meal'}</span>
+                            </button>
+                            <button className={`w-full bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2`}>
+                              <span>🧀</span>
+                              <span>{language === 'hebrew' ? 'הפחת כמות גבינה' : 'Reduce amount of cheese'}</span>
+                            </button>
+                          </div>
+                          
+                          <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mt-1`}>
+                            {language === 'hebrew' ? '14:33' : '2:33 PM'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Text Mode */}
+                {chatMode === 'text' && (
+                  <>
+                    {/* User sends text message */}
+                    <div 
+                      className={`flex justify-end transition-all duration-500 ${
+                        chatAnimation.showTextMessage 
+                          ? 'opacity-100 translate-x-0' 
+                          : 'opacity-0 translate-x-4'
+                      }`}
+                      style={{
+                        animation: chatAnimation.showTextMessage ? 'slideInRight 0.5s ease-out' : 'none'
+                      }}
+                    >
+                      <div className="max-w-[75%]">
+                        <div className={`${isDarkMode ? 'bg-green-700' : 'bg-[#dcf8c6]'} rounded-lg rounded-tr-none p-3 shadow-sm`}>
+                          <p className={`${isDarkMode ? 'text-white' : 'text-gray-800'} text-sm`}>
+                            {language === 'hebrew' 
+                              ? 'אכלתי קרפ 240ג עם חלב מרוכז ממותק'
+                              : 'I ate a 240g crepe with sweetened condensed milk'}
+                          </p>
+                        </div>
+                        <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mt-1 text-right`}>
+                          {language === 'hebrew' ? '14:32' : '2:32 PM'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Typing indicator */}
+                    {chatAnimation.showTyping && (
+                      <div 
+                        className="flex justify-start animate-fadeIn"
+                        style={{
+                          animation: 'fadeIn 0.3s ease-in'
+                        }}
+                      >
+                        <div className={`${isDarkMode ? 'bg-gray-700' : 'bg-white'} rounded-lg rounded-tl-none p-3 shadow-sm`}>
+                          <div className="flex space-x-1">
+                            <div className={`w-2 h-2 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'} rounded-full animate-bounce`} style={{ animationDelay: '0ms' }}></div>
+                            <div className={`w-2 h-2 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'} rounded-full animate-bounce`} style={{ animationDelay: '150ms' }}></div>
+                            <div className={`w-2 h-2 ${isDarkMode ? 'bg-gray-400' : 'bg-gray-500'} rounded-full animate-bounce`} style={{ animationDelay: '300ms' }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Bot response - Text mode */}
+                    {chatAnimation.showBotMessage && (
+                      <div 
+                        className={`flex justify-start transition-all duration-500 ${
+                          chatAnimation.showBotMessage 
+                            ? 'opacity-100 translate-x-0' 
+                            : 'opacity-0 -translate-x-4'
+                        }`}
+                        style={{
+                          animation: chatAnimation.showBotMessage ? 'slideInLeft 0.5s ease-out' : 'none'
+                        }}
+                      >
+                        <div className="max-w-[85%]">
+                          <div className={`${isDarkMode ? 'bg-gray-700' : 'bg-white'} rounded-lg rounded-tl-none p-4 shadow-sm`}>
+                            <div className={`${isDarkMode ? 'text-gray-100' : 'text-gray-800'} text-sm space-y-2`}>
+                              <div>
+                                <span className="font-semibold">*{language === 'hebrew' ? 'ציון' : 'Rating'}*</span>: 3/10
+                              </div>
+                              <div>
+                                <span className="font-semibold">*{language === 'hebrew' ? 'סיבה' : 'Reason'}*</span>: {language === 'hebrew' 
+                                  ? 'עשיר מאוד בסוכר ופחמימות פשוטות, עם ערך תזונתי נמוך.'
+                                  : 'Very rich in sugar and simple carbohydrates, with low nutritional value.'}
+                              </div>
+                              <div>
+                                <span className="font-semibold">*{language === 'hebrew' ? 'התאמה לתוכנית' : 'Plan Match'}*</span>: ❌ {language === 'hebrew' ? 'בחירה גרועה מאוד' : 'Very poor choice'}
+                              </div>
+                              <div className="pt-2 border-t border-gray-300">
+                                <span className="font-semibold">📊 *{language === 'hebrew' ? 'ניתוח' : 'Analysis'}*</span>:
+                                <div className="mt-2 text-xs space-y-1 font-mono">
+                                  <div>{language === 'hebrew' ? 'סה״כ' : 'Total'}: 500 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 12{language === 'hebrew' ? 'ג' : 'g'} {language === 'hebrew' ? 'חלבון' : 'protein'} | 75{language === 'hebrew' ? 'ג' : 'g'} {language === 'hebrew' ? 'פחמימה' : 'carbs'} | 28{language === 'hebrew' ? 'ג' : 'g'} {language === 'hebrew' ? 'שומן' : 'fat'}</div>
+                                  <div>1. {language === 'hebrew' ? 'קרפ שוקולד עם חלב מרוכז ממותק (כ-240ג)' : 'Chocolate crepe with sweetened condensed milk (~240g)'}: 500 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 12 {language === 'hebrew' ? 'חלבון' : 'protein'} 75 {language === 'hebrew' ? 'פחמימה' : 'carbs'} 28 {language === 'hebrew' ? 'שומן' : 'fat'}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Action buttons - Text mode */}
+                          <div 
+                            className={`mt-3 space-y-2 transition-all duration-500 ${
+                              chatAnimation.showButtons 
+                                ? 'opacity-100 translate-y-0' 
+                                : 'opacity-0 translate-y-4'
+                            }`}
+                            style={{
+                              animation: chatAnimation.showButtons ? 'slideUp 0.5s ease-out' : 'none'
+                            }}
+                          >
+                            <button className={`w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2`}>
+                              <span>📝</span>
+                              <span>{language === 'hebrew' ? 'תתעד ארוחה זו' : 'Log this meal'}</span>
+                            </button>
+                            <button className={`w-full bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2`}>
+                              <span>🚫</span>
+                              <span>{language === 'hebrew' ? 'ללא חלב מרוכז' : 'No condensed milk'}</span>
+                            </button>
+                            <button className={`w-full bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 hover:from-green-600 hover:via-emerald-600 hover:to-green-700 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2`}>
+                              <span>🥞</span>
+                              <span>{language === 'hebrew' ? 'חצי מנה' : 'Half portion'}</span>
+                            </button>
+                          </div>
+                          
+                          <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mt-1`}>
+                            {language === 'hebrew' ? '14:33' : '2:33 PM'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              
+              {/* CSS Animations */}
+              <style>{`
+                @keyframes slideInRight {
+                  from {
+                    opacity: 0;
+                    transform: translateX(20px);
+                  }
+                  to {
+                    opacity: 1;
+                    transform: translateX(0);
+                  }
+                }
+                
+                @keyframes slideInLeft {
+                  from {
+                    opacity: 0;
+                    transform: translateX(-20px);
+                  }
+                  to {
+                    opacity: 1;
+                    transform: translateX(0);
+                  }
+                }
+                
+                @keyframes slideUp {
+                  from {
+                    opacity: 0;
+                    transform: translateY(10px);
+                  }
+                  to {
+                    opacity: 1;
+                    transform: translateY(0);
+                  }
+                }
+                
+                @keyframes fadeIn {
+                  from {
+                    opacity: 0;
+                  }
+                  to {
+                    opacity: 1;
+                  }
+                }
+                
+                @keyframes bounce-down {
+                  0%, 100% {
+                    transform: translateY(0);
+                  }
+                  50% {
+                    transform: translateY(10px);
+                  }
+                }
+                
+                .animate-bounce-down {
+                  animation: bounce-down 1.5s ease-in-out infinite;
+                }
+              `}</style>
+            </div>
+            
+            <div className="mt-4 text-center">
+              <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} italic`}>
+                {language === 'hebrew' ? 'דוגמה לשיחה אמיתית ב-WhatsApp' : 'Example of a real WhatsApp conversation'}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Why Choose BetterChoice AI Section */}
+        <section className={`py-12 sm:py-16 md:py-20 ${themeClasses.sectionBg}`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12 sm:mb-16">
+              <h3 className={`text-3xl sm:text-4xl md:text-5xl font-bold ${themeClasses.textPrimary} mb-4`}>
+                <span className={isDarkMode ? 'text-green-400' : 'text-green-600'}>
+                  {language === 'hebrew' ? 'למה לבחור BetterChoice AI?' : 'Why Choose BetterChoice AI?'}
                 </span>
-              </button>
+              </h3>
             </div>
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-6 md:gap-8 px-2">
-              <div className="flex items-center">
-                <span className="text-red-500 mr-2 text-lg sm:text-base">❤️</span>
-                <span className={`${themeClasses.textSecondary} text-xs sm:text-sm md:text-base`}>{t.hero.footer.satisfiedClients}</span>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-12">
+              {/* Point 1 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+                <div className="flex items-start mb-4">
+                  <div className="text-3xl mr-4">🧠</div>
+                  <div className="flex-1">
+                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'תזונה מותאמת אישית ברמה אחרת, בכל רגע' : 'Hyper-Personalized Nutrition, Anytime'}
+                    </h4>
+                  </div>
+                </div>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew' 
+                    ? 'מאמן תזונה אישי ב-AI זמין ב-WhatsApp למענה מיידי, פשוט וזמין: מה לאכול? מתי? כמה? תשובות בזמן אמת.'
+                    : 'Personal AI nutrition coach available on WhatsApp for instant, simple, and accessible answers: What to eat? When? How much? Real-time responses.'}
+                </p>
               </div>
-              <div className="flex items-center">
-                <span className="text-yellow-500 mr-2 text-lg sm:text-base">✨</span>
-                <span className={`${themeClasses.textSecondary} text-xs sm:text-sm md:text-base`}>{t.hero.footer.beginJourney}</span>
+              
+              {/* Point 2 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+                <div className="flex items-start mb-4">
+                  <div className="text-3xl mr-4">🍽️</div>
+                  <div className="flex-1">
+                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'תכנית שמתעדכנת איתך' : 'A Plan That Updates With You'}
+                    </h4>
+                  </div>
+                </div>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'המערכת לומדת את הרגלי האכילה, סדר היום ורמת הפעילות - ומתאימה את עצמה באופן דינמי. לא עוד תפריטים שלא שורדים שבוע.'
+                    : 'The system learns eating habits, daily schedule and activity level to adapt dynamically. No more meal plans that don\'t last a week.'}
+                </p>
               </div>
-              <div className="flex items-center">
-                <span className="text-green-500 mr-2 text-lg sm:text-base">✅</span>
-                <span className={`${themeClasses.textSecondary} text-xs sm:text-sm md:text-base`}>{t.hero.footer.verifiedSuccess}</span>
+              
+              {/* Point 3 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+                <div className="flex items-start mb-4">
+                  <div className="text-3xl mr-4">👩‍⚕️</div>
+                  <div className="flex-1">
+                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'תמיכה של דיאטניות קליניות' : 'Support from Clinical Dietitians'}
+                    </h4>
+                  </div>
+                </div>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'מאחורי כל המלצה עומד בן אדם אנושי. ייעוצים חודשיים ופיקוח מקצועי מבטיחים תכנית בטוחה, יעילה ומותאמת אישית.'
+                    : 'Behind every recommendation stands a human. Monthly consultations and professional supervision ensure a safe, effective, and personalized plan.'}
+                </p>
+              </div>
+              
+              {/* Point 4 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+                <div className="flex items-start mb-4">
+                  <div className="text-3xl mr-4">📱</div>
+                  <div className="flex-1">
+                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'אינטגרציה עם Apple Watch' : 'Apple Watch Integration'}
+                    </h4>
+                  </div>
+                </div>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'התזונה מתעדכנת על פי שינה, צעדים, סטרס ונתוני בריאות - כדי לתת המלצות שמדויקות למצב האמיתי.'
+                    : 'Nutrition updates based on sleep, steps, stress, and health data - to provide recommendations that are accurate to your real situation.'}
+                </p>
+              </div>
+              
+              {/* Point 5 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+                <div className="flex items-start mb-4">
+                  <div className="text-3xl mr-4">🔬</div>
+                  <div className="flex-1">
+                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'טכנולוגיה שמחזירה שליטה' : 'Technology That Returns Control'}
+                    </h4>
+                  </div>
+                </div>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'AI מתקדם, Digital Health Twin ומודלים ביולוגיים מאפשרים: חיזוי תוצאות, התאמות חכמות, שינויים בעלי השפעה גבוהה. כל זה ללא מאמץ וללא תסכול.'
+                    : 'Advanced AI, Digital Health Twin, and biological models enable: outcome prediction, smart adjustments, high-impact changes. All without effort and without frustration.'}
+                </p>
+              </div>
+              
+              {/* Point 6 - Differentiation */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+                <div className="flex items-start mb-4">
+                  <div className="text-3xl mr-4">🎯</div>
+                  <div className="flex-1">
+                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'מיני־שינויים בעלי ROI גבוה' : 'High-ROI Mini-Changes'}
+                    </h4>
+                  </div>
+                </div>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'אנחנו לא עושים \'תפריט\'. אנחנו עושים החלטה אחת טובה יותר בכל פעם - וזה מצטבר לשינוי אמיתי.'
+                    : 'We don\'t make a \'meal plan\'. We make one better decision at a time - and it adds up to real change.'}
+                </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Pain Section */}
+        {/* Results Section */}
         <section className={`py-12 sm:py-16 md:py-20 ${themeClasses.sectionBg}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-8 sm:mb-12 md:mb-16">
-              <h3 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${themeClasses.textPrimary} mb-3 sm:mb-4`}>
-                <span className="text-blue-500">We see</span> <span className="text-white">your pain</span>
+            <div className="text-center mb-12 sm:mb-16">
+              <h3 className={`text-3xl sm:text-4xl md:text-5xl font-bold ${themeClasses.textPrimary} mb-4`}>
+                <span className={isDarkMode ? 'text-green-400' : 'text-green-600'}>
+                  {language === 'hebrew' ? 'התוצאות שאנשים מרגישים' : 'Results People Feel'}
+                </span>
               </h3>
-              <p className={`text-base sm:text-lg md:text-xl ${themeClasses.textSecondary} max-w-3xl mx-auto px-2`}>
-                {t.painSection.subtitle}
-              </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 md:gap-8 mb-8 sm:mb-12 md:mb-16">
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="flex items-center mb-4">
-                  <div className="w-16 h-16 bg-teal-500 rounded-full flex items-center justify-center mr-4">
-                    <span className="text-white font-bold text-xl">{t.painSection.challenges.unbalancedNutrition.percentage}</span>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary}`}>{t.painSection.challenges.unbalancedNutrition.title}</h4>
-                  </div>
-                  <div className="text-orange-500 text-2xl">🍽️</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+              {/* Result 1 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 text-center hover:shadow-2xl transition-shadow duration-300`}>
+                <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-3xl">⚡</span>
                 </div>
-                <p className={themeClasses.textSecondary}>{t.painSection.challenges.unbalancedNutrition.description}</p>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="flex items-center mb-4">
-                  <div className="w-16 h-16 bg-teal-500 rounded-full flex items-center justify-center mr-4">
-                    <span className="text-white font-bold text-xl">{t.painSection.challenges.lackOfMotivation.percentage}</span>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary}`}>{t.painSection.challenges.lackOfMotivation.title}</h4>
-                  </div>
-                  <div className="text-red-500 text-2xl">🎯</div>
-                </div>
-                <p className={themeClasses.textSecondary}>{t.painSection.challenges.lackOfMotivation.description}</p>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="flex items-center mb-4">
-                  <div className="w-16 h-16 bg-teal-500 rounded-full flex items-center justify-center mr-4">
-                    <span className="text-white font-bold text-xl">{t.painSection.challenges.noTimeForWorkouts.percentage}</span>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary}`}>{t.painSection.challenges.noTimeForWorkouts.title}</h4>
-                  </div>
-                  <div className="text-yellow-500 text-2xl">⏰</div>
-                </div>
-                <p className={themeClasses.textSecondary}>{t.painSection.challenges.noTimeForWorkouts.description}</p>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="flex items-center mb-4">
-                  <div className="w-16 h-16 bg-teal-500 rounded-full flex items-center justify-center mr-4">
-                    <span className="text-white font-bold text-xl">{t.painSection.challenges.noResults.percentage}</span>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary}`}>{t.painSection.challenges.noResults.title}</h4>
-                  </div>
-                  <div className="text-blue-500 text-2xl">❌</div>
-                </div>
-                <p className={themeClasses.textSecondary}>{t.painSection.challenges.noResults.description}</p>
-              </div>
-            </div>
-            
-            <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-8 mb-16`}>
-              <div className="text-center">
-                <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4 flex items-center justify-center`}>
-                  <span className="text-yellow-500 mr-2">⏰</span>
-                  {t.painSection.frustration.title}
+                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
+                  {language === 'hebrew' ? 'יותר יציבות אנרגטית' : 'More Energy Stability'}
                 </h4>
-                <p className={`text-lg ${themeClasses.textSecondary} mb-4`}>
-                  {t.painSection.frustration.description}
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'פחות נפילות אנרגיה במהלך היום, ריכוז משופר.'
+                    : 'Fewer energy crashes during the day, improved focus.'}
                 </p>
-                <p className={`text-xl font-bold text-blue-500 mb-6`}>
-                  {t.painSection.frustration.callToAction}
+              </div>
+              
+              {/* Result 2 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 text-center hover:shadow-2xl transition-shadow duration-300`}>
+                <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-3xl">🥗</span>
+                </div>
+                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
+                  {language === 'hebrew' ? 'פחות נשנושים בערב' : 'Less Evening Snacking'}
+                </h4>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'החלטות נכונות יותר במהלך היום מובילות לבחירות טובות יותר גם בערב.'
+                    : 'Better decisions during the day lead to better choices in the evening too.'}
                 </p>
-                <div className="flex justify-center items-center space-x-8 space-x-reverse">
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
-                    <span className={themeClasses.textSecondary}>{t.painSection.frustration.legend.frustration}</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 bg-yellow-500 rounded-full mr-2"></div>
-                    <span className={themeClasses.textSecondary}>{t.painSection.frustration.legend.hope}</span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 bg-teal-500 rounded-full mr-2"></div>
-                    <span className={themeClasses.textSecondary}>{t.painSection.frustration.legend.results}</span>
-                  </div>
-                </div>
               </div>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8">
-              <div className="text-center">
-                <div className={`text-3xl sm:text-4xl font-bold ${isDarkMode ? 'text-red-400' : 'text-red-600'} mb-2`}>
-                  {t.painSection.statistics.dietFailure.percentage}
+              
+              {/* Result 3 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 text-center hover:shadow-2xl transition-shadow duration-300`}>
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-3xl">🔄</span>
                 </div>
-                <p className={themeClasses.textSecondary}>{t.painSection.statistics.dietFailure.description}</p>
-                <p className={`text-sm ${themeClasses.textMuted} mt-2`}>{t.painSection.statistics.dietFailure.source}</p>
-                <a 
-                  href="https://doi.org/10.1056/NEJMoa1800389" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-emerald-500 hover:text-emerald-400 text-sm flex items-center justify-center mt-2 transition-colors duration-300"
-                >
-                  {t.painSection.statistics.dietFailure.link} ↗️
-                </a>
+                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
+                  {language === 'hebrew' ? 'יותר עקביות' : 'More Consistency'}
+                </h4>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'הרגלים שנוצרים בהדרגה ונשארים לאורך זמן.'
+                    : 'Habits that develop gradually and last over time.'}
+                </p>
               </div>
-              <div className="text-center">
-                <div className={`text-4xl font-bold ${isDarkMode ? 'text-yellow-400' : 'text-yellow-600'} mb-2`}>
-                  {t.painSection.statistics.motivationLoss.percentage}
+              
+              {/* Result 4 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 text-center hover:shadow-2xl transition-shadow duration-300`}>
+                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-3xl">😴</span>
                 </div>
-                <p className={themeClasses.textSecondary}>{t.painSection.statistics.motivationLoss.description}</p>
-                <p className={`text-sm ${themeClasses.textMuted} mt-2`}>{t.painSection.statistics.motivationLoss.source}</p>
-                <a 
-                  href="https://pubmed.ncbi.nlm.nih.gov/7707624/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-emerald-500 hover:text-emerald-400 text-sm flex items-center justify-center mt-2 transition-colors duration-300"
-                >
-                  {t.painSection.statistics.motivationLoss.link} ↗️
-                </a>
-              </div>
-              <div className="text-center">
-                <div className={`text-4xl font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} mb-2`}>
-                  {t.painSection.statistics.noWorkoutTime.percentage}
-                </div>
-                <p className={themeClasses.textSecondary}>{t.painSection.statistics.noWorkoutTime.description}</p>
-                <p className={`text-sm ${themeClasses.textMuted} mt-2`}>{t.painSection.statistics.noWorkoutTime.source}</p>
-                <a 
-                  href="https://doi.org/10.1016/S1389-9457%2802%2900016-3" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-emerald-500 hover:text-emerald-400 text-sm flex items-center justify-center mt-2 transition-colors duration-300"
-                >
-                  {t.painSection.statistics.noWorkoutTime.link} ↗️
-                </a>
+                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
+                  {language === 'hebrew' ? 'שינה טובה יותר' : 'Better Sleep'}
+                </h4>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'תזונה מאוזנת תורמת לאיכות שינה טובה יותר.'
+                    : 'Balanced nutrition contributes to better sleep quality.'}
+                </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Features Section */}
-        <section data-tour="features-section" className={`py-20 ${themeClasses.bgSecondary}`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>
-                {t.features.title}
-              </h3>
-              <p className={`text-xl ${themeClasses.textSecondary} max-w-3xl mx-auto`}>
-                {t.features.subtitle}
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {/* Feature 1 */}
-              <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-8 ${themeClasses.shadowHover} transition-shadow duration-300 hover:-translate-y-2`}>
-                <div className="text-center">
-                  <div className="text-6xl mb-6">🍎</div>
-                  <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.features.nutrition.title}</h4>
-                  <p className={`${themeClasses.textSecondary} leading-relaxed`}>
-                    {t.features.nutrition.description}
-                  </p>
-                </div>
-              </div>
-
-              {/* Feature 2 */}
-              <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-8 ${themeClasses.shadowHover} transition-shadow duration-300 hover:-translate-y-2`}>
-                <div className="text-center">
-                  <div className="text-6xl mb-6">💪</div>
-                  <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.features.fitness.title}</h4>
-                  <p className={`${themeClasses.textSecondary} leading-relaxed`}>
-                    {t.features.fitness.description}
-                  </p>
-                </div>
-              </div>
-
-              {/* Feature 3 */}
-              <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-8 ${themeClasses.shadowHover} transition-shadow duration-300 hover:-translate-y-2`}>
-                <div className="text-center">
-                  <div className="text-6xl mb-6">📊</div>
-                  <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.features.tracking.title}</h4>
-                  <p className={`${themeClasses.textSecondary} leading-relaxed`}>
-                    {t.features.tracking.description}
-                  </p>
-                </div>
-              </div>
-            </div>
+        {/* Closing Statement Section */}
+        <section className={`py-12 sm:py-16 md:py-20 ${isDarkMode ? 'bg-gradient-to-br from-gray-800 to-gray-900' : 'bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h3 className={`text-3xl sm:text-4xl md:text-5xl font-bold ${themeClasses.textPrimary} mb-4`}>
+              <span className={isDarkMode ? 'text-green-400' : 'text-green-600'}>
+                {language === 'hebrew' ? 'BetterChoice AI - תזונה פשוטה, בחירות טובות יותר.' : 'BetterChoice AI — Simple nutrition, Better Choices.'}
+              </span>
+            </h3>
           </div>
         </section>
 
-        {/* Athletes & Professionals Section */}
+        {/* How It Works Section */}
         <section className={`py-12 sm:py-16 md:py-20 ${themeClasses.sectionBg}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-8 sm:mb-12 md:mb-16">
-              <h3 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${themeClasses.textPrimary} mb-3 sm:mb-4`}>
-                {t.athletesSection.title}
+            <div className="text-center mb-12 sm:mb-16">
+              <h3 className={`text-3xl sm:text-4xl md:text-5xl font-bold ${themeClasses.textPrimary} mb-4`}>
+                <span className={isDarkMode ? 'text-green-400' : 'text-green-600'}>
+                  {language === 'hebrew' ? 'איך זה עובד' : 'How It Works'}
+                </span>
               </h3>
-              <p className={`text-base sm:text-lg md:text-xl ${themeClasses.textSecondary} max-w-3xl mx-auto px-2`}>
-                {t.athletesSection.subtitle}
+            </div>
+            
+            {/* Flow Layout */}
+            <div className="flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-8 mb-8">
+              {/* Step 1 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center`}>
+                <div className="text-sm font-bold text-green-600 mb-2">{language === 'hebrew' ? 'שלב 1' : 'Step 1'}</div>
+                <div className="text-4xl mb-4">💬</div>
+                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
+                  {language === 'hebrew' ? 'מדברים בוואטסאפ' : 'Talk on WhatsApp'}
+                </h4>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'שואלים מה לאכול עכשיו ומקבלים תשובה מיידית.'
+                    : 'Ask what to eat now and get an instant answer.'}
+                </p>
+              </div>
+              
+              {/* Arrow */}
+              <div className={`text-3xl ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} hidden md:block`}>
+                {language === 'hebrew' ? '←' : '→'}
+              </div>
+              
+              {/* Step 2 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center`}>
+                <div className="text-sm font-bold text-green-600 mb-2">{language === 'hebrew' ? 'שלב 2' : 'Step 2'}</div>
+                <div className="text-4xl mb-4">🎯</div>
+                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
+                  {language === 'hebrew' ? 'מקבלים המלצה עכשיו' : 'Get Recommendation Now'}
+                </h4>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'תשובה מותאמת לגוף, למטרות ולמצב הנוכחי.'
+                    : 'Answer tailored to your body, goals, and current situation.'}
+                </p>
+              </div>
+              
+              {/* Arrow */}
+              <div className={`text-3xl ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} hidden md:block`}>
+                {language === 'hebrew' ? '←' : '→'}
+              </div>
+              
+              {/* Step 3 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center`}>
+                <div className="text-sm font-bold text-green-600 mb-2">{language === 'hebrew' ? 'שלב 3' : 'Step 3'}</div>
+                <div className="text-4xl mb-4">🧠</div>
+                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
+                  {language === 'hebrew' ? 'המערכת לומדת אותך' : 'System Learns You'}
+                </h4>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'כל שיחה משפרת את ההבנה של הרגלים וצרכים.'
+                    : 'Every conversation improves understanding of habits and needs.'}
+                </p>
+              </div>
+              
+              {/* Arrow */}
+              <div className={`text-3xl ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} hidden md:block`}>
+                {language === 'hebrew' ? '←' : '→'}
+              </div>
+              
+              {/* Step 4 */}
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center`}>
+                <div className="text-sm font-bold text-green-600 mb-2">{language === 'hebrew' ? 'שלב 4' : 'Step 4'}</div>
+                <div className="text-4xl mb-4">🔄</div>
+                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
+                  {language === 'hebrew' ? 'התוכנית מתעדכנת אוטומטית' : 'Plan Updates Automatically'}
+                </h4>
+                <p className={themeClasses.textSecondary}>
+                  {language === 'hebrew'
+                    ? 'ההמלצות משתנות בהתאם להתקדמות ולשינויים.'
+                    : 'Recommendations change based on progress and changes.'}
+                </p>
+              </div>
+            </div>
+            
+            {/* Flow Summary */}
+            <div className="text-center mt-8">
+              <p className={`text-lg sm:text-xl ${themeClasses.textSecondary} max-w-3xl mx-auto`}>
+                {language === 'hebrew'
+                  ? 'מדברים בוואטסאפ → מקבלים המלצה עכשיו → המערכת לומדת אותך → התוכנית מתעדכנת אוטומטית'
+                  : 'Talk on WhatsApp → Get recommendation now → System learns you → Plan updates automatically'}
               </p>
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 mb-8 sm:mb-12 md:mb-16">
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="text-center mb-4">
-                  <div className="text-4xl mb-4">🔗</div>
-                  <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.athletesSection.features.advancedNutrition.title}</h4>
-                  <p className={`${themeClasses.textSecondary} mb-4`}>{t.athletesSection.features.advancedNutrition.description}</p>
-                  <div className={`text-2xl font-bold text-green-500`}>{t.athletesSection.features.advancedNutrition.metric}</div>
-                </div>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="text-center mb-4">
-                  <div className="text-4xl mb-4">📈</div>
-                  <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.athletesSection.features.performanceTracking.title}</h4>
-                  <p className={`${themeClasses.textSecondary} mb-4`}>{t.athletesSection.features.performanceTracking.description}</p>
-                  <div className={`text-2xl font-bold text-green-500`}>{t.athletesSection.features.performanceTracking.metric}</div>
-                </div>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="text-center mb-4">
-                  <div className="text-4xl mb-4">👥</div>
-                  <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.athletesSection.features.professionalSupport.title}</h4>
-                  <p className={`${themeClasses.textSecondary} mb-4`}>{t.athletesSection.features.professionalSupport.description}</p>
-                  <div className={`text-2xl font-bold text-green-500`}>{t.athletesSection.features.professionalSupport.metric}</div>
-                </div>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="text-center mb-4">
-                  <div className="text-4xl mb-4">🏆</div>
-                  <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.athletesSection.features.competitionPrograms.title}</h4>
-                  <p className={`${themeClasses.textSecondary} mb-4`}>{t.athletesSection.features.competitionPrograms.description}</p>
-                  <div className={`text-2xl font-bold text-green-500`}>{t.athletesSection.features.competitionPrograms.metric}</div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="text-center mb-16">
-              <h4 className={`text-3xl font-bold ${themeClasses.textPrimary} mb-8`}>{t.athletesSection.whyChooseUs.title}</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                  <div className="text-4xl mb-4">🧠</div>
-                  <h5 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.athletesSection.whyChooseUs.reasons.scientificKnowledge.title}</h5>
-                  <p className={themeClasses.textSecondary}>{t.athletesSection.whyChooseUs.reasons.scientificKnowledge.description}</p>
-                </div>
-                <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                  <div className="text-4xl mb-4">⚙️</div>
-                  <h5 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.athletesSection.whyChooseUs.reasons.fullPersonalization.title}</h5>
-                  <p className={themeClasses.textSecondary}>{t.athletesSection.whyChooseUs.reasons.fullPersonalization.description}</p>
-                </div>
-                <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                  <div className="text-4xl mb-4">💭</div>
-                  <h5 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.athletesSection.whyChooseUs.reasons.mentalSupport.title}</h5>
-                  <p className={themeClasses.textSecondary}>{t.athletesSection.whyChooseUs.reasons.mentalSupport.description}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="flex items-center mb-4">
-                  <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mr-4">
-                    <span className="text-white font-bold text-lg">{t.athletesSection.testimonials.david.name.charAt(0)}</span>
-                  </div>
-                  <div>
-                    <h5 className={`font-bold ${themeClasses.textPrimary}`}>{t.athletesSection.testimonials.david.name}</h5>
-                    <p className={`${themeClasses.textSecondary} text-sm`}>{t.athletesSection.testimonials.david.profession}</p>
-                  </div>
-                </div>
-                <p className={`${themeClasses.textSecondary} italic mb-4`}>
-                  "{t.athletesSection.testimonials.david.quote}"
-                </p>
-                <div className={`text-lg font-bold text-green-500`}>{t.athletesSection.testimonials.david.metric}</div>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="flex items-center mb-4">
-                  <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mr-4">
-                    <span className="text-white font-bold text-lg">{t.athletesSection.testimonials.sarah.name.charAt(0)}</span>
-                  </div>
-                  <div>
-                    <h5 className={`font-bold ${themeClasses.textPrimary}`}>{t.athletesSection.testimonials.sarah.name}</h5>
-                    <p className={`${themeClasses.textSecondary} text-sm`}>{t.athletesSection.testimonials.sarah.profession}</p>
-                  </div>
-                </div>
-                <p className={`${themeClasses.textSecondary} italic mb-4`}>
-                  "{t.athletesSection.testimonials.sarah.quote}"
-                </p>
-                <div className={`text-lg font-bold text-green-500`}>{t.athletesSection.testimonials.sarah.metric}</div>
-              </div>
-            </div>
-            
-            <div className="bg-gradient-to-r from-green-500 to-teal-600 rounded-xl p-8 text-white text-center relative">
-              <div className="absolute top-4 right-4 bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                {language === 'hebrew' ? 'בפיתוח' : 'In Development'}
-              </div>
-              <h4 className="text-3xl font-bold mb-4">{t.athletesSection.callToAction.title}</h4>
-              <p className="text-xl mb-6">{t.athletesSection.callToAction.subtitle}</p>
-              <button 
-                onClick={() => {
-                  alert(language === 'hebrew' ? 'תכנית הספורטאים נמצאת בפיתוח - בקרוב!' : 'Athlete Program is currently in development - coming soon!');
-                }}
-                className="bg-white text-green-600 px-8 py-4 rounded-full text-lg font-semibold hover:bg-gray-100 transition-colors duration-300 mb-4 opacity-75 cursor-not-allowed"
-              >
-                {t.athletesSection.callToAction.button}
-              </button>
-              <p className="text-sm opacity-80">{t.athletesSection.callToAction.details}</p>
-            </div>
           </div>
         </section>
 
-        {/* Services Section */}
-        <section className={`py-12 sm:py-16 md:py-20 ${themeClasses.sectionBg}`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-8 sm:mb-12 md:mb-16">
-              <h3 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${themeClasses.textPrimary} mb-3 sm:mb-4`}>{t.services.title}</h3>
-              <p className={`text-base sm:text-lg md:text-xl ${themeClasses.textSecondary} max-w-3xl mx-auto px-2`}>
-                {t.services.subtitle}
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8">
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300`}>
-                <div className="text-4xl mb-4">🥗</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.services.nutrition.title}</h4>
-                <p className={themeClasses.textSecondary}>{t.services.nutrition.description}</p>
-              </div>
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300`}>
-                <div className="text-4xl mb-4">🏃‍♂️</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.services.training.title}</h4>
-                <p className={themeClasses.textSecondary}>{t.services.training.description}</p>
-              </div>
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300`}>
-                <div className="text-4xl mb-4">🧘‍♀️</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.services.mental.title}</h4>
-                <p className={themeClasses.textSecondary}>{t.services.mental.description}</p>
-              </div>
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300`}>
-                <div className="text-4xl mb-4">📱</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.services.app.title}</h4>
-                <p className={themeClasses.textSecondary}>{t.services.app.description}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-
-        {/* About Section */}
-        <section className={`py-20 ${themeClasses.bgSecondary}`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-              <div>
-                <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-6`}>{t.about.title}</h3>
-                <p className={`text-lg ${themeClasses.textSecondary} mb-6 leading-relaxed`}>
-                  {t.about.description1}
-                </p>
-                <p className={`text-lg ${themeClasses.textSecondary} mb-8 leading-relaxed`}>
-                  {t.about.description2}
-                </p>
-                <div className="flex flex-wrap gap-4">
-                  {t.about.features.map((feature, index) => (
-                    <div key={index} className="flex items-center">
-                      <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-                      <span className={themeClasses.textPrimary}>{feature}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className={`${isDarkMode ? 'bg-gradient-to-br from-gray-700 to-gray-800' : 'bg-gradient-to-br from-indigo-100 to-purple-100'} rounded-2xl p-8`}>
-                <div className="text-center">
-                  <div className="text-6xl mb-6">🏆</div>
-                  <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.about.achievements.title}</h4>
-                  <div className="space-y-4">
-                    <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard}`}>
-                      <div className={`text-3xl font-bold ${isDarkMode ? 'text-emerald-400' : 'text-indigo-600'}`}>15,000+</div>
-                      <div className={themeClasses.textSecondary}>{t.about.achievements.clients}</div>
-                    </div>
-                    <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard}`}>
-                      <div className={`text-3xl font-bold ${isDarkMode ? 'text-emerald-400' : 'text-indigo-600'}`}>98%</div>
-                      <div className={themeClasses.textSecondary}>{t.about.achievements.success}</div>
-                    </div>
-                    <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard}`}>
-                      <div className={`text-3xl font-bold ${isDarkMode ? 'text-emerald-400' : 'text-indigo-600'}`}>5+</div>
-                      <div className={themeClasses.textSecondary}>{t.about.achievements.experience}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* Testimonials Section */}
         <section className={`py-20 ${themeClasses.sectionBg}`}>
@@ -664,7 +1249,7 @@ function HomePage() {
                 {language === 'hebrew' ? 'תוכניות המנוי שלנו' : 'Our Subscription Plans'}
               </h3>
               <p className={`text-xl ${themeClasses.textSecondary} mb-8`}>
-                {language === 'hebrew' ? 'בחר את התוכנית המתאימה לך' : 'Choose the plan that fits you best'}
+                {language === 'hebrew' ? 'אפשר לבחור את התוכנית המתאימה' : 'Choose the plan that fits you best'}
               </p>
               
               {/* Toggle Controls */}
@@ -769,7 +1354,7 @@ function HomePage() {
                     onClick={() => handlePlanSelect('basic')}
                     className={`w-full ${themeClasses.btnSecondary} py-3 rounded-lg font-semibold transition-colors duration-300`}
                   >
-                    {language === 'hebrew' ? 'בחר תוכנית' : 'Select Plan'}
+                    {language === 'hebrew' ? 'בחירת תוכנית' : 'Select Plan'}
                   </button>
                 </div>
               </div>
@@ -817,7 +1402,7 @@ function HomePage() {
                     onClick={() => handlePlanSelect('professional')}
                     className="w-full bg-white text-emerald-600 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors duration-300"
                   >
-                    {language === 'hebrew' ? 'בחר תוכנית' : 'Select Plan'}
+                    {language === 'hebrew' ? 'בחירת תוכנית' : 'Select Plan'}
                   </button>
                 </div>
               </div>
@@ -892,7 +1477,7 @@ function HomePage() {
                     onClick={() => handlePlanSelect('betterpro')}
                     className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-purple-700 transition-all duration-300 shadow-lg"
                   >
-                    {language === 'hebrew' ? 'בחר תוכנית' : 'Select Plan'}
+                    {language === 'hebrew' ? 'בחירת תוכנית' : 'Select Plan'}
                   </button>
                 </div>
               </div>
@@ -911,307 +1496,38 @@ function HomePage() {
 
 
         {/* Stats Section */}
-        <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-r from-emerald-600 to-teal-600">
+        <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 text-center">
               <div className="text-white">
                 <div className="text-3xl sm:text-4xl md:text-5xl font-bold mb-1 sm:mb-2">15K+</div>
-                <div className="text-sm sm:text-base md:text-xl opacity-90">{t.stats.users}</div>
+                <div className="text-sm sm:text-base md:text-xl opacity-90">
+                  {language === 'hebrew' ? 'משתמשים מרוצים' : 'Satisfied Users'}
+                </div>
               </div>
               <div className="text-white">
                 <div className="text-3xl sm:text-4xl md:text-5xl font-bold mb-1 sm:mb-2">98%</div>
-                <div className="text-sm sm:text-base md:text-xl opacity-90">{t.stats.success}</div>
+                <div className="text-sm sm:text-base md:text-xl opacity-90">
+                  {language === 'hebrew' ? 'שיעור הצלחה' : 'Success Rate'}
+                </div>
               </div>
               <div className="text-white">
                 <div className="text-3xl sm:text-4xl md:text-5xl font-bold mb-1 sm:mb-2">24/7</div>
-                <div className="text-sm sm:text-base md:text-xl opacity-90">{t.stats.support}</div>
+                <div className="text-sm sm:text-base md:text-xl opacity-90">
+                  {language === 'hebrew' ? 'תמיכה זמינה' : 'Available Support'}
+                </div>
               </div>
               <div className="text-white">
                 <div className="text-3xl sm:text-4xl md:text-5xl font-bold mb-1 sm:mb-2">50+</div>
-                <div className="text-sm sm:text-base md:text-xl opacity-90">{t.stats.experts}</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Learning Library Section */}
-        <section className={`py-20 ${themeClasses.bgPrimary}`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.learning.title}</h3>
-              <p className={`text-xl ${themeClasses.textSecondary}`}>{t.learning.subtitle}</p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300 relative`}>
-                <div className="absolute top-4 right-4 bg-orange-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                  {language === 'hebrew' ? 'בקרוב' : 'Soon'}
-                </div>
-                <div className="text-4xl mb-4">📚</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.learning.nutrition.title}</h4>
-                <p className={`${themeClasses.textSecondary} mb-4`}>{t.learning.nutrition.description}</p>
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm ${themeClasses.textMuted}`}>{t.learning.nutrition.lessons}</span>
-                  <button 
-                    onClick={() => {
-                      alert(language === 'hebrew' ? 'שיעורי התזונה יגיעו בקרוב!' : 'Nutrition lessons coming soon!');
-                    }}
-                    className="bg-gray-400 text-white px-4 py-2 rounded-lg text-sm transition-colors duration-300 opacity-75 cursor-not-allowed"
-                  >
-                    {language === 'hebrew' ? 'בקרוב' : 'Coming Soon'}
-                  </button>
-                </div>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300 relative`}>
-                <div className="absolute top-4 right-4 bg-orange-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                  {language === 'hebrew' ? 'בקרוב' : 'Soon'}
-                </div>
-                <div className="text-4xl mb-4">🏃‍♀️</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.learning.fitness.title}</h4>
-                <p className={`${themeClasses.textSecondary} mb-4`}>{t.learning.fitness.description}</p>
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm ${themeClasses.textMuted}`}>{t.learning.fitness.lessons}</span>
-                  <button 
-                    onClick={() => {
-                      alert(language === 'hebrew' ? 'שיעורי הכושר יגיעו בקרוב!' : 'Fitness lessons coming soon!');
-                    }}
-                    className="bg-gray-400 text-white px-4 py-2 rounded-lg text-sm transition-colors duration-300 opacity-75 cursor-not-allowed"
-                  >
-                    {language === 'hebrew' ? 'בקרוב' : 'Coming Soon'}
-                  </button>
-                </div>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300 relative`}>
-                <div className="absolute top-4 right-4 bg-orange-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                  {language === 'hebrew' ? 'בקרוב' : 'Soon'}
-                </div>
-                <div className="text-4xl mb-4">🧠</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.learning.mental.title}</h4>
-                <p className={`${themeClasses.textSecondary} mb-4`}>{t.learning.mental.description}</p>
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm ${themeClasses.textMuted}`}>{t.learning.mental.lessons}</span>
-                  <button 
-                    onClick={() => {
-                      alert(language === 'hebrew' ? 'שיעורי הבריאות הנפשית יגיעו בקרוב!' : 'Mental health lessons coming soon!');
-                    }}
-                    className="bg-gray-400 text-white px-4 py-2 rounded-lg text-sm transition-colors duration-300 opacity-75 cursor-not-allowed"
-                  >
-                    {language === 'hebrew' ? 'בקרוב' : 'Coming Soon'}
-                  </button>
+                <div className="text-sm sm:text-base md:text-xl opacity-90">
+                  {language === 'hebrew' ? 'דיאטנים קליניים' : 'Clinical Dietitians'}
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Discussion Center Section */}
-        <section className={`py-20 ${themeClasses.bgSecondary}`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.discussion.title}</h3>
-              <p className={`text-xl ${themeClasses.textSecondary}`}>{t.discussion.subtitle}</p>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className={`${themeClasses.bgCard} rounded-xl p-6`}>
-                <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.discussion.forums.title}</h4>
-                <div className="space-y-4">
-                  <div className={`${themeClasses.bgSecondary} rounded-lg p-4 ${themeClasses.shadowCard}`}>
-                    <h5 className={`font-semibold ${themeClasses.textPrimary}`}>{t.discussion.forums.nutrition.title}</h5>
-                    <p className={`${themeClasses.textSecondary} text-sm`}>{t.discussion.forums.nutrition.stats}</p>
-                  </div>
-                  <div className={`${themeClasses.bgSecondary} rounded-lg p-4 ${themeClasses.shadowCard}`}>
-                    <h5 className={`font-semibold ${themeClasses.textPrimary}`}>{t.discussion.forums.fitness.title}</h5>
-                    <p className={`${themeClasses.textSecondary} text-sm`}>{t.discussion.forums.fitness.stats}</p>
-                  </div>
-                  <div className={`${themeClasses.bgSecondary} rounded-lg p-4 ${themeClasses.shadowCard}`}>
-                    <h5 className={`font-semibold ${themeClasses.textPrimary}`}>{t.discussion.forums.mental.title}</h5>
-                    <p className={`${themeClasses.textSecondary} text-sm`}>{t.discussion.forums.mental.stats}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className={`${isDarkMode ? 'bg-gradient-to-br from-gray-700 to-gray-800' : 'bg-gradient-to-br from-indigo-50 to-purple-50'} rounded-xl p-6`}>
-                <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.discussion.recent.title}</h4>
-                <div className="space-y-4">
-                  <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard}`}>
-                    <div className="flex items-center mb-2">
-                      <div className={`w-8 h-8 ${isDarkMode ? 'bg-gray-700' : 'bg-indigo-100'} rounded-full flex items-center justify-center mr-3`}>
-                        <span className={`${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} font-bold text-sm`}>{t.discussion.recent.sarah.name.charAt(0)}</span>
-                      </div>
-                      <div>
-                        <div className={`font-semibold ${themeClasses.textPrimary} text-sm`}>{t.discussion.recent.sarah.name}</div>
-                        <div className={`${themeClasses.textMuted} text-xs`}>{t.discussion.recent.sarah.time}</div>
-                      </div>
-                    </div>
-                    <p className={`${themeClasses.textSecondary} text-sm`}>"{t.discussion.recent.sarah.message}"</p>
-                  </div>
-                  <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard}`}>
-                    <div className="flex items-center mb-2">
-                      <div className={`w-8 h-8 ${isDarkMode ? 'bg-gray-700' : 'bg-indigo-100'} rounded-full flex items-center justify-center mr-3`}>
-                        <span className={`${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} font-bold text-sm`}>{t.discussion.recent.michael.name.charAt(0)}</span>
-                      </div>
-                      <div>
-                        <div className={`font-semibold ${themeClasses.textPrimary} text-sm`}>{t.discussion.recent.michael.name}</div>
-                        <div className={`${themeClasses.textMuted} text-xs`}>{t.discussion.recent.michael.time}</div>
-                      </div>
-                    </div>
-                    <p className={`${themeClasses.textSecondary} text-sm`}>"{t.discussion.recent.michael.message}"</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        {/* Action Plan Board Section */}
-        <section className={`py-20 ${themeClasses.sectionBg}`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.actionPlan.title}</h3>
-              <p className={`text-xl ${themeClasses.textSecondary}`}>{t.actionPlan.subtitle}</p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="text-center mb-6">
-                  <div className={`w-16 h-16 ${isDarkMode ? 'bg-red-900' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4`}>
-                    <span className="text-red-600 text-2xl">🎯</span>
-                  </div>
-                  <h4 className={`text-xl font-bold ${themeClasses.textPrimary}`}>{t.actionPlan.weekly.title}</h4>
-                </div>
-                <div className="space-y-3">
-                  {t.actionPlan.weekly.goals.map((goal, index) => (
-                    <div key={index} className={`flex items-center justify-between p-3 ${themeClasses.bgSecondary} rounded-lg`}>
-                      <span className={themeClasses.textSecondary}>{goal}</span>
-                      <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="text-center mb-6">
-                  <div className={`w-16 h-16 ${isDarkMode ? 'bg-blue-900' : 'bg-blue-100'} rounded-full flex items-center justify-center mx-auto mb-4`}>
-                    <span className="text-blue-600 text-2xl">📅</span>
-                  </div>
-                  <h4 className={`text-xl font-bold ${themeClasses.textPrimary}`}>{t.actionPlan.monthly.title}</h4>
-                </div>
-                <div className="space-y-3">
-                  <div className={`p-3 ${isDarkMode ? 'bg-blue-900' : 'bg-blue-50'} rounded-lg`}>
-                    <div className={`font-semibold ${themeClasses.textPrimary} text-sm`}>{t.actionPlan.monthly.week1.period}</div>
-                    <div className={`${themeClasses.textSecondary} text-sm`}>{t.actionPlan.monthly.week1.task}</div>
-                  </div>
-                  <div className={`p-3 ${isDarkMode ? 'bg-blue-900' : 'bg-blue-50'} rounded-lg`}>
-                    <div className={`font-semibold ${themeClasses.textPrimary} text-sm`}>{t.actionPlan.monthly.week3.period}</div>
-                    <div className={`${themeClasses.textSecondary} text-sm`}>{t.actionPlan.monthly.week3.task}</div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6`}>
-                <div className="text-center mb-6">
-                  <div className={`w-16 h-16 ${isDarkMode ? 'bg-green-900' : 'bg-green-100'} rounded-full flex items-center justify-center mx-auto mb-4`}>
-                    <span className="text-green-600 text-2xl">📊</span>
-                  </div>
-                  <h4 className={`text-xl font-bold ${themeClasses.textPrimary}`}>{t.actionPlan.progress.title}</h4>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className={themeClasses.textSecondary}>{t.actionPlan.progress.weight}</span>
-                    <span className="font-bold text-green-600">-3 ק"ג</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className={themeClasses.textSecondary}>{t.actionPlan.progress.workouts}</span>
-                    <span className="font-bold text-blue-600">12/15</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className={themeClasses.textSecondary}>{t.actionPlan.progress.water}</span>
-                    <span className="font-bold text-indigo-600">85%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Private Messages Section */}
-        <section className={`py-20 ${themeClasses.bgSecondary}`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.messages.title}</h3>
-              <p className={`text-xl ${themeClasses.textSecondary}`}>{t.messages.subtitle}</p>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className={`${isDarkMode ? 'bg-gradient-to-br from-gray-700 to-gray-800' : 'bg-gradient-to-br from-indigo-50 to-purple-50'} rounded-xl p-8`}>
-                <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-6`}>{t.messages.guides.title}</h4>
-                <div className="space-y-4">
-                  <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard} flex items-center`}>
-                    <div className={`w-12 h-12 ${isDarkMode ? 'bg-gray-700' : 'bg-indigo-100'} rounded-full flex items-center justify-center mr-4`}>
-                      <span className={`${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} font-bold`}>{t.messages.guides.ronit.name.charAt(0)}</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className={`font-semibold ${themeClasses.textPrimary}`}>{t.messages.guides.ronit.name}</div>
-                      <div className={`${themeClasses.textSecondary} text-sm`}>{t.messages.guides.ronit.specialty}</div>
-                    </div>
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  </div>
-                  <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard} flex items-center`}>
-                    <div className={`w-12 h-12 ${isDarkMode ? 'bg-gray-700' : 'bg-indigo-100'} rounded-full flex items-center justify-center mr-4`}>
-                      <span className={`${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} font-bold`}>{t.messages.guides.alon.name.charAt(0)}</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className={`font-semibold ${themeClasses.textPrimary}`}>{t.messages.guides.alon.name}</div>
-                      <div className={`${themeClasses.textSecondary} text-sm`}>{t.messages.guides.alon.specialty}</div>
-                    </div>
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  </div>
-                  <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard} flex items-center`}>
-                    <div className={`w-12 h-12 ${isDarkMode ? 'bg-gray-700' : 'bg-indigo-100'} rounded-full flex items-center justify-center mr-4`}>
-                      <span className={`${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} font-bold`}>{t.messages.guides.yael.name.charAt(0)}</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className={`font-semibold ${themeClasses.textPrimary}`}>{t.messages.guides.yael.name}</div>
-                      <div className={`${themeClasses.textSecondary} text-sm`}>{t.messages.guides.yael.specialty}</div>
-                    </div>
-                    <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-8`}>
-                <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-6`}>{t.messages.recentMessages.title}</h4>
-                <div className="space-y-4">
-                  <div className="border-l-4 border-indigo-500 pl-4">
-                    <div className={`font-semibold ${themeClasses.textPrimary}`}>{t.messages.recentMessages.ronit.name}</div>
-                    <div className={`${themeClasses.textMuted} text-sm mb-2`}>{t.messages.recentMessages.ronit.time}</div>
-                    <p className={themeClasses.textSecondary}>"{t.messages.recentMessages.ronit.message}"</p>
-                  </div>
-                  <div className="border-l-4 border-blue-500 pl-4">
-                    <div className={`font-semibold ${themeClasses.textPrimary}`}>{t.messages.recentMessages.alon.name}</div>
-                    <div className={`${themeClasses.textMuted} text-sm mb-2`}>{t.messages.recentMessages.alon.time}</div>
-                    <p className={themeClasses.textSecondary}>"{t.messages.recentMessages.alon.message}"</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => {
-                    alert(language === 'hebrew' ? 
-                      'לשליחת הודעה, אנא פנה לבוט שלנו בווטסאפ!' : 
-                      'To send a message, please contact our WhatsApp bot!'
-                    );
-                  }}
-                  className={`w-full mt-6 bg-gradient-to-r from-green-500 to-teal-600 text-white py-3 rounded-lg font-semibold transition-colors duration-300 hover:from-green-600 hover:to-teal-700 flex items-center justify-center`}
-                >
-                  <span className="mr-2">📱</span>
-                  {language === 'hebrew' ? 'שלח הודעה בווטסאפ' : 'Send Message via WhatsApp'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* Celebrations Section */}
         <section className={`py-20 ${isDarkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900' : 'bg-gradient-to-r from-yellow-50 to-orange-50'}`}>
@@ -1308,53 +1624,6 @@ function HomePage() {
           </div>
         </section>
 
-        {/* Resources Section */}
-        <section className={`py-20 ${themeClasses.sectionBg}`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.resources.title}</h3>
-              <p className={`text-xl ${themeClasses.textSecondary}`}>{t.resources.subtitle}</p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300`}>
-                <div className="text-4xl mb-4">📋</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.resources.worksheets.title}</h4>
-                <p className={`${themeClasses.textSecondary} mb-4`}>{t.resources.worksheets.description}</p>
-                <button className={`w-full ${themeClasses.btnPrimary} text-white py-2 rounded-lg font-semibold transition-colors duration-300`}>
-                  {t.buttons.download}
-                </button>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300`}>
-                <div className="text-4xl mb-4">🔗</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.resources.links.title}</h4>
-                <p className={`${themeClasses.textSecondary} mb-4`}>{t.resources.links.description}</p>
-                <button className={`w-full ${themeClasses.btnPrimary} text-white py-2 rounded-lg font-semibold transition-colors duration-300`}>
-                  {t.buttons.viewLinks}
-                </button>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300`}>
-                <div className="text-4xl mb-4">📱</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.resources.apps.title}</h4>
-                <p className={`${themeClasses.textSecondary} mb-4`}>{t.resources.apps.description}</p>
-                <button className={`w-full ${themeClasses.btnPrimary} text-white py-2 rounded-lg font-semibold transition-colors duration-300`}>
-                  {t.buttons.discoverApps}
-                </button>
-              </div>
-              
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 ${themeClasses.shadowHover} transition-shadow duration-300`}>
-                <div className="text-4xl mb-4">📖</div>
-                <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{t.resources.books.title}</h4>
-                <p className={`${themeClasses.textSecondary} mb-4`}>{t.resources.books.description}</p>
-                <button className={`w-full ${themeClasses.btnPrimary} text-white py-2 rounded-lg font-semibold transition-colors duration-300`}>
-                  {t.buttons.browseBooks}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* Professional Platform Section */}
         <section className={`py-20 ${themeClasses.sectionBg}`}>
@@ -1442,25 +1711,6 @@ function HomePage() {
               </div>
             </div>
             
-            <div className="text-center mb-8">
-              <h4 className={`text-3xl font-bold ${themeClasses.textPrimary} mb-4`}>
-                {t.professionalPlatform.callToAction.question}
-              </h4>
-              <h5 className={`text-3xl font-bold text-blue-400 mb-8`}>
-                {t.professionalPlatform.callToAction.highlightedQuestion}
-              </h5>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button className={`${themeClasses.btnPrimary} text-white px-8 py-4 rounded-full text-lg font-semibold transform hover:-translate-y-1 transition-all duration-300 ${themeClasses.shadowCard} ${themeClasses.shadowHover} flex items-center justify-center`}>
-                  <span className="mr-2">←</span>
-                  {t.professionalPlatform.callToAction.buttons.requestDemo}
-                </button>
-                <button className={`border-2 border-blue-500 ${isDarkMode ? 'text-blue-400 hover:bg-blue-500 hover:text-white' : 'text-blue-500 hover:bg-blue-500 hover:text-white'} px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 flex items-center justify-center`}>
-                  <span className="mr-2">🎯</span>
-                  {t.professionalPlatform.callToAction.buttons.contactUs}
-                </button>
-              </div>
-            </div>
-            
             <div className="text-center">
               <p className={`${themeClasses.textSecondary} text-sm`}>{t.professionalPlatform.footer}</p>
             </div>
@@ -1468,7 +1718,7 @@ function HomePage() {
         </section>
 
         {/* Contact Section */}
-        <section className={`py-12 sm:py-16 md:py-20 ${themeClasses.bgSecondary}`}>
+        <section id="contact-section" className={`py-12 sm:py-16 md:py-20 ${themeClasses.bgSecondary}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-8 sm:mb-12 md:mb-16">
               <h3 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${themeClasses.textPrimary} mb-3 sm:mb-4`}>{t.contact.title}</h3>
@@ -1528,7 +1778,7 @@ function HomePage() {
                     className={`w-full ${isSubmittingContact ? 'bg-gray-400 cursor-not-allowed' : themeClasses.btnPrimary} text-white py-3 rounded-lg font-semibold transition-all duration-300`}
                   >
                     {isSubmittingContact ? 
-                      (language === 'hebrew' ? 'שולח...' : 'Sending...') : 
+                      (language === 'hebrew' ? 'שליחה...' : 'Sending...') : 
                       t.buttons.sendMessage
                     }
                   </button>

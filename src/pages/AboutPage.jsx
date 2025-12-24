@@ -58,6 +58,85 @@ const AboutPage = () => {
           </div>
         </div>
 
+        {/* About BetterChoice AI Section */}
+        <div className={`py-20 ${isDarkMode ? 'bg-gradient-to-br from-gray-800 to-gray-900' : 'bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+              <div>
+                <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-6`}>
+                  <span className={isDarkMode ? 'text-green-400' : 'text-green-600'}>
+                    {language === 'hebrew' ? 'אודות BetterChoice AI' : 'About BetterChoice AI'}
+                  </span>
+                </h3>
+                <p className={`text-lg ${themeClasses.textSecondary} mb-6 leading-relaxed`}>
+                  {language === 'hebrew'
+                    ? 'BetterChoice AI הוא פתרון תזונה מהפכני המשלב בינה מלאכותית מתקדמת עם מומחיות של דיאטנים קליניים מורשים. אנו מספקים הנחיה תזונתית מותאמת אישית, מבוססת נתונים ומדע, המסייעת לך לשפר את רמות האנרגיה, הריכוז והבריאות הכללית.'
+                    : 'BetterChoice AI is a revolutionary nutrition solution that combines advanced artificial intelligence with the expertise of licensed clinical dietitians. We provide hyper-personalized, data-driven, and science-backed nutrition guidance that helps you improve energy levels, focus, and overall health.'}
+                </p>
+                <p className={`text-lg ${themeClasses.textSecondary} mb-8 leading-relaxed`}>
+                  {language === 'hebrew'
+                    ? 'הטכנולוגיה שלנו משתמשת ב-Spatial AI, Digital Health Twin ומדע תזונה משולב כדי ליצור תוכניות מציאותיות המתאימות לאורח החיים שלך, תוך הבטחת בטיחות ופיקוח קליני מתמיד.'
+                    : 'Our technology uses Spatial AI, Digital Health Twin, and integrated nutrition science to create realistic plans that fit your actual lifestyle, while ensuring safety and continuous clinical supervision.'}
+                </p>
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                    <span className={themeClasses.textPrimary}>
+                      {language === 'hebrew' ? 'בינה מלאכותית מתקדמת' : 'Advanced AI Technology'}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                    <span className={themeClasses.textPrimary}>
+                      {language === 'hebrew' ? 'דיאטנים קליניים מורשים' : 'Licensed Clinical Dietitians'}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                    <span className={themeClasses.textPrimary}>
+                      {language === 'hebrew' ? 'תמיכה 24/7' : '24/7 Support'}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                    <span className={themeClasses.textPrimary}>
+                      {language === 'hebrew' ? 'פיקוח קליני' : 'Clinical Supervision'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className={`${isDarkMode ? 'bg-gradient-to-br from-gray-700 to-gray-800' : 'bg-gradient-to-br from-green-100 to-emerald-100'} rounded-2xl p-8 border-2 ${isDarkMode ? 'border-green-800' : 'border-green-200'}`}>
+                <div className="text-center">
+                  <div className="text-6xl mb-6">🏆</div>
+                  <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>
+                    {language === 'hebrew' ? 'הישגים' : 'Achievements'}
+                  </h4>
+                  <div className="space-y-4">
+                    <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard}`}>
+                      <div className={`text-3xl font-bold ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>15,000+</div>
+                      <div className={themeClasses.textSecondary}>
+                        {language === 'hebrew' ? 'משתמשים מרוצים' : 'Satisfied Users'}
+                      </div>
+                    </div>
+                    <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard}`}>
+                      <div className={`text-3xl font-bold ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>98%</div>
+                      <div className={themeClasses.textSecondary}>
+                        {language === 'hebrew' ? 'שיעור הצלחה' : 'Success Rate'}
+                      </div>
+                    </div>
+                    <div className={`${themeClasses.bgCard} rounded-lg p-4 ${themeClasses.shadowCard}`}>
+                      <div className={`text-3xl font-bold ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>50+</div>
+                      <div className={themeClasses.textSecondary}>
+                        {language === 'hebrew' ? 'דיאטנים קליניים' : 'Clinical Dietitians'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Mission & Vision Section */}
         <div className="py-12 sm:py-16 md:py-20 bg-slate-900">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
