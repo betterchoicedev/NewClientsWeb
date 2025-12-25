@@ -350,7 +350,7 @@ export const generateUniqueUserCode = async () => {
 };
 
 // Create client record in clients table and chat_users table
-export const createClientRecord = async (userId, userData) => {
+export const createClientRecord = async (userId, userData, providerId = null) => {
   try {
     // Generate unique user code
     const userCode = await generateUniqueUserCode();
@@ -387,28 +387,37 @@ export const createClientRecord = async (userId, userData) => {
       let chatUserDataResult = null;
       if (supabaseSecondary && data && data[0]) {
         try {
-          // Find the default "better choice" company manager
-          let defaultProviderId = null;
-          try {
-            // Use the "better choice" company ID directly
-            const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
-            
-            // Find the first company_manager for this company
-            const { data: managerData, error: managerError } = await supabaseSecondary
-              .from('profiles')
-              .select('id')
-              .eq('company_id', betterChoiceCompanyId)
-              .eq('role', 'company_manager')
-              .order('created_at', { ascending: true })
-              .limit(1)
-              .single();
+          // Use provided provider_id from referral link, or find the default "better choice" company manager
+          let finalProviderId = providerId || null;
+          
+          if (!finalProviderId) {
+            console.log('No referral provider_id found, using default BetterChoice company manager');
+            try {
+              // Use the "better choice" company ID directly
+              const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
+              
+              // Find the first company_manager for this company
+              const { data: managerData, error: managerError } = await supabaseSecondary
+                .from('profiles')
+                .select('id')
+                .eq('company_id', betterChoiceCompanyId)
+                .eq('role', 'company_manager')
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .single();
 
-            if (!managerError && managerData) {
-              defaultProviderId = managerData.id;
+              if (!managerError && managerData) {
+                finalProviderId = managerData.id;
+                console.log('Using default BetterChoice company manager:', finalProviderId);
+              } else {
+                console.warn('Could not find default BetterChoice company manager');
+              }
+            } catch (providerError) {
+              console.error('Error finding default provider:', providerError);
+              // Continue without provider_id if we can't find it
             }
-          } catch (providerError) {
-            console.error('Error finding default provider:', providerError);
-            // Continue without provider_id if we can't find it
+          } else {
+            console.log('Using referral provider_id:', finalProviderId);
           }
 
           const chatUserData = {
@@ -418,7 +427,7 @@ export const createClientRecord = async (userId, userData) => {
             phone_number: normalizedPhone,
             whatsapp_number: normalizedPhone, // Also set whatsapp_number for WhatsApp registrations
             platform: userData.platform || 'whatsapp',
-            provider_id: defaultProviderId, // Set to default company manager
+            provider_id: finalProviderId, // Use referral provider_id or default company manager
             activated: true, // Set activated to true
             is_verified: false,
             language: 'en',
@@ -480,28 +489,37 @@ export const createClientRecord = async (userId, userData) => {
     let chatUserDataResult = null;
     if (supabaseSecondary && data && data[0]) {
       try {
-        // Find the default "better choice" company manager
-        let defaultProviderId = null;
-        try {
-          // Use the "better choice" company ID directly
-          const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
-          
-          // Find the first company_manager for this company
-          const { data: managerData, error: managerError } = await supabaseSecondary
-            .from('profiles')
-            .select('id')
-            .eq('company_id', betterChoiceCompanyId)
-            .eq('role', 'company_manager')
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .single();
+        // Use provided provider_id from referral link, or find the default "better choice" company manager
+        let finalProviderId = providerId || null;
+        
+        if (!finalProviderId) {
+          console.log('No referral provider_id found, using default BetterChoice company manager');
+          try {
+            // Use the "better choice" company ID directly
+            const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
+            
+            // Find the first company_manager for this company
+            const { data: managerData, error: managerError } = await supabaseSecondary
+              .from('profiles')
+              .select('id')
+              .eq('company_id', betterChoiceCompanyId)
+              .eq('role', 'company_manager')
+              .order('created_at', { ascending: true })
+              .limit(1)
+              .single();
 
-          if (!managerError && managerData) {
-            defaultProviderId = managerData.id;
+            if (!managerError && managerData) {
+              finalProviderId = managerData.id;
+              console.log('Using default BetterChoice company manager:', finalProviderId);
+            } else {
+              console.warn('Could not find default BetterChoice company manager');
+            }
+          } catch (providerError) {
+            console.error('Error finding default provider:', providerError);
+            // Continue without provider_id if we can't find it
           }
-        } catch (providerError) {
-          console.error('Error finding default provider:', providerError);
-          // Continue without provider_id if we can't find it
+        } else {
+          console.log('Using referral provider_id:', finalProviderId);
         }
 
         const chatUserData = {
@@ -511,7 +529,7 @@ export const createClientRecord = async (userId, userData) => {
           phone_number: normalizedPhone,
           whatsapp_number: normalizedPhone, // Also set whatsapp_number for WhatsApp registrations
           platform: userData.platform || 'whatsapp',
-          provider_id: defaultProviderId, // Set to default company manager
+          provider_id: finalProviderId, // Use referral provider_id or default company manager
           activated: true, // Set activated to true
           is_verified: false,
           language: 'en',

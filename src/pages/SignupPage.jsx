@@ -21,6 +21,40 @@ function SignupPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [socialLoading, setSocialLoading] = useState(false);
+  const [dietitianId, setDietitianId] = useState(null);
+
+  // Function to get dietitian ID from URL hash
+  const getDietitianIdFromHash = () => {
+    try {
+      // Get the hash fragment (e.g., "#d=YWJjZGVmZ2hpams=")
+      const hash = window.location.hash;
+      
+      // Extract the 'd' parameter value using regex
+      const match = hash.match(/[#&]d=([^&]*)/);
+      
+      if (match && match[1]) {
+        // Decode from Base64 to get the original dietitian ID (UUID)
+        const decodedId = atob(match[1]);
+        return decodedId;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error extracting dietitian ID from hash:', error);
+      return null;
+    }
+  };
+
+  // Extract dietitian ID from URL hash on component mount
+  useEffect(() => {
+    const id = getDietitianIdFromHash();
+    if (id) {
+      setDietitianId(id);
+      // Also store in sessionStorage as backup
+      sessionStorage.setItem('referral_dietitian_id', id);
+      console.log('Dietitian ID extracted from referral link:', id);
+    }
+  }, []);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -41,6 +75,12 @@ function SignupPage() {
     setSocialLoading(true);
     setError('');
     try {
+      // Store dietitian ID before OAuth redirect (hash will be lost during redirect)
+      const id = dietitianId || getDietitianIdFromHash();
+      if (id) {
+        sessionStorage.setItem('referral_dietitian_id', id);
+        console.log('Stored dietitian ID for OAuth signup:', id);
+      }
       const { error } = await signInWithGoogle();
       if (error) {
         setError(language === 'hebrew' 
@@ -62,6 +102,12 @@ function SignupPage() {
     setSocialLoading(true);
     setError('');
     try {
+      // Store dietitian ID before OAuth redirect (hash will be lost during redirect)
+      const id = dietitianId || getDietitianIdFromHash();
+      if (id) {
+        sessionStorage.setItem('referral_dietitian_id', id);
+        console.log('Stored dietitian ID for OAuth signup:', id);
+      }
       const { error } = await signInWithFacebook();
       if (error) {
         setError(language === 'hebrew' 
@@ -129,7 +175,16 @@ function SignupPage() {
         if (data?.user?.id) {
           try {
             console.log('Attempting to create client record...');
-            const clientResult = await createClientRecord(data.user.id, userData);
+            // Get dietitian ID from state or sessionStorage
+            const referralDietitianId = dietitianId || sessionStorage.getItem('referral_dietitian_id');
+            // Ensure we pass null (not empty string) if no referral ID exists
+            const providerId = referralDietitianId && referralDietitianId.trim() !== '' ? referralDietitianId : null;
+            if (providerId) {
+              console.log('Using referral dietitian ID:', providerId);
+            } else {
+              console.log('No referral link detected, will use default BetterChoice company manager');
+            }
+            const clientResult = await createClientRecord(data.user.id, userData, providerId);
             if (clientResult.error) {
               console.error('Client record creation failed:', clientResult.error);
               setError(
@@ -140,6 +195,11 @@ function SignupPage() {
               return;
             }
             console.log('Client record created successfully');
+            // Clear stored dietitian ID after successful creation
+            if (referralDietitianId) {
+              sessionStorage.removeItem('referral_dietitian_id');
+              setDietitianId(null);
+            }
           } catch (clientError) {
             console.error('Failed to create client record:', clientError);
             setError(

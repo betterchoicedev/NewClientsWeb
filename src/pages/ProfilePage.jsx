@@ -127,7 +127,8 @@ const ProfilePage = () => {
     city: '',
     timezone: '',
     userLanguage: '',
-    companyId: ''
+    companyId: '',
+    profileImageUrl: ''
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
@@ -194,7 +195,7 @@ const ProfilePage = () => {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('user_code, onboarding_completed, phone, user_language, city, birth_date, age, gender, current_weight, target_weight, height, food_allergies, dietary_preferences, food_limitations, activity_level, goal, client_preference, region, medical_conditions')
+        .select('user_code, onboarding_completed, phone, user_language, city, birth_date, age, gender, current_weight, target_weight, height, food_allergies, dietary_preferences, food_limitations, activity_level, goal, client_preference, region, medical_conditions, profile_image_url')
         .eq('user_id', user.id)
         .single();
 
@@ -308,7 +309,7 @@ const ProfilePage = () => {
       // First, load from clients table (primary database) to get user_code
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select('*, profile_image_url')
         .eq('user_id', user.id)
         .single();
       
@@ -390,7 +391,8 @@ const ProfilePage = () => {
           city: (chatUserData?.city || data?.city) || '',
           timezone: (chatUserData?.timezone || data?.timezone) || '',
           userLanguage: (chatUserData?.language || data?.user_language) || '',
-          companyId: prev.companyId || ''
+          companyId: prev.companyId || '',
+          profileImageUrl: data?.profile_image_url || ''
         }));
 
         // Sync web language immediately after loading profile
@@ -485,6 +487,7 @@ const ProfilePage = () => {
         city: profileData.city?.trim() || null,
         timezone: profileData.timezone || null,
         user_language: profileData.userLanguage || null,
+        profile_image_url: profileData.profileImageUrl || null,
         updated_at: new Date().toISOString()
       };
 
@@ -523,6 +526,7 @@ const ProfilePage = () => {
             city: dataToSave.city,
             timezone: dataToSave.timezone,
             user_language: dataToSave.user_language,
+            profile_image_url: dataToSave.profile_image_url || null,
             updated_at: dataToSave.updated_at
           })
           .eq('user_id', user.id)
@@ -687,6 +691,56 @@ const ProfilePage = () => {
 
   const handleSave = () => {
     saveProfileData();
+  };
+
+  // Function to save only the profile image URL (called after image upload)
+  const saveProfileImageUrl = async (imageUrl) => {
+    try {
+      // Check if a record exists for this user
+      const { data: existingData, error: checkError } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (checkError && checkError.code === 'PGRST116') {
+        // No existing record, we need to create one with minimal data
+        // But we should still save the image URL - create with just user_id and profile_image_url
+        const { error: insertError } = await supabase
+          .from('clients')
+          .insert({
+            user_id: user.id,
+            profile_image_url: imageUrl,
+            updated_at: new Date().toISOString()
+          });
+
+        if (insertError) {
+          console.error('Error saving profile image URL:', insertError);
+          return { error: insertError };
+        }
+      } else if (existingData) {
+        // Record exists, update just the profile_image_url
+        const { error: updateError } = await supabase
+          .from('clients')
+          .update({
+            profile_image_url: imageUrl,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id);
+
+        if (updateError) {
+          console.error('Error updating profile image URL:', updateError);
+          return { error: updateError };
+        }
+      }
+
+      // Update local state
+      setProfileData(prev => ({ ...prev, profileImageUrl: imageUrl }));
+      return { success: true };
+    } catch (error) {
+      console.error('Unexpected error saving profile image URL:', error);
+      return { error };
+    }
   };
 
   const handleLogout = async () => {
@@ -1251,12 +1305,14 @@ const ProfilePage = () => {
               saveStatus={saveStatus}
               errorMessage={errorMessage}
               themeClasses={themeClasses}
-            t={t}
-            companyOptions={companyOptions}
-            isLoadingCompanies={isLoadingCompanies}
-            companyError={companyError}
-            language={language}
-            onboardingCompleted={onboardingCompleted}
+              t={t}
+              companyOptions={companyOptions}
+              isLoadingCompanies={isLoadingCompanies}
+              companyError={companyError}
+              language={language}
+              onboardingCompleted={onboardingCompleted}
+              user={user}
+              onSaveProfileImageUrl={saveProfileImageUrl}
             />
           )}
           {activeTab === 'myPlan' && (
@@ -2836,7 +2892,11 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
   );
 };
 
-const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, errorMessage, themeClasses, t, companyOptions, isLoadingCompanies, companyError, language, onboardingCompleted = false }) => {
+const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, errorMessage, themeClasses, t, companyOptions, isLoadingCompanies, companyError, language, onboardingCompleted = false, user, onSaveProfileImageUrl }) => {
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState('');
+  const fileInputRef = useRef(null);
+
   // Helper function to check if a field should be shown (if onboarding not completed, only show non-null fields)
   const shouldShowField = (fieldValue) => {
     if (onboardingCompleted === true) return true; // Show all fields if onboarding is completed
@@ -2845,6 +2905,117 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
 
   // Personal Information fields are always read-only - cannot be edited
   const isReadOnly = true;
+
+  // Handle profile image upload - directly to Supabase Storage
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setImageError(language === 'hebrew' ? 'הקובץ חייב להיות תמונה' : 'File must be an image');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError(language === 'hebrew' ? 'התמונה גדולה מדי (מקסימום 5MB)' : 'Image is too large (max 5MB)');
+      return;
+    }
+
+    setUploadingImage(true);
+    setImageError('');
+
+    try {
+      // Get user_code from clients table
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('user_code')
+        .eq('user_id', user.id)
+        .single();
+
+      if (clientError) {
+        if (clientError.code === 'PGRST116') {
+          setImageError(language === 'hebrew' ? 'פרופיל לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User profile not found. Please complete your profile setup first.');
+        } else {
+          console.error('Error fetching user_code:', clientError);
+          setImageError(language === 'hebrew' ? 'שגיאה בטעינת פרטי המשתמש' : 'Error loading user information');
+        }
+        setUploadingImage(false);
+        return;
+      }
+
+      const userCode = clientData?.user_code;
+      if (!userCode) {
+        setImageError(language === 'hebrew' ? 'קוד משתמש לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User code not found. Please complete your profile setup first.');
+        setUploadingImage(false);
+        return;
+      }
+
+      // Get file extension
+      const fileExtension = file.name.split('.').pop().toLowerCase();
+      const imageFormat = fileExtension === 'jpg' ? 'jpeg' : fileExtension;
+
+      // Generate unique filename using user_code
+      const timestamp = Date.now();
+      const filename = `${userCode}/${timestamp}.${imageFormat}`;
+
+      // Upload directly to Supabase Storage
+      const bucketName = process.env.REACT_APP_SUPABASE_STORAGE_BUCKET_NAME || 'profile-pictures';
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(filename, file, {
+          contentType: file.type,
+          upsert: false,
+          cacheControl: '3600',
+          metadata: {
+            userId: user.id,
+            userCode: userCode,
+            uploadedAt: new Date().toISOString()
+          }
+        });
+
+      if (uploadError) {
+        console.error('Error uploading to Supabase Storage:', uploadError);
+        setImageError(uploadError.message || (language === 'hebrew' ? 'שגיאה בהעלאת התמונה' : 'Error uploading image'));
+        setUploadingImage(false);
+        return;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(uploadData.path);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Update profile data with new image URL
+      onInputChange('profileImageUrl', publicUrl);
+      
+      // Automatically save the image URL to the database
+      if (onSaveProfileImageUrl) {
+        const saveResult = await onSaveProfileImageUrl(publicUrl);
+        if (saveResult.error) {
+          console.error('Error saving profile image URL to database:', saveResult.error);
+          setImageError(language === 'hebrew' ? 'התמונה הועלתה אך לא נשמרה. אנא נסה לשמור ידנית.' : 'Image uploaded but not saved. Please try saving manually.');
+        } else {
+          setImageError('');
+        }
+      } else {
+        setImageError('');
+      }
+    } catch (error) {
+      console.error('Error processing image:', error);
+      setImageError(error.message || (language === 'hebrew' ? 'שגיאה בעיבוד התמונה' : 'Error processing image'));
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
 
   return (
     <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
@@ -2864,6 +3035,111 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
       </div>
 
       <div className="space-y-6 sm:space-y-8">
+        {/* Profile Photo Section */}
+        <div className={`${themeClasses.bgCard} border border-indigo-500/30 rounded-2xl p-4 sm:p-6 md:p-8 shadow-xl shadow-indigo-500/10 transform hover:scale-[1.01] transition-all duration-300 animate-slideInUp`} style={{ animationDelay: '0.1s' }}>
+          <div className="flex items-center mb-6 sm:mb-8">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mr-3 sm:mr-4 shadow-lg shadow-purple-500/25">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd"/>
+              </svg>
+            </div>
+            <div>
+              <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold tracking-tight`}>
+                {language === 'hebrew' ? 'תמונת פרופיל' : 'Profile Photo'}
+              </h3>
+              <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mt-1`}>
+                {language === 'hebrew' ? 'העלה תמונת פרופיל אישית' : 'Upload your profile picture'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center">
+            {/* Profile Photo Display */}
+            <div className="relative mb-4">
+              <div 
+                onClick={handleImageClick}
+                className={`relative w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 ${uploadingImage ? 'border-gray-400' : 'border-indigo-500'} cursor-pointer transition-all duration-300 hover:scale-105 hover:border-purple-500 shadow-xl`}
+              >
+                {profileData.profileImageUrl ? (
+                  <img 
+                    src={profileData.profileImageUrl} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
+                    <svg className="w-16 h-16 sm:w-20 sm:h-20 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
+                    </svg>
+                  </div>
+                )}
+                {uploadingImage && (
+                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                  </div>
+                )}
+                <div className="absolute bottom-0 right-0 bg-indigo-500 text-white rounded-full p-2 shadow-lg border-2 border-white">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Hidden File Input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+
+            {/* Upload Button */}
+            <button
+              onClick={handleImageClick}
+              disabled={uploadingImage}
+              className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                uploadingImage 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+              }`}
+            >
+              {uploadingImage ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  {language === 'hebrew' ? 'מעלה...' : 'Uploading...'}
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  {language === 'hebrew' ? 'העלה תמונה' : 'Upload Photo'}
+                </span>
+              )}
+            </button>
+
+            {/* Error Message */}
+            {imageError && (
+              <div className="mt-4 px-4 py-2 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg text-sm">
+                {imageError}
+              </div>
+            )}
+
+            {/* Info Text */}
+            <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mt-4 text-center max-w-md`}>
+              {language === 'hebrew' 
+                ? 'לחץ על התמונה או על הכפתור להעלאת תמונת פרופיל חדשה. פורמטים נתמכים: JPG, PNG, GIF, WebP (מקסימום 5MB)'
+                : 'Click on the photo or button to upload a new profile picture. Supported formats: JPG, PNG, GIF, WebP (max 5MB)'}
+            </p>
+          </div>
+        </div>
+
         {/* Personal Information */}
         <div className={`${themeClasses.bgCard} border border-indigo-500/30 rounded-2xl p-4 sm:p-6 md:p-8 shadow-xl shadow-indigo-500/10 transform hover:scale-[1.01] transition-all duration-300 animate-slideInUp`} style={{ animationDelay: '0.2s' }}>
           <div className="flex items-center mb-6 sm:mb-8">
