@@ -52,7 +52,7 @@ function Navigation() {
   };
 
   return (
-    <header className={`sticky top-0 z-50 ${isDarkMode ? themeClasses.bgHeader : 'bg-gradient-to-r from-emerald-500 to-teal-600'} shadow-xl border-b ${themeClasses.borderPrimary} backdrop-blur-sm`}>
+    <header className={`sticky top-0 z-50 ${isDarkMode ? 'bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-r from-emerald-50 via-green-50 to-amber-50'} shadow-md border-b ${isDarkMode ? 'border-emerald-900/50' : 'border-emerald-100/50'} backdrop-blur-md`}>
       <nav data-tour="nav" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           {/* Logo Section */}
@@ -61,20 +61,20 @@ function Navigation() {
               <img src="/favicon.ico" alt="BetterChoice Logo" className="w-10 h-10 sm:w-12 sm:h-12 mr-2 sm:mr-4 rounded-xl shadow-lg shadow-emerald-500/25" />
             </div>
             <div className="flex flex-col">
-              <h1 className={`text-xl sm:text-2xl font-bold ${isDarkMode ? themeClasses.textPrimary : 'text-white'} leading-tight`}>BetterChoice</h1>
-              <p className="text-emerald-300 text-xs font-medium hidden sm:block">{t.tagline}</p>
+              <h1 className={`text-xl sm:text-2xl font-semibold ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} leading-tight`}>BetterChoice</h1>
+              <p className={`${isDarkMode ? 'text-emerald-300/80' : 'text-emerald-600/80'} text-xs font-medium hidden sm:block`}>{t.tagline}</p>
             </div>
           </div>
 
           {/* Navigation Links */}
-          <div data-tour="nav-links" className={`hidden lg:flex items-center ${language === 'hebrew' ? 'space-x-reverse space-x-1' : 'space-x-1'} ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} rounded-2xl p-2.5 backdrop-blur-sm border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} shadow-lg`}>
+          <div data-tour="nav-links" className={`hidden lg:flex items-center ${language === 'hebrew' ? 'space-x-reverse space-x-1' : 'space-x-1'} ${isDarkMode ? 'bg-slate-800/80' : 'bg-white/80'} rounded-2xl p-2.5 backdrop-blur-md border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'} shadow-sm`}>
             <Link 
               to="/" 
               data-tour="nav-home"
-              className={`px-3 py-1 rounded-lg font-medium text-sm transition-all duration-300 ${
+              className={`px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 ${
                 isActive('/') 
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-lg shadow-emerald-500/25' 
-                  : `${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} hover:text-emerald-500 hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-emerald-50'}`
+                  ? `${isDarkMode ? 'bg-emerald-600' : 'bg-emerald-500'} text-white font-semibold shadow-md` 
+                  : `${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} hover:text-emerald-600 hover:${isDarkMode ? 'bg-slate-700/50' : 'bg-emerald-100/60'}`
               }`}
             >
               {language === 'hebrew' ? 'בית' : 'Home'}
@@ -82,10 +82,10 @@ function Navigation() {
             <Link 
               to="/knowledge" 
               data-tour="nav-knowledge"
-              className={`px-3 py-1 rounded-lg font-medium text-sm whitespace-nowrap transition-all duration-300 ${
+              className={`px-4 py-2 rounded-xl font-medium text-sm whitespace-nowrap transition-all duration-300 ${
                 isActive('/knowledge') 
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-lg shadow-emerald-500/25' 
-                  : `${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} hover:text-emerald-500 hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-emerald-50'}`
+                  ? `${isDarkMode ? 'bg-emerald-600' : 'bg-emerald-500'} text-white font-semibold shadow-md` 
+                  : `${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} hover:text-emerald-600 hover:${isDarkMode ? 'bg-slate-700/50' : 'bg-emerald-100/60'}`
               }`}
             >
               {language === 'hebrew' ? 'ידע והשראה' : 'Knowledge & Inspiration'}
@@ -93,10 +93,10 @@ function Navigation() {
             <Link 
               to="/recipes" 
               data-tour="nav-recipes"
-              className={`px-3 py-1 rounded-lg font-medium text-sm transition-all duration-300 ${
+              className={`px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 ${
                 isActive('/recipes') 
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-lg shadow-emerald-500/25' 
-                  : `${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} hover:text-emerald-500 hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-emerald-50'}`
+                  ? `${isDarkMode ? 'bg-emerald-600' : 'bg-emerald-500'} text-white font-semibold shadow-md` 
+                  : `${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} hover:text-emerald-600 hover:${isDarkMode ? 'bg-slate-700/50' : 'bg-emerald-100/60'}`
               }`}
             >
               {language === 'hebrew' ? 'מתכונים' : 'Recipes'}
@@ -104,10 +104,10 @@ function Navigation() {
             <Link 
               to="/about" 
               data-tour="nav-about"
-              className={`px-3 py-1 rounded-lg font-medium text-sm transition-all duration-300 ${
+              className={`px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 ${
                 isActive('/about') 
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-lg shadow-emerald-500/25' 
-                  : `${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} hover:text-emerald-500 hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-emerald-50'}`
+                  ? `${isDarkMode ? 'bg-emerald-600' : 'bg-emerald-500'} text-white font-semibold shadow-md` 
+                  : `${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} hover:text-emerald-600 hover:${isDarkMode ? 'bg-slate-700/50' : 'bg-emerald-100/60'}`
               }`}
             >
               {language === 'hebrew' ? 'אודות' : t.nav.about}
@@ -120,7 +120,7 @@ function Navigation() {
             <button 
               onClick={toggleTheme}
               data-tour="theme-toggle"
-              className={`w-10 h-10 ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm`}
+              className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800/80' : 'bg-white/80'} hover:${isDarkMode ? 'bg-slate-700/80' : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'} backdrop-blur-md shadow-sm`}
               title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {isDarkMode ? (
@@ -138,7 +138,7 @@ function Navigation() {
             <button 
               onClick={toggleLanguage}
               data-tour="language-toggle"
-              className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 rounded-xl flex items-center justify-center transition-all duration-300 text-white font-semibold text-sm"
+              className={`w-10 h-10 ${isDarkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-600'} rounded-xl flex items-center justify-center transition-all duration-300 text-white font-medium text-sm shadow-md`}
             >
               {language === 'hebrew' ? 'EN' : 'ע'}
             </button>
@@ -156,20 +156,20 @@ function Navigation() {
                 <Link 
                   to="/profile"
                   data-tour="profile-button"
-                  className={`${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} ${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm whitespace-nowrap flex items-center gap-2`}
+                  className={`${isDarkMode ? 'bg-slate-800/80' : 'bg-white/80'} hover:${isDarkMode ? 'bg-slate-700/80' : 'bg-white'} ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'} backdrop-blur-md whitespace-nowrap flex items-center gap-2 shadow-sm`}
                   title={language === 'hebrew' ? 'פרופיל' : 'Profile'}
                 >
-                  <svg className={`w-4 h-4 ${isDarkMode ? themeClasses.textPrimary : 'text-gray-600'} flex-shrink-0`} fill="currentColor" viewBox="0 0 20 20">
+                  <svg className={`w-4 h-4 ${isDarkMode ? 'text-emerald-300' : 'text-emerald-600'} flex-shrink-0`} fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
                   </svg>
                   <span>{language === 'hebrew' ? 'פרופיל' : 'Profile'}</span>
                 </Link>
                 
                 {/* Separator */}
-                <div className={`w-px h-8 ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`}></div>
+                <div className={`w-px h-8 ${isDarkMode ? 'bg-emerald-800/30' : 'bg-emerald-200/50'}`}></div>
                 
                 {/* Welcome Message */}
-                <div className={`${isDarkMode ? themeClasses.bgCard : 'bg-white/95'} ${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} px-4 py-2 rounded-xl font-medium text-sm border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} flex items-center backdrop-blur-sm whitespace-nowrap`}>
+                <div className={`${isDarkMode ? 'bg-slate-800/80' : 'bg-white/80'} ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} px-4 py-2 rounded-xl font-medium text-sm border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'} flex items-center backdrop-blur-md whitespace-nowrap shadow-sm`}>
                   <svg className={`w-4 h-4 ${language === 'hebrew' ? 'ml-2' : 'mr-2'} text-emerald-500 flex-shrink-0`} fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
                   </svg>
@@ -177,12 +177,12 @@ function Navigation() {
                 </div>
                 
                 {/* Separator */}
-                <div className={`w-px h-8 ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`}></div>
+                <div className={`w-px h-8 ${isDarkMode ? 'bg-emerald-800/30' : 'bg-emerald-200/50'}`}></div>
                 
                 {/* Logout Button */}
                 <button 
                   onClick={handleLogout}
-                  className={`${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} ${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm whitespace-nowrap`}
+                  className={`${isDarkMode ? 'bg-slate-800/80' : 'bg-white/80'} hover:${isDarkMode ? 'bg-slate-700/80' : 'bg-white'} ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'} backdrop-blur-md whitespace-nowrap shadow-sm`}
                 >
                   {language === 'hebrew' ? 'התנתק' : 'Logout'}
                 </button>
@@ -190,14 +190,14 @@ function Navigation() {
             ) : (
               <>
                 <div data-tour="auth-buttons" className="flex items-center gap-2">
-                <Link to="/login" className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 whitespace-nowrap">
+                <Link to="/login" className={`${isDarkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-600'} text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-300 whitespace-nowrap shadow-md`}>
                   {t.buttons.login}
                 </Link>
                 
                 {/* Separator */}
-                <div className={`w-px h-8 ${isDarkMode ? 'bg-gray-600' : 'bg-gray-300'}`}></div>
+                <div className={`w-px h-8 ${isDarkMode ? 'bg-emerald-800/30' : 'bg-emerald-200/50'}`}></div>
                 
-                <Link to="/signup" className={`${isDarkMode ? themeClasses.bgCard : 'bg-white/95'} ${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} hover:${isDarkMode ? themeClasses.bgSecondary : 'bg-white'} backdrop-blur-sm whitespace-nowrap`}>
+                <Link to="/signup" className={`${isDarkMode ? 'bg-slate-800/80' : 'bg-white/80'} ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-300 border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'} hover:${isDarkMode ? 'bg-slate-700/80' : 'bg-white'} hover:text-emerald-600 backdrop-blur-md whitespace-nowrap shadow-sm`}>
                   {t.buttons.signup}
                 </Link>
                 </div>
@@ -211,7 +211,7 @@ function Navigation() {
             <button 
               onClick={toggleTheme}
               data-tour="theme-toggle"
-              className={`w-10 h-10 ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm`}
+              className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800/80' : 'bg-white/80'} hover:${isDarkMode ? 'bg-slate-700/80' : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'} backdrop-blur-md shadow-sm`}
               title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {isDarkMode ? (
@@ -229,7 +229,7 @@ function Navigation() {
             <button 
               onClick={toggleLanguage}
               data-tour="language-toggle"
-              className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 rounded-xl flex items-center justify-center transition-all duration-300 text-white font-semibold text-sm"
+              className={`w-10 h-10 ${isDarkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-600'} rounded-xl flex items-center justify-center transition-all duration-300 text-white font-medium text-sm shadow-md`}
             >
               {language === 'hebrew' ? 'EN' : 'ע'}
             </button>
@@ -238,9 +238,9 @@ function Navigation() {
             <button 
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               data-tour="mobile-menu-button"
-              className={`w-10 h-10 ${isDarkMode ? themeClasses.bgSecondary : 'bg-white/95'} hover:${isDarkMode ? themeClasses.bgPrimary : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? themeClasses.borderPrimary : 'border-white/30'} backdrop-blur-sm`}
+              className={`w-10 h-10 ${isDarkMode ? 'bg-slate-800/80' : 'bg-white/80'} hover:${isDarkMode ? 'bg-slate-700/80' : 'bg-white'} rounded-xl flex items-center justify-center transition-all duration-300 border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'} backdrop-blur-md shadow-sm`}
             >
-              <svg className={`w-5 h-5 ${isDarkMode ? themeClasses.textPrimary : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-5 h-5 ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {mobileMenuOpen ? (
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 ) : (
@@ -253,7 +253,7 @@ function Navigation() {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className={`lg:hidden ${isDarkMode ? themeClasses.bgCard : 'bg-white'} border-t ${isDarkMode ? themeClasses.borderPrimary : 'border-gray-200'} shadow-lg`}>
+          <div className={`lg:hidden ${isDarkMode ? 'bg-slate-900/95' : 'bg-white/95'} border-t ${isDarkMode ? 'border-emerald-900/50' : 'border-emerald-100/50'} shadow-lg backdrop-blur-md`}>
             <div className="px-4 py-4 space-y-3">
               {/* Navigation Links */}
               <div data-tour="nav-links" className="space-y-3">
@@ -263,8 +263,8 @@ function Navigation() {
                 onClick={closeMobileMenu}
                 className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${
                   isActive('/') 
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' 
-                    : `${isDarkMode ? themeClasses.textPrimary + ' ' + themeClasses.bgSecondary : 'text-gray-800 bg-gray-50'} hover:bg-emerald-50 hover:text-emerald-600`
+                    ? `${isDarkMode ? 'bg-emerald-600' : 'bg-emerald-500'} text-white shadow-md` 
+                    : `${isDarkMode ? 'text-emerald-200 bg-slate-800/50' : 'text-emerald-700 bg-emerald-50/50'} hover:bg-emerald-100/60 hover:text-emerald-600`
                 }`}
               >
                 {language === 'hebrew' ? 'בית' : 'Home'}
@@ -275,8 +275,8 @@ function Navigation() {
                 onClick={closeMobileMenu}
                 className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${
                   isActive('/knowledge') 
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' 
-                    : `${isDarkMode ? themeClasses.textPrimary + ' ' + themeClasses.bgSecondary : 'text-gray-800 bg-gray-50'} hover:bg-emerald-50 hover:text-emerald-600`
+                    ? `${isDarkMode ? 'bg-emerald-600' : 'bg-emerald-500'} text-white shadow-md` 
+                    : `${isDarkMode ? 'text-emerald-200 bg-slate-800/50' : 'text-emerald-700 bg-emerald-50/50'} hover:bg-emerald-100/60 hover:text-emerald-600`
                 }`}
               >
                 {language === 'hebrew' ? 'ידע והשראה' : 'Knowledge & Inspiration'}
@@ -287,8 +287,8 @@ function Navigation() {
                 onClick={closeMobileMenu}
                 className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${
                   isActive('/recipes') 
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' 
-                    : `${isDarkMode ? themeClasses.textPrimary + ' ' + themeClasses.bgSecondary : 'text-gray-800 bg-gray-50'} hover:bg-emerald-50 hover:text-emerald-600`
+                    ? `${isDarkMode ? 'bg-emerald-600' : 'bg-emerald-500'} text-white shadow-md` 
+                    : `${isDarkMode ? 'text-emerald-200 bg-slate-800/50' : 'text-emerald-700 bg-emerald-50/50'} hover:bg-emerald-100/60 hover:text-emerald-600`
                 }`}
               >
                 {language === 'hebrew' ? 'מתכונים' : 'Recipes'}
@@ -299,8 +299,8 @@ function Navigation() {
                 onClick={closeMobileMenu}
                 className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${
                   isActive('/about') 
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' 
-                    : `${isDarkMode ? themeClasses.textPrimary + ' ' + themeClasses.bgSecondary : 'text-gray-800 bg-gray-50'} hover:bg-emerald-50 hover:text-emerald-600`
+                    ? `${isDarkMode ? 'bg-emerald-600' : 'bg-emerald-500'} text-white shadow-md` 
+                    : `${isDarkMode ? 'text-emerald-200 bg-slate-800/50' : 'text-emerald-700 bg-emerald-50/50'} hover:bg-emerald-100/60 hover:text-emerald-600`
                 }`}
               >
                 {language === 'hebrew' ? 'אודות' : t.nav.about}
@@ -308,21 +308,21 @@ function Navigation() {
               </div>
 
               {/* Divider */}
-              <div className={`border-t ${isDarkMode ? themeClasses.borderPrimary : 'border-gray-200'} my-3`}></div>
+              <div className={`border-t ${isDarkMode ? 'border-emerald-900/50' : 'border-emerald-100/50'} my-3`}></div>
 
               {/* User Section */}
               {loading ? (
-                <div className={`px-4 py-3 text-center ${isDarkMode ? themeClasses.textSecondary : 'text-gray-600'} text-sm`}>
+                <div className={`px-4 py-3 text-center ${isDarkMode ? 'text-emerald-300/80' : 'text-emerald-600'} text-sm`}>
                   {language === 'hebrew' ? 'טוען...' : 'Loading...'}
                 </div>
               ) : isAuthenticated ? (
                 <>
                   {/* Welcome Message */}
-                  <div className={`px-4 py-3 ${isDarkMode ? themeClasses.bgSecondary : 'bg-emerald-50'} rounded-xl flex items-center justify-center`}>
+                  <div className={`px-4 py-3 ${isDarkMode ? 'bg-slate-800/50' : 'bg-emerald-50/60'} rounded-xl flex items-center justify-center`}>
                     <svg className={`w-4 h-4 ${language === 'hebrew' ? 'ml-2' : 'mr-2'} text-emerald-500`} fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
                     </svg>
-                    <span className={`${isDarkMode ? themeClasses.textPrimary : 'text-gray-800'} font-medium text-sm`}>
+                    <span className={`${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} font-medium text-sm`}>
                       {language === 'hebrew' ? `שלום ${userDisplayName}` : `Hello ${userDisplayName}`}
                     </span>
                   </div>
@@ -332,7 +332,7 @@ function Navigation() {
                     to="/profile"
                     data-tour="profile-button"
                     onClick={closeMobileMenu}
-                    className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${isDarkMode ? themeClasses.bgSecondary + ' ' + themeClasses.textPrimary : 'bg-gray-50 text-gray-800'} hover:bg-emerald-50 hover:text-emerald-600 text-center`}
+                    className={`block px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${isDarkMode ? 'bg-slate-800/50 text-emerald-200' : 'bg-emerald-50/50 text-emerald-700'} hover:bg-emerald-100/60 hover:text-emerald-600 text-center`}
                   >
                     {language === 'hebrew' ? 'פרופיל' : 'Profile'}
                   </Link>
@@ -340,7 +340,7 @@ function Navigation() {
                   {/* Logout Button */}
                   <button 
                     onClick={handleLogout}
-                    className={`w-full px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${isDarkMode ? themeClasses.bgSecondary + ' ' + themeClasses.textPrimary : 'bg-gray-50 text-gray-800'} hover:bg-red-50 hover:text-red-600`}
+                    className={`w-full px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 ${isDarkMode ? 'bg-slate-800/50 text-emerald-200' : 'bg-emerald-50/50 text-emerald-700'} hover:bg-red-50 hover:text-red-600`}
                   >
                     {language === 'hebrew' ? 'התנתק' : 'Logout'}
                   </button>
@@ -351,14 +351,14 @@ function Navigation() {
                   <Link 
                     to="/login" 
                     onClick={closeMobileMenu}
-                    className="block w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 text-center"
+                    className={`block w-full ${isDarkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-600'} text-white px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 text-center shadow-md`}
                   >
                     {t.buttons.login}
                   </Link>
                   <Link 
                     to="/signup" 
                     onClick={closeMobileMenu}
-                    className={`block w-full ${isDarkMode ? themeClasses.bgSecondary + ' ' + themeClasses.textPrimary : 'bg-gray-50 text-gray-800'} px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 hover:bg-emerald-50 hover:text-emerald-600 text-center`}
+                    className={`block w-full ${isDarkMode ? 'bg-slate-800/50 text-emerald-200' : 'bg-emerald-50/50 text-emerald-700'} px-4 py-3 rounded-xl font-medium text-sm transition-all duration-300 hover:bg-emerald-100/60 hover:text-emerald-600 text-center border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'}`}
                   >
                     {t.buttons.signup}
                   </Link>

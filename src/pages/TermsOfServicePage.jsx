@@ -7,7 +7,7 @@ import Navigation from '../components/Navigation';
 const TermsOfServicePage = () => {
   const navigate = useNavigate();
   const { language, direction } = useLanguage();
-  const { themeClasses } = useTheme();
+  const { isDarkMode, themeClasses } = useTheme();
 
   const content = {
     hebrew: {
@@ -120,7 +120,6 @@ const TermsOfServicePage = () => {
           content: `אם יש לך שאלות לגבי תנאי שימוש אלה, אנא צור קשר איתנו:`,
           contact: {
             email: "info@betterchoice.live",
-            phone: "050-2420905",
             address: "ישראל"
           }
         }
@@ -236,7 +235,6 @@ const TermsOfServicePage = () => {
           content: `If you have questions about these Terms of Service, please contact us:`,
           contact: {
             email: "info@betterchoice.live",
-            phone: "050-2420905",
             address: "Israel"
           }
         }
@@ -247,10 +245,10 @@ const TermsOfServicePage = () => {
   const currentContent = content[language] || content.english;
 
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition`} dir={direction}>
+    <div className={`min-h-screen ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'} language-transition`} dir={direction}>
       <Navigation />
       
-      <div className="container mx-auto px-4 py-8 sm:py-12 md:py-16 lg:py-24 max-w-4xl">
+      <div className="container mx-auto px-4 py-8 sm:py-12 md:py-16 lg:py-24 max-w-4xl min-h-screen">
         <button
           onClick={() => navigate(-1)}
           className={`mb-4 sm:mb-6 ${themeClasses.textPrimary} hover:text-green-600 dark:hover:text-green-400 flex items-center gap-2 transition-colors text-sm sm:text-base`}
@@ -296,12 +294,6 @@ const TermsOfServicePage = () => {
                       <strong>{language === 'hebrew' ? 'אימייל:' : 'Email:'}</strong>{' '}
                       <a href={`mailto:${section.contact.email}`} className="text-green-600 hover:text-green-700 dark:text-green-400 transition-colors">
                         {section.contact.email}
-                      </a>
-                    </p>
-                    <p className={`${themeClasses.textSecondary} mt-2`}>
-                      <strong>{language === 'hebrew' ? 'טלפון:' : 'Phone:'}</strong>{' '}
-                      <a href={`tel:${section.contact.phone}`} className="text-green-600 hover:text-green-700 dark:text-green-400 transition-colors">
-                        {section.contact.phone}
                       </a>
                     </p>
                     {section.contact.address && (

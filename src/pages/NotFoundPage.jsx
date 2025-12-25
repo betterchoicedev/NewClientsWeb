@@ -6,7 +6,7 @@ import Navigation from '../components/Navigation';
 
 const NotFoundPage = () => {
   const { language, direction } = useLanguage();
-  const { themeClasses } = useTheme();
+  const { isDarkMode, themeClasses } = useTheme();
 
   // Prevent body scrolling to avoid double scrollbars
   useEffect(() => {
@@ -22,7 +22,7 @@ const NotFoundPage = () => {
       <Navigation />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto custom-scrollbar flex items-center justify-center" style={{ minHeight: 0 }}>
+      <main className={`flex-1 overflow-y-auto custom-scrollbar flex items-center justify-center ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'}`} style={{ minHeight: 0 }}>
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
           {/* 404 Icon/Number */}
           <div className="mb-8">

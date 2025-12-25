@@ -298,24 +298,24 @@ function ResetPasswordPage() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-6 sm:py-8">
+      <footer className={`${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'} py-6 sm:py-8`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 md:gap-8 mb-2 md:mb-0 text-center">
               <Link 
                 to="/privacy-policy" 
-                className="text-gray-300 hover:text-white transition-colors duration-300 text-sm"
+                className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm`}
               >
                 {t.footer.privacy}
               </Link>
               <Link 
                 to="/terms" 
-                className="text-gray-300 hover:text-white transition-colors duration-300 text-sm"
+                className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm`}
               >
                 {t.footer.terms}
               </Link>
             </div>
-            <div className="text-gray-400 text-center">
+            <div className={`${isDarkMode ? 'text-gray-400' : 'text-emerald-600/80'} text-center`}>
               <p className="text-xs sm:text-sm">{t.footer.copyright}</p>
             </div>
           </div>

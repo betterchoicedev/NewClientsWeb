@@ -292,37 +292,45 @@ function HomePage() {
       <Navigation />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
+      <main className={`flex-1 overflow-y-auto custom-scrollbar ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'}`} style={{ minHeight: 0 }}>
         {/* Hero Section */}
-        <section data-tour="hero-section" className={`py-12 sm:py-16 md:py-20 px-4 sm:px-6 lg:px-8 ${isDarkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800' : 'bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+        <section data-tour="hero-section" className="py-16 sm:py-20 md:py-24 px-4 sm:px-6 lg:px-8">
           <div className="max-w-5xl mx-auto text-center">
-            <h1 className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6 sm:mb-8`}>
-              <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+            {/* Natural, welcoming greeting */}
+            
+            
+            <h1 className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-semibold mb-6 sm:mb-8 leading-tight`}>
+              <span className={`${isDarkMode ? 'text-emerald-300' : 'text-emerald-700'}`}>
                 {language === 'hebrew' ? 'BetterChoice AI' : 'BetterChoice AI'}
               </span>
               <br />
-              <span className={`${themeClasses.textPrimary} text-3xl sm:text-4xl md:text-5xl lg:text-6xl`}>
-                {language === 'hebrew' ? 'תזונה שתפורה עבורך' : 'Nutrition Tailored to You'}
+              <span className={`${themeClasses.textPrimary} text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-normal`}>
+                {language === 'hebrew' 
+                  ? 'תזונה שפועלת בשבילך, כל יום' 
+                  : 'Nutrition that works for you, every day'}
               </span>
             </h1>
             
-            {/* Value Prop Line */}
-            <p className={`text-xl sm:text-2xl md:text-3xl font-bold ${isDarkMode ? 'text-green-400' : 'text-green-600'} mb-6 sm:mb-8 leading-relaxed max-w-4xl mx-auto px-2`}>
+            {/* Warm, inviting value prop */}
+            <p className={`text-xl sm:text-2xl md:text-3xl ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} mb-6 sm:mb-8 leading-relaxed max-w-4xl mx-auto px-2 font-medium`}>
               {language === 'hebrew' 
-                ? 'שואלים - ומקבלים תשובה מותאמת ומבוססת לך.'
-                : 'Just Ask - and get an answer tailored TO YOU.'}
+                ? 'יש לך שאלה? פשוט שואלים. מקבלים תשובה מותאמת אישית, עכשיו.'
+                : 'Have a question? Just ask. Get a personalized answer, right now.'}
             </p>
-            <p className={`text-lg sm:text-xl md:text-2xl ${themeClasses.textSecondary} mb-8 sm:mb-10 leading-relaxed max-w-4xl mx-auto px-2`}>
+            
+            <p className={`text-lg sm:text-xl md:text-2xl ${themeClasses.textSecondary} mb-6 sm:mb-8 leading-relaxed max-w-4xl mx-auto px-2`}>
               {language === 'hebrew' 
-                ? 'תזונה, כושר ויומן מזון וכושר - הכל בצ\'אט AI אחד.'
-                : 'Nutrition & fitness Planner , Follow up Journal - all in one AI chat.'}
+                ? 'יומן מזון, תכנון ארוחות, והדרכה יומיומית - הכל במקום אחד, פשוט ונגיש.'
+                : 'Food journal, meal planning, and daily guidance - all in one place, simple and accessible.'}
             </p>
-            <p className={`text-base sm:text-lg md:text-xl ${themeClasses.textSecondary} mb-8 sm:mb-10 leading-relaxed max-w-3xl mx-auto px-2`}>
+            
+            <p className={`text-base sm:text-lg ${themeClasses.textSecondary} mb-10 sm:mb-12 leading-relaxed max-w-3xl mx-auto px-2 italic`}>
               {language === 'hebrew'
-                ? ' טכנולוגיה חכמה משולבת עם דיאטניות קלינית עבור הדרכה יומיומית פשוטה, מדויקת ויעילה - המובילה לשינוי אמיתי ולאורח חיים מאוזן.'
-                : 'smart technology combined with clinical dietitian to provide simple, accurate, and effective daily guidance - leading to real change and a balanced lifestyle.'}
+                ? 'דיאטניות קליניות מלוות אותך בכל צעד, עם כלים חכמים שעוזרים לך לבחור נכון - יום אחר יום.'
+                : 'Clinical dietitians guide you every step of the way, with smart tools that help you choose right - day after day.'}
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-6 sm:mb-8 px-2">
+            
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 justify-center mb-8 sm:mb-10 px-2">
               <button 
                 onClick={() => {
                   if (!isAuthenticated) {
@@ -331,10 +339,13 @@ function HomePage() {
                     window.location.href = '/profile';
                   }
                 }}
-                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-8 sm:px-10 py-4 sm:py-5 rounded-full text-lg sm:text-xl font-semibold transform hover:-translate-y-1 transition-all duration-300 shadow-xl hover:shadow-2xl flex items-center justify-center w-full sm:w-auto"
+                className={`${isDarkMode 
+                  ? 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500' 
+                  : 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700'
+                } text-white px-10 sm:px-12 py-4 sm:py-5 rounded-full text-lg sm:text-xl font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center w-full sm:w-auto`}
               >
-                <span className="mr-2">🤖</span>
-                {language === 'hebrew' ? 'התחל עכשיו' : 'Get Started'}
+                <span className="mr-2 text-xl">✨</span>
+                {language === 'hebrew' ? 'בואו נתחיל' : 'Let\'s Begin'}
                 <span className="ml-2">→</span>
               </button>
              
@@ -385,7 +396,7 @@ function HomePage() {
         </section>
 
         {/* Chat Preview Section */}
-        <section id="chat-preview-section" className={`py-8 sm:py-12 ${isDarkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
+        <section id="chat-preview-section" className="py-8 sm:py-12">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* WhatsApp-style container */}
             <div className={`${isDarkMode ? 'bg-gray-900' : 'bg-[#e5ddd5]'} rounded-2xl shadow-2xl overflow-hidden`} style={{
@@ -448,7 +459,7 @@ function HomePage() {
               </div>
               
               {/* Chat messages */}
-              <div className="p-4 space-y-3 min-h-[500px] relative">
+              <div className="p-4 space-y-3 min-h-[500px] relative" dir="ltr">
                 {/* Photo Mode */}
                 {chatMode === 'photo' && (
                   <>
@@ -875,117 +886,122 @@ function HomePage() {
           </div>
         </section>
 
-        {/* Why Choose BetterChoice AI Section */}
-        <section className={`py-12 sm:py-16 md:py-20 ${themeClasses.sectionBg}`}>
+        {/* Why Choose BetterChoice Section */}
+        <section className="py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12 sm:mb-16">
-              <h3 className={`text-3xl sm:text-4xl md:text-5xl font-bold ${themeClasses.textPrimary} mb-4`}>
-                <span className={isDarkMode ? 'text-green-400' : 'text-green-600'}>
-                  {language === 'hebrew' ? 'למה לבחור BetterChoice AI?' : 'Why Choose BetterChoice AI?'}
+              <h3 className={`text-3xl sm:text-4xl md:text-5xl font-semibold ${themeClasses.textPrimary} mb-4`}>
+                <span className={isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}>
+                  {language === 'hebrew' ? 'למה BetterChoice?' : 'Why BetterChoice?'}
                 </span>
               </h3>
+              <p className={`text-lg sm:text-xl ${themeClasses.textSecondary} mt-4 max-w-2xl mx-auto`}>
+                {language === 'hebrew' 
+                  ? 'כי תזונה טובה צריכה להיות פשוטה, אישית, ותמיד שם בשבילך'
+                  : 'Because good nutrition should be simple, personal, and always there for you'}
+              </p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-12">
               {/* Point 1 */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+              <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-6 border-l-4 ${isDarkMode ? 'border-emerald-400' : 'border-emerald-500'} hover:shadow-lg transition-shadow duration-300`}>
                 <div className="flex items-start mb-4">
-                  <div className="text-3xl mr-4">🧠</div>
+                  <div className="text-3xl mr-4">💬</div>
                   <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
-                      {language === 'hebrew' ? 'תזונה מותאמת אישית ברמה אחרת, בכל רגע' : 'Hyper-Personalized Nutrition, Anytime'}
+                    <h4 className={`text-xl font-semibold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'תזונה מותאמת לך, בכל רגע' : 'Nutrition Tailored to You, Anytime'}
                     </h4>
                   </div>
                 </div>
-                <p className={themeClasses.textSecondary}>
+                <p className={`${themeClasses.textSecondary} leading-relaxed`}>
                   {language === 'hebrew' 
-                    ? 'מאמן תזונה אישי ב-AI זמין ב-WhatsApp למענה מיידי, פשוט וזמין: מה לאכול? מתי? כמה? תשובות בזמן אמת.'
-                    : 'Personal AI nutrition coach available on WhatsApp for instant, simple, and accessible answers: What to eat? When? How much? Real-time responses.'}
+                    ? 'יש לך שאלה? פשוט שואלים. מקבלים תשובה מותאמת אישית, עכשיו - מה לאכול? מתי? כמה?'
+                    : 'Have a question? Just ask. Get a personalized answer, right now - what to eat? When? How much?'}
                 </p>
               </div>
               
               {/* Point 2 */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+              <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-6 border-l-4 ${isDarkMode ? 'border-emerald-400' : 'border-emerald-500'} hover:shadow-lg transition-shadow duration-300`}>
                 <div className="flex items-start mb-4">
-                  <div className="text-3xl mr-4">🍽️</div>
+                  <div className="text-3xl mr-4">🌱</div>
                   <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
-                      {language === 'hebrew' ? 'תכנית שמתעדכנת איתך' : 'A Plan That Updates With You'}
+                    <h4 className={`text-xl font-semibold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'תכנית שגדלה איתך' : 'A Plan That Grows With You'}
                     </h4>
                   </div>
                 </div>
-                <p className={themeClasses.textSecondary}>
+                <p className={`${themeClasses.textSecondary} leading-relaxed`}>
                   {language === 'hebrew'
-                    ? 'המערכת לומדת את הרגלי האכילה, סדר היום ורמת הפעילות - ומתאימה את עצמה באופן דינמי. לא עוד תפריטים שלא שורדים שבוע.'
-                    : 'The system learns eating habits, daily schedule and activity level to adapt dynamically. No more meal plans that don\'t last a week.'}
+                    ? 'אנחנו לומדים את ההרגלים שלך, סדר היום והפעילות - ומתאימים את עצמנו. לא עוד תפריטים נוקשים שלא עובדים.'
+                    : 'We learn your habits, daily routine, and activity - and adapt. No more rigid meal plans that don\'t work.'}
                 </p>
               </div>
               
               {/* Point 3 */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+              <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-6 border-l-4 ${isDarkMode ? 'border-emerald-400' : 'border-emerald-500'} hover:shadow-lg transition-shadow duration-300`}>
                 <div className="flex items-start mb-4">
                   <div className="text-3xl mr-4">👩‍⚕️</div>
                   <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
-                      {language === 'hebrew' ? 'תמיכה של דיאטניות קליניות' : 'Support from Clinical Dietitians'}
+                    <h4 className={`text-xl font-semibold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'דיאטניות קליניות מלוות אותך' : 'Clinical Dietitians Guide You'}
                     </h4>
                   </div>
                 </div>
-                <p className={themeClasses.textSecondary}>
+                <p className={`${themeClasses.textSecondary} leading-relaxed`}>
                   {language === 'hebrew'
-                    ? 'מאחורי כל המלצה עומד בן אדם אנושי. ייעוצים חודשיים ופיקוח מקצועי מבטיחים תכנית בטוחה, יעילה ומותאמת אישית.'
-                    : 'Behind every recommendation stands a human. Monthly consultations and professional supervision ensure a safe, effective, and personalized plan.'}
+                    ? 'מאחורי כל המלצה עומדת דיאטנית אמיתית. ייעוצים חודשיים ופיקוח מקצועי מבטיחים תכנית בטוחה ויעילה.'
+                    : 'Behind every recommendation stands a real dietitian. Monthly consultations and professional guidance ensure a safe and effective plan.'}
                 </p>
               </div>
               
               {/* Point 4 */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+              <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-6 border-l-4 ${isDarkMode ? 'border-emerald-400' : 'border-emerald-500'} hover:shadow-lg transition-shadow duration-300`}>
                 <div className="flex items-start mb-4">
-                  <div className="text-3xl mr-4">📱</div>
+                  <div className="text-3xl mr-4">💚</div>
                   <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
-                      {language === 'hebrew' ? 'אינטגרציה עם Apple Watch' : 'Apple Watch Integration'}
+                    <h4 className={`text-xl font-semibold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'מתחבר לחיים שלך' : 'Connects to Your Life'}
                     </h4>
                   </div>
                 </div>
-                <p className={themeClasses.textSecondary}>
+                <p className={`${themeClasses.textSecondary} leading-relaxed`}>
                   {language === 'hebrew'
-                    ? 'התזונה מתעדכנת על פי שינה, צעדים, סטרס ונתוני בריאות - כדי לתת המלצות שמדויקות למצב האמיתי.'
-                    : 'Nutrition updates based on sleep, steps, stress, and health data - to provide recommendations that are accurate to your real situation.'}
+                    ? 'התזונה מתעדכנת לפי השינה, הצעדים, והמצב שלך - כדי לתת המלצות שמתאימות למצב האמיתי שלך.'
+                    : 'Nutrition updates based on your sleep, steps, and how you\'re feeling - to give recommendations that match your real situation.'}
                 </p>
               </div>
               
               {/* Point 5 */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+              <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-6 border-l-4 ${isDarkMode ? 'border-emerald-400' : 'border-emerald-500'} hover:shadow-lg transition-shadow duration-300`}>
                 <div className="flex items-start mb-4">
-                  <div className="text-3xl mr-4">🔬</div>
+                  <div className="text-3xl mr-4">✨</div>
                   <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
-                      {language === 'hebrew' ? 'טכנולוגיה שמחזירה שליטה' : 'Technology That Returns Control'}
+                    <h4 className={`text-xl font-semibold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'פשוט, יעיל, ומותאם לך' : 'Simple, Effective, Made for You'}
                     </h4>
                   </div>
                 </div>
-                <p className={themeClasses.textSecondary}>
+                <p className={`${themeClasses.textSecondary} leading-relaxed`}>
                   {language === 'hebrew'
-                    ? 'AI מתקדם, Digital Health Twin ומודלים ביולוגיים מאפשרים: חיזוי תוצאות, התאמות חכמות, שינויים בעלי השפעה גבוהה. כל זה ללא מאמץ וללא תסכול.'
-                    : 'Advanced AI, Digital Health Twin, and biological models enable: outcome prediction, smart adjustments, high-impact changes. All without effort and without frustration.'}
+                    ? 'כלים חכמים שעוזרים לך לבחור נכון, להתאים את התזונה למצב שלך, ולעשות שינויים קטנים עם השפעה גדולה - בלי מאמץ ובלי תסכול.'
+                    : 'Smart tools that help you choose right, adapt nutrition to your situation, and make small changes with big impact - without effort or frustration.'}
                 </p>
               </div>
               
               {/* Point 6 - Differentiation */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-l-4 border-green-500`}>
+              <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-6 border-l-4 ${isDarkMode ? 'border-emerald-400' : 'border-emerald-500'} hover:shadow-lg transition-shadow duration-300`}>
                 <div className="flex items-start mb-4">
-                  <div className="text-3xl mr-4">🎯</div>
+                  <div className="text-3xl mr-4">🌿</div>
                   <div className="flex-1">
-                    <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
-                      {language === 'hebrew' ? 'מיני־שינויים בעלי ROI גבוה' : 'High-ROI Mini-Changes'}
+                    <h4 className={`text-xl font-semibold ${themeClasses.textPrimary} mb-2`}>
+                      {language === 'hebrew' ? 'שינוי אמיתי, צעד אחר צעד' : 'Real Change, Step by Step'}
                     </h4>
                   </div>
                 </div>
-                <p className={themeClasses.textSecondary}>
+                <p className={`${themeClasses.textSecondary} leading-relaxed`}>
                   {language === 'hebrew'
-                    ? 'אנחנו לא עושים \'תפריט\'. אנחנו עושים החלטה אחת טובה יותר בכל פעם - וזה מצטבר לשינוי אמיתי.'
-                    : 'We don\'t make a \'meal plan\'. We make one better decision at a time - and it adds up to real change.'}
+                    ? 'אנחנו לא עושים \'תפריט נוקשה\'. אנחנו עוזרים לך לעשות החלטה אחת טובה יותר בכל פעם - וזה מצטבר לשינוי אמיתי.'
+                    : 'We don\'t make a \'rigid meal plan\'. We help you make one better decision at a time - and it adds up to real change.'}
                 </p>
               </div>
             </div>
@@ -993,7 +1009,7 @@ function HomePage() {
         </section>
 
         {/* Results Section */}
-        <section className={`py-12 sm:py-16 md:py-20 ${themeClasses.sectionBg}`}>
+        <section className="py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12 sm:mb-16">
               <h3 className={`text-3xl sm:text-4xl md:text-5xl font-bold ${themeClasses.textPrimary} mb-4`}>
@@ -1068,25 +1084,44 @@ function HomePage() {
         </section>
 
         {/* Closing Statement Section */}
-        <section className={`py-12 sm:py-16 md:py-20 ${isDarkMode ? 'bg-gradient-to-br from-gray-800 to-gray-900' : 'bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+        <section className="py-16 sm:py-20 md:py-24">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h3 className={`text-3xl sm:text-4xl md:text-5xl font-bold ${themeClasses.textPrimary} mb-4`}>
-              <span className={isDarkMode ? 'text-green-400' : 'text-green-600'}>
-                {language === 'hebrew' ? 'BetterChoice AI - תזונה פשוטה, בחירות טובות יותר.' : 'BetterChoice AI — Simple nutrition, Better Choices.'}
+            <div className="mb-6">
+              <span className="text-5xl sm:text-6xl">🌿</span>
+            </div>
+            <h3 className={`text-3xl sm:text-4xl md:text-5xl font-semibold ${themeClasses.textPrimary} mb-6 leading-tight`}>
+              <span className={isDarkMode ? 'text-emerald-300' : 'text-emerald-700'}>
+                {language === 'hebrew' ? 'BetterChoice' : 'BetterChoice'}
+              </span>
+              <br />
+              <span className={`${themeClasses.textPrimary} text-2xl sm:text-3xl md:text-4xl font-normal`}>
+                {language === 'hebrew' 
+                  ? 'תזונה פשוטה. בחירות טובות יותר. כל יום.' 
+                  : 'Simple nutrition. Better choices. Every day.'}
               </span>
             </h3>
+            <p className={`text-lg sm:text-xl ${themeClasses.textSecondary} max-w-2xl mx-auto italic`}>
+              {language === 'hebrew'
+                ? 'כי כל החלטה טובה מובילה לשינוי אמיתי'
+                : 'Because every good choice leads to real change'}
+            </p>
           </div>
         </section>
 
         {/* How It Works Section */}
-        <section className={`py-12 sm:py-16 md:py-20 ${themeClasses.sectionBg}`}>
+        <section className="py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12 sm:mb-16">
-              <h3 className={`text-3xl sm:text-4xl md:text-5xl font-bold ${themeClasses.textPrimary} mb-4`}>
-                <span className={isDarkMode ? 'text-green-400' : 'text-green-600'}>
+              <h3 className={`text-3xl sm:text-4xl md:text-5xl font-semibold ${themeClasses.textPrimary} mb-4`}>
+                <span className={isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}>
                   {language === 'hebrew' ? 'איך זה עובד' : 'How It Works'}
                 </span>
               </h3>
+              <p className={`text-lg sm:text-xl ${themeClasses.textSecondary} mt-4 max-w-2xl mx-auto`}>
+                {language === 'hebrew' 
+                  ? 'פשוט, טבעי, ומותאם לך'
+                  : 'Simple, natural, and made for you'}
+              </p>
             </div>
             
             {/* Flow Layout */}
@@ -1176,7 +1211,7 @@ function HomePage() {
 
 
         {/* Testimonials Section */}
-        <section className={`py-20 ${themeClasses.sectionBg}`}>
+        <section className="py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
               <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.testimonials.title}</h3>
@@ -1242,7 +1277,7 @@ function HomePage() {
         </section>
 
         {/* Pricing Section */}
-        <section data-tour="pricing-section" className={`py-20 ${themeClasses.bgSecondary}`} id="know-your-numbers">
+        <section data-tour="pricing-section" className="py-20" id="know-your-numbers">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
               <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>
@@ -1496,7 +1531,7 @@ function HomePage() {
 
 
         {/* Stats Section */}
-        <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600">
+        <section className={`py-12 sm:py-16 md:py-20 ${isDarkMode ? 'bg-gradient-to-r from-emerald-700 via-green-700 to-emerald-800' : 'bg-gradient-to-r from-emerald-400 via-green-500 to-emerald-500'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 md:gap-8 text-center">
               <div className="text-white">
@@ -1530,7 +1565,7 @@ function HomePage() {
 
 
         {/* Celebrations Section */}
-        <section className={`py-20 ${isDarkMode ? 'bg-gradient-to-r from-gray-800 to-gray-900' : 'bg-gradient-to-r from-yellow-50 to-orange-50'}`}>
+        <section className="py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
               <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.celebrations.title}</h3>
@@ -1626,7 +1661,7 @@ function HomePage() {
 
 
         {/* Professional Platform Section */}
-        <section className={`py-20 ${themeClasses.sectionBg}`}>
+        <section className="py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
               <h3 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>
@@ -1718,7 +1753,7 @@ function HomePage() {
         </section>
 
         {/* Contact Section */}
-        <section id="contact-section" className={`py-12 sm:py-16 md:py-20 ${themeClasses.bgSecondary}`}>
+        <section id="contact-section" className="py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-8 sm:mb-12 md:mb-16">
               <h3 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${themeClasses.textPrimary} mb-3 sm:mb-4`}>{t.contact.title}</h3>
@@ -1790,14 +1825,8 @@ function HomePage() {
                   <h5 className={`text-xl font-bold ${themeClasses.textPrimary} mb-4`}>{t.contact.details.title}</h5>
                   <div className="space-y-4">
                     <div className="flex items-center">
-                      <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center mr-4">
-                        <span className="text-white text-lg">📞</span>
-                      </div>
-                      <div>
-                        <div className={`font-semibold ${themeClasses.textPrimary}`}>{t.contact.details.phone}</div>
-                        <div className={themeClasses.textSecondary}>050-2420905</div>
-                        <div className={`${themeClasses.textMuted} text-sm`}>{language === 'hebrew' ? 'זמינים א-ה 8:00-18:00' : 'Available Sun-Thu 8:00-18:00'}</div>
-                      </div>
+                     
+                     
                     </div>
                     <div className="flex items-center">
                       <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center mr-4">
@@ -1854,19 +1883,19 @@ function HomePage() {
         </section>
 
         {/* Footer */}
-        <footer className={`${themeClasses.footerBg} text-white py-8 sm:py-10 md:py-12`}>
+        <footer className="py-8 sm:py-10 md:py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 md:gap-8 mb-4 md:mb-0 text-center sm:text-left">
                 <Link 
                   to="/privacy-policy" 
-                  className="text-gray-300 hover:text-white transition-colors duration-300 text-sm sm:text-base"
+                  className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm sm:text-base`}
                 >
                   {t.footer.privacy}
                 </Link>
                 <Link 
                   to="/terms" 
-                  className="text-gray-300 hover:text-white transition-colors duration-300 text-sm sm:text-base"
+                  className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm sm:text-base`}
                 >
                   {t.footer.terms}
                 </Link>
@@ -1878,12 +1907,12 @@ function HomePage() {
                       console.error('Cookie consent error:', error);
                     }
                   }}
-                  className="text-gray-300 hover:text-white transition-colors duration-300 cursor-pointer text-sm sm:text-base"
+                  className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 cursor-pointer text-sm sm:text-base`}
                 >
                   {language === 'hebrew' ? 'הגדרות עוגיות' : 'Cookie Settings'}
                 </button>
               </div>
-              <div className="text-gray-400 text-center">
+              <div className={`${isDarkMode ? 'text-gray-400' : 'text-emerald-600/80'} text-center`}>
                 <p className="text-xs sm:text-sm">{t.footer.copyright}</p>
               </div>
             </div>

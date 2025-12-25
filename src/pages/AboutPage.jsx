@@ -22,9 +22,9 @@ const AboutPage = () => {
       <Navigation />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
+      <main className={`flex-1 overflow-y-auto custom-scrollbar ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'}`} style={{ minHeight: 0 }}>
         {/* Hero Section */}
-        <div className="relative bg-gradient-to-b from-slate-800 via-slate-900 to-black py-12 sm:py-16 md:py-20">
+        <div className="relative py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             {/* Logo */}
             <div className="mb-6 sm:mb-8">
@@ -36,12 +36,12 @@ const AboutPage = () => {
             </div>
 
             {/* Main Heading */}
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-emerald-400 mb-4 sm:mb-6 px-2 animate-fadeIn">
+            <h1 className={`text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'} mb-4 sm:mb-6 px-2 animate-fadeIn`}>
               {language === 'hebrew' ? 'דיוק בינה מלאכותית, הדרכה קלינית מומחית' : 'AI Precision, Expert Clinical Guidance'}
             </h1>
 
             {/* Description */}
-            <div className="max-w-4xl mx-auto space-y-3 sm:space-y-4 text-base sm:text-lg text-slate-300 px-2 animate-slideInUp">
+            <div className={`max-w-4xl mx-auto space-y-3 sm:space-y-4 text-base sm:text-lg ${themeClasses.textSecondary} px-2 animate-slideInUp`}>
               <p>
                 {language === 'hebrew' 
                   ? 'BetterChoice נוסדה ב-2025 מתוך צורך אמיתי: לספק לאנשים גישה לתזונה מדויקת, מקצועית ומותאמת אישית'
@@ -59,7 +59,7 @@ const AboutPage = () => {
         </div>
 
         {/* About BetterChoice AI Section */}
-        <div className={`py-20 ${isDarkMode ? 'bg-gradient-to-br from-gray-800 to-gray-900' : 'bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+        <div className="py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <div>
@@ -138,18 +138,18 @@ const AboutPage = () => {
         </div>
 
         {/* Mission & Vision Section */}
-        <div className="py-12 sm:py-16 md:py-20 bg-slate-900">
+        <div className="py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-10 md:gap-12">
               {/* Mission Card */}
-              <div className={`${themeClasses.bgCard} rounded-2xl p-8 shadow-xl border border-slate-700 hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`}>
+              <div className={`${themeClasses.bgCard} rounded-2xl p-8 shadow-xl border ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`}>
                 <div className="text-center mb-8">
                   <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/25">
                     <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"/>
                     </svg>
                   </div>
-                  <h2 className="text-3xl font-bold text-white mb-4">
+                  <h2 className={`text-3xl font-bold ${themeClasses.textPrimary} mb-4`}>
                     {language === 'hebrew' ? 'המשימה שלנו' : 'Our Mission'}
                   </h2>
                 </div>
@@ -167,27 +167,27 @@ const AboutPage = () => {
                   ].map((item, index) => (
                     <div key={index} className="flex items-start">
                       <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                      <p className="text-slate-300">{item}</p>
+                      <p className={themeClasses.textSecondary}>{item}</p>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Vision Card */}
-              <div className={`${themeClasses.bgCard} rounded-2xl p-8 shadow-xl border border-slate-700 hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`} style={{ animationDelay: '0.2s' }}>
+              <div className={`${themeClasses.bgCard} rounded-2xl p-8 shadow-xl border ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`} style={{ animationDelay: '0.2s' }}>
                 <div className="text-center mb-8">
                   <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/25">
                     <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd"/>
                     </svg>
                   </div>
-                  <h2 className="text-3xl font-bold text-white mb-4">
+                  <h2 className={`text-3xl font-bold ${themeClasses.textPrimary} mb-4`}>
                     {language === 'hebrew' ? 'החזון שלנו' : 'Our Vision'}
                   </h2>
                 </div>
                 
                 <div className="space-y-6">
-                  <p className="text-slate-300 text-lg leading-relaxed">
+                  <p className={`${themeClasses.textSecondary} text-lg leading-relaxed`}>
                     {language === 'hebrew'
                       ? 'להפוך תזונה בריאה לנגישה ומותאמת אישית לכולם, תוך שילוב הטכנולוגיה המתקדמת ביותר עם מומחיות קלינית מוכחת.'
                       : 'To make healthy nutrition accessible and personalized for everyone, combining the most advanced technology with proven clinical expertise.'
@@ -205,7 +205,7 @@ const AboutPage = () => {
                         <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
                           <span className="text-white text-xs font-bold">A</span>
                         </div>
-                        <p className="text-slate-300">{item}</p>
+                        <p className={themeClasses.textSecondary}>{item}</p>
                       </div>
                     ))}
                   </div>
@@ -216,13 +216,13 @@ const AboutPage = () => {
         </div>
 
         {/* Journey Section */}
-        <div className="py-12 sm:py-16 md:py-20 bg-slate-800">
+        <div className="py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-8 sm:mb-12 md:mb-16">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-emerald-400 mb-3 sm:mb-4 animate-fadeIn">
+              <h2 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'} mb-3 sm:mb-4 animate-fadeIn`}>
                 {language === 'hebrew' ? 'המסע שלנו' : 'Our Journey'}
               </h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-300 px-2 animate-slideInUp">
+              <p className={`text-base sm:text-lg md:text-xl ${themeClasses.textSecondary} px-2 animate-slideInUp`}>
                 {language === 'hebrew' ? 'המסע המותאם אישית שלך לבריאות טובה יותר מתחיל כאן' : 'Your personalized journey to better health starts here'}
               </p>
             </div>
@@ -281,7 +281,7 @@ const AboutPage = () => {
               ].map((step, index) => (
                 <div 
                   key={index} 
-                  className={`${themeClasses.bgCard} rounded-2xl p-6 text-center shadow-xl border border-slate-700 hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`}
+                  className={`${themeClasses.bgCard} rounded-2xl p-6 text-center shadow-xl border ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`}
                   style={{ animationDelay: `${0.1 * index}s` }}
                 >
                   <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/25">
@@ -290,22 +290,22 @@ const AboutPage = () => {
                   <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/25">
                     {step.icon}
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
-                  <p className="text-slate-300 text-sm leading-relaxed">{step.description}</p>
+                  <h3 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>{step.title}</h3>
+                  <p className={`${themeClasses.textSecondary} text-sm leading-relaxed`}>{step.description}</p>
                 </div>
               ))}
             </div>
 
             {/* Progress Bar */}
             <div className="relative">
-              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div className={`h-2 ${isDarkMode ? 'bg-slate-700' : 'bg-gray-300'} rounded-full overflow-hidden`}>
                 <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full animate-progressBar"></div>
               </div>
               <div className="flex justify-between mt-4">
-                <span className="text-slate-300 text-sm font-medium">
+                <span className={`${themeClasses.textSecondary} text-sm font-medium`}>
                   {language === 'hebrew' ? 'התחלה' : 'Start'}
                 </span>
-                <span className="text-slate-300 text-sm font-medium">
+                <span className={`${themeClasses.textSecondary} text-sm font-medium`}>
                   {language === 'hebrew' ? 'השלמה' : 'Complete'}
                 </span>
               </div>
@@ -314,17 +314,17 @@ const AboutPage = () => {
         </div>
 
         {/* Team Section */}
-        <div className="py-12 sm:py-16 md:py-20 bg-slate-900">
+        <div className="py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-8 sm:mb-12 md:mb-16">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-emerald-400 mb-3 sm:mb-4 animate-fadeIn">
+              <h2 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'} mb-3 sm:mb-4 animate-fadeIn`}>
                 {language === 'hebrew' ? 'הצוות שלנו' : 'Our Team'}
               </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-10 md:gap-12">
               {/* Gal Becker */}
-              <div className={`${themeClasses.bgCard} rounded-2xl p-8 shadow-xl border border-slate-700 hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`}>
+              <div className={`${themeClasses.bgCard} rounded-2xl p-8 shadow-xl border ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`}>
                 <div className="text-center">
                   <div className="w-24 h-24 mx-auto mb-6 relative">
                     <img 
@@ -342,21 +342,21 @@ const AboutPage = () => {
                       </svg>
                     </div>
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">Gal Becker</h3>
-                  <p className="text-emerald-400 text-lg font-semibold mb-4">
+                  <h3 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-2`}>Gal Becker</h3>
+                  <p className={`${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} text-lg font-semibold mb-4`}>
                     {language === 'hebrew' ? 'דיאטנית קלינית מורשית' : 'Licensed Clinical Dietitian'}
                   </p>
-                  <p className="text-slate-300 mb-6">
+                  <p className={`${themeClasses.textSecondary} mb-6`}>
                     {language === 'hebrew' 
                       ? 'מומחית בתזונת ספורט וירידה במשקל עם שנים של ניסיון עם אלפי מטופלים'
                       : 'Expert in sports nutrition and weight loss with years of experience with thousands of patients'
                     }
                   </p>
                   <div className="text-left">
-                    <h4 className="text-white font-bold mb-2">
+                    <h4 className={`${themeClasses.textPrimary} font-bold mb-2`}>
                       {language === 'hebrew' ? 'ניסיון' : 'Experience'}
                     </h4>
-                    <p className="text-slate-300">
+                    <p className={themeClasses.textSecondary}>
                       {language === 'hebrew' ? 'תואר שני במדעי התזונה' : 'Master\'s degree in Nutrition Sciences'}
                     </p>
                   </div>
@@ -364,7 +364,7 @@ const AboutPage = () => {
               </div>
 
               {/* Yarden Ovadia */}
-              <div className={`${themeClasses.bgCard} rounded-2xl p-8 shadow-xl border border-slate-700 hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`} style={{ animationDelay: '0.2s' }}>
+              <div className={`${themeClasses.bgCard} rounded-2xl p-8 shadow-xl border ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} hover:border-emerald-500/30 transition-all duration-300 animate-slideInUp`} style={{ animationDelay: '0.2s' }}>
                 <div className="text-center">
                   <div className="w-24 h-24 mx-auto mb-6 relative">
                     <img 
@@ -382,21 +382,21 @@ const AboutPage = () => {
                       </svg>
                     </div>
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">Yarden Ovadia</h3>
-                  <p className="text-emerald-400 text-lg font-semibold mb-4">
+                  <h3 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-2`}>Yarden Ovadia</h3>
+                  <p className={`${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} text-lg font-semibold mb-4`}>
                     {language === 'hebrew' ? 'דיאטן קליני ומאמן כושר' : 'Clinical Dietitian and Fitness Trainer'}
                   </p>
-                  <p className="text-slate-300 mb-6">
+                  <p className={`${themeClasses.textSecondary} mb-6`}>
                     {language === 'hebrew' 
                       ? 'אימון כוח ותזונת ספורט'
                       : 'Strength training and sports nutrition'
                     }
                   </p>
                   <div className="text-left">
-                    <h4 className="text-white font-bold mb-2">
+                    <h4 className={`${themeClasses.textPrimary} font-bold mb-2`}>
                       {language === 'hebrew' ? 'ניסיון' : 'Experience'}
                     </h4>
-                    <p className="text-slate-300">
+                    <p className={themeClasses.textSecondary}>
                       {language === 'hebrew' ? 'דיאטן קליני' : 'Clinical Dietitian'}
                     </p>
                   </div>
@@ -407,7 +407,7 @@ const AboutPage = () => {
         </div>
 
         {/* Contact Section */}
-        <div className="py-12 sm:py-16 md:py-20 bg-gradient-to-r from-emerald-600 to-emerald-700">
+        <div className={`py-12 sm:py-16 md:py-20 ${isDarkMode ? 'bg-gradient-to-r from-emerald-700 via-green-700 to-emerald-800' : 'bg-gradient-to-r from-emerald-400 via-green-500 to-emerald-500'}`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4 sm:mb-6 animate-fadeIn">
               {language === 'hebrew' ? 'צור קשר' : 'Contact Us'}
@@ -420,33 +420,24 @@ const AboutPage = () => {
             </p>
 
             {/* Contact Info */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 mb-8 sm:mb-10 md:mb-12">
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 animate-slideInUp">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
-                  </svg>
-                </div>
-                <p className="text-white font-semibold">050-2420905</p>
-              </div>
-
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 animate-slideInUp" style={{ animationDelay: '0.1s' }}>
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-6 sm:gap-8 mb-8 sm:mb-10 md:mb-12">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 animate-slideInUp w-full sm:w-auto sm:min-w-[280px] max-w-md" style={{ animationDelay: '0.1s' }}>
                 <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mx-auto mb-4">
                   <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
                     <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
                   </svg>
                 </div>
-                <p className="text-white font-semibold">info@betterchoice.live</p>
+                <p className="text-white font-semibold text-center">info@betterchoice.live</p>
               </div>
 
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 animate-slideInUp w-full sm:w-auto sm:min-w-[280px] max-w-md" style={{ animationDelay: '0.2s' }}>
                 <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mx-auto mb-4">
                   <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"/>
                   </svg>
                 </div>
-                <p className="text-white font-semibold">Maskit 10, Herzliya</p>
+                <p className="text-white font-semibold text-center">Maskit 10, Herzliya</p>
               </div>
             </div>
 
@@ -463,7 +454,7 @@ const AboutPage = () => {
               </Link>
               <Link 
                 to="/contact"
-                className="bg-slate-800 text-white font-semibold py-4 px-8 rounded-xl hover:bg-slate-700 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center"
+                className={`${isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-semibold py-4 px-8 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center`}
               >
                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd"/>

@@ -179,34 +179,34 @@ function LoginPage() {
   return (
     <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition`} dir={direction}>
       {/* Header */}
-      <header className={`${themeClasses.bgHeader} shadow-lg`}>
+      <header className={`${isDarkMode ? 'bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-r from-emerald-50 via-green-50 to-amber-50'} shadow-md border-b ${isDarkMode ? 'border-emerald-900/50' : 'border-emerald-100/50'} backdrop-blur-md`}>
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4 sm:py-6">
             <div className="flex items-center">
               <img src="/favicon.ico" alt="BetterChoice Logo" className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 mr-2 sm:mr-4 rounded-lg shadow-md" />
               <div className="flex flex-col">
-                <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white leading-tight">BetterChoice</h1>
-                <p className="text-emerald-200 text-xs sm:text-sm font-medium hidden sm:block">{t.tagline}</p>
+                <h1 className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} leading-tight`}>BetterChoice</h1>
+                <p className={`${isDarkMode ? 'text-emerald-300/80' : 'text-emerald-600/80'} text-xs sm:text-sm font-medium hidden sm:block`}>{t.tagline}</p>
               </div>
             </div>
             <div className="flex gap-2 sm:gap-4">
               <button 
                 onClick={toggleTheme}
-                className={`${isDarkMode ? 'bg-gray-700 text-yellow-400' : 'bg-white text-gray-600'} px-3 sm:px-4 py-2 rounded-full font-semibold hover:opacity-80 transition-all duration-300 text-xs sm:text-sm`}
+                className={`${isDarkMode ? 'bg-slate-800/80 text-yellow-400 hover:bg-slate-700/80' : 'bg-white/80 text-gray-600 hover:bg-white'} px-3 sm:px-4 py-2 rounded-full font-medium transition-all duration-300 text-xs sm:text-sm shadow-sm backdrop-blur-md border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'}`}
                 title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {isDarkMode ? '☀️' : '🌙'}
               </button>
               <button 
                 onClick={toggleLanguage}
-                className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-600'} px-3 sm:px-4 py-2 rounded-full font-semibold hover:opacity-80 transition-all duration-300 text-xs sm:text-sm`}
+                className={`${isDarkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-600'} text-white px-3 sm:px-4 py-2 rounded-full font-medium transition-all duration-300 text-xs sm:text-sm shadow-md`}
                 title={language === 'hebrew' ? 'Switch to English' : 'עבור לעברית'}
               >
                 {language === 'hebrew' ? 'EN' : 'עב'}
               </button>
               <Link 
                 to="/" 
-                className="bg-white text-emerald-600 px-3 sm:px-4 md:px-6 py-2 rounded-full font-semibold hover:bg-emerald-50 transition-colors duration-300 text-xs sm:text-sm"
+                className={`${isDarkMode ? 'bg-slate-800/80 text-emerald-200 hover:bg-slate-700/80' : 'bg-white/80 text-emerald-700 hover:bg-white'} px-3 sm:px-4 md:px-6 py-2 rounded-full font-medium transition-colors duration-300 text-xs sm:text-sm shadow-sm backdrop-blur-md border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'}`}
               >
                 {language === 'hebrew' ? 'חזרה לבית' : 'Back to Home'}
               </Link>
@@ -216,7 +216,7 @@ function LoginPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center py-6 sm:py-8 md:py-12 px-4 sm:px-6 lg:px-8">
+      <main className={`flex-1 flex items-center justify-center py-6 sm:py-8 md:py-12 px-4 sm:px-6 lg:px-8 ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'}`}>
         <div className="max-w-md w-full space-y-6 sm:space-y-8">
           <div className="text-center">
             <h2 className={`text-2xl sm:text-3xl font-bold ${themeClasses.textPrimary} mb-2`}>
@@ -377,24 +377,24 @@ function LoginPage() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-6 sm:py-8">
+      <footer className={`${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'} py-6 sm:py-8`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 md:gap-8 mb-2 md:mb-0 text-center">
               <a 
                 href="#privacy" 
-                className="text-gray-300 hover:text-white transition-colors duration-300 text-sm"
+                className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm`}
               >
                 {t.footer.privacy}
               </a>
               <a 
                 href="#terms" 
-                className="text-gray-300 hover:text-white transition-colors duration-300 text-sm"
+                className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm`}
               >
                 {t.footer.terms}
               </a>
             </div>
-            <div className="text-gray-400 text-center">
+            <div className={`${isDarkMode ? 'text-gray-400' : 'text-emerald-600/80'} text-center`}>
               <p className="text-xs sm:text-sm">{t.footer.copyright}</p>
             </div>
           </div>

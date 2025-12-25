@@ -924,7 +924,7 @@ function RecipesPage() {
       <Navigation />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
+      <main className={`flex-1 overflow-y-auto custom-scrollbar ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'}`} style={{ minHeight: 0 }}>
         {/* Hero Section */}
         <section className="py-8 sm:py-10 md:py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">

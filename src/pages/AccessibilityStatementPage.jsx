@@ -88,7 +88,6 @@ const AccessibilityStatementPage = () => {
       coordinator: 'רכז נגישות: BetterChoice',
       email: 'דוא"ל:',
       emailAddress: 'info@betterchoice.live',
-      phone: 'טלפון: 050-2420905',
       response: 'זמן תגובה: תוך 5 ימי עבודה',
       note: 'בפנייה אנא פרטו: את הדפדפן בו אתם משתמשים, תיאור הבעיה, וקישור לעמוד הרלוונטי.'
     },
@@ -185,7 +184,6 @@ const AccessibilityStatementPage = () => {
       coordinator: 'Accessibility Coordinator: BetterChoice',
       email: 'Email:',
       emailAddress: 'info@betterchoice.live',
-      phone: 'Phone: 050-2420905',
       response: 'Response time: Within 5 business days',
       note: 'When contacting, please include: the browser you\'re using, description of the issue, and link to the relevant page.'
     },

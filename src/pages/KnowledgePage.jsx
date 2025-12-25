@@ -102,9 +102,9 @@ const KnowledgePage = () => {
       <Navigation />
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
+      <main className={`flex-1 overflow-y-auto custom-scrollbar ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'}`} style={{ minHeight: 0 }}>
         {/* Hero Section */}
-        <div className={`relative ${isDarkMode ? 'bg-gradient-to-b from-slate-800 via-slate-900 to-black' : 'bg-gradient-to-b from-emerald-50 via-emerald-100 to-emerald-200'} py-12 sm:py-16 md:py-20`}>
+        <div className="relative py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             {/* Icon */}
             <div className="mb-6 sm:mb-8">
@@ -131,7 +131,7 @@ const KnowledgePage = () => {
         </div>
 
         {/* Studies Section */}
-        <div className={`py-12 sm:py-16 md:py-20 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+        <div className="py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Section Header */}
             <div className="text-center mb-8 sm:mb-12 md:mb-16">
@@ -239,7 +239,7 @@ const KnowledgePage = () => {
         </div>
 
         {/* Back to Home Button */}
-        <div className={`${isDarkMode ? 'bg-black' : 'bg-emerald-50'} py-12`}>
+        <div className="py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <Link
               to="/"
