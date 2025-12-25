@@ -28,35 +28,44 @@ function SignupPage() {
     try {
       // Get the hash fragment (e.g., "#d=YWJjZGVmZ2hpams=")
       const hash = window.location.hash;
+      console.log('🔍 Raw hash:', hash);
       
       if (!hash || hash.length === 0) {
+        console.log('⚠️ No hash found in URL');
         return null;
       }
       
       // Extract the 'd' parameter value using regex
       const match = hash.match(/[#&]d=([^&]*)/);
+      console.log('🔍 Regex match result:', match);
       
       if (match && match[1]) {
         const base64Value = match[1];
+        console.log('🔍 Base64 value found:', base64Value);
         
         try {
           // Decode from Base64 to get the original dietitian ID (UUID)
           const decodedId = atob(base64Value);
+          console.log('✅ Decoded dietitian ID:', decodedId);
           
           // Validate it looks like a UUID (basic check)
           if (decodedId && decodedId.length > 0) {
             return decodedId;
+          } else {
+            console.error('❌ Decoded ID is empty');
+            return null;
           }
-          return null;
         } catch (decodeError) {
-          console.error('Error decoding Base64:', decodeError);
+          console.error('❌ Error decoding Base64:', decodeError);
           return null;
         }
+      } else {
+        console.log('⚠️ No "d" parameter found in hash');
       }
       
       return null;
     } catch (error) {
-      console.error('Error extracting dietitian ID from hash:', error);
+      console.error('❌ Error extracting dietitian ID from hash:', error);
       return null;
     }
   };
@@ -64,11 +73,17 @@ function SignupPage() {
   // Extract dietitian ID from URL hash on component mount and on hash changes
   useEffect(() => {
     const extractAndStoreDietitianId = () => {
+      const hash = window.location.hash;
+      console.log('🔍 Current hash:', hash);
       const id = getDietitianIdFromHash();
+      console.log('🔍 Extracted dietitian ID:', id);
       if (id) {
         setDietitianId(id);
         // Also store in sessionStorage as backup
         sessionStorage.setItem('referral_dietitian_id', id);
+        console.log('✅ Dietitian ID extracted and stored from referral link:', id);
+      } else {
+        console.log('⚠️ No dietitian ID found in hash');
       }
     };
     
@@ -110,6 +125,7 @@ function SignupPage() {
       const id = dietitianId || getDietitianIdFromHash();
       if (id) {
         sessionStorage.setItem('referral_dietitian_id', id);
+        console.log('Stored dietitian ID for OAuth signup:', id);
       }
       const { error } = await signInWithGoogle();
       if (error) {
@@ -136,6 +152,7 @@ function SignupPage() {
       const id = dietitianId || getDietitianIdFromHash();
       if (id) {
         sessionStorage.setItem('referral_dietitian_id', id);
+        console.log('Stored dietitian ID for OAuth signup:', id);
       }
       const { error } = await signInWithFacebook();
       if (error) {
@@ -175,6 +192,7 @@ function SignupPage() {
     }
 
     // Check if email already exists
+    console.log('🔍 Checking if email already exists...');
     const emailCheck = await checkEmailExists(formData.email);
     if (emailCheck.exists) {
       setError(
@@ -185,6 +203,8 @@ function SignupPage() {
       setLoading(false);
       return;
     }
+
+    console.log('✅ Email is available!');
 
     try {
       const userData = {
@@ -200,14 +220,25 @@ function SignupPage() {
         // Create client record in clients table
         if (data?.user?.id) {
           try {
+            console.log('Attempting to create client record...');
             // Get dietitian ID from state or sessionStorage
             const referralDietitianId = dietitianId || sessionStorage.getItem('referral_dietitian_id');
+            console.log('🔍 Referral dietitian ID from state:', dietitianId);
+            console.log('🔍 Referral dietitian ID from sessionStorage:', sessionStorage.getItem('referral_dietitian_id'));
+            console.log('🔍 Combined referral dietitian ID:', referralDietitianId);
             
             // Ensure we pass null (not empty string) if no referral ID exists
             const providerId = referralDietitianId && referralDietitianId.trim && referralDietitianId.trim() !== '' ? referralDietitianId.trim() : null;
+            console.log('🔍 Final providerId to pass:', providerId, 'type:', typeof providerId);
             
+            if (providerId) {
+              console.log('✅ Using referral dietitian ID:', providerId);
+            } else {
+              console.log('⚠️ No referral link detected, will use default BetterChoice company manager');
+            }
             const clientResult = await createClientRecord(data.user.id, userData, providerId);
             if (clientResult.error) {
+              console.error('Client record creation failed:', clientResult.error);
               setError(
                 language === 'hebrew' 
                   ? 'החשבון נוצר אבל לא ניתן ליצור רשומת לקוח. אנא פנה לתמיכה.' 
@@ -215,12 +246,14 @@ function SignupPage() {
               );
               return;
             }
+            console.log('Client record created successfully');
             // Clear stored dietitian ID after successful creation
             if (referralDietitianId) {
               sessionStorage.removeItem('referral_dietitian_id');
               setDietitianId(null);
             }
           } catch (clientError) {
+            console.error('Failed to create client record:', clientError);
             setError(
               language === 'hebrew' 
                 ? 'החשבון נוצר אבל לא ניתן ליצור רשומת לקוח. אנא פנה לתמיכה.' 
