@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { createClient } = require('@supabase/supabase-js');
+
 // Initialize Supabase client for main project (Stripe, clients, etc.)
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
@@ -19,9 +20,6 @@ const chatSupabase = chatSupabaseUrl && chatSupabaseServiceRoleKey
   : null;
 
 console.log('Supabase connection:', process.env.REACT_APP_SUPABASE_URL ? 'Configured' : 'Missing URL');
-
-// Supabase Storage bucket name for profile pictures
-const PROFILE_PICTURES_BUCKET = process.env.SUPABASE_STORAGE_BUCKET_NAME;
 
 const app = express();
 function normalizePort(value) {
@@ -52,8 +50,8 @@ app.use(cors({
 // Raw body parser for webhooks (BEFORE express.json())
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));
 
-// JSON parser for other routes (increase limit for image uploads)
-app.use(express.json({ limit: '10mb' }));
+// JSON parser for other routes
+app.use(express.json());
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -1507,165 +1505,6 @@ app.post('/api/contact', async (req, res) => {
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to process contact form'
-    });
-  }
-});
-
-// ====================================
-// PROFILE IMAGE UPLOAD
-// ====================================
-
-// Upload profile image to Supabase Storage
-app.post('/api/upload-profile-image', async (req, res) => {
-  try {
-    if (!supabase) {
-      return res.status(503).json({
-        error: 'Storage not configured',
-        message: 'Supabase is not configured. Please check your environment variables.'
-      });
-    }
-
-    const { userId, imageData } = req.body;
-
-    // Validate inputs
-    if (!userId) {
-      return res.status(400).json({
-        error: 'Missing userId',
-        message: 'User ID is required'
-      });
-    }
-
-    if (!imageData) {
-      return res.status(400).json({
-        error: 'Missing image data',
-        message: 'Image data is required (base64 encoded)'
-      });
-    }
-
-    // Validate image data format (should be base64 data URL)
-    if (!imageData.startsWith('data:image/')) {
-      return res.status(400).json({
-        error: 'Invalid image format',
-        message: 'Image must be a valid base64 encoded image (data URL)'
-      });
-    }
-
-    // Extract image format and base64 data
-    const matches = imageData.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!matches) {
-      return res.status(400).json({
-        error: 'Invalid image data',
-        message: 'Image data must be in format: data:image/<format>;base64,<data>'
-      });
-    }
-
-    const imageFormat = matches[1];
-    const base64Data = matches[2];
-
-    // Validate image format (only allow common image types)
-    const allowedFormats = ['jpeg', 'jpg', 'png', 'gif', 'webp'];
-    if (!allowedFormats.includes(imageFormat.toLowerCase())) {
-      return res.status(400).json({
-        error: 'Unsupported image format',
-        message: `Image format must be one of: ${allowedFormats.join(', ')}`
-      });
-    }
-
-    // Validate image size (max 5MB)
-    const imageSizeInBytes = (base64Data.length * 3) / 4;
-    const maxSizeInBytes = 5 * 1024 * 1024; // 5MB
-    if (imageSizeInBytes > maxSizeInBytes) {
-      return res.status(400).json({
-        error: 'Image too large',
-        message: 'Image size must be less than 5MB'
-      });
-    }
-
-    // Get user_code from clients table
-    const { data: clientData, error: clientError } = await supabase
-      .from('clients')
-      .select('user_code')
-      .eq('user_id', userId)
-      .single();
-
-    if (clientError) {
-      if (clientError.code === 'PGRST116') {
-        // No client record found
-        return res.status(400).json({
-          error: 'User profile not found',
-          message: 'User profile not found. Please complete your profile setup first.'
-        });
-      }
-      console.error('Error fetching user_code:', clientError);
-      return res.status(500).json({
-        error: 'Failed to fetch user code',
-        message: 'Could not retrieve user information. Please try again.'
-      });
-    }
-
-    // Use user_code (required)
-    const userCode = clientData?.user_code;
-    if (!userCode) {
-      return res.status(400).json({
-        error: 'User code not found',
-        message: 'User code not found. Please complete your profile setup first.'
-      });
-    }
-
-    // Convert base64 to buffer
-    const imageBuffer = Buffer.from(base64Data, 'base64');
-
-    // Generate unique filename using user_code
-    const timestamp = Date.now();
-    const filename = `${userCode}/${timestamp}.${imageFormat}`;
-
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(PROFILE_PICTURES_BUCKET)
-      .upload(filename, imageBuffer, {
-        contentType: `image/${imageFormat}`,
-        upsert: false, // Don't overwrite existing files (they have unique timestamps anyway)
-        cacheControl: '3600',
-        metadata: {
-          userId: userId,
-          userCode: userCode,
-          uploadedAt: new Date().toISOString()
-        }
-      });
-
-    if (uploadError) {
-      console.error('Error uploading to Supabase Storage:', uploadError);
-      return res.status(500).json({
-        error: 'Upload failed',
-        message: uploadError.message || 'Failed to upload profile image'
-      });
-    }
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(PROFILE_PICTURES_BUCKET)
-      .getPublicUrl(uploadData.path);
-
-    const publicUrl = urlData.publicUrl;
-
-    console.log('✅ Profile image uploaded successfully:', {
-      userId,
-      userCode,
-      filename: uploadData.path,
-      url: publicUrl.substring(0, 50) + '...'
-    });
-
-    res.status(200).json({
-      success: true,
-      url: publicUrl,
-      filename: uploadData.path
-    });
-
-  } catch (error) {
-    console.error('Profile image upload error:', error);
-    res.status(500).json({
-      error: 'Upload failed',
-      message: error.message || 'Failed to upload profile image'
     });
   }
 });

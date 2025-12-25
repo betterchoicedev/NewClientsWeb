@@ -2906,7 +2906,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   // Personal Information fields are always read-only - cannot be edited
   const isReadOnly = true;
 
-  // Handle profile image upload
+  // Handle profile image upload - directly to Supabase Storage
   const handleImageUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2927,67 +2927,88 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
     setImageError('');
 
     try {
-      // Convert file to base64
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const base64Data = reader.result;
+      // Get user_code from clients table
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('user_code')
+        .eq('user_id', user.id)
+        .single();
 
-          // Upload to server
-          // Use REACT_APP_API_URL if set (for production), otherwise use relative URL (proxy in dev)
-          const endpoint = process.env.REACT_APP_API_URL 
-            ? `${process.env.REACT_APP_API_URL}/api/upload-profile-image`
-            : '/api/upload-profile-image';
-          
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userId: user.id,
-              imageData: base64Data
-            })
-          });
-
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.message || data.error || 'Failed to upload image');
-          }
-
-          // Update profile data with new image URL
-          onInputChange('profileImageUrl', data.url);
-          
-          // Automatically save the image URL to the database
-          if (onSaveProfileImageUrl) {
-            const saveResult = await onSaveProfileImageUrl(data.url);
-            if (saveResult.error) {
-              console.error('Error saving profile image URL to database:', saveResult.error);
-              setImageError(language === 'hebrew' ? 'התמונה הועלתה אך לא נשמרה. אנא נסה לשמור ידנית.' : 'Image uploaded but not saved. Please try saving manually.');
-            } else {
-              setImageError('');
-            }
-          } else {
-            setImageError('');
-          }
-        } catch (error) {
-          console.error('Error uploading image:', error);
-          setImageError(error.message || (language === 'hebrew' ? 'שגיאה בהעלאת התמונה' : 'Error uploading image'));
-        } finally {
-          setUploadingImage(false);
+      if (clientError) {
+        if (clientError.code === 'PGRST116') {
+          setImageError(language === 'hebrew' ? 'פרופיל לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User profile not found. Please complete your profile setup first.');
+        } else {
+          console.error('Error fetching user_code:', clientError);
+          setImageError(language === 'hebrew' ? 'שגיאה בטעינת פרטי המשתמש' : 'Error loading user information');
         }
-      };
-
-      reader.onerror = () => {
-        setImageError(language === 'hebrew' ? 'שגיאה בקריאת הקובץ' : 'Error reading file');
         setUploadingImage(false);
-      };
+        return;
+      }
 
-      reader.readAsDataURL(file);
+      const userCode = clientData?.user_code;
+      if (!userCode) {
+        setImageError(language === 'hebrew' ? 'קוד משתמש לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User code not found. Please complete your profile setup first.');
+        setUploadingImage(false);
+        return;
+      }
+
+      // Get file extension
+      const fileExtension = file.name.split('.').pop().toLowerCase();
+      const imageFormat = fileExtension === 'jpg' ? 'jpeg' : fileExtension;
+
+      // Generate unique filename using user_code
+      const timestamp = Date.now();
+      const filename = `${userCode}/${timestamp}.${imageFormat}`;
+
+      // Upload directly to Supabase Storage
+      const bucketName = process.env.REACT_APP_SUPABASE_STORAGE_BUCKET_NAME || 'profile-pictures';
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(filename, file, {
+          contentType: file.type,
+          upsert: false,
+          cacheControl: '3600',
+          metadata: {
+            userId: user.id,
+            userCode: userCode,
+            uploadedAt: new Date().toISOString()
+          }
+        });
+
+      if (uploadError) {
+        console.error('Error uploading to Supabase Storage:', uploadError);
+        setImageError(uploadError.message || (language === 'hebrew' ? 'שגיאה בהעלאת התמונה' : 'Error uploading image'));
+        setUploadingImage(false);
+        return;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(uploadData.path);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Update profile data with new image URL
+      onInputChange('profileImageUrl', publicUrl);
+      
+      // Automatically save the image URL to the database
+      if (onSaveProfileImageUrl) {
+        const saveResult = await onSaveProfileImageUrl(publicUrl);
+        if (saveResult.error) {
+          console.error('Error saving profile image URL to database:', saveResult.error);
+          setImageError(language === 'hebrew' ? 'התמונה הועלתה אך לא נשמרה. אנא נסה לשמור ידנית.' : 'Image uploaded but not saved. Please try saving manually.');
+        } else {
+          setImageError('');
+        }
+      } else {
+        setImageError('');
+      }
     } catch (error) {
       console.error('Error processing image:', error);
       setImageError(error.message || (language === 'hebrew' ? 'שגיאה בעיבוד התמונה' : 'Error processing image'));
+    } finally {
       setUploadingImage(false);
     }
   };
