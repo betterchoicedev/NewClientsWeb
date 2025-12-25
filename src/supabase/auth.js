@@ -388,10 +388,13 @@ export const createClientRecord = async (userId, userData, providerId = null) =>
       if (supabaseSecondary && data && data[0]) {
         try {
           // Use provided provider_id from referral link, or find the default "better choice" company manager
-          let finalProviderId = providerId || null;
+          // Check if providerId is a valid non-empty string (UUID)
+          let finalProviderId = null;
+          if (providerId && typeof providerId === 'string' && providerId.trim().length > 0) {
+            finalProviderId = providerId.trim();
+          }
           
           if (!finalProviderId) {
-            console.log('No referral provider_id found, using default BetterChoice company manager');
             try {
               // Use the "better choice" company ID directly
               const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
@@ -408,16 +411,11 @@ export const createClientRecord = async (userId, userData, providerId = null) =>
 
               if (!managerError && managerData) {
                 finalProviderId = managerData.id;
-                console.log('Using default BetterChoice company manager:', finalProviderId);
-              } else {
-                console.warn('Could not find default BetterChoice company manager');
               }
             } catch (providerError) {
               console.error('Error finding default provider:', providerError);
               // Continue without provider_id if we can't find it
             }
-          } else {
-            console.log('Using referral provider_id:', finalProviderId);
           }
 
           const chatUserData = {
@@ -490,10 +488,13 @@ export const createClientRecord = async (userId, userData, providerId = null) =>
     if (supabaseSecondary && data && data[0]) {
       try {
         // Use provided provider_id from referral link, or find the default "better choice" company manager
-        let finalProviderId = providerId || null;
+        // Check if providerId is a valid non-empty string (UUID)
+        let finalProviderId = null;
+        if (providerId && typeof providerId === 'string' && providerId.trim().length > 0) {
+          finalProviderId = providerId.trim();
+        }
         
         if (!finalProviderId) {
-          console.log('No referral provider_id found, using default BetterChoice company manager');
           try {
             // Use the "better choice" company ID directly
             const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
@@ -510,16 +511,11 @@ export const createClientRecord = async (userId, userData, providerId = null) =>
 
             if (!managerError && managerData) {
               finalProviderId = managerData.id;
-              console.log('Using default BetterChoice company manager:', finalProviderId);
-            } else {
-              console.warn('Could not find default BetterChoice company manager');
             }
           } catch (providerError) {
             console.error('Error finding default provider:', providerError);
             // Continue without provider_id if we can't find it
           }
-        } else {
-          console.log('Using referral provider_id:', finalProviderId);
         }
 
         const chatUserData = {
