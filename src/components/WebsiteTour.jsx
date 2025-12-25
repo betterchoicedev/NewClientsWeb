@@ -15,6 +15,7 @@ const WebsiteTour = () => {
   const [highlightedElement, setHighlightedElement] = useState(null);
   const [tooltipKey, setTooltipKey] = useState(0); // Force re-render on resize
   const highlightRef = useRef(null);
+  const tourTimeoutRef = useRef(null); // Store timeout ID to cancel if user skips
 
   // Detect which page we're on
   const isHomePage = location.pathname === '/';
@@ -385,14 +386,6 @@ const WebsiteTour = () => {
           : 'Here you can customize your website settings: display calories and macros, measurement units, language, and dark mode.',
         position: 'bottom'
       },
-      {
-        target: 'profile-home-button',
-        title: language === 'hebrew' ? 'כפתור חזרה לבית' : 'Return to Home Button',
-        description: language === 'hebrew'
-          ? 'כפתור זה מחזיר אתכם לדף הבית הראשי של האתר.'
-          : 'This button returns you to the main homepage of the website.',
-        position: 'bottom'
-      }
     ];
   };
 
@@ -408,6 +401,12 @@ const WebsiteTour = () => {
 
   // Check if tour should be shown
   useEffect(() => {
+    // Clear any pending timeout when component unmounts or dependencies change
+    if (tourTimeoutRef.current) {
+      clearTimeout(tourTimeoutRef.current);
+      tourTimeoutRef.current = null;
+    }
+
     if (!loading) {
       if (isHomePage) {
         const tourCompleted = localStorage.getItem('websiteTourCompleted');
@@ -421,11 +420,16 @@ const WebsiteTour = () => {
           pathname: location.pathname
         });
         
-        if (!tourCompleted) {
+        if (!tourCompleted && !isOpen) {
           // Delay to ensure page is fully rendered
-          setTimeout(() => {
-            console.log('🎯 Opening Home Page Tour...');
-            setIsOpen(true);
+          tourTimeoutRef.current = setTimeout(() => {
+            // Check localStorage again before opening (user might have skipped)
+            const stillNotCompleted = !localStorage.getItem('websiteTourCompleted');
+            if (stillNotCompleted && !isOpen) {
+              console.log('🎯 Opening Home Page Tour...');
+              setIsOpen(true);
+            }
+            tourTimeoutRef.current = null;
           }, 2000);
         } else {
           console.log('ℹ️ Home tour already completed. Press Ctrl+Shift+T (or Cmd+Shift+T on Mac) to restart it.');
@@ -442,11 +446,19 @@ const WebsiteTour = () => {
           pathname: location.pathname
         });
         
-        if (!profileTourCompleted) {
+        if (!profileTourCompleted && !isOpen) {
           // Delay to ensure page is fully rendered
-          setTimeout(() => {
-            console.log('🎯 Opening Profile Page Tour...');
-            setIsOpen(true);
+          tourTimeoutRef.current = setTimeout(() => {
+            // Check localStorage again before opening (user might have skipped)
+            const stillNotCompleted = !localStorage.getItem('profileTourCompleted');
+            if (stillNotCompleted && !isOpen) {
+              console.log('🎯 Opening Profile Page Tour...');
+              // Ensure welcome screen is shown and current step is reset
+              setShowWelcome(true);
+              setCurrentStep(-1);
+              setIsOpen(true);
+            }
+            tourTimeoutRef.current = null;
           }, 2000);
         } else {
           console.log('ℹ️ Profile tour already completed. Press Ctrl+Shift+P (or Cmd+Shift+P on Mac) to restart it.');
@@ -456,6 +468,14 @@ const WebsiteTour = () => {
         setIsOpen(false);
       }
     }
+
+    // Cleanup function to clear timeout on unmount
+    return () => {
+      if (tourTimeoutRef.current) {
+        clearTimeout(tourTimeoutRef.current);
+        tourTimeoutRef.current = null;
+      }
+    };
   }, [isAuthenticated, loading, isHomePage, isProfilePage, isOpen, location.pathname]);
 
   // Handle element highlighting
@@ -738,27 +758,33 @@ const WebsiteTour = () => {
         });
         
         if (isVisible) {
-          // On mobile with menu-required steps, avoid scrolling the window
-          // Only scroll within the menu container if needed
+          // On mobile with menu-required steps, ensure element is visible in viewport
           if (isMobileView && step.requiresMenu) {
-            // Check if element is already visible in viewport (with some margin)
+            // Check if element is already visible in viewport (with margin for tooltip)
             const elementRect = element.getBoundingClientRect();
             const viewportHeight = window.innerHeight;
-            const margin = 100; // Margin from viewport edges to account for tooltip
+            // Make tooltip height responsive
+            const isSmallPhone = viewportHeight < 700;
+            const isMediumPhone = viewportHeight < 900;
+            const tooltipHeight = isSmallPhone ? 280 : (isMediumPhone ? 320 : 400);
+            const margin = 20; // Small margin from viewport edges
             
-            const isElementVisible = elementRect.top >= margin && 
-                                   elementRect.bottom <= viewportHeight - margin;
+            // Calculate if element is visible with enough space for tooltip
+            const spaceAbove = elementRect.top;
+            const spaceBelow = viewportHeight - elementRect.bottom;
+            const needsScroll = elementRect.top < margin || 
+                               elementRect.bottom > viewportHeight - margin ||
+                               (elementRect.top < tooltipHeight + margin && spaceBelow < tooltipHeight);
             
-            if (isElementVisible) {
+            if (!needsScroll) {
               // Element is already visible, set highlighted element immediately
-              // Use a small delay to ensure menu animations are complete
               setTimeout(() => {
                 setHighlightedElement(element);
               }, 100);
               return true;
             }
             
-            // Find the scrollable menu container and scroll within it only
+            // Try to find scrollable parent container first
             let parent = element.parentElement;
             let scrolledInContainer = false;
             while (parent && parent !== document.body) {
@@ -768,34 +794,100 @@ const WebsiteTour = () => {
                 const containerRect = parent.getBoundingClientRect();
                 const scrollTop = parent.scrollTop + (elementRect.top - containerRect.top) - (containerRect.height / 2) + (elementRect.height / 2);
                 
-                // Save current window scroll position before scrolling container
-                const savedScrollY = window.scrollY;
-                
                 parent.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
                 scrolledInContainer = true;
                 
-                // Ensure window doesn't scroll (body is already position:fixed, but double-check)
-                // Set highlighted element after container scroll, with shorter delay for mobile
                 setTimeout(() => {
-                  // If window scroll changed, restore it (though it shouldn't with position:fixed)
-                  if (window.scrollY !== savedScrollY) {
-                    window.scrollTo(0, savedScrollY);
-                  }
-                  
-                  // Re-check element is still visible after scroll
                   const newRect = element.getBoundingClientRect();
                   if (newRect.width > 0 && newRect.height > 0) {
                     setHighlightedElement(element);
                   }
-                }, 350); // Shorter delay for mobile menu steps
+                }, 400);
                 break;
               }
               parent = parent.parentElement;
             }
             
-            // If we didn't scroll in a container, set highlighted element immediately
-            // Don't call scrollIntoView on mobile for menu elements to avoid window scroll
+            // If no scrollable container found, we need to make the mobile menu scrollable
+            // Since body is fixed, we can't scroll the window, so we must scroll the menu container
             if (!scrolledInContainer) {
+              // Find the mobile menu container - look for div with lg:hidden that contains our element
+              let mobileMenuContainer = null;
+              
+              // Start from element and go up to find the menu container
+              let current = element;
+              while (current && current !== document.body) {
+                const classes = current.className;
+                if (typeof classes === 'string' && 
+                    (classes.includes('lg:hidden') || classes.includes('lg\\:hidden')) &&
+                    (classes.includes('border-t') || current.querySelector('[data-tour="nav-links"]'))) {
+                  mobileMenuContainer = current;
+                  break;
+                }
+                current = current.parentElement;
+              }
+              
+              // If not found by traversing, try querySelector
+              if (!mobileMenuContainer) {
+                const allMenus = document.querySelectorAll('[class*="lg:hidden"], [class*="lg\\:hidden"]');
+                for (const menu of allMenus) {
+                  if (menu.contains(element) && menu.querySelector('[data-tour="nav-links"]')) {
+                    mobileMenuContainer = menu;
+                    break;
+                  }
+                }
+              }
+              
+              if (mobileMenuContainer) {
+                const containerRect = mobileMenuContainer.getBoundingClientRect();
+                const containerScrollHeight = mobileMenuContainer.scrollHeight;
+                const containerHeight = containerRect.height;
+                const availableHeight = viewportHeight - containerRect.top - 20;
+                
+                // Always make it scrollable if content is taller than viewport
+                if (containerScrollHeight > containerHeight || step.target === 'nav-links') {
+                  // Set max-height and make it scrollable
+                  if (!mobileMenuContainer.style.maxHeight) {
+                    mobileMenuContainer.style.maxHeight = `${availableHeight}px`;
+                  }
+                  mobileMenuContainer.style.overflowY = 'auto';
+                  mobileMenuContainer.style.overflowX = 'hidden';
+                  
+                  // Wait a frame for styles to apply
+                  requestAnimationFrame(() => {
+                    let scrollPosition = 0;
+                    
+                    if (step.target === 'nav-links') {
+                      // Step 4: Scroll to top to show all nav links from the beginning
+                      scrollPosition = 0;
+                    } else {
+                      // Steps 8 & 9: Calculate scroll to show the specific element
+                      const currentElementRect = element.getBoundingClientRect();
+                      const currentContainerRect = mobileMenuContainer.getBoundingClientRect();
+                      
+                      // Get element position relative to container's content (not viewport)
+                      const elementOffsetTop = currentElementRect.top - currentContainerRect.top + mobileMenuContainer.scrollTop;
+                      
+                      // Calculate scroll to center element in visible area (with space for tooltip)
+                      const tooltipSpace = 250; // Space needed for tooltip
+                      scrollPosition = elementOffsetTop - (availableHeight / 2) + (currentElementRect.height / 2) - tooltipSpace;
+                      scrollPosition = Math.max(0, Math.min(scrollPosition, mobileMenuContainer.scrollHeight - availableHeight));
+                    }
+                    
+                    // Scroll immediately (no smooth for instant positioning)
+                    mobileMenuContainer.scrollTop = scrollPosition;
+                    
+                    // Then highlight after a short delay
+                    setTimeout(() => {
+                      setHighlightedElement(element);
+                    }, 150);
+                  });
+                  
+                  return true;
+                }
+              }
+              
+              // Fallback: just highlight the element
               setTimeout(() => {
                 setHighlightedElement(element);
               }, 100);
@@ -876,7 +968,7 @@ const WebsiteTour = () => {
 
   // Recalculate tooltip position on scroll
   useEffect(() => {
-    if (!highlightedElement || showWelcome) return;
+    if (!highlightedElement || shouldShowWelcome) return;
     
     let scrollTimeout;
     const handleScroll = () => {
@@ -912,7 +1004,20 @@ const WebsiteTour = () => {
     const rect = highlightedElement.getBoundingClientRect();
     const step = tourSteps && tourSteps[currentStep] ? tourSteps[currentStep] : null;
     if (!step) return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
-    const tooltipHeight = 380; // Increased to account for content and buttons (Finish, Previous, Skip)
+    // Make tooltip height responsive based on screen size
+    const currentViewportHeight = window.innerHeight;
+    const isSmallPhone = currentViewportHeight < 700; // Small phones like iPhone SE
+    const isMediumPhone = currentViewportHeight < 900; // Medium phones
+    
+    let tooltipHeight;
+    if (isSmallPhone) {
+      tooltipHeight = 280; // Smaller for very small phones
+    } else if (isMediumPhone) {
+      tooltipHeight = 320; // Medium for medium phones
+    } else {
+      tooltipHeight = 380; // Full size for larger phones
+    }
+    
     const tooltipWidth = Math.min(450, window.innerWidth * 0.9);
     const spacing = 20;
     const viewportWidth = window.innerWidth;
@@ -1369,6 +1474,21 @@ const WebsiteTour = () => {
   };
 
   const handleFinish = () => {
+    // Clear any pending timeout to prevent tour from reopening
+    if (tourTimeoutRef.current) {
+      clearTimeout(tourTimeoutRef.current);
+      tourTimeoutRef.current = null;
+    }
+    
+    // Restore mobile menu styles if we modified them
+    const mobileMenuContainers = document.querySelectorAll('.lg\\:hidden[class*="border-t"]');
+    mobileMenuContainers.forEach(container => {
+      if (container.style.overflowY === 'auto' || container.style.maxHeight) {
+        container.style.overflowY = '';
+        container.style.maxHeight = '';
+      }
+    });
+    
     setIsOpen(false);
     // Close mobile drawer if it was opened by tour
     if (isProfilePage && isMobile) {
@@ -1393,12 +1513,17 @@ const WebsiteTour = () => {
     return null;
   }
 
-  const currentStepData = showWelcome ? null : (tourSteps && tourSteps[currentStep] ? tourSteps[currentStep] : null);
+  // Ensure we have valid tour steps before proceeding
+  const hasValidTourSteps = tourSteps && tourSteps.length > 0;
+  const currentStepData = showWelcome ? null : (hasValidTourSteps && tourSteps[currentStep] ? tourSteps[currentStep] : null);
+  
+  // If tour is open but we don't have valid steps, show welcome screen
+  const shouldShowWelcome = showWelcome || (isOpen && !hasValidTourSteps);
 
   // Get blur overlay regions (everything except highlighted element)
   const getBlurRegions = () => {
     // On welcome screen, blur everything
-    if (showWelcome || !highlightedElement) {
+    if (shouldShowWelcome || !highlightedElement) {
       return [{ top: 0, left: 0, width: '100%', height: '100%' }];
     }
 
@@ -1453,7 +1578,7 @@ const WebsiteTour = () => {
   };
 
   const blurRegions = getBlurRegions();
-  const tooltipStyle = showWelcome 
+  const tooltipStyle = shouldShowWelcome 
     ? { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
     : getTooltipPosition();
 
@@ -1469,7 +1594,7 @@ const WebsiteTour = () => {
       ))}
       
       {/* Highlighted element overlay (only during tour) */}
-      {!showWelcome && highlightedElement && (
+      {!shouldShowWelcome && highlightedElement && (
         <>
           <div
             className="absolute border-4 border-emerald-400 rounded-lg shadow-2xl shadow-emerald-500/50 pointer-events-none z-[10000] transition-all duration-300"
@@ -1499,43 +1624,44 @@ const WebsiteTour = () => {
         className="absolute z-[10001] pointer-events-auto"
         style={{
           ...tooltipStyle,
-          width: showWelcome ? '90vw' : 'min(450px, 90vw)',
-          maxWidth: showWelcome ? '600px' : '450px'
+          width: shouldShowWelcome ? 'min(90vw, 500px)' : 'min(450px, 90vw)',
+          maxWidth: shouldShowWelcome ? '500px' : '450px',
+          maxHeight: shouldShowWelcome ? '90vh' : 'auto'
         }}
       >
-        {showWelcome ? (
+        {shouldShowWelcome ? (
           /* Welcome Screen */
-          <div className={`${themeClasses.bgCard} rounded-2xl shadow-2xl border-2 border-emerald-500/50 p-8 relative text-center`}>
+          <div className={`${themeClasses.bgCard} rounded-2xl shadow-2xl border-2 border-emerald-500/50 p-4 sm:p-6 md:p-8 relative text-center max-h-[90vh] overflow-y-auto`}>
             {/* Language Selector */}
-            <div className="absolute top-6 right-6">
+            <div className="absolute top-2 right-2 sm:top-4 sm:right-4 md:top-6 md:right-6">
               <button
                 onClick={toggleLanguage}
-                className={`px-4 py-2 ${themeClasses.bgSecondary} ${themeClasses.textPrimary} rounded-lg font-semibold hover:${themeClasses.bgPrimary} transition-all border-2 border-emerald-500/50 hover:border-emerald-500 flex items-center gap-2`}
+                className={`px-2 py-1 sm:px-3 sm:py-1.5 md:px-4 md:py-2 ${themeClasses.bgSecondary} ${themeClasses.textPrimary} rounded-lg font-semibold hover:${themeClasses.bgPrimary} transition-all border-2 border-emerald-500/50 hover:border-emerald-500 flex items-center gap-1 sm:gap-2 text-xs sm:text-sm`}
                 title={language === 'hebrew' ? 'Switch to English' : 'עברית'}
               >
                 {language === 'hebrew' ? (
                   <>
-                    <span>🇬🇧</span>
-                    <span>English</span>
+                    <span className="text-sm sm:text-base">🇬🇧</span>
+                    <span className="hidden sm:inline">English</span>
                   </>
                 ) : (
                   <>
-                    <span>🇮🇱</span>
-                    <span>עברית</span>
+                    <span className="text-sm sm:text-base">🇮🇱</span>
+                    <span className="hidden sm:inline">עברית</span>
                   </>
                 )}
               </button>
             </div>
 
             {/* Welcome Icon/Logo */}
-            <div className="mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <span className="text-4xl">✨</span>
+            <div className="mb-3 sm:mb-4 md:mb-6 mt-6 sm:mt-4 md:mt-0">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-2 sm:mb-3 md:mb-4 shadow-lg">
+                <span className="text-2xl sm:text-3xl md:text-4xl">✨</span>
               </div>
             </div>
 
             {/* Title */}
-            <h2 className={`text-4xl font-bold ${themeClasses.textPrimary} mb-4`}>
+            <h2 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${themeClasses.textPrimary} mb-3 sm:mb-4 px-2 sm:px-0`}>
               {isProfilePage 
                 ? (language === 'hebrew' ? 'ברוכים הבאים לפרופיל שלכם!' : 'Welcome to Your Profile!')
                 : (language === 'hebrew' ? 'ברוכים הבאים ל-Better Choice!' : 'Welcome to Better Choice!')
@@ -1543,22 +1669,22 @@ const WebsiteTour = () => {
             </h2>
 
             {/* Description */}
-            <div className={`${themeClasses.textSecondary} mb-8 leading-relaxed space-y-4 ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+            <div className={`${themeClasses.textSecondary} mb-4 sm:mb-6 md:mb-8 leading-relaxed space-y-2 sm:space-y-3 md:space-y-4 px-2 sm:px-0 ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
               {isProfilePage ? (
                 <>
-                  <p className="text-lg">
+                  <p className="text-sm sm:text-base md:text-lg">
                     {language === 'hebrew' 
                       ? 'זהו הפרופיל האישי שלכם ב-Better Choice. כאן תוכלו לנהל את כל המידע האישי, תוכנית התזונה, מעקב יומי, ותקשורת עם הדיאטנית שלכם.'
                       : 'This is your personal profile on Better Choice. Here you can manage all your personal information, meal plan, daily tracking, and communication with your dietitian.'
                     }
                   </p>
-                  <p>
+                  <p className="text-xs sm:text-sm md:text-base">
                     {language === 'hebrew'
                       ? 'הסיור יראה לכם את כל התכונות העיקריות של הפרופיל: כרטיסיות הניווט, ניהול פרטים אישיים, צפייה בתוכנית התזונה, מעקב יומי, הודעות, תוכניות מנוי, והגדרות.'
                       : 'The tour will show you all the main features of your profile: navigation tabs, personal information management, meal plan viewing, daily tracking, messages, subscription plans, and settings.'
                     }
                   </p>
-                  <p className="font-semibold text-lg">
+                  <p className="font-semibold text-sm sm:text-base md:text-lg">
                     {language === 'hebrew'
                       ? 'האם תרצו לסיור קצר בפרופיל?'
                       : 'Would you like to take a quick tour of your profile?'
@@ -1567,19 +1693,19 @@ const WebsiteTour = () => {
                 </>
               ) : (
                 <>
-                  <p className="text-lg">
+                  <p className="text-sm sm:text-base md:text-lg">
                     {language === 'hebrew' 
                       ? 'Better Choice היא פלטפורמה מתקדמת לבריאות ואורח חיים בריא, המספקת לכם כלים מקצועיים להשגת המטרות שלכם.'
                       : 'Better Choice is an advanced platform for health and healthy living, providing you with professional tools to achieve your goals.'
                     }
                   </p>
-                  <p>
+                  <p className="text-xs sm:text-sm md:text-base">
                     {language === 'hebrew'
                       ? 'אצלנו תמצאו תוכניות תזונה מותאמות אישית, תוכניות אימון, מעקב התקדמות, ותמיכה מקצועית 24/7. אנו כאן כדי לעזור לכם להשיג את המטרות שלכם ולחיות חיים בריאים יותר.'
                       : 'With us, you\'ll find personalized nutrition plans, workout programs, progress tracking, and 24/7 professional support. We\'re here to help you achieve your goals and live a healthier life.'
                     }
                   </p>
-                  <p className="font-semibold text-lg">
+                  <p className="font-semibold text-sm sm:text-base md:text-lg">
                     {language === 'hebrew'
                       ? 'האם תרצו לסיור קצר באתר?'
                       : 'Would you like to take a quick tour of the website?'
@@ -1590,16 +1716,16 @@ const WebsiteTour = () => {
             </div>
 
             {/* Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center px-2 sm:px-0">
               <button
                 onClick={handleSkipWelcome}
-                className={`px-8 py-3 ${themeClasses.bgSecondary} ${themeClasses.textPrimary} rounded-xl font-semibold hover:${themeClasses.bgPrimary} transition-all shadow-lg w-full sm:w-auto`}
+                className={`px-6 py-2.5 sm:px-8 sm:py-3 ${themeClasses.bgSecondary} ${themeClasses.textPrimary} rounded-xl font-semibold hover:${themeClasses.bgPrimary} transition-all shadow-lg w-full sm:w-auto text-sm sm:text-base`}
               >
                 {language === 'hebrew' ? 'דלג' : 'Skip'}
               </button>
               <button
                 onClick={handleStartTour}
-                className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg w-full sm:w-auto"
+                className="px-6 py-2.5 sm:px-8 sm:py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg w-full sm:w-auto text-sm sm:text-base"
               >
                 {language === 'hebrew' ? 'התחל סיור' : 'Start Tour'}
               </button>
@@ -1608,31 +1734,31 @@ const WebsiteTour = () => {
         ) : currentStepData ? (
           /* Tour Tooltip */
           <>
-            <div className={`${themeClasses.bgCard} rounded-2xl shadow-2xl border-2 border-emerald-500/50 p-6 relative`}>
+            <div className={`${themeClasses.bgCard} rounded-2xl shadow-2xl border-2 border-emerald-500/50 p-3 sm:p-4 md:p-6 relative`}>
               {/* Step indicator */}
-              <div className="absolute -top-4 -right-4 w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
+              <div className="absolute -top-3 -right-3 sm:-top-4 sm:-right-4 w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg text-sm sm:text-base">
                 {currentStep + 1}
               </div>
 
               {/* Title */}
-              <h3 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-3 pr-8`}>
+              <h3 className={`text-lg sm:text-xl md:text-2xl font-bold ${themeClasses.textPrimary} mb-2 sm:mb-3 pr-6 sm:pr-8`}>
                 {currentStepData.title}
               </h3>
 
               {/* Description */}
-              <p className={`${themeClasses.textSecondary} mb-6 leading-relaxed`}>
+              <p className={`${themeClasses.textSecondary} mb-3 sm:mb-4 md:mb-6 leading-relaxed text-sm sm:text-base`}>
                 {currentStepData.description}
               </p>
 
               {/* Progress bar */}
-              <div className="mb-6">
-                <div className="w-full bg-gray-700/50 rounded-full h-2 overflow-hidden">
+              <div className="mb-3 sm:mb-4 md:mb-6">
+                <div className="w-full bg-gray-700/50 rounded-full h-1.5 sm:h-2 overflow-hidden">
                   <div
-                    className="bg-gradient-to-r from-emerald-400 to-emerald-600 h-2 rounded-full transition-all duration-500"
+                    className="bg-gradient-to-r from-emerald-400 to-emerald-600 h-1.5 sm:h-2 rounded-full transition-all duration-500"
                     style={{ width: `${((currentStep + 1) / tourSteps.length) * 100}%` }}
                   />
                 </div>
-                <p className={`text-xs ${themeClasses.textMuted} mt-2 text-center`}>
+                <p className={`text-xs ${themeClasses.textMuted} mt-1 sm:mt-2 text-center`}>
                   {language === 'hebrew' 
                     ? `שלב ${currentStep + 1} מתוך ${tourSteps.length}`
                     : `Step ${currentStep + 1} of ${tourSteps.length}`
@@ -1641,26 +1767,26 @@ const WebsiteTour = () => {
               </div>
 
               {/* Buttons */}
-              <div className="flex justify-between items-center gap-3">
+              <div className="flex justify-between items-center gap-2 sm:gap-3">
                 <button
                   onClick={handleSkip}
-                  className={`px-4 py-2 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary} transition-colors text-sm font-medium`}
+                  className={`px-3 py-1.5 sm:px-4 sm:py-2 ${themeClasses.textSecondary} hover:${themeClasses.textPrimary} transition-colors text-xs sm:text-sm font-medium`}
                 >
                   {language === 'hebrew' ? 'דלג' : 'Skip'}
                 </button>
 
-                <div className="flex gap-3">
+                <div className="flex gap-2 sm:gap-3">
                   {currentStep > 0 && (
                     <button
                       onClick={handlePrevious}
-                      className={`px-6 py-2 ${themeClasses.bgSecondary} ${themeClasses.textPrimary} rounded-lg font-semibold hover:${themeClasses.bgPrimary} transition-colors`}
+                      className={`px-4 py-1.5 sm:px-6 sm:py-2 ${themeClasses.bgSecondary} ${themeClasses.textPrimary} rounded-lg font-semibold hover:${themeClasses.bgPrimary} transition-colors text-xs sm:text-sm`}
                     >
                       {language === 'hebrew' ? '← קודם' : '← Previous'}
                     </button>
                   )}
                   <button
                     onClick={handleNext}
-                    className="px-6 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg"
+                    className="px-4 py-1.5 sm:px-6 sm:py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg text-xs sm:text-sm"
                   >
                     {currentStep < tourSteps.length - 1
                       ? (language === 'hebrew' ? 'הבא →' : 'Next →')

@@ -861,15 +861,6 @@ const ProfilePage = () => {
               </div>
             </div>
             
-            {/* Go Back to Home - Small Button */}
-            <Link 
-              to="/"
-              data-tour="profile-home-button"
-              className={`flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-300 hover:scale-110 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md`}
-              title={language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}
-            >
-              <span className="text-lg">🏠</span>
-            </Link>
           </div>
         </div>
 
@@ -1077,14 +1068,6 @@ const ProfilePage = () => {
                 </div>
               </div>
               
-              {/* Home button - small icon button */}
-              <Link 
-                to="/"
-                className={`flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-300 hover:scale-110 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md`}
-                title={language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}
-              >
-                <span className="text-lg">🏠</span>
-              </Link>
             </div>
           </div>
         </div>
@@ -1138,15 +1121,6 @@ const ProfilePage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* Home button - small icon button */}
-                  <Link 
-                    to="/"
-                    onClick={() => setIsMobileNavOpen(false)}
-                    className={`flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-300 hover:scale-110 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md`}
-                    title={language === 'hebrew' ? 'חזור לעמוד הבית' : 'Return to Home'}
-                  >
-                    <span className="text-lg">🏠</span>
-                  </Link>
                   <button
                     onClick={() => setIsMobileNavOpen(false)}
                     className={`p-2 rounded-xl transition-all duration-300 ${themeClasses.bgSecondary} border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:scale-105 active:scale-95`}
@@ -4324,34 +4298,38 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                         {meal.main.ingredients.map((ingredient, idx) => (
                           <div 
                             key={idx}
-                            className={`flex items-start sm:items-center ${themeClasses.textSecondary} text-xs sm:text-sm md:text-base group`}
+                            className={`flex flex-col sm:flex-row items-start sm:items-center ${themeClasses.textSecondary} text-xs sm:text-sm md:text-base group`}
                           >
-                            <div className="w-2 h-2 sm:w-3 sm:h-3 bg-emerald-500 rounded-full mr-2 sm:mr-4 animate-pulse flex-shrink-0 mt-1.5 sm:mt-0"></div>
-                            <span className="font-medium flex-1">
-                              {ingredient.item || ingredient.name || 'Unknown item'}
-                            </span>
-                            <span className="ml-2 font-semibold whitespace-nowrap">
-                              {formatPortion(ingredient)}
-                            </span>
-                            <div className="flex items-center gap-1 ml-2 sm:ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => handleEditIngredient(index, idx, ingredient)}
-                                className="w-6 h-6 sm:w-7 sm:h-7 bg-blue-500 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors"
-                                title={language === 'hebrew' ? 'ערוך' : 'Edit'}
-                              >
-                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                              </button>
-                              <button
-                                onClick={() => handleDeleteIngredient(index, idx)}
-                                className="w-6 h-6 sm:w-7 sm:h-7 bg-red-500 rounded-lg flex items-center justify-center hover:bg-red-600 transition-colors"
-                                title={language === 'hebrew' ? 'מחק' : 'Delete'}
-                              >
-                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
+                            <div className="flex items-center w-full sm:w-auto">
+                              <div className="w-2 h-2 sm:w-3 sm:h-3 bg-emerald-500 rounded-full mr-2 sm:mr-4 animate-pulse flex-shrink-0 mt-1.5 sm:mt-0"></div>
+                              <span className="font-medium flex-1 sm:flex-none">
+                                {ingredient.item || ingredient.name || 'Unknown item'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto mt-1 sm:mt-0 sm:ml-2">
+                              <span className="font-semibold sm:whitespace-nowrap">
+                                {formatPortion(ingredient)}
+                              </span>
+                              <div className="flex items-center gap-1 ml-2 sm:ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => handleEditIngredient(index, idx, ingredient)}
+                                  className="w-6 h-6 sm:w-7 sm:h-7 bg-blue-500 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors"
+                                  title={language === 'hebrew' ? 'ערוך' : 'Edit'}
+                                >
+                                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteIngredient(index, idx)}
+                                  className="w-6 h-6 sm:w-7 sm:h-7 bg-red-500 rounded-lg flex items-center justify-center hover:bg-red-600 transition-colors"
+                                  title={language === 'hebrew' ? 'מחק' : 'Delete'}
+                                >
+                                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}

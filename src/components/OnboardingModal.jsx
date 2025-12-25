@@ -12,6 +12,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const [checkingData, setCheckingData] = useState(true);
   const [error, setError] = useState('');
   const [filteredSteps, setFilteredSteps] = useState([]);
+  const [invalidFields, setInvalidFields] = useState([]); // Track fields with validation errors
+  const [fieldErrors, setFieldErrors] = useState({}); // Track which fields have errors
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -204,7 +206,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('first_name, last_name, phone, user_language, city, region, timezone, birth_date, age, gender, current_weight, target_weight, height, food_allergies, food_limitations, activity_level, goal, client_preference, medical_conditions')
+        .select('first_name, last_name, phone, user_language, city, region, timezone, birth_date, age, gender, current_weight, target_weight, height, food_allergies, food_limitations, activity_level, goal, client_preference, dietary_preferences, medical_conditions')
         .eq('user_id', user.id)
         .single();
 
@@ -234,7 +236,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           food_limitations: data.food_limitations || '',
           activity_level: data.activity_level || '',
           goal: data.goal || '',
-          client_preference: typeof data.client_preference === 'string' ? data.client_preference : (data.client_preference?.preference || ''),
+          client_preference: typeof data.client_preference === 'string' ? data.client_preference : (data.client_preference?.preference || '') || (typeof data.dietary_preferences === 'string' ? data.dietary_preferences : (data.dietary_preferences?.preference || '')),
           medical_conditions: data.medical_conditions || ''
         }));
       }
@@ -388,6 +390,18 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       ...prev,
       [name]: value
     }));
+    // Clear error for this field when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+    // Clear generic error message when user types (especially for phone validation errors)
+    if (error && name === 'phone') {
+      setError('');
+    }
   };
 
   const handleNoneClick = (fieldName) => {
@@ -395,6 +409,22 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       ...prev,
       [fieldName]: ''
     }));
+    // Clear error for this field when clicking None
+    if (fieldErrors[fieldName]) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[fieldName];
+        return newErrors;
+      });
+    }
+  };
+  
+  // Helper function to get border class based on field error
+  const getBorderClass = (fieldName) => {
+    if (fieldErrors[fieldName]) {
+      return 'border-red-500 border-2';
+    }
+    return 'border-gray-600/50 border-2';
   };
 
   const calculateAge = (birthDate) => {
@@ -482,27 +512,57 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     const currentStepFields = filteredSteps[currentStep]?.fields || [];
     
     // Fields that can be empty (None is a valid selection or auto-filled)
-    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations', 'client_preference', 'timezone'];
+    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations', 'client_preference'];
     
-    const missingFields = currentStepFields.filter(field => {
+    // Track field errors for this step
+    const newFieldErrors = {};
+    let hasErrors = false;
+    
+    currentStepFields.forEach(field => {
       // Skip validation for optional fields (empty string means "None" is selected)
       if (optionalFields.includes(field)) {
-        return false;
+        return;
       }
       // For other fields, empty value means missing
-      return !formData[field];
+      if (!formData[field]) {
+        newFieldErrors[field] = true;
+        hasErrors = true;
+      }
     });
 
-    if (missingFields.length > 0) {
-      setError(language === 'hebrew' ? 'אנא מלא את כל השדות' : 'Please fill in all fields');
+    if (hasErrors) {
+      // Update field errors state to highlight empty fields
+      setFieldErrors(prev => ({ ...prev, ...newFieldErrors }));
+      // Clear generic error message
+      setError('');
+      // Scroll to first invalid field
+      setTimeout(() => {
+        const firstInvalidField = document.querySelector(`[name="${Object.keys(newFieldErrors)[0]}"]`);
+        if (firstInvalidField) {
+          firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          firstInvalidField.focus();
+        }
+      }, 100);
       return;
     }
+    
+    // Clear field errors if validation passes
+    setFieldErrors({});
 
     // Validate phone number if it's in the current step
     if (currentStepFields.includes('phone') && formData.phone) {
       const phoneValidation = validatePhoneNumber(formData.phone, formData.phoneCountryCode);
       if (!phoneValidation.valid) {
+        setFieldErrors(prev => ({ ...prev, phone: true }));
         setError(phoneValidation.error);
+        // Scroll to phone field
+        setTimeout(() => {
+          const phoneField = document.querySelector(`[name="phone"]`);
+          if (phoneField) {
+            phoneField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            phoneField.focus();
+          }
+        }, 100);
         return;
       }
 
@@ -512,6 +572,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       setLoading(false);
       
       if (phoneCheck.exists) {
+        setFieldErrors(prev => ({ ...prev, phone: true }));
         setError(
           language === 'hebrew'
             ? 'מספר הטלפון כבר קיים במערכת. אנא השתמש במספר אחר.'
@@ -535,6 +596,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
       setError('');
+      // Clear field errors when going back
+      setFieldErrors({});
     }
   };
 
@@ -564,6 +627,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       const age = calculateAge(formData.date_of_birth);
       console.log('📝 Fields shown in onboarding:', allOnboardingFields);
       console.log('📋 Current formData:', formData);
+      console.log('🔍 Age calculation:', {
+        date_of_birth: formData.date_of_birth,
+        calculated_age: age,
+        date_of_birth_in_fields: allOnboardingFields.includes('date_of_birth')
+      });
       console.log('🔍 Gender check:', { 
         inFields: allOnboardingFields.includes('gender'), 
         value: formData.gender,
@@ -634,8 +702,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       if (allOnboardingFields.includes('date_of_birth') && formData.date_of_birth) {
         clientData.birth_date = formData.date_of_birth;
       }
-      if (allOnboardingFields.includes('date_of_birth') && age) {
+      if (allOnboardingFields.includes('date_of_birth') && age !== null && age !== undefined) {
         clientData.age = age;
+        console.log('✅ Age will be saved to clients:', age);
+      } else if (allOnboardingFields.includes('date_of_birth')) {
+        console.log('⚠️ Age not calculated - date_of_birth:', formData.date_of_birth, 'calculated age:', age);
       }
       if (allOnboardingFields.includes('gender')) {
         if (formData.gender) {
@@ -668,6 +739,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       }
       if (allOnboardingFields.includes('client_preference')) {
         clientData.client_preference = formData.client_preference || null;
+        clientData.dietary_preferences = formData.client_preference || null; // Also save to dietary_preferences column
       }
       if (allOnboardingFields.includes('medical_conditions')) {
         clientData.medical_conditions = formData.medical_conditions || null;
@@ -686,8 +758,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         city: formData.city,
         region: formData.region,
         timezone: formData.timezone,
-        date_of_birth: formData.date_of_birth,
-        age: age,
+        date_of_birth: allOnboardingFields.includes('date_of_birth') ? formData.date_of_birth : undefined,
+        age: (allOnboardingFields.includes('date_of_birth') && age !== null && age !== undefined) ? age : undefined,
         gender: formData.gender,
         weight_kg: formData.weight_kg ? parseFloat(formData.weight_kg) : null,
         height_cm: formData.height_cm ? parseFloat(formData.height_cm) : null,
@@ -699,6 +771,16 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         onboarding_done: true,
         updated_at: new Date().toISOString()
       };
+      
+      // Log age saving for debugging
+      if (allOnboardingFields.includes('date_of_birth')) {
+        console.log('🔍 Age check for chat_users:', {
+          date_of_birth: formData.date_of_birth,
+          calculated_age: age,
+          will_save_age: age !== null && age !== undefined,
+          age_value: chatUserData.age
+        });
+      }
 
       // Set full_name if we have it
       if (fullName) {
@@ -782,10 +864,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   if (checkingData) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fadeIn" dir={direction}>
-        <div className={`${themeClasses.bgCard} rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 animate-scaleIn`}>
+        <div className={`${themeClasses.bgCard} rounded-xl shadow-2xl p-6 sm:p-8 max-w-md w-full mx-4 animate-scaleIn`}>
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
-            <p className={themeClasses.textPrimary}>
+            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-emerald-500 mx-auto mb-3 sm:mb-4"></div>
+            <p className={`${themeClasses.textPrimary} text-sm sm:text-base`}>
               {language === 'hebrew' ? 'בודק נתונים...' : 'Checking data...'}
             </p>
           </div>
@@ -801,50 +883,51 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const currentFields = filteredSteps[currentStep]?.fields || [];
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn" dir={direction}>
-      <div className={`${themeClasses.bgCard} rounded-2xl shadow-2xl border border-white/10 p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-scaleIn relative`}>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4" dir={direction}>
+      <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto animate-scaleIn relative`}>
         {/* Decorative gradient overlay */}
-        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-established-500/20 via-emerald-500/10 to-transparent rounded-t-2xl pointer-events-none"></div>
+        <div className="absolute top-0 left-0 right-0 h-20 sm:h-32 bg-gradient-to-br from-established-500/20 via-emerald-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none"></div>
         
         {/* Language Toggle Button */}
         <button
           onClick={toggleLanguage}
-          className={`absolute top-6 ${direction === 'rtl' ? 'left-6' : 'right-6'} z-10 px-4 py-2 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all duration-200 text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
+          className={`absolute top-2 right-2 sm:top-4 sm:right-4 md:top-6 ${direction === 'rtl' ? 'md:left-6 md:right-auto' : 'md:right-6'} z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all duration-200 text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
           title={language === 'hebrew' ? 'Switch to English' : 'עברית'}
         >
-          {language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}
+          <span className="hidden sm:inline">{language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}</span>
+          <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
         </button>
         
         {/* Header */}
-        <div className="mb-8 relative">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-established-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg">
+        <div className="mb-4 sm:mb-6 md:mb-8 relative mt-8 sm:mt-0">
+          <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-gradient-to-br from-emerald-400 to-established-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg text-sm sm:text-base md:text-lg">
               {(currentStep + 1)}
             </div>
-            <h2 className={`text-3xl font-bold bg-gradient-to-r from-emerald-400 to-established-400 bg-clip-text text-transparent ${themeClasses.textPrimary}`}>
+            <h2 className={`text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-established-400 bg-clip-text text-transparent ${themeClasses.textPrimary} leading-tight`}>
               {language === 'hebrew' ? 'בואו נעשה כמה שאלות התחלה' : "Let's get started"}
             </h2>
           </div>
-          <p className={`${themeClasses.textSecondary} ml-14`}>
+          <p className={`${themeClasses.textSecondary} text-xs sm:text-sm ml-10 sm:ml-12 md:ml-14`}>
             {language === 'hebrew' ? `שלב ${currentStep + 1} מתוך ${filteredSteps.length}` : `Step ${currentStep + 1} of ${filteredSteps.length}`}
           </p>
         </div>
 
         {/* Progress Bar */}
-        <div className="mb-8">
-          <div className="w-full bg-gray-700/50 rounded-full h-2.5 overflow-hidden">
+        <div className="mb-4 sm:mb-6 md:mb-8">
+          <div className="w-full bg-gray-700/50 rounded-full h-2 sm:h-2.5 overflow-hidden">
             <div
-              className="bg-gradient-to-r from-emerald-400 to-established-500 h-2.5 rounded-full transition-all duration-500 ease-out shadow-lg shadow-emerald-500/50"
+              className="bg-gradient-to-r from-emerald-400 to-established-500 h-2 sm:h-2.5 rounded-full transition-all duration-500 ease-out shadow-lg shadow-emerald-500/50"
               style={{ width: `${((currentStep + 1) / filteredSteps.length) * 100}%` }}
             ></div>
           </div>
         </div>
 
         {/* Form Fields */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-5 md:space-y-6">
           {currentFields.includes('first_name') && (
             <div className="group">
-              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'שם פרטי' : 'First Name'}
               </label>
               <input
@@ -852,7 +935,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 name="first_name"
                 value={formData.first_name}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('first_name')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
                 placeholder={language === 'hebrew' ? 'יוסי' : 'John'}
               />
             </div>
@@ -860,7 +943,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('last_name') && (
             <div className="group">
-              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'שם משפחה' : 'Last Name'}
               </label>
               <input
@@ -868,7 +951,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 name="last_name"
                 value={formData.last_name}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('last_name')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
                 placeholder={language === 'hebrew' ? 'כהן' : 'Doe'}
               />
             </div>
@@ -876,7 +959,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('phone') && (
             <div className="group">
-              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'מספר טלפון' : 'Phone Number'}
               </label>
               <div className="flex gap-2">
@@ -884,7 +967,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                   name="phoneCountryCode"
                   value={formData.phoneCountryCode}
                   onChange={handleInputChange}
-                  className={`px-3 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer text-sm`}
+                  className={`px-2 py-2.5 sm:px-3 sm:py-3 md:py-3.5 text-xs sm:text-sm ${themeClasses.bgCard} ${getBorderClass('phone')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
                 >
                   {countryCodes.map((country) => (
                     <option key={country.code} value={country.code}>
@@ -897,7 +980,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  className={`flex-1 px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                  className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('phone')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
                   placeholder={language === 'hebrew' ? '50-123-4567' : '50-123-4567'}
                 />
               </div>
@@ -906,14 +989,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('language') && (
             <div className="group">
-              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'שפה מועדפת' : 'Preferred Language'}
               </label>
               <select
                 name="language"
                 value={formData.language}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('language')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
               >
                 <option value="en">🇬🇧 English (en)</option>
                 <option value="he">🇮🇱 עברית (he)</option>
@@ -923,7 +1006,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('city') && (
             <div className="group">
-              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'עיר' : 'City'}
               </label>
               <input
@@ -931,7 +1014,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 name="city"
                 value={formData.city}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('city')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
                 placeholder={language === 'hebrew' ? 'תל אביב' : 'Tel Aviv'}
               />
             </div>
@@ -939,7 +1022,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('region') && (
             <div className="group">
-              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'אזור' : 'Region'}
               </label>
               <input
@@ -947,7 +1030,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 name="region"
                 value={formData.region}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('region')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
                 placeholder={language === 'hebrew' ? 'מרכז' : 'Center'}
               />
             </div>
@@ -955,14 +1038,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('timezone') && (
             <div className="group">
-              <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'אזור זמן' : 'Timezone'}
               </label>
               <select
                 name="timezone"
                 value={formData.timezone}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('timezone')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
               >
                 <option value="">{language === 'hebrew' ? 'בחר אזור זמן' : 'Select timezone'}</option>
                 {timezones.map((tz) => (
@@ -976,7 +1059,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('date_of_birth') && (
             <div className="group">
-              <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
                 {language === 'hebrew' ? 'תאריך לידה' : 'Date of Birth'}
               </label>
               <input
@@ -984,21 +1067,21 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 name="date_of_birth"
                 value={formData.date_of_birth}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('date_of_birth')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
               />
             </div>
           )}
 
           {currentFields.includes('gender') && (
             <div className="group">
-              <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
                 {language === 'hebrew' ? 'מין' : 'Gender'}
               </label>
               <select
                 name="gender"
                 value={formData.gender}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('gender')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
               >
                 <option value="">{language === 'hebrew' ? 'בחר' : 'Select'}</option>
                 <option value="male">{language === 'hebrew' ? 'זכר' : 'Male'}</option>
@@ -1010,7 +1093,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('weight_kg') && (
             <div className="group">
-              <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
                 {language === 'hebrew' ? 'משקל נוכחי (ק"ג)' : 'Current Weight (kg)'}
               </label>
               <input
@@ -1020,7 +1103,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 onChange={handleInputChange}
                 min="0"
                 step="0.1"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('weight_kg')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
                 placeholder={language === 'hebrew' ? '70' : '70'}
               />
             </div>
@@ -1028,7 +1111,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('target_weight') && (
             <div className="group">
-              <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
                 {language === 'hebrew' ? 'משקל מטרה (ק"ג)' : 'Target Weight (kg)'}
               </label>
               <input
@@ -1038,7 +1121,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 onChange={handleInputChange}
                 min="0"
                 step="0.1"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('target_weight')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
                 placeholder={language === 'hebrew' ? '65' : '65'}
               />
             </div>
@@ -1046,7 +1129,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('height_cm') && (
             <div className="group">
-              <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
                 {language === 'hebrew' ? 'גובה (ס"מ)' : 'Height (cm)'}
               </label>
               <input
@@ -1056,7 +1139,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 onChange={handleInputChange}
                 min="0"
                 step="1"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('height_cm')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
                 placeholder={language === 'hebrew' ? '175' : '175'}
               />
             </div>
@@ -1064,14 +1147,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('medical_conditions') && (
             <div className="group">
-              <div className="flex items-center justify-between mb-2">
-                <label className={`block text-sm font-semibold ${themeClasses.textPrimary}`}>
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
                   {language === 'hebrew' ? 'מצבים רפואיים' : 'Medical Conditions'}
                 </label>
                 <button
                   type="button"
                   onClick={() => handleNoneClick('medical_conditions')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
                     !formData.medical_conditions
                       ? 'bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-400'
                       : 'bg-gray-700/50 border-2 border-gray-600/50 text-gray-400 hover:bg-gray-600/50 hover:border-emerald-500/30 hover:text-emerald-400'
@@ -1094,7 +1177,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 value={formData.medical_conditions}
                 onChange={handleInputChange}
                 rows="3"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 ${!formData.medical_conditions ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${!formData.medical_conditions ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
                 placeholder={!formData.medical_conditions ? (language === 'hebrew' ? 'לא נבחר - לחץ כדי להוסיף' : 'None selected - click to add') : (language === 'hebrew' ? 'לדוגמה: סוכרת, לחץ דם...' : 'e.g., diabetes, hypertension...')}
               />
             </div>
@@ -1102,14 +1185,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('food_allergies') && (
             <div className="group">
-              <div className="flex items-center justify-between mb-2">
-                <label className={`block text-sm font-semibold ${themeClasses.textPrimary}`}>
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
                   {language === 'hebrew' ? 'אלרגיות למזון' : 'Food Allergies'}
                 </label>
                 <button
                   type="button"
                   onClick={() => handleNoneClick('food_allergies')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
                     !formData.food_allergies
                       ? 'bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-400'
                       : 'bg-gray-700/50 border-2 border-gray-600/50 text-gray-400 hover:bg-gray-600/50 hover:border-emerald-500/30 hover:text-emerald-400'
@@ -1132,7 +1215,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 value={formData.food_allergies}
                 onChange={handleInputChange}
                 rows="3"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 ${!formData.food_allergies ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${!formData.food_allergies ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
                 placeholder={!formData.food_allergies ? (language === 'hebrew' ? 'לא נבחר - לחץ כדי להוסיף' : 'None selected - click to add') : (language === 'hebrew' ? 'לדוגמה: בוטנים, חלב...' : 'e.g., peanuts, dairy...')}
               />
             </div>
@@ -1140,14 +1223,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('food_limitations') && (
             <div className="group">
-              <div className="flex items-center justify-between mb-2">
-                <label className={`block text-sm font-semibold ${themeClasses.textPrimary}`}>
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
                   {language === 'hebrew' ? 'הגבלות תזונתיות' : 'Food Limitations'}
                 </label>
                 <button
                   type="button"
                   onClick={() => handleNoneClick('food_limitations')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
                     !formData.food_limitations
                       ? 'bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-400'
                       : 'bg-gray-700/50 border-2 border-gray-600/50 text-gray-400 hover:bg-gray-600/50 hover:border-emerald-500/30 hover:text-emerald-400'
@@ -1170,7 +1253,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 value={formData.food_limitations}
                 onChange={handleInputChange}
                 rows="3"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 ${!formData.food_limitations ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${!formData.food_limitations ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
                 placeholder={!formData.food_limitations ? (language === 'hebrew' ? 'לא נבחר - לחץ כדי להוסיף' : 'None selected - click to add') : (language === 'hebrew' ? 'לדוגמה: צמחוני, כשר...' : 'e.g., vegetarian, kosher...')}
               />
             </div>
@@ -1178,14 +1261,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('activity_level') && (
             <div className="group">
-              <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
                 {language === 'hebrew' ? 'רמת פעילות' : 'Activity Level'}
               </label>
               <select
                 name="activity_level"
                 value={formData.activity_level}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('activity_level')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
               >
                 <option value="">{language === 'hebrew' ? 'בחר' : 'Select'}</option>
                 <option value="sedentary">{language === 'hebrew' ? 'יושבני - מעט או ללא פעילות גופנית' : 'Sedentary - Little or no exercise'}</option>
@@ -1199,14 +1282,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('goal') && (
             <div className="group">
-              <label className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
                 {language === 'hebrew' ? 'מטרה' : 'Goal'}
               </label>
               <select
                 name="goal"
                 value={formData.goal}
                 onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('goal')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
               >
                 <option value="">{language === 'hebrew' ? 'בחר מטרה' : 'Select a goal'}</option>
                 <option value="lose">{language === 'hebrew' ? 'ירידה במשקל' : 'Lose Weight'}</option>
@@ -1222,14 +1305,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('client_preference') && (
             <div className="group">
-              <div className="flex items-center justify-between mb-2">
-                <label className={`block text-sm font-semibold ${themeClasses.textPrimary}`}>
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
                   {language === 'hebrew' ? 'העדפות אישיות' : 'Personal Preferences'}
                 </label>
                 <button
                   type="button"
                   onClick={() => handleNoneClick('client_preference')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
                     !formData.client_preference
                       ? 'bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-400'
                       : 'bg-gray-700/50 border-2 border-gray-600/50 text-gray-400 hover:bg-gray-600/50 hover:border-emerald-500/30 hover:text-emerald-400'
@@ -1252,7 +1335,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 value={formData.client_preference}
                 onChange={handleInputChange}
                 rows="4"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} border-2 ${!formData.client_preference ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${!formData.client_preference ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
                 placeholder={!formData.client_preference ? (language === 'hebrew' ? 'לא נבחר - לחץ כדי להוסיף' : 'None selected - click to add') : (language === 'hebrew' ? 'מה אתה אוהב לאכול? מה אתה לא אוהב לאכול?' : 'What do you like to eat? What don\'t you like to eat?')}
               />
             </div>
@@ -1261,24 +1344,24 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
         {/* Error Message */}
         {error && (
-          <div className="mt-6 p-4 bg-red-500/10 border-2 border-red-500/30 text-red-400 rounded-xl backdrop-blur-sm">
+          <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-red-500/10 border-2 border-red-500/30 text-red-400 rounded-lg sm:rounded-xl backdrop-blur-sm">
             <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
-              {error}
+              <span className="text-xs sm:text-sm">{error}</span>
             </div>
           </div>
         )}
 
         {/* Buttons */}
-        <div className="flex justify-between mt-8 pt-6 border-t border-white/10">
+        <div className="flex justify-between items-center mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-white/10 gap-2 sm:gap-3">
           <div>
             {currentStep > 0 && (
               <button
                 onClick={handlePrevious}
                 disabled={loading}
-                className={`px-8 py-3.5 border-2 border-gray-600/50 rounded-xl font-semibold ${themeClasses.textSecondary} hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-4 py-2 sm:px-6 sm:py-2.5 md:px-8 md:py-3.5 border-2 border-gray-600/50 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm md:text-base ${themeClasses.textSecondary} hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 ← {language === 'hebrew' ? 'קודם' : 'Previous'}
               </button>
@@ -1287,18 +1370,18 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               <button
                 onClick={handleSkip}
                 disabled={loading}
-                className={`px-6 py-3.5 text-gray-400 hover:text-white font-semibold transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-3.5 text-xs sm:text-sm md:text-base text-gray-400 hover:text-white font-semibold transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {language === 'hebrew' ? 'דלג' : 'Skip'}
               </button>
             )}
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             {currentStep < filteredSteps.length - 1 ? (
               <button
                 onClick={handleNext}
                 disabled={loading}
-                className={`px-6 py-3 bg-emerald-500 text-white rounded-lg font-semibold hover:bg-emerald-600 transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 bg-emerald-500 text-white rounded-lg font-semibold text-xs sm:text-sm md:text-base hover:bg-emerald-600 transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {language === 'hebrew' ? 'הבא' : 'Next'} →
               </button>
@@ -1306,7 +1389,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               <button
                 onClick={handleNext}
                 disabled={loading}
-                className={`px-6 py-3 bg-emerald-500 text-white rounded-lg font-semibold hover:bg-emerald-600 transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 bg-emerald-500 text-white rounded-lg font-semibold text-xs sm:text-sm md:text-base hover:bg-emerald-600 transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {loading ? (language === 'hebrew' ? 'שומר...' : 'Saving...') : (language === 'hebrew' ? 'סיום' : 'Finish')}
               </button>
