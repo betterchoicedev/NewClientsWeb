@@ -1,10 +1,10 @@
 #!/bin/bash
-echo "Starting application..."
-cd /home/site/wwwroot || exit 1
+echo "Starting FastAPI application with uvicorn..."
+cd /home/site/wwwroot
 
-echo "Installing dependencies..."
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+# Install dependencies if needed
+python -m pip install -q --upgrade pip
+python -m pip install -q -r requirements.txt
 
-echo "Starting uvicorn..."
-python -m uvicorn application:app --host 0.0.0.0 --port 8000
+# Start uvicorn
+exec python -m uvicorn application:app --host 0.0.0.0 --port 8000
