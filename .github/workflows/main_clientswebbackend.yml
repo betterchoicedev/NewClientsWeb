@@ -47,7 +47,18 @@ jobs:
             cd Backend
             # Make startup.sh executable
             chmod +x startup.sh 2>/dev/null || true
-            find . -type f -not -path "./antenv/*" -not -path "./venv/*" -not -path "./__pycache__/*" -not -path "./myenv/*" -exec zip ../backend.zip {} \;
+            # Verify backend.py exists
+            if [ ! -f "backend.py" ]; then
+              echo "ERROR: backend.py not found in Backend directory!"
+              ls -la
+              exit 1
+            fi
+            echo "Files to be zipped:"
+            ls -la
+            # Create zip with all necessary files
+            zip -r ../backend.zip . -x "*/antenv/*" "*/venv/*" "*/__pycache__/*" "*/myenv/*" "*.pyc" "*.pyo"
+            echo "Zip file created. Contents:"
+            unzip -l ../backend.zip
           else
             echo "Backend directory not found for zipping"
             exit 1
