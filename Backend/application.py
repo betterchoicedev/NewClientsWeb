@@ -1,5 +1,10 @@
-from fastapi import FastAPI
+import sys
 import os
+
+# Add packages directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'packages'))
+
+from fastapi import FastAPI
 
 app = FastAPI(title="ClientsWebBackend API")
 
