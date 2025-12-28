@@ -62,7 +62,7 @@ jobs:
           
       - name: Set App Settings
         run: |
-          echo "If build still happens, you need to set SCM_DO_BUILD_DURING_DEPLOYMENT=0 in Azure Portal manually"   
+          echo "If build still happens, you need to set SCM_DO_BUILD_DURING_DEPLOYMENT=0 in Azure Portal manually"
           
 
 # Note: Make sure to configure these environment variables in Azure App Service if needed:
