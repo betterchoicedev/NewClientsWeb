@@ -44,7 +44,13 @@ jobs:
         run: |
           if [ -d "Backend" ]; then
             cd Backend
+            echo "=== Files in Backend directory before zipping ==="
+            ls -la
+            echo "=== Creating zip file ==="
             find . -type f -not -path "./venv/*" -not -path "./__pycache__/*" -not -path "./myenv/*" -exec zip ../backend.zip {} \;
+            cd ..
+            echo "=== Contents of backend.zip ==="
+            unzip -l backend.zip
           else
             echo "Backend directory not found for zipping"
             exit 1
