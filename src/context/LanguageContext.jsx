@@ -1056,16 +1056,16 @@ const translations = {
           title: "The Old Reality",
           points: [
             "You don't always have time to stop and breathe between clients",
-            "Your head is full – and you're afraid to forget something important",
+            "Your head is full - and you're afraid to forget something important",
             "Another menu, another follow-up, another message you didn't have time to answer",
-            "It's not that you're not professional – you just don't have a tool that works for you"
+            "It's not that you're not professional - you just don't have a tool that works for you"
           ]
         },
         newReality: {
           title: "The New Reality",
           points: [
-            "Suddenly everything is in one place – and you're calm",
-            "No need to chase after data – it comes to you",
+            "Suddenly everything is in one place - and you're calm",
+            "No need to chase after data - it comes to you",
             "You have a smart clinic that understands exactly how you work",
             "Clients get a different experience. And you get yourself back"
           ]

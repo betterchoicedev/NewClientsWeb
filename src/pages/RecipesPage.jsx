@@ -107,6 +107,39 @@ function RecipesPage() {
 
   const tr = translations[language];
 
+  // Recipe image mapping - maps recipe titles to image filenames
+  const recipeImageMap = {
+    hebrew: {
+      'שייק ירוק בריא': '/recipes/Healthy_Green_Smoothie.png',
+      'סלט קינואה עם ירקות': '/recipes/Quinoa_Salad_with_Vegetables.png',
+      'דג סלמון אפוי עם ירקות': '/recipes/Baked_Salmon_with_Vegetables.png',
+      'פנקייק בננה בריא': '/recipes/Healthy_Banana_Pancakes.png',
+      'פסטה עם ירקות ופסטו': '/recipes/Pasta_with_Vegetables_and_Pesto.png',
+      'עוף בגריל עם ירקות': '/recipes/Grilled_Chicken_with_Vegetables.png',
+      'גרנולה ביתית': '/recipes/Homemade_Granola.png',
+      'שוקולד צמחי בריא': '/recipes/Healthy_Plant-Based_Chocolate.png',
+      'מרק ירקות עשיר': '/recipes/Rich_Vegetable_Soup.png',
+      'תה ירוק עם נענע': '/recipes/Green_Tea_with_Mint.png'
+    },
+    english: {
+      'Healthy Green Smoothie': '/recipes/Healthy_Green_Smoothie.png',
+      'Quinoa Salad with Vegetables': '/recipes/Quinoa_Salad_with_Vegetables.png',
+      'Baked Salmon with Vegetables': '/recipes/Baked_Salmon_with_Vegetables.png',
+      'Healthy Banana Pancakes': '/recipes/Healthy_Banana_Pancakes.png',
+      'Pasta with Vegetables and Pesto': '/recipes/Pasta_with_Vegetables_and_Pesto.png',
+      'Grilled Chicken with Vegetables': '/recipes/Grilled_Chicken_with_Vegetables.png',
+      'Homemade Granola': '/recipes/Homemade_Granola.png',
+      'Healthy Plant-Based Chocolate': '/recipes/Healthy_Plant-Based_Chocolate.png',
+      'Rich Vegetable Soup': '/recipes/Rich_Vegetable_Soup.png',
+      'Green Tea with Mint': '/recipes/Green_Tea_with_Mint.png'
+    }
+  };
+
+  // Helper function to get recipe image
+  const getRecipeImage = (recipeTitle) => {
+    return recipeImageMap[language]?.[recipeTitle] || null;
+  };
+
   // Categories mapping
   const categories = {
     hebrew: ['הכל', 'ארוחת בוקר', 'ארוחת צהריים', 'ארוחת ערב', 'נשנושים', 'קינוחים', 'משקאות'],
@@ -1006,15 +1039,15 @@ function RecipesPage() {
                 {filteredRecipes.map((recipe) => (
                   <div key={recipe.id} className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} overflow-hidden ${themeClasses.shadowHover} transition-shadow duration-300 hover:-translate-y-2`}>
                     {/* Recipe Image */}
-                    <div className="h-48 bg-gradient-to-br from-emerald-400 to-teal-500 relative">
-                      {recipe.image_url ? (
+                    <div className="w-full relative overflow-hidden">
+                      {getRecipeImage(recipe.title) ? (
                         <img 
-                          src={recipe.image_url} 
+                          src={getRecipeImage(recipe.title)} 
                           alt={recipe.title}
-                          className="w-full h-full object-cover"
+                          className="w-full h-auto"
                         />
                       ) : (
-                        <div className="flex items-center justify-center h-full">
+                        <div className="h-48 bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
                           <span className="text-6xl">{recipe.image_emoji || '🍽️'}</span>
                         </div>
                       )}
@@ -1151,33 +1184,85 @@ function RecipesPage() {
             onClick={(e) => e.stopPropagation()}
             dir={direction}
           >
-            {/* Modal Header */}
-            <div className="sticky top-0 z-10 bg-gradient-to-br from-emerald-400 to-teal-500 p-6 rounded-t-2xl">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-5xl">{selectedRecipe.image_emoji || '🍽️'}</span>
-                    <div>
-                      <h2 className="text-2xl sm:text-3xl font-bold text-white">
+            {/* Modal Header with Full Image */}
+            {getRecipeImage(selectedRecipe.title) ? (
+              <div className="w-full relative">
+                <img 
+                  src={getRecipeImage(selectedRecipe.title)} 
+                  alt={selectedRecipe.title}
+                  className="w-full h-auto"
+                />
+                <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/60 to-transparent p-6">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
                         {selectedRecipe.title}
                       </h2>
-                      <p className="text-white/90 text-sm sm:text-base mt-1">
+                      <p className="text-white/90 text-sm sm:text-base">
                         {selectedRecipe.description}
                       </p>
                     </div>
+                    <button
+                      onClick={closeRecipeModal}
+                      className="ml-4 p-2 hover:bg-white/20 rounded-full transition-colors duration-200"
+                    >
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={closeRecipeModal}
-                  className="ml-4 p-2 hover:bg-white/20 rounded-full transition-colors duration-200"
-                >
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
               </div>
+            ) : (
+              <div className="sticky top-0 z-10 bg-gradient-to-br from-emerald-400 to-teal-500 p-6 rounded-t-2xl">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-5xl">{selectedRecipe.image_emoji || '🍽️'}</span>
+                      <div>
+                        <h2 className="text-2xl sm:text-3xl font-bold text-white">
+                          {selectedRecipe.title}
+                        </h2>
+                        <p className="text-white/90 text-sm sm:text-base mt-1">
+                          {selectedRecipe.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={closeRecipeModal}
+                    className="ml-4 p-2 hover:bg-white/20 rounded-full transition-colors duration-200"
+                  >
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
 
-              {/* Quick Stats */}
+            {/* Quick Stats - Only show if image exists, positioned below image */}
+            {getRecipeImage(selectedRecipe.title) && (
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
+                    <div className="text-white text-xl font-bold">{selectedRecipe.servings}</div>
+                    <div className="text-white/80 text-xs">{tr.servings}</div>
+                  </div>
+                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
+                    <div className="text-white text-xl font-bold">{selectedRecipe.cook_time}</div>
+                    <div className="text-white/80 text-xs">{tr.minutes}</div>
+                  </div>
+                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
+                    <div className="text-white text-xl font-bold">{selectedRecipe.difficulty}</div>
+                    <div className="text-white/80 text-xs">{tr.difficulty}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Stats - For fallback (no image) */}
+            {!getRecipeImage(selectedRecipe.title) && (
               <div className="grid grid-cols-3 gap-3 mt-4">
                 <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
                   <div className="text-white text-xl font-bold">{selectedRecipe.servings}</div>
@@ -1192,7 +1277,7 @@ function RecipesPage() {
                   <div className="text-white/80 text-xs">{tr.difficulty}</div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Modal Content */}
             <div className="p-6 space-y-6">

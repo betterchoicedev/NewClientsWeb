@@ -50,8 +50,8 @@ const AboutPage = () => {
               </p>
               <p>
                 {language === 'hebrew'
-                  ? 'מדויק, מקצועי ומותאם אישית – בדיוק מה שכל אדם צריך לאורח חיים בריא'
-                  : 'Precise, professional, and personally tailored – exactly what every person needs for a healthy lifestyle'
+                  ? 'מדויק, מקצועי ומותאם אישית - בדיוק מה שכל אדם צריך לאורח חיים בריא'
+                  : 'Precise, professional, and personally tailored - exactly what every person needs for a healthy lifestyle'
                 }
               </p>
             </div>

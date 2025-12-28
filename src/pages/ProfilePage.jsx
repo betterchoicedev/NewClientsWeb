@@ -3622,14 +3622,14 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 <option value="indonesia_malaysia">{language === 'hebrew' ? 'אינדונזיה/מלזיה' : 'Indonesia/Malaysia'}</option>
                 <option value="turkey">{language === 'hebrew' ? 'טורקיה' : 'Turkey'}</option>
                 <option value="persian_iranian">{language === 'hebrew' ? 'איראן/פרס' : 'Persian/Iranian'}</option>
-                <option value="gulf_arabia">{language === 'hebrew' ? 'העולם הערבי–מפרץ' : 'Gulf Arabia'}</option>
+                <option value="gulf_arabia">{language === 'hebrew' ? 'העולם הערבי-מפרץ' : 'Gulf Arabia'}</option>
                 <option value="north_africa">{language === 'hebrew' ? 'צפון אפריקה' : 'North Africa'}</option>
                 <option value="east_africa">{language === 'hebrew' ? 'אפריקה מזרחית' : 'East Africa'}</option>
-                <option value="europe_mediterranean">{language === 'hebrew' ? 'אירופה – ים תיכוני' : 'Europe – Mediterranean'}</option>
-                <option value="europe_west">{language === 'hebrew' ? 'אירופה – מרכז/מערב' : 'Europe – Central/West'}</option>
-                <option value="europe_east_russian">{language === 'hebrew' ? 'אירופה – מזרח/רוסי' : 'Europe – East/Russian'}</option>
-                <option value="mexico">{language === 'hebrew' ? 'אמריקה לטינית – מקסיקו' : 'Latin America – Mexico'}</option>
-                <option value="latam_south_america">{language === 'hebrew' ? 'אמריקה לטינית – דרום אמריקה' : 'Latin America – South America'}</option>
+                <option value="europe_mediterranean">{language === 'hebrew' ? 'אירופה - ים תיכוני' : 'Europe - Mediterranean'}</option>
+                <option value="europe_west">{language === 'hebrew' ? 'אירופה - מרכז/מערב' : 'Europe - Central/West'}</option>
+                <option value="europe_east_russian">{language === 'hebrew' ? 'אירופה - מזרח/רוסי' : 'Europe - East/Russian'}</option>
+                <option value="mexico">{language === 'hebrew' ? 'אמריקה לטינית - מקסיקו' : 'Latin America - Mexico'}</option>
+                <option value="latam_south_america">{language === 'hebrew' ? 'אמריקה לטינית - דרום אמריקה' : 'Latin America - South America'}</option>
                 <option value="caribbean">{language === 'hebrew' ? 'קריביים' : 'Caribbean'}</option>
                 <option value="north_america">{language === 'hebrew' ? 'צפון אמריקה' : 'North America'}</option>
                 <option value="other">{language === 'hebrew' ? 'אחר' : 'Other'}</option>
@@ -7116,6 +7116,102 @@ const PricingTab = ({ themeClasses, user, language }) => {
           </div>
         </div>
       )}
+
+      {/* What Every Plan Includes */}
+      <div className="mb-8 animate-slideInUp" style={{ animationDelay: '0.3s' }}>
+        <div className={`${themeClasses.bgCard} border ${themeClasses.borderPrimary} rounded-2xl p-6 md:p-8 shadow-lg`}>
+          <h3 className={`${themeClasses.textPrimary} text-xl font-bold mb-4 ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+            {language === 'hebrew' ? 'מה כל סוג תוכנית כולל' : 'What Every Plan Includes'}
+          </h3>
+          {language === 'hebrew' ? (
+            <div className="space-y-4 text-right">
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>פגישה ראשונה מקיפה:</h4>
+                <ul className={`${themeClasses.textSecondary} space-y-1 text-sm list-disc list-inside`}>
+                  <li>היכרות מעמיקה</li>
+                  <li>בניית תכנית תזונה אישית</li>
+                  <li>ובבחירה בתכנית משולבת - גם בניית תכנית אימונים</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>פגישות מעקב:</h4>
+                <ul className={`${themeClasses.textSecondary} space-y-2 text-sm`}>
+                  <li>
+                    <span className="font-medium">פגישה אחת לשבועיים:</span> מתאימה למי שרוצה ליווי צמוד יותר, דיוק ונוכחות גבוהה של הדיאטן/נית שלנו לאורך הדרך
+                  </li>
+                  <li>
+                    <span className="font-medium">פגישה אחת לחודש:</span> מתאימה למי שמעדיף מרווחים, עבודה הדרגתית ועצמאות גבוהה יותר
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>ליווי אישי ב־WhatsApp לאורך כל התהליך:</h4>
+                <ul className={`${themeClasses.textSecondary} space-y-1 text-sm list-disc list-inside`}>
+                  <li>מענה על שאלות</li>
+                  <li>התייעצויות שוטפות</li>
+                  <li>דיוקים בזמן אמת (ארוחות, סיטואציות ושגרה)</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>התאמות ושינויים אישיים:</h4>
+                <p className={`${themeClasses.textSecondary} text-sm`}>
+                  בהתאם להתקדמות, לתחושות ולמציאות המשתנה
+                </p>
+              </div>
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>תקופות מחויבות:</h4>
+                <ul className={`${themeClasses.textSecondary} space-y-1 text-sm list-disc list-inside`}>
+                  <li><span className="font-medium">3 חודשים:</span> תהליך ממוקד, יצירת בסיס והנעה</li>
+                  <li><span className="font-medium">6 חודשים:</span> תהליך עמוק, יציב ומבוסס הרגלים לאורך זמן</li>
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 text-left">
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>Comprehensive First Session:</h4>
+                <ul className={`${themeClasses.textSecondary} space-y-1 text-sm list-disc list-inside`}>
+                  <li>In-depth introduction</li>
+                  <li>Building a personalized nutrition plan</li>
+                  <li>For combined plans - also building a training plan</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>Follow-up Sessions:</h4>
+                <ul className={`${themeClasses.textSecondary} space-y-2 text-sm`}>
+                  <li>
+                    <span className="font-medium">One session every two weeks:</span> Suitable for those who want closer guidance, precision and high presence of our dietician/nutritionist throughout the process.
+                  </li>
+                  <li>
+                    <span className="font-medium">One session per month:</span> Suitable for those who prefer intervals, gradual work and higher independence.
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>Personal WhatsApp Guidance Throughout the Process:</h4>
+                <ul className={`${themeClasses.textSecondary} space-y-1 text-sm list-disc list-inside`}>
+                  <li>Answering questions</li>
+                  <li>Ongoing consultations</li>
+                  <li>Real-time adjustments (meals, situations and routine)</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>Personal Adjustments and Changes:</h4>
+                <p className={`${themeClasses.textSecondary} text-sm`}>
+                  According to progress, feelings and changing reality
+                </p>
+              </div>
+              <div>
+                <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>Commitment Periods:</h4>
+                <ul className={`${themeClasses.textSecondary} space-y-1 text-sm list-disc list-inside`}>
+                  <li><span className="font-medium">3 months:</span> Focused process, creating foundation and momentum</li>
+                  <li><span className="font-medium">6 months:</span> Deep process, stable and habit-based over time</li>
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Products Grid */}
       <div className="animate-slideInUp" style={{ animationDelay: '0.4s' }}>

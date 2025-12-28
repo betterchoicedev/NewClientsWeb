@@ -9,7 +9,15 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
   const { user, isAuthenticated } = useAuth();
   const { language } = useLanguage();
   const { themeClasses } = useTheme();
-  const [selectedPrice, setSelectedPrice] = useState(selectedPriceId || product.prices?.[0]?.id);
+  
+  // Get 6-month price ID for default selection, or first price if no 6-month option
+  const getDefaultPriceId = () => {
+    if (selectedPriceId) return selectedPriceId;
+    const sixMonthPrice = product.prices?.find(p => p.commitment === 6);
+    return sixMonthPrice?.id || product.prices?.[0]?.id;
+  };
+  
+  const [selectedPrice, setSelectedPrice] = useState(getDefaultPriceId());
   const [showUSD, setShowUSD] = useState(false);
   
   // Check if this is a consultation product (can always be purchased)
@@ -88,22 +96,39 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
     </div>
   );
 
-  const getDiscountBadge = (discount) => (
-    <div className="absolute -top-2 -right-2 z-10">
-      <span className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg">
-        {discount}
-      </span>
-    </div>
-  );
 
   // Find if any price is marked as popular
   const hasPopularPrice = product.prices?.some(price => price.popular);
   const selectedPriceObj = product.prices?.find(price => price.id === selectedPrice);
 
+  // Calculate savings for 6-month plan
+  const calculateSavings = () => {
+    if (!product.prices || product.prices.length < 2) return null;
+    
+    const threeMonthPrice = product.prices.find(p => p.commitment === 3);
+    const sixMonthPrice = product.prices.find(p => p.commitment === 6);
+    
+    if (!threeMonthPrice || !sixMonthPrice) return null;
+    
+    const threeMonthAmount = showUSD ? threeMonthPrice.amountUSD : threeMonthPrice.amount;
+    const sixMonthAmount = showUSD ? sixMonthPrice.amountUSD : sixMonthPrice.amount;
+    const currency = showUSD ? 'USD' : 'ILS';
+    
+    // Total cost: 3-month plan for 6 months (2 cycles) vs 6-month plan
+    const totalThreeMonth = (threeMonthAmount / 100) * 6; // 3 months * 2 = 6 months
+    const totalSixMonth = (sixMonthAmount / 100) * 6;
+    const savings = totalThreeMonth - totalSixMonth;
+    
+    if (savings <= 0) return null;
+    
+    return { savings, currency };
+  };
+
+  const savings = calculateSavings();
+
   return (
     <div className={`relative ${themeClasses.bgCard} rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border ${themeClasses.borderPrimary} ${className}`}>
       {hasPopularPrice && selectedPriceObj?.popular && getPopularBadge()}
-      {selectedPriceObj?.discount && getDiscountBadge(selectedPriceObj.discount)}
 
       <div className="p-6">
         {/* Header */}
@@ -165,7 +190,12 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
               {language === 'hebrew' ? 'בחר תוכנית:' : 'Choose Plan:'}
             </label>
             <div className="space-y-2">
-              {product.prices.map((price) => (
+              {/* Sort prices: 6-month first, then 3-month */}
+              {[...product.prices].sort((a, b) => {
+                const aCommitment = a.commitment || 0;
+                const bCommitment = b.commitment || 0;
+                return bCommitment - aCommitment; // 6-month (6) comes before 3-month (3)
+              }).map((price) => (
                 <label
                   key={price.id}
                   className={`
@@ -186,11 +216,8 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
                       className="mr-3 text-blue-600"
                     />
                     <div>
-                      <div className={`font-medium ${themeClasses.textPrimary}`}>
-                        {language === 'hebrew' ? (price.nameHebrew || price.name) : price.name}
-                      </div>
                       {price.commitment && (
-                        <div className={`text-xs ${themeClasses.textMuted}`}>
+                        <div className={`font-medium ${themeClasses.textPrimary}`}>
                           {price.commitment} {language === 'hebrew' ? 'חודשי מחויבות' : 'month commitment'}
                         </div>
                       )}
@@ -205,9 +232,13 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
                         </span>
                       )}
                     </div>
-                    {price.discount && (
-                      <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                        {price.discount}
+                    {price.commitment === 6 && savings && (
+                      <div className={`text-xs text-green-600 dark:text-green-400 font-medium mt-1`}>
+                        {language === 'hebrew' ? 'חיסכון של: ' : 'Saves: '}
+                        {savings.currency === 'ILS' 
+                          ? `₪${Math.round(savings.savings).toLocaleString('he-IL')}`
+                          : `$${Math.round(savings.savings).toLocaleString('en-US')}`
+                        }
                       </div>
                     )}
                   </div>

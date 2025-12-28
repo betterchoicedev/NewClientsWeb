@@ -28,8 +28,8 @@ const KnowledgePage = () => {
         ? "אפילו כמויות קטנות של פעילות גופנית סדירה (<150 דקות/שבוע) קשורות לירידה בתמותה כללית ובסיכון למחלות כרוניות."
         : "Even small amounts of regular exercise (<150 min/week) are linked with lower all-cause mortality and chronic disease risk.",
       whyInteresting: language === 'hebrew'
-        ? "זה מפריך את המיתוס של \"הכל או כלום\" — מראה שתנועה \"כלשהי\" כבר מביאה יתרונות בריאותיים מדידים."
-        : "It debunks the \"all or nothing\" myth — showing that *some* movement already brings measurable health benefits.",
+        ? "זה מפריך את המיתוס של \"הכל או כלום\" - מראה שתנועה \"כלשהי\" כבר מביאה יתרונות בריאותיים מדידים."
+        : "It debunks the \"all or nothing\" myth - showing that *some* movement already brings measurable health benefits.",
       icon: "💪"
     },
     {
@@ -43,8 +43,8 @@ const KnowledgePage = () => {
         ? "על פני 116 מחקרים אקראיים מבוקרים (n = 6,880), כל 30 דקות נוספות של פעילות אירובית שבועית הביאו לירידה של ~0.52 ק\"ג במשקל."
         : "Across 116 RCTs (n = 6,880), every additional 30 minutes of aerobic exercise per week resulted in ~0.52 kg of weight loss.",
       whyInteresting: language === 'hebrew'
-        ? "מספק נוסחת \"מינון-תגובה\" ברורה — אפשר לכמת תוצאות לפי דקות של פעילות גופנית."
-        : "Provides a clear \"dose-response\" formula — you can quantify results per minutes of exercise.",
+        ? "מספק נוסחת \"מינון-תגובה\" ברורה - אפשר לכמת תוצאות לפי דקות של פעילות גופנית."
+        : "Provides a clear \"dose-response\" formula - you can quantify results per minutes of exercise.",
       icon: "🏃"
     },
     {
@@ -58,8 +58,8 @@ const KnowledgePage = () => {
         ? "שילוב תזונה מותאמת אישית עם ≥175 דקות פעילות גופנית שבועית מביא ליתרונות הירידה במשקל והבריאות הגדולים ביותר."
         : "Combining personalized nutrition with ≥175 minutes of exercise per week yields the greatest weight-loss and health benefits.",
       whyInteresting: language === 'hebrew'
-        ? "מראה סינרגיה — דיאטה + פעילות גופנית יחד עולות בביצועים על כל אחד בנפרד."
-        : "Shows synergy — diet + exercise together outperform either alone.",
+        ? "מראה סינרגיה - דיאטה + פעילות גופנית יחד עולות בביצועים על כל אחד בנפרד."
+        : "Shows synergy - diet + exercise together outperform either alone.",
       icon: "🥗"
     },
     {
@@ -75,8 +75,8 @@ const KnowledgePage = () => {
         ? "דיאטות \"בריאות\" או \"ים-תיכוניות\" נמצאות בקורלציה חזקה עם ציוני רווחה גופנית ונפשית גבוהים יותר."
         : "\"Healthy\" or \"Mediterranean\" diets correlate strongly with higher physical and mental well-being scores.",
       whyInteresting: language === 'hebrew'
-        ? "חורג מעבר למניעת מחלות — מחבר תזונה לשביעות רצון מהחיים ורווחה רגשית."
-        : "Goes beyond disease prevention — connects diet to *life satisfaction* and emotional well-being.",
+        ? "חורג מעבר למניעת מחלות - מחבר תזונה לשביעות רצון מהחיים ורווחה רגשית."
+        : "Goes beyond disease prevention - connects diet to *life satisfaction* and emotional well-being.",
       icon: "🧠"
     },
     {
@@ -90,8 +90,8 @@ const KnowledgePage = () => {
         ? "התערבויות אורח חיים על ידי תזונאים או מאמני כושר מעלות משמעותיות צריכת פירות/ירקות ופעילות גופנית, ומקטינות היקף מותניים."
         : "Lifestyle interventions by nutritionists or exercise coaches significantly increase fruit/vegetable intake, physical activity, and reduce waist circumference.",
       whyInteresting: language === 'hebrew'
-        ? "מדגים את ההשפעה הניתנת למדידה בעולם האמיתי של הדרכה מקצועית — לא רק \"עזרה עצמית\"."
-        : "Demonstrates the measurable real-world effect of professional guidance — not just \"self-help.\"",
+        ? "מדגים את ההשפעה הניתנת למדידה בעולם האמיתי של הדרכה מקצועית - לא רק \"עזרה עצמית\"."
+        : "Demonstrates the measurable real-world effect of professional guidance - not just \"self-help.\"",
       icon: "👨‍⚕️"
     }
   ];

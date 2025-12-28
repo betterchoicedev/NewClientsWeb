@@ -188,7 +188,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         
         // Determine subscription type based on product ID
         let subscriptionType = 'unknown';
-        if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'better_pro';
+        if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'nutrition_training_once_month';
         else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
         else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
         else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
@@ -197,11 +197,11 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         let commitmentMonths = null; // Default no commitment 
         const currentDate = new Date(subscription.current_period_start * 1000);
         
-        // BetterPro plans
+        // Nutrition + Training (once/month) plans (using BetterPro price IDs)
         if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
-          commitmentMonths = 3; // BetterPro 3-Month Plan
+          commitmentMonths = 3; // Nutrition + Training once/month 3-Month Plan
         } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
-          commitmentMonths = 6; // BetterPro 6-Month Plan
+          commitmentMonths = 6; // Nutrition + Training once/month 6-Month Plan
         }
         // Nutrition Only plans
         else if (priceId === 'price_1Rg5R6HIeYfvCylDcsV3T2Kr') {
@@ -944,7 +944,7 @@ async function handleSubscriptionCreated(subscription) {
     
     // Determine subscription type based on product ID
     let subscriptionType = 'unknown';
-    if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'better_pro';
+    if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'nutrition_training_once_month';
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
@@ -954,11 +954,11 @@ async function handleSubscriptionCreated(subscription) {
     // Use subscription created date (when subscription was first created) for commitment calculation
     const subscriptionStartDate = new Date(subscription.created * 1000);
     
-    // BetterPro plans
+    // Nutrition + Training (once/month) plans (using BetterPro price IDs)
     if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
-      commitmentMonths = 3; // BetterPro 3-Month Plan
+      commitmentMonths = 3; // Nutrition + Training once/month 3-Month Plan
     } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
-      commitmentMonths = 6; // BetterPro 6-Month Plan
+      commitmentMonths = 6; // Nutrition + Training once/month 6-Month Plan
     }
     // Nutrition Only plans
     else if (priceId === 'price_1Rg5R6HIeYfvCylDcsV3T2Kr') {
@@ -1104,11 +1104,11 @@ async function handleSubscriptionUpdated(subscription) {
     // This is the correct date to calculate commitment period from
     const subscriptionStartDate = new Date(subscription.created * 1000);
     
-    // BetterPro plans
+    // Nutrition + Training (once/month) plans (using BetterPro price IDs)
     if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
-      commitmentMonths = 3; // BetterPro 3-Month Plan
+      commitmentMonths = 3; // Nutrition + Training once/month 3-Month Plan
     } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
-      commitmentMonths = 6; // BetterPro 6-Month Plan
+      commitmentMonths = 6; // Nutrition + Training once/month 6-Month Plan
     }
     // Nutrition Only plans
     else if (priceId === 'price_1Rg5R6HIeYfvCylDcsV3T2Kr') {
@@ -1131,7 +1131,7 @@ async function handleSubscriptionUpdated(subscription) {
 
     // Determine subscription type based on product ID (same mapping as on create)
     let subscriptionType = 'unknown';
-    if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'better_pro';
+    if (productId === 'prod_SbI1Lu7FWbybUO') subscriptionType = 'nutrition_training_once_month';
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
@@ -1223,11 +1223,11 @@ async function handleSubscriptionDeleted(subscription) {
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null;
-    // BetterPro plans
+    // Nutrition + Training (once/month) plans (using BetterPro price IDs)
     if (priceId === 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr') {
-      commitmentMonths = 3; // BetterPro 3-Month Plan
+      commitmentMonths = 3; // Nutrition + Training once/month 3-Month Plan
     } else if (priceId === 'price_1Rg5R8HIeYfvCylDxX2PsOrR') {
-      commitmentMonths = 6; // BetterPro 6-Month Plan
+      commitmentMonths = 6; // Nutrition + Training once/month 6-Month Plan
     }
     // Nutrition Only plans
     else if (priceId === 'price_1Rg5R6HIeYfvCylDcsV3T2Kr') {

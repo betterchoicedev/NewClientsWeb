@@ -5,6 +5,7 @@ export const STRIPE_PRODUCTS = {
   BETTER_PRO: 'prod_SbI1Lu7FWbybUO',
   NUTRITION_ONLY: 'prod_SbI1dssS5NElLZ', 
   NUTRITION_TRAINING: 'prod_SbI1AIv2A46oJ9',
+  NUTRITION_TRAINING_ONCE_MONTH: 'prod_SbI1Lu7FWbybUO',
   NUTRITION_ONLY_2X_MONTH: 'prod_SbI0A23T20wul3',
   CONSULTATION: 'prod_SSzustraPd40C1'
 };
@@ -18,9 +19,13 @@ export const STRIPE_PRICES = {
   NUTRITION_ONLY_3_MONTHS: 'price_1Rg5R6HIeYfvCylDcsV3T2Kr',
   NUTRITION_ONLY_6_MONTHS: 'price_1Rg5R6HIeYfvCylDxuQODpK4',
   
-  // Nutrition + Training - 2 pricing options (commitment periods)
+  // Nutrition + Training (2x/month) - 2 pricing options (commitment periods)
   NUTRITION_TRAINING_6_MONTHS: 'price_1Rg5R4HIeYfvCylDy1OT1YJc',
   NUTRITION_TRAINING_3_MONTHS: 'price_1Rg5R4HIeYfvCylDAshP6FOk',
+  
+  // Nutrition + Training (once/month) - 2 pricing options (commitment periods) - using BetterPro price IDs
+  NUTRITION_TRAINING_ONCE_3_MONTHS: 'price_1Rg5R8HIeYfvCylDJ4Xfg5hr',
+  NUTRITION_TRAINING_ONCE_6_MONTHS: 'price_1Rg5R8HIeYfvCylDxX2PsOrR',
   
   // Nutrition Only 2x/month - 2 pricing options (commitment periods)
   NUTRITION_ONLY_2X_3_MONTHS: 'price_1Rg5QtHIeYfvCylDyXHY5X6G',
@@ -32,73 +37,22 @@ export const STRIPE_PRICES = {
 
 // Product configuration with metadata
 export const PRODUCT_CONFIG = {
-  [STRIPE_PRODUCTS.BETTER_PRO]: {
-    name: 'BetterPro Plan',
-    nameHebrew: 'תוכנית BetterPro',
-    description: 'Complete nutrition and training program with premium features',
-    descriptionHebrew: 'תוכנית תזונה ואימונים מלאה עם תכונות פרימיום',
-    features: [
-      'Advanced meal planning',
-      'Personal trainer support', 
-      'Progress tracking',
-      'Priority support',
-      'Custom workout plans'
-    ],
-    featuresHebrew: [
-      'תכנון ארוחות מתקדם',
-      'תמיכת מאמן אישי',
-      'מעקב התקדמות',
-      'תמיכה עדיפות',
-      'תוכניות אימון מותאמות'
-    ],
-    category: 'premium',
-    prices: [
-      {
-        id: STRIPE_PRICES.BETTER_PRO_OPTION_1,
-        name: '3 Month Plan',
-        nameHebrew: 'תוכנית 3 חודשים',
-        interval: 'month',
-        interval_count: 1,
-        commitment: 3,
-        amount: 68000, // ₪680/month in agorot (680 * 100)
-        amountUSD: 19400, // $194/month in cents (680 ÷ 3.5)
-        currency: 'ILS',
-        popular: false
-      },
-      {
-        id: STRIPE_PRICES.BETTER_PRO_OPTION_2, 
-        name: '6 Month Plan',
-        nameHebrew: 'תוכנית 6 חודשים',
-        interval: 'month',
-        interval_count: 1,
-        commitment: 6,
-        amount: 60000, // ₪600/month in agorot
-        amountUSD: 17100, // $171/month in cents
-        currency: 'ILS',
-        discount: '15% off',
-        popular: true
-      }
-    ]
-  },
-  
   [STRIPE_PRODUCTS.NUTRITION_TRAINING]: {
-    name: 'Nutrition + Training',
-    nameHebrew: 'תזונה + אימונים',
-    description: 'Comprehensive nutrition guidance with training support',
-    descriptionHebrew: 'הדרכה תזונתית מקיפה עם תמיכה באימונים',
+    name: 'Nutrition + Training - 2x Month',
+    nameHebrew: 'תזונה + אימונים - פעמיים בחודש',
+    description: 'Combined guidance for complete connection between nutrition and movement',
+    descriptionHebrew: 'ליווי משולב למי שרוצה חיבור מלא בין תזונה לתנועה',
+    frequencyDescription: 'One session every two weeks. Suitable for those who want closer guidance, precision and high presence of our dietician/nutritionist throughout the process.',
+    frequencyDescriptionHebrew: 'פגישה אחת לשבועיים. מתאימה למי שרוצה ליווי צמוד יותר, דיוק ונוכחות גבוהה של הדיאטן/נית שלנו לאורך הדרך',
     features: [
-      'Personalized meal plans',
-      'Workout routines',
-      'Progress monitoring',
-      'Expert consultations',
-      'Mobile app access'
+      'Personalized meal plan',
+      'Personalized training plan (fitness level, availability and preferences)',
+      'Connection between eating, training and daily routine'
     ],
     featuresHebrew: [
-      'תוכניות ארוחות מותאמות אישית',
-      'שגרות אימון',
-      'מעקב התקדמות',
-      'יעוצים מומחים',
-      'גישה לאפליקציה'
+      'בניית תוכנית תזונה אישית',
+      'בניית תוכנית אימונים מותאמת (רמת כושר, זמינות והעדפות)',
+      'חיבור בין האכילה לאימונים ולשגרה היומית'
     ],
     category: 'complete',
     prices: [
@@ -106,6 +60,8 @@ export const PRODUCT_CONFIG = {
         id: STRIPE_PRICES.NUTRITION_TRAINING_6_MONTHS,
         name: '6 Month Plan',
         nameHebrew: 'תוכנית 6 חודשים',
+        description: 'Deep process, stable and habit-based over time',
+        descriptionHebrew: 'תהליך עמוק, יציב ומבוסס הרגלים לאורך זמן',
         interval: 'month',
         interval_count: 1,
         commitment: 6,
@@ -118,6 +74,8 @@ export const PRODUCT_CONFIG = {
         id: STRIPE_PRICES.NUTRITION_TRAINING_3_MONTHS,
         name: '3 Month Plan',
         nameHebrew: 'תוכנית 3 חודשים',
+        description: 'Focused process, creating foundation and momentum',
+        descriptionHebrew: 'תהליך ממוקד, יצירת בסיס והנעה',
         interval: 'month', 
         interval_count: 1,
         commitment: 3,
@@ -129,24 +87,72 @@ export const PRODUCT_CONFIG = {
     ]
   },
   
+  [STRIPE_PRODUCTS.NUTRITION_TRAINING_ONCE_MONTH]: {
+    name: 'Nutrition + Training',
+    nameHebrew: 'תזונה + אימונים',
+    description: 'Combined guidance for complete connection between nutrition and movement',
+    descriptionHebrew: 'ליווי משולב למי שרוצה חיבור מלא בין תזונה לתנועה',
+    frequencyDescription: 'One session per month. Suitable for those who prefer intervals, gradual work and higher independence.',
+    frequencyDescriptionHebrew: 'פגישה אחת לחודש. מתאימה למי שמעדיף מרווחים, עבודה הדרגתית ועצמאות גבוהה יותר',
+    features: [
+      'Personalized meal plan',
+      'Personalized training plan (fitness level, availability and preferences)',
+      'Connection between eating, training and daily routine'
+    ],
+    featuresHebrew: [
+      'בניית תוכנית תזונה אישית',
+      'בניית תוכנית אימונים מותאמת (רמת כושר, זמינות והעדפות)',
+      'חיבור בין האכילה לאימונים ולשגרה היומית'
+    ],
+    category: 'complete',
+    prices: [
+      {
+        id: STRIPE_PRICES.NUTRITION_TRAINING_ONCE_6_MONTHS,
+        name: '6 Month Plan',
+        nameHebrew: 'תוכנית 6 חודשים',
+        description: 'Deep process, stable and habit-based over time',
+        descriptionHebrew: 'תהליך עמוק, יציב ומבוסס הרגלים לאורך זמן',
+        interval: 'month',
+        interval_count: 1,
+        commitment: 6,
+        amount: 60000, // ₪600/month in agorot
+        amountUSD: 17100, // $171/month in cents (600 ÷ 3.5)
+        currency: 'ILS',
+        popular: true
+      },
+      {
+        id: STRIPE_PRICES.NUTRITION_TRAINING_ONCE_3_MONTHS,
+        name: '3 Month Plan',
+        nameHebrew: 'תוכנית 3 חודשים',
+        description: 'Focused process, creating foundation and momentum',
+        descriptionHebrew: 'תהליך ממוקד, יצירת בסיס והנעה',
+        interval: 'month',
+        interval_count: 1,
+        commitment: 3,
+        amount: 68000, // ₪680/month in agorot
+        amountUSD: 19400, // $194/month in cents (680 ÷ 3.5)
+        currency: 'ILS',
+        popular: false
+      }
+    ]
+  },
+  
   [STRIPE_PRODUCTS.NUTRITION_ONLY]: {
     name: 'Nutrition Only',
     nameHebrew: 'תזונה בלבד',
-    description: 'Focused nutrition planning and guidance',
-    descriptionHebrew: 'תכנון תזונתי ממוקד והדרכה',
+    description: 'Personal nutrition guidance with comprehensive support',
+    descriptionHebrew: 'ליווי תזונתי אישי ומעמיק',
+    frequencyDescription: 'One session per month. Suitable for those who prefer intervals, gradual work and higher independence.',
+    frequencyDescriptionHebrew: 'פגישה אחת לחודש. מתאימה למי שמעדיף מרווחים, עבודה הדרגתית ועצמאות גבוהה יותר',
     features: [
-      'Custom meal plans',
-      'Nutritional analysis',
-      'Progress tracking',
-      'Email support',
-      'Recipe library'
+      'Personalized meal plan based on goals, lifestyle and preferences',
+      'Regular follow-up sessions',
+      'Adjustments and changes along the way'
     ],
     featuresHebrew: [
-      'תוכניות ארוחות מותאמות',
-      'ניתוח תזונתי',
-      'מעקב התקדמות',
-      'תמיכה במייל',
-      'ספריית מתכונים'
+      'בניית תכנית תזונה מותאמת אישית לפי מטרות, אורח חיים והעדפות',
+      'פגישות מעקב קבועות',
+      'התאמות ושינויים לאורך הדרך'
     ],
     category: 'nutrition',
     prices: [
@@ -154,6 +160,8 @@ export const PRODUCT_CONFIG = {
         id: STRIPE_PRICES.NUTRITION_ONLY_3_MONTHS,
         name: '3 Month Plan',
         nameHebrew: 'תוכנית 3 חודשים',
+        description: 'Focused process, creating foundation and momentum',
+        descriptionHebrew: 'תהליך ממוקד, יצירת בסיס והנעה',
         interval: 'month',
         interval_count: 1,
         commitment: 3,
@@ -166,6 +174,8 @@ export const PRODUCT_CONFIG = {
         id: STRIPE_PRICES.NUTRITION_ONLY_6_MONTHS,
         name: '6 Month Plan', 
         nameHebrew: 'תוכנית 6 חודשים',
+        description: 'Deep process, stable and habit-based over time',
+        descriptionHebrew: 'תהליך עמוק, יציב ומבוסס הרגלים לאורך זמן',
         interval: 'month',
         interval_count: 1,
         commitment: 6,
@@ -181,23 +191,19 @@ export const PRODUCT_CONFIG = {
   [STRIPE_PRODUCTS.NUTRITION_ONLY_2X_MONTH]: {
     name: 'Nutrition Only - 2x Month',
     nameHebrew: 'תזונה בלבד - פעמיים בחודש',
-    description: 'Focused nutrition planning with bi-monthly consultations',
-    descriptionHebrew: 'תכנון תזונתי ממוקד עם יעוצים דו-חודשיים',
+    description: 'Personal nutrition guidance with bi-monthly sessions',
+    descriptionHebrew: 'ליווי תזונתי אישי ומעמיק',
+    frequencyDescription: 'One session every two weeks. Suitable for those who want closer guidance, precision and high presence of our dietician/nutritionist throughout the process.',
+    frequencyDescriptionHebrew: 'פגישה אחת לשבועיים. מתאימה למי שרוצה ליווי צמוד יותר, דיוק ונוכחות גבוהה של הדיאטן/נית שלנו לאורך הדרך',
     features: [
-      'Custom meal plans',
-      'Bi-monthly consultations',
-      'Nutritional analysis',
-      'Progress tracking',
-      'Email support',
-      'Recipe library'
+      'Personalized meal plan based on goals, lifestyle and preferences',
+      'Regular follow-up sessions',
+      'Adjustments and changes along the way'
     ],
     featuresHebrew: [
-      'תוכניות ארוחות מותאמות',
-      'יעוצים דו-חודשיים',
-      'ניתוח תזונתי',
-      'מעקב התקדמות',
-      'תמיכה במייל',
-      'ספריית מתכונים'
+      'בניית תכנית תזונה מותאמת אישית לפי מטרות, אורח חיים והעדפות',
+      'פגישות מעקב קבועות',
+      'התאמות ושינויים לאורך הדרך'
     ],
     category: 'nutrition',
     prices: [
@@ -205,6 +211,8 @@ export const PRODUCT_CONFIG = {
         id: STRIPE_PRICES.NUTRITION_ONLY_2X_3_MONTHS,
         name: '3 Month Plan',
         nameHebrew: 'תוכנית 3 חודשים',
+        description: 'Focused process, creating foundation and momentum',
+        descriptionHebrew: 'תהליך ממוקד, יצירת בסיס והנעה',
         interval: 'month',
         interval_count: 1,
         commitment: 3,
@@ -217,6 +225,8 @@ export const PRODUCT_CONFIG = {
         id: STRIPE_PRICES.NUTRITION_ONLY_2X_6_MONTHS,
         name: '6 Month Plan',
         nameHebrew: 'תוכנית 6 חודשים',
+        description: 'Deep process, stable and habit-based over time',
+        descriptionHebrew: 'תהליך עמוק, יציב ומבוסס הרגלים לאורך זמן',
         interval: 'month',
         interval_count: 1,
         commitment: 6,

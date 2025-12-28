@@ -58,7 +58,7 @@ function Navigation() {
           {/* Logo Section */}
           <div className="flex items-center">
             <div className="relative">
-              <img src="/favicon.ico" alt="BetterChoice Logo" className="w-10 h-10 sm:w-12 sm:h-12 mr-2 sm:mr-4 rounded-xl shadow-lg shadow-emerald-500/25" />
+              <img src="/favicon.ico" alt="BetterChoice Logo" className="w-10 h-10 sm:w-12 sm:h-12 mr-2 sm:mr-4 rounded-xl" />
             </div>
             <div className="flex flex-col">
               <h1 className={`text-xl sm:text-2xl font-semibold ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} leading-tight`}>BetterChoice</h1>
