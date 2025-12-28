@@ -47,6 +47,8 @@ jobs:
             cd Backend
             # Copy requirements.txt to Backend directory for deployment
             cp ../requirements.txt .
+            # Make startup.sh executable
+            chmod +x startup.sh 2>/dev/null || true
             find . -type f -not -path "./antenv/*" -not -path "./venv/*" -not -path "./__pycache__/*" -not -path "./myenv/*" -exec zip ../backend.zip {} \;
           else
             echo "Backend directory not found for zipping"
