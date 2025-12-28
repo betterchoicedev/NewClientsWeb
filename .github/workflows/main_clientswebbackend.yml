@@ -2,12 +2,11 @@
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 # More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
 
-name: Build and deploy Python app to Azure Web App - ClientsWebBackend
+name: Deploy backend → Azure (ClientsWebBackend)
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -45,20 +44,7 @@ jobs:
         run: |
           if [ -d "Backend" ]; then
             cd Backend
-            # Make startup.sh executable
-            chmod +x startup.sh 2>/dev/null || true
-            # Verify backend.py exists
-            if [ ! -f "backend.py" ]; then
-              echo "ERROR: backend.py not found in Backend directory!"
-              ls -la
-              exit 1
-            fi
-            echo "Files to be zipped:"
-            ls -la
-            # Create zip with all necessary files
-            zip -r ../backend.zip . -x "*/antenv/*" "*/venv/*" "*/__pycache__/*" "*/myenv/*" "*.pyc" "*.pyo"
-            echo "Zip file created. Contents:"
-            unzip -l ../backend.zip
+            find . -type f -not -path "./venv/*" -not -path "./__pycache__/*" -not -path "./myenv/*" -exec zip ../backend.zip {} \;
           else
             echo "Backend directory not found for zipping"
             exit 1
@@ -71,3 +57,16 @@ jobs:
           slot-name: Production
           package: ${{ github.workspace }}/backend.zip
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_D1C7BF274837455494695E800D0C013F }}
+
+# Note: Make sure to configure these environment variables in Azure App Service if needed:
+# - Any custom environment variables your app requires
+#
+# Startup Command to set in Azure App Service:
+# bash startup.sh
+# OR
+# python -m uvicorn backend:app --host 0.0.0.0 --port 8000
+#
+# App Settings to configure in Azure App Service:
+# - WEBSITES_PORT = 8000
+# - SCM_DO_BUILD_DURING_DEPLOYMENT = 0
+# - WEBSITES_CONTAINER_START_TIME_LIMIT = 1800
