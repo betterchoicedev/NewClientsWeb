@@ -27,7 +27,7 @@ jobs:
             cd Backend
             ls -la
             python -m pip install --upgrade pip
-            pip install -r ../requirements.txt
+            pip install -r requirements.txt
           else
             echo "Backend directory not found, checking current directory"
             ls -la
@@ -45,8 +45,6 @@ jobs:
         run: |
           if [ -d "Backend" ]; then
             cd Backend
-            # Copy requirements.txt to Backend directory for deployment
-            cp ../requirements.txt .
             # Make startup.sh executable
             chmod +x startup.sh 2>/dev/null || true
             find . -type f -not -path "./antenv/*" -not -path "./venv/*" -not -path "./__pycache__/*" -not -path "./myenv/*" -exec zip ../backend.zip {} \;
