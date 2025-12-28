@@ -119,6 +119,30 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     { value: 'America/Buenos_Aires', label: '🇦🇷 Buenos Aires (America/Buenos_Aires)', offset: 'GMT-3' }
   ];
 
+  // Common regions list (bilingual - values always in English)
+  const regions = [
+    { value: 'israel', labelHe: 'ישראל', labelEn: 'Israel' },
+    { value: 'japan', labelHe: 'יפן', labelEn: 'Japan' },
+    { value: 'korea', labelHe: 'קוריאה', labelEn: 'Korea' },
+    { value: 'greater_china', labelHe: 'סין/הונג קונג/טאיוואן', labelEn: 'Greater China (China/Hong Kong/Taiwan)' },
+    { value: 'india_south_asia', labelHe: 'הודו / דרום אסיה', labelEn: 'India / South Asia' },
+    { value: 'southeast_asia', labelHe: 'דרום־מזרח אסיה', labelEn: 'Southeast Asia' },
+    { value: 'indonesia_malaysia', labelHe: 'אינדונזיה/מלזיה', labelEn: 'Indonesia/Malaysia' },
+    { value: 'turkey', labelHe: 'טורקיה', labelEn: 'Turkey' },
+    { value: 'persian_iranian', labelHe: 'איראן/פרס', labelEn: 'Persian/Iranian' },
+    { value: 'gulf_arabia', labelHe: 'העולם הערבי–מפרץ', labelEn: 'Gulf Arabia' },
+    { value: 'north_africa', labelHe: 'צפון אפריקה', labelEn: 'North Africa' },
+    { value: 'east_africa', labelHe: 'אפריקה מזרחית', labelEn: 'East Africa' },
+    { value: 'europe_mediterranean', labelHe: 'אירופה – ים תיכוני', labelEn: 'Europe – Mediterranean' },
+    { value: 'europe_west', labelHe: 'אירופה – מרכז/מערב', labelEn: 'Europe – Central/West' },
+    { value: 'europe_east_russian', labelHe: 'אירופה – מזרח/רוסי', labelEn: 'Europe – East/Russian' },
+    { value: 'mexico', labelHe: 'אמריקה לטינית – מקסיקו', labelEn: 'Latin America – Mexico' },
+    { value: 'latam_south_america', labelHe: 'אמריקה לטינית – דרום אמריקה', labelEn: 'Latin America – South America' },
+    { value: 'caribbean', labelHe: 'קריביים', labelEn: 'Caribbean' },
+    { value: 'north_america', labelHe: 'צפון אמריקה', labelEn: 'North America' },
+    { value: 'other', labelHe: 'אחר', labelEn: 'Other' }
+  ];
+
   // Function to validate phone number based on country code
   const validatePhoneNumber = (phone, countryCode) => {
     // Normalize phone number (remove spaces, dashes, parentheses, dots, etc.)
@@ -765,6 +789,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         height_cm: formData.height_cm ? parseFloat(formData.height_cm) : null,
         food_allergies: formData.food_allergies || null,
         food_limitations: formData.food_limitations || null,
+        medical_conditions: allOnboardingFields.includes('medical_conditions') ? (formData.medical_conditions || null) : undefined,
         Activity_level: formData.activity_level,
         goal: formData.goal,
         client_preference: formData.client_preference || null,
@@ -1025,14 +1050,19 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'אזור' : 'Region'}
               </label>
-              <input
-                type="text"
+              <select
                 name="region"
                 value={formData.region}
                 onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('region')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
-                placeholder={language === 'hebrew' ? 'מרכז' : 'Center'}
-              />
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('region')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+              >
+                <option value="">{language === 'hebrew' ? 'בחר אזור' : 'Select Region'}</option>
+                {regions.map((region) => (
+                  <option key={region.value} value={region.value}>
+                    {language === 'hebrew' ? region.labelHe : region.labelEn}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 

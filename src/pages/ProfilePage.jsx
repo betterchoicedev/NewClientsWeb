@@ -951,6 +951,20 @@ const ProfilePage = () => {
             opacity: 0.3;
           }
         }
+        @keyframes shake {
+          0%, 100% {
+            transform: translateX(0);
+          }
+          10%, 30%, 50%, 70%, 90% {
+            transform: translateX(-4px);
+          }
+          20%, 40%, 60%, 80% {
+            transform: translateX(4px);
+          }
+        }
+        .animate-shake {
+          animation: shake 0.5s ease-in-out;
+        }
       `}</style>
       <div className={`min-h-screen ${themeClasses.bgPrimary} flex flex-col lg:flex-row language-transition language-text-transition`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Sidebar Navigation - Desktop */}
@@ -976,6 +990,17 @@ const ProfilePage = () => {
                 <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
                 <p className={`${themeClasses.textSecondary} text-sm`}>{t.profile.title}</p>
               </div>
+              <a
+                href={language === 'hebrew' ? 'https://wa.me/message/AREMEVDZ4DOMB1' : 'https://wa.me/message/FH7OWJZ7PKEHN1'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${direction === 'rtl' ? 'mr-3' : 'ml-3'} p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center`}
+                aria-label={language === 'hebrew' ? 'צור קשר ב-WhatsApp' : 'Contact us on WhatsApp'}
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                </svg>
+              </a>
             </div>
             
           </div>
@@ -1183,6 +1208,17 @@ const ProfilePage = () => {
                   <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
                   <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
                 </div>
+                <a
+                  href={language === 'hebrew' ? 'https://wa.me/message/AREMEVDZ4DOMB1' : 'https://wa.me/message/FH7OWJZ7PKEHN1'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${direction === 'rtl' ? 'mr-3' : 'ml-3'} p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center`}
+                  aria-label={language === 'hebrew' ? 'צור קשר ב-WhatsApp' : 'Contact us on WhatsApp'}
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                  </svg>
+                </a>
               </div>
               
             </div>
@@ -1236,6 +1272,17 @@ const ProfilePage = () => {
                     <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
                     <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
                   </div>
+                  <a
+                    href={language === 'hebrew' ? 'https://wa.me/message/AREMEVDZ4DOMB1' : 'https://wa.me/message/FH7OWJZ7PKEHN1'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`${direction === 'rtl' ? 'mr-3' : 'ml-3'} p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center`}
+                    aria-label={language === 'hebrew' ? 'צור קשר ב-WhatsApp' : 'Contact us on WhatsApp'}
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                    </svg>
+                  </a>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -2958,7 +3005,14 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
 const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, errorMessage, themeClasses, t, companyOptions, isLoadingCompanies, companyError, language, onboardingCompleted = false, user, onSaveProfileImageUrl }) => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState('');
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState(null);
+  const [cropImage, setCropImage] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const fileInputRef = useRef(null);
+  const imageRef = useRef(null);
+  const containerRef = useRef(null);
 
   // Helper function to check if a field should be shown (if onboarding not completed, only show non-null fields)
   const shouldShowField = (fieldValue) => {
@@ -2969,7 +3023,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   // Personal Information fields are always read-only - cannot be edited
   const isReadOnly = true;
 
-  // Handle profile image upload - directly to Supabase Storage
+  // Handle image selection - show crop modal
   const handleImageUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2986,93 +3040,252 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
       return;
     }
 
+    setImageError('');
+    
+    // Create image preview URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImageToCrop(e.target.result);
+      setShowCropModal(true);
+      setCropImage({ x: 0, y: 0 });
+    };
+    reader.readAsDataURL(file);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Handle mouse events for dragging
+  const handleMouseDown = (e) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - cropImage.x, y: e.clientY - cropImage.y });
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    setCropImage(prev => ({
+      ...prev,
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    }));
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+
+  // Crop and upload the image
+  const handleCropAndUpload = async () => {
+    if (!imageToCrop || !imageRef.current || !containerRef.current) return;
+
     setUploadingImage(true);
     setImageError('');
 
     try {
-      // Get user_code from clients table
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('user_code')
-        .eq('user_id', user.id)
-        .single();
-
-      if (clientError) {
-        if (clientError.code === 'PGRST116') {
-          setImageError(language === 'hebrew' ? 'פרופיל לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User profile not found. Please complete your profile setup first.');
-        } else {
-          console.error('Error fetching user_code:', clientError);
-          setImageError(language === 'hebrew' ? 'שגיאה בטעינת פרטי המשתמש' : 'Error loading user information');
-        }
-        setUploadingImage(false);
-        return;
-      }
-
-      const userCode = clientData?.user_code;
-      if (!userCode) {
-        setImageError(language === 'hebrew' ? 'קוד משתמש לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User code not found. Please complete your profile setup first.');
-        setUploadingImage(false);
-        return;
-      }
-
-      // Get file extension
-      const fileExtension = file.name.split('.').pop().toLowerCase();
-      const imageFormat = fileExtension === 'jpg' ? 'jpeg' : fileExtension;
-
-      // Generate unique filename using user_code
-      const timestamp = Date.now();
-      const filename = `${userCode}/${timestamp}.${imageFormat}`;
-
-      // Upload directly to Supabase Storage
-      const bucketName = process.env.REACT_APP_SUPABASE_STORAGE_BUCKET_NAME || 'profile-pictures';
+      // Get container and image dimensions
+      const container = containerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const containerSize = Math.min(containerRect.width, containerRect.height);
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(bucketName)
-        .upload(filename, file, {
-          contentType: file.type,
-          upsert: false,
-          cacheControl: '3600',
-          metadata: {
-            userId: user.id,
-            userCode: userCode,
-            uploadedAt: new Date().toISOString()
+      // Create canvas for cropping
+      const canvas = document.createElement('canvas');
+      canvas.width = 400; // Output size
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+
+      // Load image
+      const img = new Image();
+      img.onload = async () => {
+        const container = containerRef.current;
+        if (!container) return;
+        
+        const containerRect = container.getBoundingClientRect();
+        const containerSize = Math.min(containerRect.width, containerRect.height);
+        const cropCircleSize = containerSize * 0.75; // 75% - the visible circle
+        const circleRadius = cropCircleSize / 2;
+        
+        // Calculate how image is displayed with object-fit: cover
+        const imgAspect = img.width / img.height;
+        let coverScale;
+        
+        if (imgAspect > 1) {
+          // Wider image - height fills container
+          coverScale = containerSize / img.height;
+        } else {
+          // Taller image - width fills container
+          coverScale = containerSize / img.width;
+        }
+        
+        // Image element dimensions after object-fit: cover
+        const displayedWidth = img.width * coverScale;
+        const displayedHeight = img.height * coverScale;
+        
+        // Offset to center the image (object-fit: cover centers it)
+        const offsetX = (containerSize - displayedWidth) / 2;
+        const offsetY = (containerSize - displayedHeight) / 2;
+        
+        // Circle center in container coordinates
+        const circleCenterX = containerSize / 2;
+        const circleCenterY = containerSize / 2;
+        
+        // Transform origin is top-left of the image element
+        // We need to find what point in the original image corresponds to the circle center
+        // Step 1: Convert circle center to coordinates relative to image element (before transform)
+        let relativeX = circleCenterX - offsetX;
+        let relativeY = circleCenterY - offsetY;
+        
+        // Step 2: Account for the transform (translate only, no scale)
+        // The transform is: translate(x, y)
+        // First undo the translation
+        relativeX = relativeX - cropImage.x;
+        relativeY = relativeY - cropImage.y;
+        
+        // Step 3: Add back the offset to get position in displayed image
+        relativeX = relativeX + offsetX;
+        relativeY = relativeY + offsetY;
+        
+        // Step 4: Convert to original image pixel coordinates
+        const imageX = relativeX / coverScale;
+        const imageY = relativeY / coverScale;
+        
+        // Calculate crop size in original image coordinates
+        const cropSizeInImage = cropCircleSize / coverScale;
+        
+        // Calculate crop rectangle centered on the calculated position
+        let cropX = imageX - cropSizeInImage / 2;
+        let cropY = imageY - cropSizeInImage / 2;
+        
+        // Ensure crop stays within image bounds
+        cropX = Math.max(0, Math.min(cropX, img.width - cropSizeInImage));
+        cropY = Math.max(0, Math.min(cropY, img.height - cropSizeInImage));
+        const finalCropSize = Math.min(cropSizeInImage, img.width - cropX, img.height - cropY);
+
+        // Draw cropped image
+        ctx.drawImage(
+          img,
+          cropX, cropY, finalCropSize, finalCropSize,
+          0, 0, 400, 400
+        );
+
+        // Convert to blob
+        canvas.toBlob(async (blob) => {
+          if (!blob) {
+            setImageError(language === 'hebrew' ? 'שגיאה בעיבוד התמונה' : 'Error processing image');
+            setUploadingImage(false);
+            return;
           }
-        });
 
-      if (uploadError) {
-        console.error('Error uploading to Supabase Storage:', uploadError);
-        setImageError(uploadError.message || (language === 'hebrew' ? 'שגיאה בהעלאת התמונה' : 'Error uploading image'));
-        setUploadingImage(false);
-        return;
-      }
+          // Get user_code from clients table
+          const { data: clientData, error: clientError } = await supabase
+            .from('clients')
+            .select('user_code')
+            .eq('user_id', user.id)
+            .single();
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(uploadData.path);
+          if (clientError) {
+            if (clientError.code === 'PGRST116') {
+              setImageError(language === 'hebrew' ? 'פרופיל לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User profile not found. Please complete your profile setup first.');
+            } else {
+              console.error('Error fetching user_code:', clientError);
+              setImageError(language === 'hebrew' ? 'שגיאה בטעינת פרטי המשתמש' : 'Error loading user information');
+            }
+            setUploadingImage(false);
+            setShowCropModal(false);
+            return;
+          }
 
-      const publicUrl = urlData.publicUrl;
+          const userCode = clientData?.user_code;
+          if (!userCode) {
+            setImageError(language === 'hebrew' ? 'קוד משתמש לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User code not found. Please complete your profile setup first.');
+            setUploadingImage(false);
+            setShowCropModal(false);
+            return;
+          }
 
-      // Update profile data with new image URL
-      onInputChange('profileImageUrl', publicUrl);
-      
-      // Automatically save the image URL to the database
-      if (onSaveProfileImageUrl) {
-        const saveResult = await onSaveProfileImageUrl(publicUrl);
-        if (saveResult.error) {
-          console.error('Error saving profile image URL to database:', saveResult.error);
-          setImageError(language === 'hebrew' ? 'התמונה הועלתה אך לא נשמרה. אנא נסה לשמור ידנית.' : 'Image uploaded but not saved. Please try saving manually.');
-        } else {
-          setImageError('');
-        }
-      } else {
-        setImageError('');
-      }
+          // Generate unique filename
+          const timestamp = Date.now();
+          const filename = `${user.id}/${timestamp}.jpeg`;
+
+          // Check if user is authenticated
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            setImageError(language === 'hebrew' ? 'נא להתחבר כדי להעלות תמונה' : 'Please sign in to upload an image');
+            setUploadingImage(false);
+            setShowCropModal(false);
+            return;
+          }
+
+          // Upload to Supabase Storage
+          const bucketName = process.env.REACT_APP_SUPABASE_STORAGE_BUCKET_NAME || 'profile-pictures';
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from(bucketName)
+            .upload(filename, blob, {
+              contentType: 'image/jpeg',
+              upsert: false,
+              cacheControl: '3600',
+              metadata: {
+                userId: user.id,
+                userCode: userCode,
+                uploadedAt: new Date().toISOString()
+              }
+            });
+
+          if (uploadError) {
+            console.error('Error uploading to Supabase Storage:', uploadError);
+            if (uploadError.message?.includes('row-level security policy') || 
+                uploadError.message?.includes('RLS') ||
+                uploadError.statusCode === 400 ||
+                uploadError.message?.includes('violates')) {
+              const rlsErrorMsg = language === 'hebrew' 
+                ? `שגיאת הרשאות: מדיניות האבטחה חוסמת את ההעלאה.`
+                : `Permission error: Security policy is blocking the upload.`;
+              setImageError(rlsErrorMsg);
+            } else {
+              setImageError(uploadError.message || (language === 'hebrew' ? 'שגיאה בהעלאת התמונה' : 'Error uploading image'));
+            }
+            setUploadingImage(false);
+            setShowCropModal(false);
+            return;
+          }
+
+          // Get public URL
+          const { data: urlData } = supabase.storage
+            .from(bucketName)
+            .getPublicUrl(uploadData.path);
+
+          const publicUrl = urlData.publicUrl;
+
+          // Update profile data
+          onInputChange('profileImageUrl', publicUrl);
+          
+          // Save to database
+          if (onSaveProfileImageUrl) {
+            const saveResult = await onSaveProfileImageUrl(publicUrl);
+            if (saveResult.error) {
+              console.error('Error saving profile image URL to database:', saveResult.error);
+              setImageError(language === 'hebrew' ? 'התמונה הועלתה אך לא נשמרה. אנא נסה לשמור ידנית.' : 'Image uploaded but not saved. Please try saving manually.');
+            } else {
+              setImageError('');
+            }
+          } else {
+            setImageError('');
+          }
+
+          setShowCropModal(false);
+          setImageToCrop(null);
+          setUploadingImage(false);
+        }, 'image/jpeg', 0.9);
+      };
+      img.src = imageToCrop;
     } catch (error) {
       console.error('Error processing image:', error);
       setImageError(error.message || (language === 'hebrew' ? 'שגיאה בעיבוד התמונה' : 'Error processing image'));
-    } finally {
       setUploadingImage(false);
+      setShowCropModal(false);
     }
   };
 
@@ -3099,29 +3312,17 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
 
       <div className="space-y-6 sm:space-y-8">
         {/* Profile Photo Section */}
-        <div className={`${themeClasses.bgCard} border border-indigo-500/30 rounded-2xl p-4 sm:p-6 md:p-8 shadow-xl shadow-indigo-500/10 transform hover:scale-[1.01] transition-all duration-300 animate-slideInUp`} style={{ animationDelay: '0.1s' }}>
-          <div className="flex items-center mb-6 sm:mb-8">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mr-3 sm:mr-4 shadow-lg shadow-purple-500/25">
-              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd"/>
-              </svg>
-            </div>
-            <div>
-              <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold tracking-tight`}>
-                {language === 'hebrew' ? 'תמונת פרופיל' : 'Profile Photo'}
-              </h3>
-              <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mt-1`}>
-                {language === 'hebrew' ? 'העלה תמונת פרופיל אישית' : 'Upload your profile picture'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center">
+        <div className={`${themeClasses.bgCard} border border-emerald-500/20 rounded-2xl p-5 shadow-lg shadow-emerald-500/5`}>
+          <div className="flex items-start gap-4">
             {/* Profile Photo Display */}
-            <div className="relative mb-4">
+            <div className="relative flex-shrink-0">
               <div 
                 onClick={handleImageClick}
-                className={`relative w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 ${uploadingImage ? 'border-gray-400' : 'border-indigo-500'} cursor-pointer transition-all duration-300 hover:scale-105 hover:border-purple-500 shadow-xl`}
+                className={`relative w-24 h-24 rounded-full overflow-hidden cursor-pointer transition-all duration-300 ${
+                uploadingImage 
+                  ? 'ring-2 ring-gray-400/50' 
+                  : 'ring-2 ring-emerald-500/30 hover:ring-emerald-500/50 shadow-lg'
+              }`}
               >
                 {profileData.profileImageUrl ? (
                   <img 
@@ -3130,23 +3331,19 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
-                    <svg className="w-16 h-16 sm:w-20 sm:h-20 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                    <svg className="w-10 h-10 text-white/90" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"/>
                     </svg>
                   </div>
                 )}
+                
+                {/* Upload overlay */}
                 {uploadingImage && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                  <div className="absolute inset-0 bg-black/70 flex items-center justify-center backdrop-blur-sm">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-white/30 border-t-white"></div>
                   </div>
                 )}
-                <div className="absolute bottom-0 right-0 bg-indigo-500 text-white rounded-full p-2 shadow-lg border-2 border-white">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
               </div>
             </div>
 
@@ -3159,49 +3356,154 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               className="hidden"
             />
 
-            {/* Upload Button */}
-            <button
-              onClick={handleImageClick}
-              disabled={uploadingImage}
-              className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
-                uploadingImage 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-              }`}
-            >
-              {uploadingImage ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  {language === 'hebrew' ? 'מעלה...' : 'Uploading...'}
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  {language === 'hebrew' ? 'העלה תמונה' : 'Upload Photo'}
-                </span>
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <h3 className={`${themeClasses.textPrimary} text-base font-semibold mb-3`}>
+                {language === 'hebrew' ? 'תמונת פרופיל' : 'Profile Photo'}
+              </h3>
+              
+              <button
+                onClick={handleImageClick}
+                disabled={uploadingImage}
+                className={`w-full sm:w-auto px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
+                  uploadingImage 
+                    ? 'bg-gray-400/50 cursor-not-allowed text-gray-600' 
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]'
+                }`}
+              >
+                {uploadingImage ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {language === 'hebrew' ? 'מעלה...' : 'Uploading...'}
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    {language === 'hebrew' ? 'העלה תמונה' : 'Upload Photo'}
+                  </span>
+                )}
+              </button>
+
+              {/* Info Text */}
+              <p className={`${themeClasses.textSecondary} text-xs mt-3`}>
+                {language === 'hebrew' 
+                  ? 'JPG, PNG, GIF, WebP (מקסימום 5MB)'
+                  : 'JPG, PNG, GIF, WebP (max 5MB)'}
+              </p>
+
+              {/* Error Message */}
+              {imageError && (
+                <div className="mt-3 px-3 py-2 bg-red-500/10 dark:bg-red-900/20 border border-red-400/30 dark:border-red-600/30 text-red-600 dark:text-red-400 rounded-lg text-xs">
+                  {imageError}
+                </div>
               )}
-            </button>
-
-            {/* Error Message */}
-            {imageError && (
-              <div className="mt-4 px-4 py-2 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg text-sm">
-                {imageError}
-              </div>
-            )}
-
-            {/* Info Text */}
-            <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mt-4 text-center max-w-md`}>
-              {language === 'hebrew' 
-                ? 'לחץ על התמונה או על הכפתור להעלאת תמונת פרופיל חדשה. פורמטים נתמכים: JPG, PNG, GIF, WebP (מקסימום 5MB)'
-                : 'Click on the photo or button to upload a new profile picture. Supported formats: JPG, PNG, GIF, WebP (max 5MB)'}
-            </p>
+            </div>
           </div>
         </div>
+
+        {/* Crop Modal */}
+        {showCropModal && imageToCrop && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => !uploadingImage && setShowCropModal(false)}>
+            <div className={`${themeClasses.bgCard} rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className={`${themeClasses.textPrimary} text-xl font-bold`}>
+                  {language === 'hebrew' ? 'התאם את התמונה' : 'Adjust Your Photo'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowCropModal(false);
+                    setImageToCrop(null);
+                  }}
+                  className={`${themeClasses.textSecondary} hover:${themeClasses.textPrimary} transition-colors`}
+                  disabled={uploadingImage}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className={`${themeClasses.textSecondary} text-sm mb-4`}>
+                  {language === 'hebrew' 
+                    ? 'גרור את התמונה כדי למקם את הפנים במרכז.'
+                    : 'Drag the image to position your face in the center.'}
+                </p>
+                
+                <div 
+                  ref={containerRef}
+                  className="relative w-full aspect-square bg-gray-900 rounded-lg overflow-hidden border-2 border-emerald-500/50"
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+                >
+                  <img
+                    ref={imageRef}
+                    src={imageToCrop}
+                    alt="Crop preview"
+                    className="absolute select-none"
+                    style={{
+                      transform: `translate(${cropImage.x}px, ${cropImage.y}px)`,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      pointerEvents: 'none'
+                    }}
+                    draggable={false}
+                  />
+                  
+                  {/* Crop overlay circle */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-3/4 h-3/4 rounded-full border-4 border-emerald-500 shadow-lg ring-4 ring-black/50"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <button
+                  onClick={() => {
+                    setShowCropModal(false);
+                    setImageToCrop(null);
+                    setCropImage({ x: 0, y: 0 });
+                  }}
+                  className={`px-4 py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:opacity-80 transition-opacity`}
+                  disabled={uploadingImage}
+                >
+                  {language === 'hebrew' ? 'ביטול' : 'Cancel'}
+                </button>
+                
+                <button
+                  onClick={handleCropAndUpload}
+                  disabled={uploadingImage}
+                  className={`px-6 py-2 rounded-lg font-medium transition-all duration-300 ${
+                    uploadingImage
+                      ? 'bg-gray-400 cursor-not-allowed text-gray-600'
+                      : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl'
+                  }`}
+                >
+                  {uploadingImage ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {language === 'hebrew' ? 'מעלה...' : 'Uploading...'}
+                    </span>
+                  ) : (
+                    language === 'hebrew' ? 'שמור והעלה' : 'Save & Upload'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Personal Information */}
         <div className={`${themeClasses.bgCard} border border-indigo-500/30 rounded-2xl p-4 sm:p-6 md:p-8 shadow-xl shadow-indigo-500/10 transform hover:scale-[1.01] transition-all duration-300 animate-slideInUp`} style={{ animationDelay: '0.2s' }}>
@@ -3311,17 +3613,26 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800`}
               >
                 <option value="">{language === 'hebrew' ? 'בחר אזור' : 'Select Region'}</option>
-                <option value="Israel">{language === 'hebrew' ? 'ישראל' : 'Israel'}</option>
-                <option value="North America">{language === 'hebrew' ? 'צפון אמריקה' : 'North America'}</option>
-                <option value="South America">{language === 'hebrew' ? 'דרום אמריקה' : 'South America'}</option>
-                <option value="Europe">{language === 'hebrew' ? 'אירופה' : 'Europe'}</option>
-                <option value="Asia">{language === 'hebrew' ? 'אסיה' : 'Asia'}</option>
-                <option value="Africa">{language === 'hebrew' ? 'אפריקה' : 'Africa'}</option>
-                <option value="Oceania">{language === 'hebrew' ? 'אוקיאניה' : 'Oceania'}</option>
-                <option value="Middle East">{language === 'hebrew' ? 'המזרח התיכון' : 'Middle East'}</option>
-                <option value="Caribbean">{language === 'hebrew' ? 'הקריביים' : 'Caribbean'}</option>
-                <option value="Central America">{language === 'hebrew' ? 'מרכז אמריקה' : 'Central America'}</option>
-                <option value="Other">{language === 'hebrew' ? 'אחר' : 'Other'}</option>
+                <option value="israel">{language === 'hebrew' ? 'ישראל' : 'Israel'}</option>
+                <option value="japan">{language === 'hebrew' ? 'יפן' : 'Japan'}</option>
+                <option value="korea">{language === 'hebrew' ? 'קוריאה' : 'Korea'}</option>
+                <option value="greater_china">{language === 'hebrew' ? 'סין/הונג קונג/טאיוואן' : 'Greater China (China/Hong Kong/Taiwan)'}</option>
+                <option value="india_south_asia">{language === 'hebrew' ? 'הודו / דרום אסיה' : 'India / South Asia'}</option>
+                <option value="southeast_asia">{language === 'hebrew' ? 'דרום־מזרח אסיה' : 'Southeast Asia'}</option>
+                <option value="indonesia_malaysia">{language === 'hebrew' ? 'אינדונזיה/מלזיה' : 'Indonesia/Malaysia'}</option>
+                <option value="turkey">{language === 'hebrew' ? 'טורקיה' : 'Turkey'}</option>
+                <option value="persian_iranian">{language === 'hebrew' ? 'איראן/פרס' : 'Persian/Iranian'}</option>
+                <option value="gulf_arabia">{language === 'hebrew' ? 'העולם הערבי–מפרץ' : 'Gulf Arabia'}</option>
+                <option value="north_africa">{language === 'hebrew' ? 'צפון אפריקה' : 'North Africa'}</option>
+                <option value="east_africa">{language === 'hebrew' ? 'אפריקה מזרחית' : 'East Africa'}</option>
+                <option value="europe_mediterranean">{language === 'hebrew' ? 'אירופה – ים תיכוני' : 'Europe – Mediterranean'}</option>
+                <option value="europe_west">{language === 'hebrew' ? 'אירופה – מרכז/מערב' : 'Europe – Central/West'}</option>
+                <option value="europe_east_russian">{language === 'hebrew' ? 'אירופה – מזרח/רוסי' : 'Europe – East/Russian'}</option>
+                <option value="mexico">{language === 'hebrew' ? 'אמריקה לטינית – מקסיקו' : 'Latin America – Mexico'}</option>
+                <option value="latam_south_america">{language === 'hebrew' ? 'אמריקה לטינית – דרום אמריקה' : 'Latin America – South America'}</option>
+                <option value="caribbean">{language === 'hebrew' ? 'קריביים' : 'Caribbean'}</option>
+                <option value="north_america">{language === 'hebrew' ? 'צפון אמריקה' : 'North America'}</option>
+                <option value="other">{language === 'hebrew' ? 'אחר' : 'Other'}</option>
               </select>
             </div>
 
