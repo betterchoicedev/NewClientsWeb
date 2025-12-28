@@ -191,8 +191,19 @@ const ProfilePage = () => {
   }, []);
 
   // Check onboarding status
-  const checkOnboardingStatus = async () => {
+  const checkOnboardingStatus = useCallback(async () => {
     try {
+      // First check if profile tour is completed
+      const profileTourCompleted = localStorage.getItem('profileTourCompleted');
+      
+      // Don't show onboarding until profile tour is finished
+      if (profileTourCompleted !== 'true') {
+        console.log('⏸️ Onboarding delayed - waiting for profile tour to complete...');
+        return;
+      }
+
+      if (!user) return;
+
       const { data, error } = await supabase
         .from('clients')
         .select('user_code, onboarding_completed, phone, user_language, city, birth_date, age, gender, current_weight, target_weight, height, food_allergies, dietary_preferences, food_limitations, activity_level, goal, client_preference, region, medical_conditions, profile_image_url')
@@ -220,14 +231,14 @@ const ProfilePage = () => {
           setShowOnboarding(false);
         }
       } else {
-        // No profile data at all - show onboarding
+        // No profile data at all - show onboarding (but only after tour is done)
         setOnboardingCompleted(false);
         setShowOnboarding(true);
       }
     } catch (error) {
       console.error('Error checking onboarding status:', error);
     }
-  };
+  }, [user]);
 
   // Callback to handle onboarding completion
   const handleOnboardingComplete = async (completed = true) => {
@@ -268,6 +279,58 @@ const ProfilePage = () => {
       checkOnboardingStatus();
     }
   }, [activeTab, user]);
+
+  // Listen for profile tour completion to show onboarding
+  useEffect(() => {
+    if (!user) return;
+
+    // Check if tour is already completed
+    const profileTourCompleted = localStorage.getItem('profileTourCompleted');
+    if (profileTourCompleted === 'true') {
+      // Tour already completed, check onboarding
+      checkOnboardingStatus();
+      return;
+    }
+
+    // Listen for storage changes (works across tabs)
+    const handleStorageChange = (e) => {
+      if (e.key === 'profileTourCompleted' && e.newValue === 'true') {
+        console.log('✅ Profile tour completed (detected via storage event), checking onboarding...');
+        checkOnboardingStatus();
+      }
+    };
+
+    // Listen for custom event from WebsiteTour
+    const handleTourComplete = () => {
+      console.log('✅ Profile tour completed (detected via custom event), checking onboarding...');
+      checkOnboardingStatus();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profileTourCompleted', handleTourComplete);
+
+    // Also poll periodically as a fallback (check every 1 second)
+    const pollInterval = setInterval(() => {
+      const tourCompleted = localStorage.getItem('profileTourCompleted');
+      if (tourCompleted === 'true') {
+        console.log('✅ Profile tour completed (detected via polling), checking onboarding...');
+        clearInterval(pollInterval);
+        checkOnboardingStatus();
+      }
+    }, 1000);
+
+    // Clean up after 5 minutes (safety timeout)
+    const timeout = setTimeout(() => {
+      clearInterval(pollInterval);
+    }, 300000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('profileTourCompleted', handleTourComplete);
+      clearInterval(pollInterval);
+      clearTimeout(timeout);
+    };
+  }, [user, checkOnboardingStatus]);
 
   useEffect(() => {
     loadCompanyOptions();

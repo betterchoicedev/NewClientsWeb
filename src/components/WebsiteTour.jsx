@@ -16,6 +16,7 @@ const WebsiteTour = () => {
   const [tooltipKey, setTooltipKey] = useState(0); // Force re-render on resize
   const highlightRef = useRef(null);
   const tourTimeoutRef = useRef(null); // Store timeout ID to cancel if user skips
+  const hasCheckedTourRef = useRef(false); // Track if we've already checked for tour on this page
 
   // Detect which page we're on
   const isHomePage = location.pathname === '/';
@@ -399,74 +400,70 @@ const WebsiteTour = () => {
 
   const tourSteps = getTourSteps();
 
-  // Check if tour should be shown
+  // Check if tour should be shown (like cookie consent - only once per page type)
   useEffect(() => {
+    // Reset check flag when page changes
+    hasCheckedTourRef.current = false;
+    
     // Clear any pending timeout when component unmounts or dependencies change
     if (tourTimeoutRef.current) {
       clearTimeout(tourTimeoutRef.current);
       tourTimeoutRef.current = null;
     }
 
-    if (!loading) {
-      if (isHomePage) {
-        const tourCompleted = localStorage.getItem('websiteTourCompleted');
-        
-        // Debug logging
-        console.log('WebsiteTour Debug (Home):', {
-          loading,
-          isAuthenticated,
-          isHomePage,
-          tourCompleted,
-          pathname: location.pathname
-        });
-        
-        if (!tourCompleted && !isOpen) {
-          // Delay to ensure page is fully rendered
-          tourTimeoutRef.current = setTimeout(() => {
-            // Check localStorage again before opening (user might have skipped)
-            const stillNotCompleted = !localStorage.getItem('websiteTourCompleted');
-            if (stillNotCompleted && !isOpen) {
-              console.log('🎯 Opening Home Page Tour...');
-              setIsOpen(true);
-            }
-            tourTimeoutRef.current = null;
-          }, 2000);
-        } else {
-          console.log('ℹ️ Home tour already completed. Press Ctrl+Shift+T (or Cmd+Shift+T on Mac) to restart it.');
-        }
-      } else if (isProfilePage && isAuthenticated) {
-        const profileTourCompleted = localStorage.getItem('profileTourCompleted');
-        
-        // Debug logging
-        console.log('WebsiteTour Debug (Profile):', {
-          loading,
-          isAuthenticated,
-          isProfilePage,
-          profileTourCompleted,
-          pathname: location.pathname
-        });
-        
-        if (!profileTourCompleted && !isOpen) {
-          // Delay to ensure page is fully rendered
-          tourTimeoutRef.current = setTimeout(() => {
-            // Check localStorage again before opening (user might have skipped)
-            const stillNotCompleted = !localStorage.getItem('profileTourCompleted');
-            if (stillNotCompleted && !isOpen) {
-              console.log('🎯 Opening Profile Page Tour...');
-              // Ensure welcome screen is shown and current step is reset
-              setShowWelcome(true);
-              setCurrentStep(-1);
-              setIsOpen(true);
-            }
-            tourTimeoutRef.current = null;
-          }, 2000);
-        } else {
-          console.log('ℹ️ Profile tour already completed. Press Ctrl+Shift+P (or Cmd+Shift+P on Mac) to restart it.');
-        }
-      } else if (!isHomePage && !isProfilePage && isOpen) {
-        // Close tour if user navigates away from supported pages
-        setIsOpen(false);
+    // Don't proceed if still loading
+    if (loading) return;
+
+    // Only check once per page load
+    if (hasCheckedTourRef.current) return;
+    hasCheckedTourRef.current = true;
+
+    // Check if tour should be shown based on current page
+    if (isHomePage) {
+      // Check localStorage first - if already completed, don't show
+      const tourCompleted = localStorage.getItem('websiteTourCompleted');
+      
+      if (tourCompleted === 'true') {
+        // Tour already completed, don't show
+        return;
       }
+
+      // Tour not completed yet, show it after a delay
+      tourTimeoutRef.current = setTimeout(() => {
+        // Double-check localStorage before opening (user might have skipped in another tab)
+        const stillNotCompleted = localStorage.getItem('websiteTourCompleted') !== 'true';
+        if (stillNotCompleted) {
+          console.log('🎯 Opening Home Page Tour (first time)...');
+          setIsOpen(true);
+          setShowWelcome(true);
+          setCurrentStep(-1);
+        }
+        tourTimeoutRef.current = null;
+      }, 2000);
+    } else if (isProfilePage && isAuthenticated) {
+      // Check localStorage first - if already completed, don't show
+      const profileTourCompleted = localStorage.getItem('profileTourCompleted');
+      
+      if (profileTourCompleted === 'true') {
+        // Tour already completed, don't show
+        return;
+      }
+
+      // Tour not completed yet, show it after a delay
+      tourTimeoutRef.current = setTimeout(() => {
+        // Double-check localStorage before opening (user might have skipped in another tab)
+        const stillNotCompleted = localStorage.getItem('profileTourCompleted') !== 'true';
+        if (stillNotCompleted) {
+          console.log('🎯 Opening Profile Page Tour (first time)...');
+          setIsOpen(true);
+          setShowWelcome(true);
+          setCurrentStep(-1);
+        }
+        tourTimeoutRef.current = null;
+      }, 2000);
+    } else if (!isHomePage && !isProfilePage && isOpen) {
+      // Close tour if user navigates away from supported pages
+      setIsOpen(false);
     }
 
     // Cleanup function to clear timeout on unmount
@@ -476,7 +473,7 @@ const WebsiteTour = () => {
         tourTimeoutRef.current = null;
       }
     };
-  }, [isAuthenticated, loading, isHomePage, isProfilePage, isOpen, location.pathname]);
+  }, [isAuthenticated, loading, isHomePage, isProfilePage, location.pathname]);
 
   // Handle element highlighting
   useEffect(() => {
@@ -1489,6 +1486,17 @@ const WebsiteTour = () => {
       }
     });
     
+    // Mark tour as completed in localStorage (like cookie consent)
+    if (isProfilePage) {
+      localStorage.setItem('profileTourCompleted', 'true');
+      console.log('✅ Profile tour marked as completed');
+      // Dispatch custom event to notify ProfilePage that tour is complete
+      window.dispatchEvent(new CustomEvent('profileTourCompleted'));
+    } else {
+      localStorage.setItem('websiteTourCompleted', 'true');
+      console.log('✅ Home tour marked as completed');
+    }
+    
     setIsOpen(false);
     // Close mobile drawer if it was opened by tour
     if (isProfilePage && isMobile) {
@@ -1496,11 +1504,6 @@ const WebsiteTour = () => {
     }
     // Close mobile menu if it was opened by tour
     window.dispatchEvent(new CustomEvent('closeMobileMenu'));
-    if (isProfilePage) {
-      localStorage.setItem('profileTourCompleted', 'true');
-    } else {
-      localStorage.setItem('websiteTourCompleted', 'true');
-    }
   };
 
   // Allow tour to show on home page (even if not authenticated for testing) or profile page (if authenticated)
