@@ -54,9 +54,9 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ClientsWebBackend
-          slot-name: Production
           package: ${{ github.workspace }}/backend.zip
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_D1C7BF274837455494695E800D0C013F }}
+          clean: true
 
 # Note: Make sure to configure these environment variables in Azure App Service if needed:
 # - Any custom environment variables your app requires
