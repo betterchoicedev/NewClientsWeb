@@ -44,8 +44,6 @@ jobs:
         run: |
           if [ -d "Backend" ]; then
             cd Backend
-            # Install dependencies locally so they're in the zip
-            python -m pip install -r requirements.txt -t ./packages
             find . -type f -not -path "./venv/*" -not -path "./__pycache__/*" -not -path "./myenv/*" -exec zip ../backend.zip {} \;
           else
             echo "Backend directory not found for zipping"
@@ -56,22 +54,15 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ClientsWebBackend
+          slot-name: Production
           package: ${{ github.workspace }}/backend.zip
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_D1C7BF274837455494695E800D0C013F }}
-          clean: true
-          
-      - name: Set App Settings
-        run: |
-          echo "If build still happens, you need to set SCM_DO_BUILD_DURING_DEPLOYMENT=0 in Azure Portal manually"
-          
 
 # Note: Make sure to configure these environment variables in Azure App Service if needed:
 # - Any custom environment variables your app requires
 #
 # Startup Command to set in Azure App Service:
-# bash startup.sh
-# OR
-# python -m uvicorn backend:app --host 0.0.0.0 --port 8000
+# python backend.py
 #
 # App Settings to configure in Azure App Service:
 # - WEBSITES_PORT = 8000
