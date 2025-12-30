@@ -93,7 +93,8 @@ const getClientMealPlan = async (userCode) => {
         active_from: data.active_from,
         active_until: data.active_until,
         active_days: data.active_days,
-        isClientEdited: hasEditedPlanFromToday
+        isClientEdited: hasEditedPlanFromToday,
+        dietitian_id: data.dietitian_id
       },
       error: null
     };
@@ -4061,6 +4062,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
 const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const { settings } = useSettings();
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [planData, setPlanData] = useState(null);
   const [originalPlanData, setOriginalPlanData] = useState(null);
@@ -4074,6 +4076,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStep, setGenerationStep] = useState('');
   const [clientData, setClientData] = useState(null);
+  const [isContactingDietitian, setIsContactingDietitian] = useState(false);
   
   // Helper function to format numbers with decimal places
   const formatNumber = (num) => {
@@ -5412,6 +5415,130 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     }
   };
 
+  // Handle contact dietitian button click
+  const handleContactDietitian = async () => {
+    if (!userCode || !user) {
+      alert(
+        language === 'hebrew'
+          ? 'שגיאה: לא ניתן לזהות את המשתמש'
+          : 'Error: Unable to identify user'
+      );
+      return;
+    }
+
+    try {
+      setIsContactingDietitian(true);
+
+      // Get provider_id from chat_users table
+      if (!supabaseSecondary) {
+        throw new Error('Secondary database not available');
+      }
+
+      const { data: chatUser, error: chatUserError } = await supabaseSecondary
+        .from('chat_users')
+        .select('provider_id')
+        .eq('user_code', userCode)
+        .single();
+
+      if (chatUserError) {
+        console.error('Error fetching chat user:', chatUserError);
+        throw new Error(
+          language === 'hebrew'
+            ? 'לא נמצא דיאטנית משויכת'
+            : 'No associated dietitian found'
+        );
+      }
+
+      if (!chatUser || !chatUser.provider_id) {
+        throw new Error(
+          language === 'hebrew'
+            ? 'לא נמצא דיאטנית משויכת'
+            : 'No associated dietitian found'
+        );
+      }
+
+      // Check if a request already exists for this client
+      const requestTitle = language === 'hebrew'
+        ? 'בקשה לתוכנית תזונה מותאמת'
+        : 'Request for Personalized Meal Plan';
+      
+      const { data: existingMessages, error: checkError } = await supabaseSecondary
+        .from('system_messages')
+        .select('id')
+        .eq('directed_to', chatUser.provider_id)
+        .eq('message_type', 'info')
+        .eq('title', requestTitle)
+        .ilike('content', `%${userCode}%`)
+        .eq('is_active', true);
+
+      if (checkError) {
+        console.error('Error checking existing messages:', checkError);
+        // Continue anyway - we'll try to create the message
+      }
+
+      if (existingMessages && existingMessages.length > 0) {
+        // Request already exists
+        alert(
+          language === 'hebrew'
+            ? 'הבקשה כבר נשלחה בעבר. ניצור איתכם קשר בקרוב!'
+            : 'Request already sent. We will contact you soon!'
+        );
+        setIsContactingDietitian(false);
+        return;
+      }
+
+      // Create system message in secondary database
+      const { data: messageData, error: messageError } = await supabaseSecondary
+        .from('system_messages')
+        .insert({
+          title: language === 'hebrew'
+            ? 'בקשה לתוכנית תזונה מותאמת'
+            : 'Request for Personalized Meal Plan',
+          content: language === 'hebrew'
+            ? `הלקוח ${userCode} מבקש תוכנית תזונה מותאמת ומדויקת יותר.`
+            : `Client ${userCode} is requesting a better and more precise personalized meal plan.`,
+          message_type: 'info',
+          priority: 'medium',
+          is_active: true,
+          directed_to: chatUser.provider_id
+        })
+        .select()
+        .single();
+
+      if (messageError) {
+        console.error('Error creating system message:', messageError);
+        console.error('Message error details:', {
+          code: messageError.code,
+          message: messageError.message,
+          details: messageError.details,
+          hint: messageError.hint
+        });
+        throw new Error(
+          language === 'hebrew'
+            ? `שגיאה בשליחת הבקשה: ${messageError.message || 'שגיאה לא ידועה'}`
+            : `Error sending request: ${messageError.message || 'Unknown error'}`
+        );
+      }
+
+      // Show success message
+      alert(
+        language === 'hebrew'
+          ? 'ניצור איתכם קשר בקרוב!'
+          : 'We will contact you soon!'
+      );
+    } catch (error) {
+      console.error('Error contacting dietitian:', error);
+      alert(
+        error.message ||
+        (language === 'hebrew'
+          ? 'שגיאה בשליחת הבקשה. אנא נסה שוב מאוחר יותר.'
+          : 'Error sending request. Please try again later.')
+      );
+    } finally {
+      setIsContactingDietitian(false);
+    }
+  };
+
   return (
     <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
       {/* Daily Summary Section */}
@@ -5631,6 +5758,62 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         </div>
       </div>
         )}
+        
+ {/* Show message for auto-made plans (when dietitian_id is null) */}
+ {planData.dietitian_id === null && (
+          <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp" style={{ animationDelay: '0.6s' }}>
+            <div className="relative rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 border-4 border-blue-500/60 shadow-2xl overflow-hidden" style={{
+              background: isDarkMode 
+                ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%)'
+                : 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.15) 100%)',
+              backdropFilter: 'blur(10px)'
+            }}>
+              {/* Decorative gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-indigo-500/10 pointer-events-none" />
+              
+              <div className="relative z-10 flex items-start gap-5 sm:gap-6 md:gap-8">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/50 animate-pulse">
+                  <svg className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1 pt-1 sm:pt-2">
+                  <h4 className={`${themeClasses.textPrimary} text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4 tracking-tight`}>
+                    {language === 'hebrew' ? '💡 רוצים תוכנית תזונה מותאמת יותר?' : '💡 Want a More Personalized Meal Plan?'}
+                  </h4>
+                  <p className={`${themeClasses.textPrimary} text-base sm:text-lg md:text-xl leading-relaxed font-medium mb-4 sm:mb-6`}>
+                    {language === 'hebrew'
+                      ? 'אם תרצו תוכנית תזונה טובה ומדויקת יותר, תוכלו ליצור קשר עם הדיאטניות שלנו.'
+                      : 'If you want a better and more precise meal plan, you can contact our dietitians.'}
+                  </p>
+                  <button
+                    onClick={handleContactDietitian}
+                    disabled={isContactingDietitian}
+                    className={`w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg transition-all duration-200 shadow-lg transform hover:scale-105 ${
+                      isContactingDietitian
+                        ? 'bg-gray-600 cursor-not-allowed opacity-60'
+                        : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white'
+                    } flex items-center justify-center gap-2 sm:gap-3`}
+                  >
+                    {isContactingDietitian ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        <span>{language === 'hebrew' ? 'שולח...' : 'Sending...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span>{language === 'hebrew' ? 'צור קשר עם דיאטנית' : 'Contact Dietitian'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Today Section */}
       <div className="animate-slideInUp" style={{ animationDelay: '0.5s' }}>
@@ -5650,6 +5833,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           </div>
         </div>
 
+       
         {/* Meals */}
         <div className="space-y-3 sm:space-y-4">
           {planData.meals.map((meal, index) => {
