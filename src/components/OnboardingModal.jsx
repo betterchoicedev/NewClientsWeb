@@ -335,7 +335,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('first_name, last_name, phone, user_language, city, region, timezone, birth_date, age, gender, current_weight, target_weight, height, food_allergies, food_limitations, activity_level, goal, client_preference, dietary_preferences, medical_conditions')
+        .select('*')
         .eq('user_id', user.id)
         .single();
 
@@ -356,7 +356,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error loading existing data:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         setCheckingData(false);
+        setError(language === 'hebrew' ? 'שגיאה בטעינת נתונים. אנא רענן את הדף.' : 'Error loading data. Please refresh the page.');
         return;
       }
 
@@ -1080,15 +1087,18 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       console.log('💾 Saving to clients:', clientData);
       
       // Update clients
-      const { error: profileError } = await supabase
+      const { data: updateData, error: profileError } = await supabase
         .from('clients')
         .update(clientData)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .select();
 
       if (profileError) {
         console.error('Error updating clients:', profileError);
         throw profileError;
       }
+
+      console.log('✅ Clients table updated successfully:', updateData);
 
       // Update chat_users if secondary DB is available
       if (supabaseSecondary && userCode) {
@@ -1108,7 +1118,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
             if (chatUpdateError) {
               console.error('Error updating chat_users:', chatUpdateError);
               // Don't throw - continue even if chat_users update fails
+            } else {
+              console.log('✅ Chat users table updated successfully');
             }
+          } else {
+            console.warn('⚠️ Chat user not found or error:', chatUserError);
           }
         } catch (syncError) {
           console.error('Error syncing to chat_users:', syncError);
@@ -1116,13 +1130,20 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         }
       }
 
+      console.log('✅ Onboarding data saved successfully, closing modal...');
+      
       // Onboarding complete - close modal with completion status
+      // Only close if the main clients update was successful
       onClose(true);
     } catch (err) {
-      console.error('Error saving onboarding data:', err);
-      setError(language === 'hebrew' ? 'שגיאה בשמירת הנתונים. אנא נסה שוב.' : 'Error saving data. Please try again.');
-    } finally {
+      console.error('❌ Error saving onboarding data:', err);
+      setError(
+        language === 'hebrew' 
+          ? `שגיאה בשמירת הנתונים: ${err.message || 'אנא נסה שוב'}` 
+          : `Error saving data: ${err.message || 'Please try again'}`
+      );
       setLoading(false);
+      // Don't call onClose on error - let user see the error and retry
     }
   };
 

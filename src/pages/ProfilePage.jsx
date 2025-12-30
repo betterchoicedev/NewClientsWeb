@@ -206,12 +206,18 @@ const ProfilePage = () => {
 
       const { data, error } = await supabase
         .from('clients')
-        .select('user_code, onboarding_completed, phone, user_language, city, birth_date, age, gender, current_weight, target_weight, height, food_allergies, dietary_preferences, food_limitations, activity_level, goal, client_preference, region, medical_conditions, profile_image_url')
+        .select('*')
         .eq('user_id', user.id)
         .single();
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error checking onboarding status:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         return;
       }
 
@@ -243,16 +249,21 @@ const ProfilePage = () => {
   // Callback to handle onboarding completion
   const handleOnboardingComplete = async (completed = true) => {
     if (completed) {
-      // Onboarding was completed - set state immediately to allow editing
-      setOnboardingCompleted(true);
+      // Onboarding was completed - close the modal first to prevent reopening
       setShowOnboarding(false);
-      // Reload profile data and re-check status to ensure everything is in sync
+      
+      // Set state immediately to allow editing
+      setOnboardingCompleted(true);
+      
+      // Reload profile data to show the updated information
+      // Don't call checkOnboardingStatus() here since we know onboarding is complete
+      // This prevents the modal from reopening
       await loadProfileData();
-      await checkOnboardingStatus();
     } else {
       // Onboarding was skipped - just close the modal without re-checking
       // This prevents the modal from immediately reopening
       setShowOnboarding(false);
+      
       // Keep onboardingCompleted as false so fields remain read-only
       setOnboardingCompleted(false);
     }
@@ -372,7 +383,7 @@ const ProfilePage = () => {
       // First, load from clients table (primary database) to get user_code
       const { data, error } = await supabase
         .from('clients')
-        .select('*, profile_image_url')
+        .select('*')
         .eq('user_id', user.id)
         .single();
       
