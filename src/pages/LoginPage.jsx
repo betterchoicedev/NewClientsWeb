@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { signIn, signInWithGoogle, signInWithFacebook, resetPassword } from '../supabase/auth';
+import { signIn, signInWithGoogle, resetPassword } from '../supabase/auth';
 import { supabase } from '../supabase/supabaseClient';
 
 function LoginPage() {
@@ -63,26 +63,6 @@ function LoginPage() {
     }
   };
 
-  const handleFacebookSignIn = async () => {
-    setSocialLoading(true);
-    setError('');
-    try {
-      const { error } = await signInWithFacebook();
-      if (error) {
-        setError(language === 'hebrew' 
-          ? 'שגיאה בהתחברות עם Facebook. אנא נסה שוב.' 
-          : 'Error signing in with Facebook. Please try again.');
-        setSocialLoading(false);
-      }
-      // If successful, user will be redirected by OAuth
-    } catch (err) {
-      console.error('Facebook sign in error:', err);
-      setError(language === 'hebrew' 
-        ? 'שגיאה בהתחברות עם Facebook' 
-        : 'Error signing in with Facebook');
-      setSocialLoading(false);
-    }
-  };
 
   const handleForgotPasswordClick = (e) => {
     e.preventDefault();
@@ -324,7 +304,7 @@ function LoginPage() {
               </div>
             </div>
 
-            <div className="mt-4 sm:mt-6 grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="mt-4 sm:mt-6">
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
@@ -346,28 +326,6 @@ function LoginPage() {
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                     </svg>
                     <span>Google</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleFacebookSignIn}
-                disabled={socialLoading}
-                className={`w-full inline-flex items-center justify-center gap-2 py-3 px-4 border ${isDarkMode ? 'border-gray-600 bg-gray-700 text-white hover:bg-gray-600' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'} rounded-lg shadow-sm text-sm font-medium transition-all duration-300 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
-                aria-label="Sign in with Facebook"
-              >
-                {socialLoading ? (
-                  <svg className="animate-spin h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                    </svg>
-                    <span>Facebook</span>
                   </>
                 )}
               </button>

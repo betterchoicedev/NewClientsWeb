@@ -1388,7 +1388,7 @@ const ProfilePage = () => {
       </div>
 
       {/* Main Content */}
-      <div className={`flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar relative ${themeClasses.bgCard} ${themeClasses.shadowCard}`} style={{
+      <div className={`flex-1 p-4 sm:p-6 md:p-8 ${activeTab === 'messages' ? 'overflow-hidden' : 'overflow-y-auto'} custom-scrollbar relative ${themeClasses.bgCard} ${themeClasses.shadowCard}`} style={{
         minHeight: 0,
         borderLeft: '3px solid',
         borderLeftColor: isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.2)',
@@ -1405,7 +1405,7 @@ const ProfilePage = () => {
         {/* Decorative gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none z-0" />
         
-        <div className={`rounded-xl p-6 language-transition language-text-transition relative z-10`}>
+        <div className={`rounded-xl ${activeTab === 'messages' ? 'p-0 h-full flex flex-col' : 'p-6'} language-transition language-text-transition relative z-10`}>
           {activeTab === 'profile' && (
             <ProfileTab
               profileData={profileData}
@@ -7818,7 +7818,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                               >
                                 {meals.map((mealCategory) => (
                                   <option key={mealCategory} value={mealCategory}>
-                                    {mealTitleMap[mealCategory] || t.profile.dailyLogTab.meals[mealCategory] || mealCategory}
+                                    {t.profile.dailyLogTab.meals[mealCategory] || mealCategory}
                                   </option>
                                 ))}
                               </select>
@@ -8999,9 +8999,9 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
   }
 
   return (
-    <div className={`min-h-screen animate-fadeIn`}>
+    <div className={`h-full flex flex-col animate-fadeIn overflow-hidden`}>
       {/* Header Section */}
-      <div className="p-4 sm:p-6 pb-4 animate-slideInUp">
+      <div className="p-4 sm:p-6 pb-4 animate-slideInUp flex-shrink-0">
         <div className="flex items-center">
           <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mr-4 shadow-lg shadow-purple-500/25 animate-pulse">
             <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -9025,8 +9025,8 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
       {/* Messages */}
       <div 
         ref={setMessagesContainerRef}
-        className={`p-4 sm:p-6 h-full overflow-y-auto animate-slideInUp custom-scrollbar`} 
-        style={{ animationDelay: '0.2s', height: 'calc(100vh - 200px)' }}
+        className={`p-4 sm:p-6 flex-1 overflow-y-auto animate-slideInUp custom-scrollbar`} 
+        style={{ animationDelay: '0.2s' }}
         onScroll={handleScroll}
       >
         {messages.length === 0 ? (
