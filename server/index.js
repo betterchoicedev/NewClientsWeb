@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { createClient } = require('@supabase/supabase-js');
+const sharp = require('sharp');
 
 // Initialize Supabase client for main project (Stripe, clients, etc.)
 const supabase = createClient(
@@ -1505,6 +1506,505 @@ app.post('/api/contact', async (req, res) => {
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to process contact form'
+    });
+  }
+});
+
+// ====================================
+// MACRO SUMMARY SVG ENDPOINT
+// ====================================
+
+// Generate macro summary SVG for a specific date
+app.get('/api/macro-summary-svg', async (req, res) => {
+  try {
+    const { user_code, phone_number, date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+
+    if (!user_code && !phone_number) {
+      return res.status(400).json({ error: 'Either user_code or phone_number is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    console.log('📊 Generating macro summary SVG for:', { user_code, phone_number, date });
+
+    // Find user in chat_users table
+    let userQuery = chatSupabase
+      .from('chat_users')
+      .select('id, user_code, language')
+      .limit(1);
+
+    if (user_code) {
+      userQuery = userQuery.eq('user_code', user_code);
+    } else if (phone_number) {
+      userQuery = userQuery.eq('phone', phone_number);
+    }
+
+    const { data: userData, error: userError } = await userQuery.single();
+
+    if (userError || !userData) {
+      console.error('❌ User not found:', userError);
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const userId = userData.id;
+    const userCode = userData.user_code;
+    const userLanguage = userData.language || 'en';
+
+    // Get food logs for the date
+    const { data: foodLogs, error: logsError } = await chatSupabase
+      .from('food_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('log_date', date);
+
+    if (logsError) {
+      console.error('❌ Error fetching food logs:', logsError);
+      return res.status(500).json({ error: 'Failed to fetch food logs' });
+    }
+
+    // Calculate totals from food logs
+    const totalCalories = (foodLogs || []).reduce((sum, log) => {
+      let logCalories = 0;
+      if (log.food_items) {
+        try {
+          const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+          if (Array.isArray(foodItems)) {
+            logCalories = foodItems.reduce((itemSum, item) => itemSum + (item.cals || 0), 0);
+          }
+        } catch (e) {
+          console.error('Error parsing food_items:', e);
+        }
+      }
+      return sum + logCalories + (log.total_calories || 0);
+    }, 0);
+
+    const totalProtein = (foodLogs || []).reduce((sum, log) => {
+      let logProtein = 0;
+      if (log.food_items) {
+        try {
+          const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+          if (Array.isArray(foodItems)) {
+            logProtein = foodItems.reduce((itemSum, item) => itemSum + (item.p || 0), 0);
+          }
+        } catch (e) {
+          console.error('Error parsing food_items:', e);
+        }
+      }
+      return sum + logProtein + (log.total_protein_g || 0);
+    }, 0);
+
+    const totalCarbs = (foodLogs || []).reduce((sum, log) => {
+      let logCarbs = 0;
+      if (log.food_items) {
+        try {
+          const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+          if (Array.isArray(foodItems)) {
+            logCarbs = foodItems.reduce((itemSum, item) => itemSum + (item.c || 0), 0);
+          }
+        } catch (e) {
+          console.error('Error parsing food_items:', e);
+        }
+      }
+      return sum + logCarbs + (log.total_carbs_g || 0);
+    }, 0);
+
+    const totalFat = (foodLogs || []).reduce((sum, log) => {
+      let logFat = 0;
+      if (log.food_items) {
+        try {
+          const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+          if (Array.isArray(foodItems)) {
+            logFat = foodItems.reduce((itemSum, item) => itemSum + (item.f || 0), 0);
+          }
+        } catch (e) {
+          console.error('Error parsing food_items:', e);
+        }
+      }
+      return sum + logFat + (log.total_fat_g || 0);
+    }, 0);
+
+    // Get meal plan targets
+    const { data: mealPlanData } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .select('*')
+      .eq('user_code', userCode)
+      .eq('record_type', 'meal_plan')
+      .eq('status', 'active')
+      .single();
+
+    let dailyGoals = {
+      calories: 2000,
+      protein: 150,
+      carbs: 250,
+      fat: 65
+    };
+
+    if (mealPlanData) {
+      if (mealPlanData.macros_target) {
+        dailyGoals = {
+          calories: mealPlanData.daily_total_calories || 2000,
+          protein: mealPlanData.macros_target.protein || 150,
+          carbs: mealPlanData.macros_target.carbs || 250,
+          fat: mealPlanData.macros_target.fat || 65
+        };
+      } else if (mealPlanData.meal_plan && mealPlanData.meal_plan.meals) {
+        const totals = mealPlanData.meal_plan.meals.reduce((acc, meal) => {
+          if (meal.main && meal.main.nutrition) {
+            acc.calories += meal.main.nutrition.calories || 0;
+            acc.protein += meal.main.nutrition.protein || 0;
+            acc.carbs += meal.main.nutrition.carbs || 0;
+            acc.fat += meal.main.nutrition.fat || 0;
+          }
+          return acc;
+        }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+        dailyGoals = {
+          calories: totals.calories || mealPlanData.daily_total_calories || 2000,
+          protein: totals.protein || 150,
+          carbs: totals.carbs || 250,
+          fat: totals.fat || 65
+        };
+      }
+    }
+
+    // Calculate percentages
+    const caloriesPercent = Math.round((totalCalories / dailyGoals.calories) * 100);
+    const proteinPercent = Math.round((totalProtein / dailyGoals.protein) * 100);
+    const carbsPercent = Math.round((totalCarbs / dailyGoals.carbs) * 100);
+    const fatPercent = Math.round((totalFat / dailyGoals.fat) * 100);
+
+    // Generate SVG
+    const outerRadius = 120;
+    const innerRadius = 100;
+    const outerCircumference = 2 * Math.PI * outerRadius;
+    const circumference = 2 * Math.PI * innerRadius;
+    const segmentLength = circumference / 3;
+
+    // Calculate lengths
+    const caloriesNormalLength = Math.min(caloriesPercent, 100) / 100 * outerCircumference;
+    const caloriesOverflowLength = caloriesPercent > 100 ? ((caloriesPercent - 100) / 100) * outerCircumference : 0;
+    const proteinNormalLength = Math.min(proteinPercent, 100) / 100 * segmentLength;
+    const proteinOverflowLength = proteinPercent > 100 ? (proteinPercent - 100) / 100 * segmentLength : 0;
+    const carbsNormalLength = Math.min(carbsPercent, 100) / 100 * segmentLength;
+    const carbsOverflowLength = carbsPercent > 100 ? (carbsPercent - 100) / 100 * segmentLength : 0;
+    const fatNormalLength = Math.min(fatPercent, 100) / 100 * segmentLength;
+    const fatOverflowLength = fatPercent > 100 ? (fatPercent - 100) / 100 * segmentLength : 0;
+
+    // Format weight helper
+    const formatWeight = (grams) => {
+      return `${Math.round(grams)}g`;
+    };
+
+    // Generate SVG string
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 450">
+  <g transform="rotate(-90 140 140)">
+  <!-- Outer Circle Background (Calories) -->
+  <circle
+    cx="140"
+    cy="140"
+    r="${outerRadius}"
+    fill="none"
+    stroke="rgba(200, 200, 200, 0.2)"
+    stroke-width="16"
+  />
+  
+  <!-- Inner Circle Background (Macros) -->
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="rgba(200, 200, 200, 0.2)"
+    stroke-width="16"
+  />
+  
+  <!-- Outer Circle - Calories Progress -->
+  ${caloriesNormalLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${outerRadius}"
+    fill="none"
+    stroke="#10b981"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${caloriesNormalLength} ${outerCircumference}"
+    stroke-dashoffset="0"
+    opacity="1"
+  />` : ''}
+  ${caloriesOverflowLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${outerRadius}"
+    fill="none"
+    stroke="#059669"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${caloriesOverflowLength} ${outerCircumference}"
+    stroke-dashoffset="0"
+    opacity="1"
+  />` : ''}
+  
+  <!-- Inner Circle - Macros -->
+  ${proteinNormalLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#a855f7"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${proteinNormalLength} ${circumference}"
+    stroke-dashoffset="0"
+    opacity="1"
+  />` : ''}
+  ${carbsNormalLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#3b82f6"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${carbsNormalLength} ${circumference}"
+    stroke-dashoffset="${-segmentLength}"
+    opacity="1"
+  />` : ''}
+  ${fatNormalLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#f59e0b"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${fatNormalLength} ${circumference}"
+    stroke-dashoffset="${-segmentLength * 2}"
+    opacity="1"
+  />` : ''}
+  
+  <!-- Overflow borders -->
+  ${proteinOverflowLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#3b82f6"
+    stroke-width="20"
+    stroke-linecap="round"
+    stroke-dasharray="${proteinOverflowLength} ${circumference}"
+    stroke-dashoffset="${0 - proteinNormalLength}"
+    opacity="1"
+  />` : ''}
+  ${carbsOverflowLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#f59e0b"
+    stroke-width="20"
+    stroke-linecap="round"
+    stroke-dasharray="${carbsOverflowLength} ${circumference}"
+    stroke-dashoffset="${-segmentLength - carbsNormalLength}"
+    opacity="1"
+  />` : ''}
+  ${fatOverflowLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#a855f7"
+    stroke-width="20"
+    stroke-linecap="round"
+    stroke-dasharray="${fatOverflowLength} ${circumference}"
+    stroke-dashoffset="0"
+    opacity="1"
+  />` : ''}
+  
+  <!-- Overflow main arcs -->
+  ${proteinOverflowLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#a855f7"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${proteinOverflowLength} ${circumference}"
+    stroke-dashoffset="${0 - proteinNormalLength}"
+    opacity="1"
+  />` : ''}
+  ${carbsOverflowLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#3b82f6"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${carbsOverflowLength} ${circumference}"
+    stroke-dashoffset="${-segmentLength - carbsNormalLength}"
+    opacity="1"
+  />` : ''}
+  ${fatOverflowLength > 0 ? `
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#f59e0b"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${fatOverflowLength} ${circumference}"
+    stroke-dashoffset="0"
+    opacity="1"
+  />` : ''}
+  
+  </g>
+  
+  <!-- Center Calories Text (rendered on top, not rotated) -->
+  <text
+    x="140"
+    y="160"
+    text-anchor="middle"
+    dominant-baseline="central"
+    font-family="system-ui, -apple-system, 'Segoe UI', Arial, sans-serif"
+    font-size="68"
+    font-weight="200"
+    fill="#1f2937"
+    letter-spacing="-0.02em"
+  >${totalCalories.toLocaleString()}</text>
+  
+  <!-- Macro Details List -->
+  <g transform="translate(0, 300)">
+    ${userLanguage === 'he' ? `
+    <!-- Calories (RTL - inverted) -->
+    <g transform="translate(50, 0)">
+      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
+        ${totalCalories.toLocaleString()} / ${dailyGoals.calories.toLocaleString()}
+      </text>
+      <circle cx="184" cy="8" r="6" fill="#10b981"/>
+      <text x="170" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+        קלוריות
+      </text>
+    </g>
+    
+    <!-- Protein (RTL - inverted) -->
+    <g transform="translate(50, 30)">
+      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
+        ${formatWeight(totalProtein)} / ${formatWeight(dailyGoals.protein)}
+      </text>
+      <circle cx="184" cy="8" r="6" fill="#a855f7"/>
+      <text x="170" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+        חלבון
+      </text>
+    </g>
+    
+    <!-- Carbs (RTL - inverted) -->
+    <g transform="translate(50, 60)">
+      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
+        ${formatWeight(totalCarbs)} / ${formatWeight(dailyGoals.carbs)}
+      </text>
+      <circle cx="184" cy="8" r="6" fill="#3b82f6"/>
+      <text x="170" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+        פחמימות
+      </text>
+    </g>
+    
+    <!-- Fat (RTL - inverted) -->
+    <g transform="translate(50, 90)">
+      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
+        ${formatWeight(totalFat)} / ${formatWeight(dailyGoals.fat)}
+      </text>
+      <circle cx="184" cy="8" r="6" fill="#f59e0b"/>
+      <text x="170" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+        שומן
+      </text>
+    </g>
+    ` : `
+    <!-- Calories -->
+    <g transform="translate(50, 0)">
+      <circle cx="6" cy="8" r="6" fill="#10b981"/>
+      <text x="20" y="12" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+        Calories
+      </text>
+      <text x="180" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
+        ${totalCalories.toLocaleString()} / ${dailyGoals.calories.toLocaleString()}
+      </text>
+    </g>
+    
+    <!-- Protein -->
+    <g transform="translate(50, 30)">
+      <circle cx="6" cy="8" r="6" fill="#a855f7"/>
+      <text x="20" y="12" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+        Protein
+      </text>
+      <text x="180" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
+        ${formatWeight(totalProtein)} / ${formatWeight(dailyGoals.protein)}
+      </text>
+    </g>
+    
+    <!-- Carbs -->
+    <g transform="translate(50, 60)">
+      <circle cx="6" cy="8" r="6" fill="#3b82f6"/>
+      <text x="20" y="12" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+        Carbs
+      </text>
+      <text x="180" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
+        ${formatWeight(totalCarbs)} / ${formatWeight(dailyGoals.carbs)}
+      </text>
+    </g>
+    
+    <!-- Fat -->
+    <g transform="translate(50, 90)">
+      <circle cx="6" cy="8" r="6" fill="#f59e0b"/>
+      <text x="20" y="12" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+        Fat
+      </text>
+      <text x="180" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
+        ${formatWeight(totalFat)} / ${formatWeight(dailyGoals.fat)}
+      </text>
+    </g>
+    `}
+  </g>
+</svg>`;
+
+    // Convert SVG to PNG using sharp
+    // Use a larger size for better quality, adjust height proportionally (450/280 * 1200)
+    const pngBuffer = await sharp(Buffer.from(svg))
+      .resize(1200, 1929, {
+        fit: 'contain',
+        background: { r: 255, g: 255, b: 255, alpha: 1 }
+      })
+      .png()
+      .toBuffer();
+
+    // Set content type to PNG image
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(pngBuffer);
+
+  } catch (error) {
+    console.error('❌ Error generating macro summary SVG:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate macro summary SVG',
+      message: error.message 
     });
   }
 });
