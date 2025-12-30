@@ -222,13 +222,19 @@ const AddIngredientModal = ({ visible, onClose, onAddIngredient, mealName, clien
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className={`${themeClasses.textPrimary} text-2xl font-bold`}>
-              {language === 'hebrew' ? 'הוסף מרכיב' : 'Add Ingredient'}
-            </h2>
-            {mealName && (
-              <p className={`${themeClasses.textSecondary} text-sm mt-1`}>
-                {language === 'hebrew' ? `לארוחה: ${mealName}` : `For meal: ${mealName}`}
-              </p>
+            {mealName ? (
+              <>
+                <h2 className={`${themeClasses.textPrimary} text-3xl font-bold mb-1`}>
+                  {mealName}
+                </h2>
+                <p className={`${themeClasses.textSecondary} text-sm`}>
+                  {language === 'hebrew' ? 'הוסף מרכיב' : 'Add Ingredient'}
+                </p>
+              </>
+            ) : (
+              <h2 className={`${themeClasses.textPrimary} text-3xl font-bold mb-1`}>
+                {language === 'hebrew' ? 'הוסף מרכיב' : 'Add Ingredient'}
+              </h2>
             )}
           </div>
           <button

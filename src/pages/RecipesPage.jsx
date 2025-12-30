@@ -1212,6 +1212,23 @@ function RecipesPage() {
                     </button>
                   </div>
                 </div>
+                {/* Quick Stats - Positioned at bottom of image */}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
+                      <div className="text-white text-xl font-bold">{selectedRecipe.servings}</div>
+                      <div className="text-white/80 text-xs">{tr.servings}</div>
+                    </div>
+                    <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
+                      <div className="text-white text-xl font-bold">{selectedRecipe.cook_time}</div>
+                      <div className="text-white/80 text-xs">{tr.minutes}</div>
+                    </div>
+                    <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
+                      <div className="text-white text-xl font-bold">{selectedRecipe.difficulty}</div>
+                      <div className="text-white/80 text-xs">{tr.difficulty}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="sticky top-0 z-10 bg-gradient-to-br from-emerald-400 to-teal-500 p-6 rounded-t-2xl">
@@ -1237,26 +1254,6 @@ function RecipesPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
-                </div>
-              </div>
-            )}
-
-            {/* Quick Stats - Only show if image exists, positioned below image */}
-            {getRecipeImage(selectedRecipe.title) && (
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
-                    <div className="text-white text-xl font-bold">{selectedRecipe.servings}</div>
-                    <div className="text-white/80 text-xs">{tr.servings}</div>
-                  </div>
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
-                    <div className="text-white text-xl font-bold">{selectedRecipe.cook_time}</div>
-                    <div className="text-white/80 text-xs">{tr.minutes}</div>
-                  </div>
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center">
-                    <div className="text-white text-xl font-bold">{selectedRecipe.difficulty}</div>
-                    <div className="text-white/80 text-xs">{tr.difficulty}</div>
-                  </div>
                 </div>
               </div>
             )}

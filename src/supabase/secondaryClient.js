@@ -1022,3 +1022,57 @@ export const getWeightLogs = async (userCode) => {
     return { data: null, error };
   }
 };
+
+export const createWeightLog = async (userCode, weightLogData) => {
+  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
+  
+  try {
+    console.log('Creating weight log for userCode:', userCode, 'data:', weightLogData);
+    
+    // Build the insert data object with user_code and measurement_date
+    const insertData = {
+      user_code: userCode,
+      measurement_date: weightLogData.measurement_date || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    };
+
+    // Add measurement values based on what's provided
+    if (weightLogData.weight_kg !== undefined && weightLogData.weight_kg !== null && weightLogData.weight_kg !== '') {
+      insertData.weight_kg = parseFloat(weightLogData.weight_kg);
+    }
+    if (weightLogData.body_fat_percentage !== undefined && weightLogData.body_fat_percentage !== null && weightLogData.body_fat_percentage !== '') {
+      insertData.body_fat_percentage = parseFloat(weightLogData.body_fat_percentage);
+    }
+    if (weightLogData.waist_circumference_cm !== undefined && weightLogData.waist_circumference_cm !== null && weightLogData.waist_circumference_cm !== '') {
+      insertData.waist_circumference_cm = parseFloat(weightLogData.waist_circumference_cm);
+    }
+    if (weightLogData.hip_circumference_cm !== undefined && weightLogData.hip_circumference_cm !== null && weightLogData.hip_circumference_cm !== '') {
+      insertData.hip_circumference_cm = parseFloat(weightLogData.hip_circumference_cm);
+    }
+    if (weightLogData.arm_circumference_cm !== undefined && weightLogData.arm_circumference_cm !== null && weightLogData.arm_circumference_cm !== '') {
+      insertData.arm_circumference_cm = parseFloat(weightLogData.arm_circumference_cm);
+    }
+    if (weightLogData.neck_circumference_cm !== undefined && weightLogData.neck_circumference_cm !== null && weightLogData.neck_circumference_cm !== '') {
+      insertData.neck_circumference_cm = parseFloat(weightLogData.neck_circumference_cm);
+    }
+
+    console.log('Inserting weight log data:', JSON.stringify(insertData, null, 2));
+
+    const { data, error } = await supabaseSecondary
+      .from('weight_logs')
+      .insert([insertData])
+      .select();
+
+    if (error) {
+      console.error('Error creating weight log:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      console.error('Failed insert data:', JSON.stringify(insertData, null, 2));
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Unexpected error creating weight log:', error);
+    return { data: null, error };
+  }
+};

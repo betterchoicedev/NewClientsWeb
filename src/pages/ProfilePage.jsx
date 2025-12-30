@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useStripe } from '../context/StripeContext';
 import { useSettings } from '../context/SettingsContext';
 import { supabase, supabaseSecondary } from '../supabase/supabaseClient';
-import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, getChatMessages, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany, getWeightLogs } from '../supabase/secondaryClient';
+import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, getChatMessages, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany, getWeightLogs, createWeightLog } from '../supabase/secondaryClient';
 import { normalizePhoneForDatabase, signOut } from '../supabase/auth';
 import { getAllProducts, getProductsByCategory, getProduct } from '../config/stripe-products';
 import PricingCard from '../components/PricingCard';
@@ -991,7 +991,7 @@ const ProfilePage = () => {
                 <p className={`${themeClasses.textSecondary} text-sm`}>{t.profile.title}</p>
               </div>
               <a
-                href={language === 'hebrew' ? 'https://wa.me/message/AREMEVDZ4DOMB1' : 'https://wa.me/message/FH7OWJZ7PKEHN1'}
+                href={language === 'hebrew' ? 'https://wa.me/message/B2LIFC7FLCCMN1' : 'https://wa.me/message/YH4IM5MWPY4HI1'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`${direction === 'rtl' ? 'mr-3' : 'ml-3'} p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center`}
@@ -1209,7 +1209,7 @@ const ProfilePage = () => {
                   <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
                 </div>
                 <a
-                  href={language === 'hebrew' ? 'https://wa.me/message/AREMEVDZ4DOMB1' : 'https://wa.me/message/FH7OWJZ7PKEHN1'}
+                  href={language === 'hebrew' ? 'https://wa.me/message/B2LIFC7FLCCMN1' : 'https://wa.me/message/YH4IM5MWPY4HI1'}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`${direction === 'rtl' ? 'mr-3' : 'ml-3'} p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center`}
@@ -1273,7 +1273,7 @@ const ProfilePage = () => {
                     <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
                   </div>
                   <a
-                    href={language === 'hebrew' ? 'https://wa.me/message/AREMEVDZ4DOMB1' : 'https://wa.me/message/FH7OWJZ7PKEHN1'}
+                    href={language === 'hebrew' ? 'https://wa.me/message/B2LIFC7FLCCMN1' : 'https://wa.me/message/YH4IM5MWPY4HI1'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`${direction === 'rtl' ? 'mr-3' : 'ml-3'} p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center`}
@@ -1535,6 +1535,13 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
   const [showAverage, setShowAverage] = useState(false);
   const [isLandscape, setIsLandscape] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [showAddMeasurementModal, setShowAddMeasurementModal] = useState(false);
+  const [measurementForm, setMeasurementForm] = useState({
+    measurementType: 'weight',
+    value: '',
+    date: new Date().toISOString().split('T')[0]
+  });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const loadWeightLogs = async () => {
@@ -1557,6 +1564,67 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
 
     loadWeightLogs();
   }, [userCode]);
+
+  const handleAddMeasurement = async () => {
+    if (!measurementForm.value || !measurementForm.date) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const weightLogData = {
+        measurement_date: measurementForm.date
+      };
+
+      // Add the value to the appropriate field based on measurement type
+      switch (measurementForm.measurementType) {
+        case 'weight':
+          weightLogData.weight_kg = parseFloat(measurementForm.value);
+          break;
+        case 'body_fat':
+          weightLogData.body_fat_percentage = parseFloat(measurementForm.value);
+          break;
+        case 'waist':
+          weightLogData.waist_circumference_cm = parseFloat(measurementForm.value);
+          break;
+        case 'hip':
+          weightLogData.hip_circumference_cm = parseFloat(measurementForm.value);
+          break;
+        case 'arm':
+          weightLogData.arm_circumference_cm = parseFloat(measurementForm.value);
+          break;
+        case 'neck':
+          weightLogData.neck_circumference_cm = parseFloat(measurementForm.value);
+          break;
+        default:
+          break;
+      }
+
+      const { data, error } = await createWeightLog(userCode, weightLogData);
+
+      if (error) {
+        console.error('Error creating weight log:', error);
+        alert(language === 'hebrew' ? 'שגיאה בשמירת המדידה. נסה שוב.' : 'Error saving measurement. Please try again.');
+      } else {
+        // Reload weight logs
+        const { data: updatedLogs, error: reloadError } = await getWeightLogs(userCode);
+        if (!reloadError) {
+          setWeightLogs(updatedLogs || []);
+        }
+        setShowAddMeasurementModal(false);
+        setMeasurementForm({
+          measurementType: 'weight',
+          value: '',
+          date: new Date().toISOString().split('T')[0]
+        });
+      }
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      alert(language === 'hebrew' ? 'שגיאה בשמירת המדידה. נסה שוב.' : 'Error saving measurement. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Check for mobile device and portrait orientation
   useEffect(() => {
@@ -1837,9 +1905,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
     );
   }
 
-  if (chartData.length === 0) {
-    return null; // Don't show if no data
-  }
+  const hasData = chartData.length > 0;
 
   return (
     <div className={`${themeClasses.bgCard} rounded-2xl p-3 sm:p-4 md:p-6 mb-6 shadow-lg border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
@@ -1857,7 +1923,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
         </div>
       )}
       
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-3 overflow-hidden">
         <div className="flex-1 min-w-0">
           <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>
             {language === 'hebrew' ? 'מעקב משקל והתקדמות' : 'Weight & Progress Tracking'}
@@ -1881,15 +1947,23 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
             )}
           </div>
         </div>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:${themeClasses.bgPrimary} transition-colors text-xs sm:text-sm font-medium whitespace-nowrap flex-shrink-0`}
-        >
-          {expanded 
-            ? (language === 'hebrew' ? 'סגור' : 'Hide Options')
-            : (language === 'hebrew' ? 'מידות נוספות' : 'More Measurements')
-          }
-        </button>
+        <div className="flex gap-2 w-full sm:w-auto sm:flex-shrink-0 min-w-0">
+          <button
+            onClick={() => setShowAddMeasurementModal(true)}
+            className={`flex-1 sm:flex-none px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors text-xs sm:text-sm font-medium whitespace-nowrap min-w-0`}
+          >
+            {language === 'hebrew' ? 'הוסף מדידה' : 'Add Measurement'}
+          </button>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className={`flex-1 sm:flex-none px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:${themeClasses.bgPrimary} transition-colors text-xs sm:text-sm font-medium whitespace-nowrap min-w-0`}
+          >
+            {expanded 
+              ? (language === 'hebrew' ? 'סגור' : 'Hide Options')
+              : (language === 'hebrew' ? 'מידות נוספות' : 'More Measurements')
+            }
+          </button>
+        </div>
       </div>
 
       {/* Time Period Filter */}
@@ -1970,9 +2044,17 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
       {/* Simple Line & Area Chart */}
       {!isLandscape && (
       <div className="relative h-64 w-full overflow-hidden rounded-xl bg-gradient-to-b from-slate-900/40 via-slate-900/10 to-slate-900/40">
+        {!hasData && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+            <div className="text-4xl mb-3">📊</div>
+            <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-4 text-center px-4`}>
+              {language === 'hebrew' ? 'אין לך רשומות מדידות גוף' : "You don't have any Body Measurements Log"}
+            </p>
+          </div>
+        )}
         <div
           style={{
-            opacity: isTransitioning ? 0.5 : 1,
+            opacity: isTransitioning ? 0.5 : (hasData ? 1 : 0.3),
             transform: isTransitioning ? 'scale(0.97)' : 'scale(1)',
             transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}
@@ -2053,7 +2135,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
           })()}
 
           {/* Data line + soft area */}
-          {chartData.length > 1 && (() => {
+          {hasData && chartData.length > 1 && (() => {
             const chartWidth = 700;
             const linePoints = chartData
               .map((d, index) => {
@@ -2105,7 +2187,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
           })()}
 
           {/* Data points (sparser, with hover emphasis) */}
-          {chartData.map((d, index) => {
+          {hasData && chartData.map((d, index) => {
             const value = getMetricValue(d);
             if (value == null) return null;
             const normalizedValue = value - min;
@@ -2230,7 +2312,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
           })()}
 
           {/* X-axis labels */}
-          {chartData.length > 0 && chartData.map((d, index) => {
+          {hasData && chartData.length > 0 && chartData.map((d, index) => {
             if (index % Math.ceil(chartData.length / 6) !== 0 && index !== chartData.length - 1) return null;
             const chartWidth = 700; // Match the chart width used for data points
             const x = 50 + (index / (chartData.length - 1 || 1)) * chartWidth;
@@ -2251,12 +2333,104 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
         </div>
       </div>
       )}
+
+      {/* Add Measurement Modal */}
+      {showAddMeasurementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => !saving && setShowAddMeasurementModal(false)}>
+          <div className={`${themeClasses.bgCard} rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`${themeClasses.textPrimary} text-xl font-bold`}>
+                {language === 'hebrew' ? 'הוסף מדידה' : 'Add Measurement'}
+              </h3>
+              <button
+                onClick={() => !saving && setShowAddMeasurementModal(false)}
+                disabled={saving}
+                className={`${themeClasses.textSecondary} hover:${themeClasses.textPrimary} transition-colors`}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Measurement Type */}
+              <div>
+                <label className={`block ${themeClasses.textPrimary} text-sm font-medium mb-2`}>
+                  {language === 'hebrew' ? 'סוג מדידה' : 'Measurement Type'}
+                </label>
+                <select
+                  value={measurementForm.measurementType}
+                  onChange={(e) => setMeasurementForm(prev => ({ ...prev, measurementType: e.target.value, value: '' }))}
+                  className={`w-full px-3 py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} border ${isDarkMode ? 'border-slate-700' : 'border-slate-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  disabled={saving}
+                >
+                  <option value="weight">{language === 'hebrew' ? 'משקל (ק"ג)' : 'Weight (kg)'}</option>
+                  <option value="body_fat">{language === 'hebrew' ? 'אחוז שומן (%)' : 'Body Fat (%)'}</option>
+                  <option value="waist">{language === 'hebrew' ? 'היקף מותניים (ס"מ)' : 'Waist (cm)'}</option>
+                  <option value="hip">{language === 'hebrew' ? 'היקף ירכיים (ס"מ)' : 'Hip (cm)'}</option>
+                  <option value="arm">{language === 'hebrew' ? 'היקף זרוע (ס"מ)' : 'Arm (cm)'}</option>
+                  <option value="neck">{language === 'hebrew' ? 'היקף צוואר (ס"מ)' : 'Neck (cm)'}</option>
+                </select>
+              </div>
+
+              {/* Value */}
+              <div>
+                <label className={`block ${themeClasses.textPrimary} text-sm font-medium mb-2`}>
+                  {language === 'hebrew' ? 'ערך' : 'Value'}
+                </label>
+                <input
+                  type="number"
+                  step={measurementForm.measurementType === 'weight' || measurementForm.measurementType === 'body_fat' ? '0.1' : '0.1'}
+                  value={measurementForm.value}
+                  onChange={(e) => setMeasurementForm(prev => ({ ...prev, value: e.target.value }))}
+                  className={`w-full px-3 py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} border ${isDarkMode ? 'border-slate-700' : 'border-slate-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  placeholder={language === 'hebrew' ? 'הכנס ערך' : 'Enter value'}
+                  disabled={saving}
+                />
+              </div>
+
+              {/* Date */}
+              <div>
+                <label className={`block ${themeClasses.textPrimary} text-sm font-medium mb-2`}>
+                  {language === 'hebrew' ? 'תאריך' : 'Date'}
+                </label>
+                <input
+                  type="date"
+                  value={measurementForm.date}
+                  onChange={(e) => setMeasurementForm(prev => ({ ...prev, date: e.target.value }))}
+                  className={`w-full px-3 py-2 rounded-lg ${themeClasses.bgSecondary} ${themeClasses.textPrimary} border ${isDarkMode ? 'border-slate-700' : 'border-slate-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  disabled={saving}
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => !saving && setShowAddMeasurementModal(false)}
+                  disabled={saving}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:${themeClasses.bgPrimary} ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {language === 'hebrew' ? 'ביטול' : 'Cancel'}
+                </button>
+                <button
+                  onClick={handleAddMeasurement}
+                  disabled={saving || !measurementForm.value || !measurementForm.date}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors bg-emerald-500 hover:bg-emerald-600 text-white ${saving || !measurementForm.value || !measurementForm.date ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {saving ? (language === 'hebrew' ? 'שומר...' : 'Saving...') : (language === 'hebrew' ? 'שמור' : 'Save')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 // Food Log Progress Component
-const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode }) => {
+const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode, onAddLog }) => {
   const [foodLogs, setFoodLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMetric, setSelectedMetric] = useState('calories'); // 'calories', 'protein', 'carbs', 'fat'
@@ -2608,9 +2782,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
     );
   }
 
-  if (chartData.length === 0) {
-    return null;
-  }
+  const hasData = chartData.length > 0;
 
   return (
     <div className={`${themeClasses.bgCard} rounded-2xl p-3 sm:p-4 md:p-6 mb-6 shadow-lg border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
@@ -2729,9 +2901,27 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
       {/* Simple Line & Area Chart */}
       {!isLandscape && (
       <div className="relative h-64 w-full overflow-hidden rounded-xl bg-gradient-to-b from-slate-900/40 via-slate-900/10 to-slate-900/40">
+        {!hasData && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+            <div className="text-4xl mb-3">📊</div>
+            <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-4 text-center px-4`}>
+              {language === 'hebrew' ? 'אין לך רשומות יומן תזונה' : "You don't have any Food Log entries"}
+            </p>
+            <button
+              onClick={() => {
+                if (onAddLog) {
+                  onAddLog();
+                }
+              }}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium text-sm transition-colors shadow-md hover:shadow-lg"
+            >
+              {language === 'hebrew' ? 'הוסף יומן תזונה' : 'Add Food Log'}
+            </button>
+          </div>
+        )}
         <div
           style={{
-            opacity: isTransitioning ? 0.5 : 1,
+            opacity: isTransitioning ? 0.5 : (hasData ? 1 : 0.3),
             transform: isTransitioning ? 'scale(0.97)' : 'scale(1)',
             transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
           }}
@@ -2812,7 +3002,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
             })()}
 
             {/* Chart line + soft area */}
-            {chartData.length > 1 && (() => {
+            {hasData && chartData.length > 1 && (() => {
               const chartStartX = 80;
               const chartWidth = 680;
               const linePoints = chartData
@@ -2867,7 +3057,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
             })()}
 
             {/* Data points (show fewer for cleaner look) */}
-            {chartData.map((d, index) => {
+            {hasData && chartData.map((d, index) => {
               const value = getMetricValue(d);
               if (value == null || value <= 0) return null;
               
@@ -2976,7 +3166,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
           })()}
 
           {/* X-axis labels */}
-          {chartData.length > 0 && chartData.map((d, index) => {
+          {hasData && chartData.length > 0 && chartData.map((d, index) => {
             if (index % Math.ceil(chartData.length / 6) !== 0 && index !== chartData.length - 1) return null;
             const chartStartX = 80;
             const chartWidth = 680;
@@ -3865,7 +4055,14 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const [originalPlanData, setOriginalPlanData] = useState(null);
   const [error, setError] = useState('');
   const [expandedMeals, setExpandedMeals] = useState({});
+  const [expandedAlternatives, setExpandedAlternatives] = useState({});
   const [isTranslating, setIsTranslating] = useState(false);
+  
+  // Menu generation states
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStep, setGenerationStep] = useState('');
+  const [clientData, setClientData] = useState(null);
   
   // Helper function to format numbers with decimal places
   const formatNumber = (num) => {
@@ -3919,6 +4116,12 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const [isEditPortionModalVisible, setIsEditPortionModalVisible] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState(null);
   const [editingIngredientIndex, setEditingIngredientIndex] = useState(null);
+  // Alternative meal editing state
+  const [selectedAlternativeMealIndex, setSelectedAlternativeMealIndex] = useState(null);
+  const [selectedAlternativeType, setSelectedAlternativeType] = useState(null); // 'alternative' or 'alternatives'
+  const [selectedAlternativeIndex, setSelectedAlternativeIndex] = useState(null); // For alternatives array
+  const [isAddAlternativeIngredientModalVisible, setIsAddAlternativeIngredientModalVisible] = useState(false);
+  const [isEditAlternativePortionModalVisible, setIsEditAlternativePortionModalVisible] = useState(false);
 
   useEffect(() => {
     const loadMealPlan = async () => {
@@ -4048,6 +4251,314 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     loadMealPlan();
   }, [userCode, language]);
 
+  // Load client data for menu generation
+  useEffect(() => {
+    const loadClientData = async () => {
+      if (!userCode) return;
+      
+      try {
+        // Load from chat_users
+        const { data: chatData, error: chatError } = await supabaseSecondary
+          .from('chat_users')
+          .select('*')
+          .eq('user_code', userCode)
+          .single();
+        
+        if (chatError) {
+          console.error('Error loading chat_users data:', chatError);
+          return;
+        }
+        
+        // Check if onboarding is completed in clients table
+        const { data: clientsData, error: clientsError } = await supabase
+          .from('clients')
+          .select('onboarding_completed')
+          .eq('user_code', userCode)
+          .single();
+        
+        if (clientsError) {
+          console.error('Error loading clients data:', clientsError);
+        }
+        
+        // Merge the data
+        setClientData({
+          ...chatData,
+          onboarding_completed: clientsData?.onboarding_completed || false
+        });
+      } catch (err) {
+        console.error('Error fetching client data:', err);
+      }
+    };
+    
+    loadClientData();
+  }, [userCode]);
+
+  // Function to calculate totals from meals
+  const calculateMainTotals = (menu) => {
+    if (!menu || !menu.meals) return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    
+    return menu.meals.reduce((acc, meal) => {
+      if (meal.main && meal.main.nutrition) {
+        acc.calories += meal.main.nutrition.calories || 0;
+        acc.protein += meal.main.nutrition.protein || 0;
+        acc.carbs += meal.main.nutrition.carbs || 0;
+        acc.fat += meal.main.nutrition.fat || 0;
+      }
+      return acc;
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  };
+
+  // Generate menu function
+  const generateMenu = async () => {
+    if (!userCode || !clientData) {
+      setError(language === 'hebrew' ? 'נתוני משתמש חסרים' : 'User data missing');
+      return;
+    }
+
+    // Check if client has daily_target_total_calories
+    if (!clientData.daily_target_total_calories) {
+      setError(language === 'hebrew' 
+        ? 'אנא השלם את תהליך ההזנה הראשוני כדי לחשב יעדים תזונתיים'
+        : 'Please complete the onboarding process to calculate nutritional targets');
+      return;
+    }
+
+    // Check meal plan structure
+    const mealPlanStructure = clientData.meal_plan_structure || [];
+    if (mealPlanStructure.length === 0) {
+      setError(language === 'hebrew'
+        ? 'אנא הגדר את מבנה הארוחות שלך בתהליך ההזנה הראשוני'
+        : 'Please set up your meal structure in the onboarding process');
+      return;
+    }
+
+    try {
+      setIsGenerating(true);
+      setError(null);
+      setGenerationProgress(0);
+      setGenerationStep(language === 'hebrew' ? 'מתחיל...' : 'Initializing...');
+
+      console.log('🧠 Generating menu for user:', userCode);
+      console.log('🔍 Client data:', clientData);
+
+      // Step 1: Get meal template from API (25% progress)
+      setGenerationProgress(5);
+      setGenerationStep(language === 'hebrew' ? '🎯 מנתח העדפות...' : '🎯 Analyzing preferences...');
+
+      const templateRes = await fetch("https://dietitian-be.azurewebsites.net/api/template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          user_code: userCode,
+          meal_structure: mealPlanStructure 
+        })
+      });
+
+      console.log('📡 Template API response status:', templateRes.status);
+
+      if (!templateRes.ok) {
+        const errorText = await templateRes.text();
+        console.error('❌ Template API error response:', errorText);
+        if (templateRes.status === 404) {
+          throw new Error(language === 'hebrew' 
+            ? 'לא נמצא משתמש במערכת'
+            : 'Client not found in the database');
+        } else if (templateRes.status === 500) {
+          throw new Error(language === 'hebrew' 
+            ? 'שגיאת שרת בניתוח העדפות'
+            : 'Server error while analyzing preferences');
+        } else {
+          throw new Error(language === 'hebrew'
+            ? 'אנא השלם את כל פרטי הלקוח בעמוד הלקוח ונסה שוב'
+            : 'Please complete all client data and try again');
+        }
+      }
+
+      const templateData = await templateRes.json();
+      console.log('📋 Template API response data:', templateData);
+
+      if (templateData.error) {
+        throw new Error(templateData.error);
+      }
+
+      if (!templateData.template) {
+        throw new Error(language === 'hebrew' 
+          ? 'לא נוצרה תבנית ארוחות'
+          : 'No meal template was generated');
+      }
+
+      const template = templateData.template;
+      console.log('✅ Template received:', template);
+      setGenerationProgress(25);
+      setGenerationStep(language === 'hebrew' ? '✅ ניתוח הושלם!' : '✅ Analysis complete!');
+
+      // Step 2: Build menu (progress 30-99%)
+      setGenerationProgress(30);
+      setGenerationStep(language === 'hebrew' ? '🍽️ יוצר ארוחות מותאמות אישית...' : '🍽️ Creating personalized meals...');
+
+      // Gradual progress animation
+      const progressInterval = setInterval(() => {
+        setGenerationProgress(prev => {
+          if (prev >= 99) {
+            clearInterval(progressInterval);
+            return 99;
+          }
+          return prev + 1;
+        });
+      }, 2000);
+
+      const buildRes = await fetch("https://dietitian-be.azurewebsites.net/api/build-menu", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template, user_code: userCode }),
+      });
+
+      clearInterval(progressInterval);
+
+      if (!buildRes.ok) {
+        const errText = await buildRes.text().catch(() => '');
+        throw new Error(language === 'hebrew'
+          ? `שגיאה ביצירת תפריט (${buildRes.status})`
+          : `Unable to create menu (Error ${buildRes.status})`);
+      }
+
+      const buildData = await buildRes.json();
+
+      if (buildData.error) {
+        throw new Error(buildData.error);
+      }
+
+      if (!buildData.menu) {
+        throw new Error(language === 'hebrew' ? 'לא נוצרו ארוחות' : 'No meals were created');
+      }
+
+      setGenerationProgress(60);
+      setGenerationStep(language === 'hebrew' ? '🔢 מחשב ערכים תזונתיים...' : '🔢 Calculating nutrition values...');
+
+      const menuData = {
+        meals: buildData.menu,
+        totals: calculateMainTotals({ meals: buildData.menu }),
+        note: buildData.note || ''
+      };
+
+      setGenerationProgress(70);
+      setGenerationStep(language === 'hebrew' ? '💾 שומר תפריט...' : '💾 Saving menu...');
+
+      // Auto-save to both databases immediately
+      console.log('💾 Auto-saving menu data:', menuData);
+      
+      const newPlanId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const dailyCalories = clientData.daily_target_total_calories || null;
+      const macros = clientData.macros || null;
+      
+      // Get client name for meal plan name
+      const clientName = clientData.full_name || 
+                        (clientData.first_name && clientData.last_name ? `${clientData.first_name} ${clientData.last_name}`.trim() : '') ||
+                        clientData.first_name || 
+                        clientData.last_name || 
+                        'Client';
+      const mealPlanName = `${clientName}'s Meal Plan`;
+
+      // Save to meal_plans_and_schemas (secondary database)
+      const { error: secondaryError } = await supabaseSecondary
+        .from('meal_plans_and_schemas')
+        .insert({
+          id: newPlanId,
+          record_type: 'meal_plan',
+          user_code: userCode,
+          meal_plan_name: mealPlanName,
+          schema: template,
+          meal_plan: menuData,
+          status: 'active',
+          daily_total_calories: dailyCalories,
+          macros_target: macros,
+          active_from: now,
+          created_at: now,
+          updated_at: now
+        });
+
+      if (secondaryError) {
+        console.error('❌ Error saving to meal_plans_and_schemas:', secondaryError);
+        throw new Error(language === 'hebrew' 
+          ? 'שגיאה בשמירה למאגר משני'
+          : 'Error saving to secondary database');
+      }
+
+      // Save to client_meal_plans (main database)
+      const { error: mainError } = await supabase
+        .from('client_meal_plans')
+        .insert({
+          id: newPlanId,
+          user_code: userCode,
+          original_meal_plan_id: newPlanId,
+          meal_plan_name: mealPlanName,
+          dietitian_meal_plan: menuData,
+          active: true,
+          daily_total_calories: dailyCalories,
+          macros_target: macros,
+          created_at: now,
+          updated_at: now
+        });
+
+      if (mainError) {
+        console.error('❌ Error saving to client_meal_plans:', mainError);
+        // Rollback secondary save
+        await supabaseSecondary
+          .from('meal_plans_and_schemas')
+          .delete()
+          .eq('id', newPlanId);
+        
+        throw new Error(language === 'hebrew' 
+          ? 'שגיאה בשמירה למאגר ראשי'
+          : 'Error saving to main database');
+      }
+
+      console.log('✅ Menu saved successfully to both databases!');
+
+      setGenerationProgress(85);
+      setGenerationStep(language === 'hebrew' ? '🌐 מכין תצוגה...' : '🌐 Preparing display...');
+
+      // Translate if needed
+      if (language === 'hebrew') {
+        setGenerationStep(language === 'hebrew' ? '🌐 מתרגם לעברית...' : '🌐 Translating to Hebrew...');
+        const translatedMenu = await translateMenu(menuData, 'he');
+        setPlanData({
+          meal_plan: translatedMenu,
+          totals: menuData.totals,
+          meals: translatedMenu.meals
+        });
+      } else {
+        setPlanData({
+          meal_plan: menuData,
+          totals: menuData.totals,
+          meals: menuData.meals
+        });
+      }
+
+      setGenerationProgress(100);
+      setGenerationStep(language === 'hebrew' ? '🎉 התפריט מוכן ונשמר!' : '🎉 Menu saved successfully!');
+
+      // Clear progress and reload to show the saved meal plan
+      setTimeout(() => {
+        setGenerationProgress(0);
+        setGenerationStep('');
+        setError(null);
+        window.location.reload();
+      }, 1500);
+
+    } catch (err) {
+      console.error("Error generating menu:", err);
+      setError(err.message || (language === 'hebrew' 
+        ? 'שגיאה ביצירת תפריט. אנא נסה שוב.'
+        : 'Error generating menu. Please try again.'));
+      setGenerationProgress(0);
+      setGenerationStep('');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -4090,42 +4601,95 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                 : 'You don\'t have a personalized meal plan yet.'
               }
             </p>
-            <p className="text-base sm:text-lg">
-              {language === 'hebrew'
-                ? 'אנא פנו לספק שלכם (דיאטנית/מנהל) כדי לקבל תוכנית תזונה מותאמת אישית שתוצג כאן.'
-                : 'Please contact your provider (dietitian/manager) to receive a personalized meal plan that will be displayed here.'
-              }
-        </p>
+            
       </div>
 
-          {/* Contact Info Card */}
-          <div className={`${themeClasses.bgSecondary} rounded-xl p-6 border-l-4 border-emerald-500`}>
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-        </div>
-              <div className="flex-1">
-                <h3 className={`${themeClasses.textPrimary} font-semibold text-lg mb-2`}>
-                  {language === 'hebrew' ? 'צרו קשר עם הספק שלכם' : 'Contact Your Provider'}
-                </h3>
-                <p className={`${themeClasses.textSecondary} text-sm`}>
-                  {language === 'hebrew'
-                    ? 'הספק שלכם יכול ליצור עבורכם תוכנית תזונה מותאמת אישית. לאחר יצירת התוכנית, היא תופיע כאן אוטומטית.'
-                    : 'Your provider can create a personalized meal plan for you. Once created, it will appear here automatically.'
-                  }
-                </p>
+          {/* Generate Menu Button - Only show if onboarding is fully completed */}
+          {clientData && 
+           clientData.onboarding_completed && 
+           clientData.meal_plan_structure && 
+           clientData.meal_plan_structure.length > 0 && (
+            <div className="mb-8">
+              <button
+                onClick={generateMenu}
+                disabled={isGenerating}
+                className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 shadow-lg ${
+                  isGenerating
+                    ? 'bg-gray-600 cursor-not-allowed opacity-60'
+                    : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 transform hover:scale-105'
+                } text-white flex items-center justify-center gap-3`}
+              >
+                {isGenerating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                    <span>{generationStep || (language === 'hebrew' ? 'יוצר תפריט...' : 'Generating Menu...')}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-2xl">🎯</span>
+                    <span>{language === 'hebrew' ? 'צור תפריט אוטומטי' : 'Generate Automatic Menu'}</span>
+                  </>
+                )}
+              </button>
+              
+              {/* Progress Bar */}
+              {isGenerating && generationProgress > 0 && (
+                <div className="mt-4">
+                  <div className="w-full bg-gray-700/50 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-3 rounded-full transition-all duration-500 ease-out shadow-lg shadow-emerald-500/50"
+                      style={{ width: `${generationProgress}%` }}
+                    ></div>
+                  </div>
+                  <p className={`${themeClasses.textSecondary} text-sm text-center mt-2`}>
+                    {Math.round(generationProgress)}% - {generationStep}
+                  </p>
+                </div>
+              )}
+              
+              {/* Error Message */}
+              {error && !isGenerating && (
+                <div className="mt-4 p-4 bg-red-500/10 border-2 border-red-500/30 text-red-400 rounded-xl backdrop-blur-sm">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm">{error}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Onboarding Required Message */}
+          {clientData && !clientData.onboarding_completed && (
+            <div className="mb-8">
+              <div className={`${themeClasses.bgSecondary} rounded-xl p-6 border-2 border-amber-500/50 shadow-lg`}>
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-amber-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className={`${themeClasses.textPrimary} font-bold text-lg mb-2`}>
+                      {language === 'hebrew' ? 'השלם את תהליך ההזנה הראשוני' : 'Complete Your Onboarding'}
+                    </h3>
+                    <p className={`${themeClasses.textSecondary} text-sm mb-3`}>
+                      {language === 'hebrew'
+                        ? 'כדי ליצור תפריט אוטומטי, אנא השלם את כל השדות בתהליך ההזנה הראשוני בעמוד הפרופיל.'
+                        : 'To generate an automatic menu, please complete all fields in the onboarding process on your profile page.'}
+                    </p>
+                    <p className={`${themeClasses.textSecondary} text-xs`}>
+                      {language === 'hebrew'
+                        ? 'דרוש: פרטים אישיים, משקל וגובה, מטרות, העדפות תזונתיות, ומבנה ארוחות.'
+                        : 'Required: Personal details, weight & height, goals, dietary preferences, and meal structure.'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Decorative Elements */}
-          <div className="mt-8 flex justify-center gap-2">
-            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-            <div className="w-2 h-2 bg-emerald-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-          </div>
+          )}
         </div>
       </div>
     );
@@ -4170,10 +4734,26 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     }));
   };
 
+  // Toggle alternatives expansion
+  const toggleAlternativesExpansion = (mealIndex) => {
+    setExpandedAlternatives(prev => ({
+      ...prev,
+      [mealIndex]: !prev[mealIndex]
+    }));
+  };
+
   // Open add ingredient modal
   const handleOpenAddIngredient = (mealIndex) => {
     setSelectedMealIndex(mealIndex);
     setIsAddIngredientModalVisible(true);
+  };
+
+  // Open add ingredient modal for alternative meal
+  const handleOpenAddAlternativeIngredient = (mealIndex, alternativeType, alternativeIndex = null) => {
+    setSelectedAlternativeMealIndex(mealIndex);
+    setSelectedAlternativeType(alternativeType);
+    setSelectedAlternativeIndex(alternativeIndex);
+    setIsAddAlternativeIngredientModalVisible(true);
   };
 
   // Helper function to ensure originalPlanData is set before making edits
@@ -4500,6 +5080,282 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     }
   };
 
+  // Add ingredient to alternative meal
+  const handleAddAlternativeIngredient = async (ingredient) => {
+    if (selectedAlternativeMealIndex === null || !planData || selectedAlternativeType === null) return;
+
+    try {
+      ensureOriginalPlanData();
+
+      const updatedPlanData = { ...planData };
+      const updatedMeals = [...updatedPlanData.meals];
+      const mealToUpdate = { ...updatedMeals[selectedAlternativeMealIndex] };
+
+      let alternativeMeal;
+      if (selectedAlternativeType === 'alternative') {
+        alternativeMeal = mealToUpdate.alternative;
+      } else if (selectedAlternativeType === 'alternatives' && selectedAlternativeIndex !== null) {
+        alternativeMeal = mealToUpdate.alternatives[selectedAlternativeIndex];
+      }
+
+      if (!alternativeMeal) return;
+
+      // Initialize ingredients array if it doesn't exist
+      if (!alternativeMeal.ingredients) {
+        alternativeMeal.ingredients = [];
+      }
+
+      // Add the new ingredient
+      alternativeMeal.ingredients = [...alternativeMeal.ingredients, ingredient];
+
+      // Update nutrition values
+      const currentNutrition = alternativeMeal.nutrition || {};
+      alternativeMeal.nutrition = {
+        calories: (currentNutrition.calories || 0) + ingredient.calories,
+        protein: (currentNutrition.protein || 0) + ingredient.protein,
+        carbs: (currentNutrition.carbs || 0) + ingredient.carbs,
+        fat: (currentNutrition.fat || 0) + ingredient.fat,
+      };
+
+      // Update the meal in the meals array
+      updatedMeals[selectedAlternativeMealIndex] = mealToUpdate;
+      updatedPlanData.meals = updatedMeals;
+
+      // Recalculate totals (only from main meals)
+      const newTotals = updatedMeals.reduce(
+        (acc, meal) => {
+          if (meal.main && meal.main.nutrition) {
+            acc.calories += meal.main.nutrition.calories || 0;
+            acc.protein += meal.main.nutrition.protein || 0;
+            acc.carbs += meal.main.nutrition.carbs || 0;
+            acc.fat += meal.main.nutrition.fat || 0;
+          }
+          return acc;
+        },
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      );
+
+      updatedPlanData.totals = newTotals;
+      updatedPlanData.isClientEdited = true;
+
+      setPlanData(updatedPlanData);
+      await saveMealPlanToDatabase(updatedPlanData, updatedMeals);
+
+      setIsAddAlternativeIngredientModalVisible(false);
+      setSelectedAlternativeMealIndex(null);
+      setSelectedAlternativeType(null);
+      setSelectedAlternativeIndex(null);
+
+      alert(
+        language === 'hebrew'
+          ? 'המרכיב נוסף בהצלחה לארוחה החלופית'
+          : 'Ingredient added successfully to the alternative meal'
+      );
+    } catch (error) {
+      console.error('Error adding alternative ingredient:', error);
+      alert(
+        language === 'hebrew'
+          ? 'לא ניתן להוסיף את המרכיב. נסה שוב.'
+          : 'Failed to add ingredient. Please try again.'
+      );
+    }
+  };
+
+  // Handle edit alternative ingredient
+  const handleEditAlternativeIngredient = (mealIndex, alternativeType, alternativeIndex, ingredientIndex, ingredient) => {
+    setSelectedAlternativeMealIndex(mealIndex);
+    setSelectedAlternativeType(alternativeType);
+    setSelectedAlternativeIndex(alternativeIndex);
+    setEditingIngredientIndex(ingredientIndex);
+    setEditingIngredient({
+      ...ingredient,
+      displayName: ingredient.item || ingredient.name || 'Unknown item',
+      calories: ingredient.calories || 0,
+      protein: ingredient.protein || 0,
+      carbs: ingredient.carbs || 0,
+      fat: ingredient.fat || 0,
+    });
+    setIsEditAlternativePortionModalVisible(true);
+  };
+
+  // Handle update alternative ingredient portion
+  const handleUpdateAlternativeIngredientPortion = async ({ quantity: quantityNum, householdMeasure }) => {
+    if (selectedAlternativeMealIndex === null || editingIngredientIndex === null || !planData || !editingIngredient || selectedAlternativeType === null) return;
+
+    try {
+      ensureOriginalPlanData();
+
+      const updatedPlanData = { ...planData };
+      const updatedMeals = [...updatedPlanData.meals];
+      const mealToUpdate = { ...updatedMeals[selectedAlternativeMealIndex] };
+
+      let alternativeMeal;
+      if (selectedAlternativeType === 'alternative') {
+        alternativeMeal = mealToUpdate.alternative;
+      } else if (selectedAlternativeType === 'alternatives' && selectedAlternativeIndex !== null) {
+        alternativeMeal = mealToUpdate.alternatives[selectedAlternativeIndex];
+      }
+
+      if (!alternativeMeal || !alternativeMeal.ingredients) return;
+
+      const oldIngredient = alternativeMeal.ingredients[editingIngredientIndex];
+
+      const originalScale = (oldIngredient['portionSI(gram)'] || 100) / 100;
+      const original100gCalories = oldIngredient.calories / originalScale;
+      const original100gProtein = oldIngredient.protein / originalScale;
+      const original100gCarbs = oldIngredient.carbs / originalScale;
+      const original100gFat = oldIngredient.fat / originalScale;
+
+      const newScale = quantityNum / 100;
+      const updatedIngredient = {
+        UPC: oldIngredient.UPC || null,
+        item: oldIngredient.item,
+        'brand of product': oldIngredient['brand of product'] || '',
+        household_measure: householdMeasure,
+        'portionSI(gram)': quantityNum,
+        calories: Math.round(original100gCalories * newScale),
+        protein: Math.round(original100gProtein * newScale * 10) / 10,
+        carbs: Math.round(original100gCarbs * newScale * 10) / 10,
+        fat: Math.round(original100gFat * newScale * 10) / 10,
+      };
+
+      alternativeMeal.ingredients[editingIngredientIndex] = updatedIngredient;
+
+      // Recalculate alternative meal nutrition
+      alternativeMeal.nutrition = alternativeMeal.ingredients.reduce(
+        (acc, ing) => ({
+          calories: acc.calories + (ing.calories || 0),
+          protein: acc.protein + (ing.protein || 0),
+          carbs: acc.carbs + (ing.carbs || 0),
+          fat: acc.fat + (ing.fat || 0),
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      );
+
+      updatedMeals[selectedAlternativeMealIndex] = mealToUpdate;
+      updatedPlanData.meals = updatedMeals;
+
+      // Recalculate totals (only from main meals)
+      const newTotals = updatedMeals.reduce(
+        (acc, meal) => {
+          if (meal.main && meal.main.nutrition) {
+            acc.calories += meal.main.nutrition.calories || 0;
+            acc.protein += meal.main.nutrition.protein || 0;
+            acc.carbs += meal.main.nutrition.carbs || 0;
+            acc.fat += meal.main.nutrition.fat || 0;
+          }
+          return acc;
+        },
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      );
+
+      updatedPlanData.totals = newTotals;
+      updatedPlanData.isClientEdited = true;
+
+      setPlanData(updatedPlanData);
+      await saveMealPlanToDatabase(updatedPlanData, updatedMeals);
+
+      setIsEditAlternativePortionModalVisible(false);
+      setEditingIngredient(null);
+      setEditingIngredientIndex(null);
+      setSelectedAlternativeMealIndex(null);
+      setSelectedAlternativeType(null);
+      setSelectedAlternativeIndex(null);
+
+      alert(
+        language === 'hebrew'
+          ? 'המרכיב עודכן בהצלחה'
+          : 'Ingredient updated successfully'
+      );
+    } catch (error) {
+      console.error('Error updating alternative ingredient:', error);
+      alert(
+        language === 'hebrew'
+          ? 'לא ניתן לעדכן את המרכיב. נסה שוב.'
+          : 'Failed to update ingredient. Please try again.'
+      );
+    }
+  };
+
+  // Handle delete alternative ingredient
+  const handleDeleteAlternativeIngredient = async (mealIndex, alternativeType, alternativeIndex, ingredientIndex) => {
+    if (!planData) return;
+
+    if (!window.confirm(
+      language === 'hebrew'
+        ? 'האם אתה בטוח שברצונך למחוק מרכיב זה?'
+        : 'Are you sure you want to delete this ingredient?'
+    )) {
+      return;
+    }
+
+    try {
+      ensureOriginalPlanData();
+
+      const updatedPlanData = { ...planData };
+      const updatedMeals = [...updatedPlanData.meals];
+      const mealToUpdate = { ...updatedMeals[mealIndex] };
+
+      let alternativeMeal;
+      if (alternativeType === 'alternative') {
+        alternativeMeal = mealToUpdate.alternative;
+      } else if (alternativeType === 'alternatives' && alternativeIndex !== null) {
+        alternativeMeal = mealToUpdate.alternatives[alternativeIndex];
+      }
+
+      if (!alternativeMeal || !alternativeMeal.ingredients) return;
+
+      alternativeMeal.ingredients.splice(ingredientIndex, 1);
+
+      // Recalculate alternative meal nutrition
+      alternativeMeal.nutrition = alternativeMeal.ingredients.reduce(
+        (acc, ing) => ({
+          calories: acc.calories + (ing.calories || 0),
+          protein: acc.protein + (ing.protein || 0),
+          carbs: acc.carbs + (ing.carbs || 0),
+          fat: acc.fat + (ing.fat || 0),
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      );
+
+      updatedMeals[mealIndex] = mealToUpdate;
+      updatedPlanData.meals = updatedMeals;
+
+      // Recalculate totals (only from main meals)
+      const newTotals = updatedMeals.reduce(
+        (acc, meal) => {
+          if (meal.main && meal.main.nutrition) {
+            acc.calories += meal.main.nutrition.calories || 0;
+            acc.protein += meal.main.nutrition.protein || 0;
+            acc.carbs += meal.main.nutrition.carbs || 0;
+            acc.fat += meal.main.nutrition.fat || 0;
+          }
+          return acc;
+        },
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      );
+
+      updatedPlanData.totals = newTotals;
+      updatedPlanData.isClientEdited = true;
+
+      setPlanData(updatedPlanData);
+      await saveMealPlanToDatabase(updatedPlanData, updatedMeals);
+
+      alert(
+        language === 'hebrew'
+          ? 'המרכיב נמחק בהצלחה'
+          : 'Ingredient deleted successfully'
+      );
+    } catch (error) {
+      console.error('Error deleting alternative ingredient:', error);
+      alert(
+        language === 'hebrew'
+          ? 'לא ניתן למחוק את המרכיב. נסה שוב.'
+          : 'Failed to delete ingredient. Please try again.'
+      );
+    }
+  };
+
   // Switch to original plan (with confirmation and clearing edited plan)
   const handleViewOriginalPlan = async () => {
     if (!originalPlanData || !planData) return;
@@ -4819,7 +5675,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                         {meal.meal}
                       </p>
                       <h4 className={`${themeClasses.textPrimary} text-base sm:text-lg md:text-xl font-bold tracking-tight`}>
-                        {meal.main?.meal_name || meal.main?.meal_title || meal.main?.title || meal.meal}
+                        {meal.main?.meal_title || meal.main?.meal_name || meal.main?.title || meal.meal}
                       </h4>
                     </div>
                     </div>
@@ -4869,49 +5725,51 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                 </div>
 
                 {/* Collapsible Content */}
-                <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className={`transition-all duration-500 ease-in-out ${isExpanded ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0'} overflow-hidden`}>
                   {/* Macro Breakdown Bars */}
-                  <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
-                    <div className="flex items-center gap-2 sm:gap-0">
-                      <div className="w-3 h-3 sm:w-4 sm:h-4 bg-purple-500 rounded-full sm:mr-4 animate-pulse"></div>
-                      <span className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold sm:mr-4 w-12 sm:w-16`}>
-                        {language === 'hebrew' ? 'חלבון' : 'Protein'}
-                      </span>
-                      <div className="flex-1 bg-slate-700 rounded-full h-2 sm:h-3 shadow-inner">
-                        <div 
-                          className="bg-gradient-to-r from-purple-600 to-purple-500 h-2 sm:h-3 rounded-full transition-all duration-1000 ease-out shadow-sm"
-                          style={{ width: `${mealProteinPercent}%` }}
-                        ></div>
-                  </div>
-                      <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-4 whitespace-nowrap`}>{formatWeight(mealProtein)} ({mealProteinPercent}%)</span>
+                  {settings.showMacros && (
+                    <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
+                      <div className="flex items-center gap-2 sm:gap-0">
+                        <div className="w-3 h-3 sm:w-4 sm:h-4 bg-purple-500 rounded-full sm:mr-4 animate-pulse"></div>
+                        <span className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold sm:mr-4 w-12 sm:w-16`}>
+                          {language === 'hebrew' ? 'חלבון' : 'Protein'}
+                        </span>
+                        <div className="flex-1 bg-slate-700 rounded-full h-2 sm:h-3 shadow-inner">
+                          <div 
+                            className="bg-gradient-to-r from-purple-600 to-purple-500 h-2 sm:h-3 rounded-full transition-all duration-1000 ease-out shadow-sm"
+                            style={{ width: `${mealProteinPercent}%` }}
+                          ></div>
                     </div>
-                    <div className="flex items-center gap-2 sm:gap-0">
-                      <div className="w-3 h-3 sm:w-4 sm:h-4 bg-blue-500 rounded-full sm:mr-4 animate-pulse"></div>
-                      <span className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold sm:mr-4 w-12 sm:w-16`}>
-                        {language === 'hebrew' ? 'פחמימות' : 'Carbs'}
-                      </span>
-                      <div className="flex-1 bg-slate-700 rounded-full h-2 sm:h-3 shadow-inner">
-                        <div 
-                          className="bg-gradient-to-r from-blue-600 to-blue-500 h-2 sm:h-3 rounded-full transition-all duration-1000 ease-out shadow-sm"
-                          style={{ width: `${mealCarbsPercent}%` }}
-                        ></div>
+                        <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-4 whitespace-nowrap`}>{formatWeight(mealProtein)} ({mealProteinPercent}%)</span>
+                      </div>
+                      <div className="flex items-center gap-2 sm:gap-0">
+                        <div className="w-3 h-3 sm:w-4 sm:h-4 bg-blue-500 rounded-full sm:mr-4 animate-pulse"></div>
+                        <span className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold sm:mr-4 w-12 sm:w-16`}>
+                          {language === 'hebrew' ? 'פחמימות' : 'Carbs'}
+                        </span>
+                        <div className="flex-1 bg-slate-700 rounded-full h-2 sm:h-3 shadow-inner">
+                          <div 
+                            className="bg-gradient-to-r from-blue-600 to-blue-500 h-2 sm:h-3 rounded-full transition-all duration-1000 ease-out shadow-sm"
+                            style={{ width: `${mealCarbsPercent}%` }}
+                          ></div>
+                      </div>
+                        <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-4 whitespace-nowrap`}>{formatWeight(mealCarbs)} ({mealCarbsPercent}%)</span>
+                      </div>
+                      <div className="flex items-center gap-2 sm:gap-0">
+                        <div className="w-3 h-3 sm:w-4 sm:h-4 bg-amber-500 rounded-full sm:mr-4 animate-pulse"></div>
+                        <span className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold sm:mr-4 w-12 sm:w-16`}>
+                          {language === 'hebrew' ? 'שומן' : 'Fat'}
+                        </span>
+                        <div className="flex-1 bg-slate-700 rounded-full h-2 sm:h-3 shadow-inner">
+                          <div 
+                            className="bg-gradient-to-r from-amber-500 to-orange-500 h-2 sm:h-3 rounded-full transition-all duration-1000 ease-out shadow-sm"
+                            style={{ width: `${mealFatPercent}%` }}
+                          ></div>
+                      </div>
+                        <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-4 whitespace-nowrap`}>{formatWeight(mealFat)} ({mealFatPercent}%)</span>
+                      </div>
                     </div>
-                      <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-4 whitespace-nowrap`}>{formatWeight(mealCarbs)} ({mealCarbsPercent}%)</span>
-                    </div>
-                    <div className="flex items-center gap-2 sm:gap-0">
-                      <div className="w-3 h-3 sm:w-4 sm:h-4 bg-amber-500 rounded-full sm:mr-4 animate-pulse"></div>
-                      <span className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold sm:mr-4 w-12 sm:w-16`}>
-                        {language === 'hebrew' ? 'שומן' : 'Fat'}
-                      </span>
-                      <div className="flex-1 bg-slate-700 rounded-full h-2 sm:h-3 shadow-inner">
-                        <div 
-                          className="bg-gradient-to-r from-amber-500 to-orange-500 h-2 sm:h-3 rounded-full transition-all duration-1000 ease-out shadow-sm"
-                          style={{ width: `${mealFatPercent}%` }}
-                        ></div>
-                    </div>
-                      <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-4 whitespace-nowrap`}>{formatWeight(mealFat)} ({mealFatPercent}%)</span>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Ingredients */}
                   <div className={`${themeClasses.bgSecondary} rounded-2xl p-4 sm:p-6`}>
@@ -4954,11 +5812,19 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                               <div className="w-2 h-2 sm:w-3 sm:h-3 bg-emerald-500 rounded-full mr-2 sm:mr-4 animate-pulse flex-shrink-0 mt-1.5 sm:mt-0"></div>
                               <span className="font-medium flex-1 sm:flex-none">
                                 {ingredient.item || ingredient.name || 'Unknown item'}
+                                {language === 'hebrew' && ' - '}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto mt-1 sm:mt-0 sm:ml-2">
+                            <div className={`flex items-center justify-between sm:justify-end w-full sm:w-auto mt-1 sm:mt-0 ${language === 'hebrew' ? 'sm:mr-2' : 'sm:ml-2'}`}>
                               <span className="font-semibold sm:whitespace-nowrap">
-                                {formatPortion(ingredient)}
+                                {ingredient.household_measure ? (
+                                  <>
+                                    {ingredient.household_measure}
+                                    <span className="text-xs opacity-70 ml-1">({formatWeight(ingredient['portionSI(gram)'] || 0)})</span>
+                                  </>
+                                ) : (
+                                  formatPortion(ingredient)
+                                )}
                               </span>
                               <div className="flex items-center gap-1 ml-2 sm:ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
@@ -4992,6 +5858,283 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                       </div>
                     )}
                   </div>
+
+                  {/* Alternative Meal Button */}
+                  {(meal.alternative || (meal.alternatives && meal.alternatives.length > 0)) && (
+                    <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-emerald-500/20">
+                      <button
+                        onClick={() => toggleAlternativesExpansion(index)}
+                        className={`w-full flex items-center justify-between ${themeClasses.bgSecondary} rounded-xl p-4 sm:p-5 hover:${themeClasses.bgPrimary} transition-all duration-300 group`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25">
+                            <svg 
+                              className={`w-5 h-5 text-white transition-transform duration-300 ${expandedAlternatives[index] ? 'rotate-180' : ''}`} 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                          <div className="text-left">
+                            <span className={`${themeClasses.textPrimary} text-sm sm:text-base font-bold`}>
+                              {(() => {
+                                const altCount = (meal.alternative ? 1 : 0) + (meal.alternatives ? meal.alternatives.length : 0);
+                                const hasMultiple = altCount > 1;
+                                return hasMultiple 
+                                  ? (language === 'hebrew' ? 'ארוחות חלופיות' : 'Alternative Meals')
+                                  : (language === 'hebrew' ? 'ארוחה חלופית' : 'Alternative Meal');
+                              })()}
+                            </span>
+                            <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mt-0.5`}>
+                              {meal.alternative 
+                                ? (language === 'hebrew' ? 'לחץ כדי לראות' : 'Click to view')
+                                : `${meal.alternatives.length} ${language === 'hebrew' ? 'אפשרויות' : 'options'}`
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Alternative Meal(s) Display */}
+                  {expandedAlternatives[index] && (meal.alternative || (meal.alternatives && meal.alternatives.length > 0)) && (
+                    <div className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
+                      {/* Single alternative */}
+                      {meal.alternative && (
+                        <div className={`${themeClasses.bgSecondary} border border-blue-500/30 rounded-2xl p-4 sm:p-6 shadow-lg`}>
+                          <div className="mb-4">
+                            <h5 className={`${themeClasses.textPrimary} text-base sm:text-lg font-bold mb-2`}>
+                              {meal.alternative.meal_title || meal.alternative.meal_name || meal.meal}
+                            </h5>
+                            {meal.alternative.nutrition && (settings.showCalories || settings.showMacros) && (
+                              <div className="flex flex-wrap gap-3 sm:gap-4 text-sm sm:text-base">
+                                {settings.showCalories && (
+                                  <span className="text-emerald-400 font-bold">{meal.alternative.nutrition.calories || 0} {language === 'hebrew' ? 'קלוריות' : 'cal'}</span>
+                                )}
+                                {settings.showMacros && (
+                                  <>
+                                    <span className={`${themeClasses.textSecondary}`}>
+                                      {formatWeight(meal.alternative.nutrition.protein || 0)} {language === 'hebrew' ? 'חלבון' : 'P'}
+                                    </span>
+                                    <span className={`${themeClasses.textSecondary}`}>
+                                      {formatWeight(meal.alternative.nutrition.carbs || 0)} {language === 'hebrew' ? 'פחמימות' : 'C'}
+                                    </span>
+                                    <span className={`${themeClasses.textSecondary}`}>
+                                      {formatWeight(meal.alternative.nutrition.fat || 0)} {language === 'hebrew' ? 'שומן' : 'F'}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className={`${themeClasses.bgSecondary} rounded-2xl p-4 sm:p-6`}>
+                            <div className="flex items-center justify-between mb-3 sm:mb-4">
+                              <div className="flex items-center">
+                                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mr-2 sm:mr-3 shadow-lg shadow-blue-500/25">
+                                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/>
+                                  </svg>
+                                </div>
+                                <span className={`${themeClasses.textPrimary} text-base sm:text-lg font-bold tracking-tight`}>
+                                  {language === 'hebrew' ? 'מרכיבים' : 'Ingredients'}
+                                </span>
+                                {meal.alternative && meal.alternative.ingredients && (
+                                  <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-3`}>
+                                    {meal.alternative.ingredients.length} {language === 'hebrew' ? 'פריטים' : 'Items'}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleOpenAddAlternativeIngredient(index, 'alternative')}
+                                className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-500 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors shadow-md hover:shadow-lg"
+                                title={language === 'hebrew' ? 'הוסף מרכיב' : 'Add ingredient'}
+                              >
+                                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                              </button>
+                            </div>
+                            
+                            {meal.alternative && meal.alternative.ingredients && meal.alternative.ingredients.length > 0 ? (
+                              <div className="space-y-2 sm:space-y-3">
+                                {meal.alternative.ingredients.map((ingredient, idx) => (
+                                  <div 
+                                    key={idx}
+                                    className={`flex flex-col sm:flex-row items-start sm:items-center ${themeClasses.textSecondary} text-xs sm:text-sm md:text-base group`}
+                                  >
+                                    <div className="flex items-center w-full sm:w-auto">
+                                      <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full mr-2 sm:mr-4 animate-pulse flex-shrink-0 mt-1.5 sm:mt-0"></div>
+                                      <span className="font-medium flex-1 sm:flex-none">
+                                        {ingredient.item || ingredient.name || 'Unknown item'}
+                                        {language === 'hebrew' && ' - '}
+                                      </span>
+                                    </div>
+                                    <div className={`flex items-center justify-between sm:justify-end w-full sm:w-auto mt-1 sm:mt-0 ${language === 'hebrew' ? 'sm:mr-2' : 'sm:ml-2'}`}>
+                                      <span className="font-semibold sm:whitespace-nowrap">
+                                        {ingredient.household_measure ? (
+                                          <>
+                                            {ingredient.household_measure}
+                                            <span className="text-xs opacity-70 ml-1">({formatWeight(ingredient['portionSI(gram)'] || 0)})</span>
+                                          </>
+                                        ) : (
+                                          formatPortion(ingredient)
+                                        )}
+                                      </span>
+                                      <div className="flex items-center gap-1 ml-2 sm:ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                          onClick={() => handleEditAlternativeIngredient(index, 'alternative', null, idx, ingredient)}
+                                          className="w-6 h-6 sm:w-7 sm:h-7 bg-blue-500 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors"
+                                          title={language === 'hebrew' ? 'ערוך' : 'Edit'}
+                                        >
+                                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                          </svg>
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteAlternativeIngredient(index, 'alternative', null, idx)}
+                                          className="w-6 h-6 sm:w-7 sm:h-7 bg-red-500 rounded-lg flex items-center justify-center hover:bg-red-600 transition-colors"
+                                          title={language === 'hebrew' ? 'מחק' : 'Delete'}
+                                        >
+                                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-4">
+                                <p className={`${themeClasses.textMuted} text-sm italic`}>
+                                  {language === 'hebrew' ? 'אין מרכיבים זמינים' : 'No ingredients available'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Multiple alternatives */}
+                      {meal.alternatives && meal.alternatives.length > 0 && meal.alternatives.map((alt, altIdx) => (
+                        <div key={altIdx} className={`${themeClasses.bgSecondary} border border-blue-500/30 rounded-2xl p-4 sm:p-6 shadow-lg`}>
+                          <div className="mb-4">
+                            <h5 className={`${themeClasses.textPrimary} text-base sm:text-lg font-bold mb-2`}>
+                              {alt.meal_title || alt.meal_name || meal.meal}
+                            </h5>
+                            {alt.nutrition && (settings.showCalories || settings.showMacros) && (
+                              <div className="flex flex-wrap gap-3 sm:gap-4 text-sm sm:text-base">
+                                {settings.showCalories && (
+                                  <span className="text-emerald-400 font-bold">{alt.nutrition.calories || 0} {language === 'hebrew' ? 'קלוריות' : 'cal'}</span>
+                                )}
+                                {settings.showMacros && (
+                                  <>
+                                    <span className={`${themeClasses.textSecondary}`}>
+                                      {formatWeight(alt.nutrition.protein || 0)} {language === 'hebrew' ? 'חלבון' : 'P'}
+                                    </span>
+                                    <span className={`${themeClasses.textSecondary}`}>
+                                      {formatWeight(alt.nutrition.carbs || 0)} {language === 'hebrew' ? 'פחמימות' : 'C'}
+                                    </span>
+                                    <span className={`${themeClasses.textSecondary}`}>
+                                      {formatWeight(alt.nutrition.fat || 0)} {language === 'hebrew' ? 'שומן' : 'F'}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className={`${themeClasses.bgSecondary} rounded-2xl p-4 sm:p-6`}>
+                            <div className="flex items-center justify-between mb-3 sm:mb-4">
+                              <div className="flex items-center">
+                                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mr-2 sm:mr-3 shadow-lg shadow-blue-500/25">
+                                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/>
+                                  </svg>
+                                </div>
+                                <span className={`${themeClasses.textPrimary} text-base sm:text-lg font-bold tracking-tight`}>
+                                  {language === 'hebrew' ? 'מרכיבים' : 'Ingredients'}
+                                </span>
+                                {alt.ingredients && (
+                                  <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium ml-2 sm:ml-3`}>
+                                    {alt.ingredients.length} {language === 'hebrew' ? 'פריטים' : 'Items'}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleOpenAddAlternativeIngredient(index, 'alternatives', altIdx)}
+                                className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-500 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors shadow-md hover:shadow-lg"
+                                title={language === 'hebrew' ? 'הוסף מרכיב' : 'Add ingredient'}
+                              >
+                                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                              </button>
+                            </div>
+                            
+                            {alt.ingredients && alt.ingredients.length > 0 ? (
+                              <div className="space-y-2 sm:space-y-3">
+                                {alt.ingredients.map((ingredient, idx) => (
+                                  <div 
+                                    key={idx}
+                                    className={`flex flex-col sm:flex-row items-start sm:items-center ${themeClasses.textSecondary} text-xs sm:text-sm md:text-base group`}
+                                  >
+                                    <div className="flex items-center w-full sm:w-auto">
+                                      <div className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full mr-2 sm:mr-4 animate-pulse flex-shrink-0 mt-1.5 sm:mt-0"></div>
+                                      <span className="font-medium flex-1 sm:flex-none">
+                                        {ingredient.item || ingredient.name || 'Unknown item'}
+                                        {language === 'hebrew' && ' - '}
+                                      </span>
+                                    </div>
+                                    <div className={`flex items-center justify-between sm:justify-end w-full sm:w-auto mt-1 sm:mt-0 ${language === 'hebrew' ? 'sm:mr-2' : 'sm:ml-2'}`}>
+                                      <span className="font-semibold sm:whitespace-nowrap">
+                                        {ingredient.household_measure ? (
+                                          <>
+                                            {ingredient.household_measure}
+                                            <span className="text-xs opacity-70 ml-1">({formatWeight(ingredient['portionSI(gram)'] || 0)})</span>
+                                          </>
+                                        ) : (
+                                          formatPortion(ingredient)
+                                        )}
+                                      </span>
+                                      <div className="flex items-center gap-1 ml-2 sm:ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                          onClick={() => handleEditAlternativeIngredient(index, 'alternatives', altIdx, idx, ingredient)}
+                                          className="w-6 h-6 sm:w-7 sm:h-7 bg-blue-500 rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors"
+                                          title={language === 'hebrew' ? 'ערוך' : 'Edit'}
+                                        >
+                                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                          </svg>
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteAlternativeIngredient(index, 'alternatives', altIdx, idx)}
+                                          className="w-6 h-6 sm:w-7 sm:h-7 bg-red-500 rounded-lg flex items-center justify-center hover:bg-red-600 transition-colors"
+                                          title={language === 'hebrew' ? 'מחק' : 'Delete'}
+                                        >
+                                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center py-4">
+                                <p className={`${themeClasses.textMuted} text-sm italic`}>
+                                  {language === 'hebrew' ? 'אין מרכיבים זמינים' : 'No ingredients available'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -5020,6 +6163,36 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           setEditingIngredientIndex(null);
         }}
         onConfirm={handleUpdateIngredientPortion}
+        ingredient={editingIngredient}
+        clientRegion={clientRegion}
+      />
+
+      {/* Add Alternative Ingredient Modal */}
+      <AddIngredientModal
+        visible={isAddAlternativeIngredientModalVisible}
+        onClose={() => {
+          setIsAddAlternativeIngredientModalVisible(false);
+          setSelectedAlternativeMealIndex(null);
+          setSelectedAlternativeType(null);
+          setSelectedAlternativeIndex(null);
+        }}
+        onAddIngredient={handleAddAlternativeIngredient}
+        mealName={selectedAlternativeMealIndex !== null && planData?.meals[selectedAlternativeMealIndex]?.meal}
+        clientRegion={clientRegion}
+      />
+
+      {/* Edit Alternative Ingredient Portion Modal */}
+      <IngredientPortionModal
+        visible={isEditAlternativePortionModalVisible}
+        onClose={() => {
+          setIsEditAlternativePortionModalVisible(false);
+          setEditingIngredient(null);
+          setEditingIngredientIndex(null);
+          setSelectedAlternativeMealIndex(null);
+          setSelectedAlternativeType(null);
+          setSelectedAlternativeIndex(null);
+        }}
+        onConfirm={handleUpdateAlternativeIngredientPortion}
         ingredient={editingIngredient}
         clientRegion={clientRegion}
       />
@@ -5493,19 +6666,29 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
   
   // Helper function to format numbers with decimal places
   const formatNumber = (num) => {
-    if (settings.decimalPlaces === 0) {
-      return Math.round(num).toString();
+    // Convert to number and handle invalid values
+    const number = typeof num === 'number' ? num : parseFloat(num);
+    if (isNaN(number) || number === null || number === undefined) {
+      return '0';
     }
-    return num.toFixed(settings.decimalPlaces);
+    if (settings.decimalPlaces === 0) {
+      return Math.round(number).toString();
+    }
+    return number.toFixed(settings.decimalPlaces);
   };
   
   // Helper function to convert weight based on weightUnit setting
   const convertWeight = (grams) => {
+    // Convert to number and handle invalid values
+    const number = typeof grams === 'number' ? grams : parseFloat(grams);
+    if (isNaN(number) || number === null || number === undefined) {
+      return 0;
+    }
     if (settings.weightUnit === 'ounces') {
       // Convert grams to ounces (1 gram = 0.035274 ounces)
-      return grams * 0.035274;
+      return number * 0.035274;
     }
-    return grams; // Return grams if weightUnit is 'grams'
+    return number; // Return grams if weightUnit is 'grams'
   };
   
   // Helper function to get weight unit label
@@ -6151,7 +7334,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
   // Create a map of meal category to meal title
   const mealTitleMap = mealPlanMeals.reduce((acc, meal) => {
     if (meal && meal.meal) {
-      const mealName = meal.main?.meal_name || meal.main?.meal_title || meal.main?.title || meal.meal;
+      const mealName = meal.main?.meal_title || meal.main?.meal_name || meal.main?.title || meal.meal;
       acc[meal.meal] = mealName;
       console.log(`📋 DailyLogTab: Meal mapping - ${meal.meal} -> ${mealName}`);
     }
@@ -6281,6 +7464,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
             themeClasses={themeClasses} 
             language={language}
             isDarkMode={isDarkMode}
+            onAddLog={() => setActiveSubTab('dailyLog')}
           />
         </>
       )}

@@ -175,11 +175,11 @@ const IngredientPortionModal = ({ visible, onClose, onConfirm, ingredient, clien
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className={`${themeClasses.textPrimary} text-2xl font-bold`}>
-              {language === 'hebrew' ? 'ערוך כמות' : 'Edit Portion'}
-            </h2>
-            <p className={`${themeClasses.textSecondary} text-sm mt-1`}>
+            <h2 className={`${themeClasses.textPrimary} text-3xl font-bold mb-1`}>
               {ingredient.item || ingredient.name || 'Unknown item'}
+            </h2>
+            <p className={`${themeClasses.textSecondary} text-sm`}>
+              {language === 'hebrew' ? 'ערוך כמות' : 'Edit Portion'}
             </p>
           </div>
           <button

@@ -34,7 +34,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     client_preference: '',
     region: '',
     medical_conditions: '',
-    timezone: ''
+    timezone: '',
+    number_of_meals: '',
+    meal_descriptions: [],
+    meal_names: []
   });
 
   // Popular country codes with phone number validation rules
@@ -196,10 +199,112 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     {
       title: language === 'hebrew' ? 'תזונה ומטרות' : 'Nutrition & Goals',
       fields: ['food_allergies', 'food_limitations', 'activity_level', 'goal', 'client_preference']
+    },
+    {
+      title: language === 'hebrew' ? 'תכנון ארוחות' : 'Meal Planning',
+      fields: ['number_of_meals', 'meal_descriptions']
     }
   ];
 
   const steps = filteredSteps;
+
+  // Calculate BMR using Harris-Benedict equation
+  const calculateBMR = (age, gender, weight_kg, height_cm) => {
+    if (!age || !gender || !weight_kg || !height_cm) return null;
+    
+    if (gender === 'male') {
+      return 66.5 + (13.75 * weight_kg) + (5.003 * height_cm) - (6.75 * age);
+    } else if (gender === 'female') {
+      return 655.1 + (9.563 * weight_kg) + (1.850 * height_cm) - (4.676 * age);
+    }
+    // For 'other', use average of male and female
+    const maleBMR = 66.5 + (13.75 * weight_kg) + (5.003 * height_cm) - (6.75 * age);
+    const femaleBMR = 655.1 + (9.563 * weight_kg) + (1.850 * height_cm) - (4.676 * age);
+    return (maleBMR + femaleBMR) / 2;
+  };
+
+  // Activity multipliers
+  const getActivityMultiplier = (activityLevel) => {
+    const multipliers = {
+      sedentary: 1.2,
+      light: 1.375,
+      moderate: 1.55,
+      active: 1.725,
+      extreme: 1.9
+    };
+    return multipliers[activityLevel] || 1.2;
+  };
+
+  // Goal factors
+  const getGoalFactor = (goal) => {
+    const factors = {
+      lose: 0.85,
+      cut: 0.80,
+      gain: 1.15,
+      muscle: 1.12,
+      improve_performance: 1.10,
+      improve_health: 1.0,
+      maintain: 1.0
+    };
+    return factors[goal] || 1.0;
+  };
+
+  // Get all available meal names
+  const getAllMealNames = (isHebrew = false) => {
+    const mealNamesEn = ['Meal', 'Breakfast', 'Morning Snack', 'Brunch', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack', 'Late Dinner', 'Post-Workout Meal', 'Midnight Snack'];
+    const mealNamesHe = ['ארוחה', 'ארוחת בוקר', 'חטיף בוקר', 'בראנץ\'', 'ארוחת צהריים', 'חטיף צהריים', 'ארוחת ערב', 'חטיף ערב', 'ארוחת ערב מאוחרת', 'ארוחה לאחר אימון', 'חטיף לילה'];
+    return isHebrew ? mealNamesHe : mealNamesEn;
+  };
+
+  // Get meal name based on number of meals and index (for default suggestions)
+  const getMealName = (numMeals, index, isHebrew = false) => {
+    if (numMeals === 1) {
+      return isHebrew ? 'ארוחה' : 'Meal';
+    }
+    
+    if (numMeals === 2) {
+      const names = isHebrew ? ['ארוחת בוקר', 'ארוחת ערב'] : ['Breakfast', 'Dinner'];
+      return names[index] || (isHebrew ? 'ארוחה' : 'Meal');
+    }
+    
+    if (numMeals === 3) {
+      const names = isHebrew ? ['ארוחת בוקר', 'ארוחת צהריים', 'ארוחת ערב'] : ['Breakfast', 'Lunch', 'Dinner'];
+      return names[index] || (isHebrew ? 'ארוחה' : 'Meal');
+    }
+    
+    // 4+ meals: Use the full list
+    const mealNamesEn = ['Breakfast', 'Morning Snack', 'Brunch', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack', 'Late Dinner', 'Post-Workout Meal', 'Midnight Snack'];
+    const mealNamesHe = ['ארוחת בוקר', 'חטיף בוקר', 'בראנץ\'', 'ארוחת צהריים', 'חטיף צהריים', 'ארוחת ערב', 'חטיף ערב', 'ארוחת ערב מאוחרת', 'ארוחה לאחר אימון', 'חטיף לילה'];
+    
+    const names = isHebrew ? mealNamesHe : mealNamesEn;
+    return names[index] || (isHebrew ? `ארוחה ${index + 1}` : `Meal ${index + 1}`);
+  };
+
+  // Calculate daily target calories
+  const calculateDailyCalories = (age, gender, weight_kg, height_cm, activityLevel, goal) => {
+    const bmr = calculateBMR(age, gender, weight_kg, height_cm);
+    if (!bmr) return null;
+    
+    const tdee = bmr * getActivityMultiplier(activityLevel);
+    const targetCalories = tdee * getGoalFactor(goal);
+    
+    return Math.round(targetCalories);
+  };
+
+  // Calculate macros (30% protein, 40% carbs, 30% fat)
+  const calculateMacros = (calories) => {
+    if (!calories) return null;
+    
+    const proteinGrams = Math.round((0.30 * calories) / 4);
+    const carbsGrams = Math.round((0.40 * calories) / 4);
+    const fatGrams = Math.round((0.30 * calories) / 9);
+    
+    return {
+      protein: `${proteinGrams}g`,
+      carbs: `${carbsGrams}g`,
+      fat: `${fatGrams}g`
+    };
+  };
 
   // Auto-detect timezone on mount
   useEffect(() => {
@@ -234,6 +339,21 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         .eq('user_id', user.id)
         .single();
 
+      // Also check chat_users for number_of_meals
+      let chatUserMealData = null;
+      if (supabaseSecondary && userCode) {
+        try {
+          const { data: chatData } = await supabaseSecondary
+            .from('chat_users')
+            .select('number_of_meals, meal_plan_structure')
+            .eq('user_code', userCode)
+            .single();
+          chatUserMealData = chatData;
+        } catch (err) {
+          console.error('Error loading chat_users meal data:', err);
+        }
+      }
+
       if (error && error.code !== 'PGRST116') {
         console.error('Error loading existing data:', error);
         setCheckingData(false);
@@ -242,6 +362,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       // Pre-fill form with existing data
       if (data) {
+        const mealDescriptions = chatUserMealData?.meal_plan_structure 
+          ? chatUserMealData.meal_plan_structure.map(m => m.description || '')
+          : [];
+        const mealNames = chatUserMealData?.meal_plan_structure
+          ? chatUserMealData.meal_plan_structure.map(m => m.meal || '')
+          : [];
+        
         setFormData(prev => ({
           ...prev,
           first_name: data.first_name || '',
@@ -261,7 +388,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           activity_level: data.activity_level || '',
           goal: data.goal || '',
           client_preference: typeof data.client_preference === 'string' ? data.client_preference : (data.client_preference?.preference || '') || (typeof data.dietary_preferences === 'string' ? data.dietary_preferences : (data.dietary_preferences?.preference || '')),
-          medical_conditions: data.medical_conditions || ''
+          medical_conditions: data.medical_conditions || '',
+          number_of_meals: chatUserMealData?.number_of_meals ? chatUserMealData.number_of_meals.toString() : '',
+          meal_descriptions: mealDescriptions,
+          meal_names: mealNames
         }));
       }
 
@@ -387,6 +517,18 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       } else {
         console.log('✓ Medical conditions has value:', data?.medical_conditions);
       }
+      
+      if (isEmpty(chatUserMealData?.number_of_meals)) {
+        missingFields.push('number_of_meals');
+      } else {
+        console.log('✓ Number of meals has value:', chatUserMealData?.number_of_meals);
+      }
+      
+      if (isEmpty(chatUserMealData?.meal_plan_structure)) {
+        missingFields.push('meal_descriptions');
+      } else {
+        console.log('✓ Meal plan structure has value:', chatUserMealData?.meal_plan_structure);
+      }
 
       console.log('📋 Missing fields to fill:', missingFields);
 
@@ -410,10 +552,29 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Special handling for number_of_meals - initialize meal_descriptions and meal_names arrays
+    if (name === 'number_of_meals') {
+      const numMeals = parseInt(value) || 0;
+      const newMealDescriptions = Array(numMeals).fill('').map((_, i) => 
+        formData.meal_descriptions[i] || ''
+      );
+      const newMealNames = Array(numMeals).fill('').map((_, i) => 
+        formData.meal_names[i] || getMealName(numMeals, i, language === 'hebrew')
+      );
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        meal_descriptions: newMealDescriptions,
+        meal_names: newMealNames
+      }));
+    } else {
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    }
+    
     // Clear error for this field when user starts typing
     if (fieldErrors[name]) {
       setFieldErrors(prev => {
@@ -426,6 +587,36 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     if (error && name === 'phone') {
       setError('');
     }
+  };
+
+  const handleMealDescriptionChange = (index, value) => {
+    setFormData(prev => {
+      const newMealDescriptions = [...prev.meal_descriptions];
+      newMealDescriptions[index] = value;
+      return {
+        ...prev,
+        meal_descriptions: newMealDescriptions
+      };
+    });
+    // Clear error for meal_descriptions when user types
+    if (fieldErrors['meal_descriptions']) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors['meal_descriptions'];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleMealNameChange = (index, value) => {
+    setFormData(prev => {
+      const newMealNames = [...prev.meal_names];
+      newMealNames[index] = value;
+      return {
+        ...prev,
+        meal_names: newMealNames
+      };
+    });
   };
 
   const handleNoneClick = (fieldName) => {
@@ -547,6 +738,22 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       if (optionalFields.includes(field)) {
         return;
       }
+      
+      // Special validation for meal_descriptions - check if all meals have descriptions
+      if (field === 'meal_descriptions') {
+        const numMeals = parseInt(formData.number_of_meals) || 0;
+        if (numMeals > 0) {
+          const hasEmptyMeals = formData.meal_descriptions.some((desc, idx) => 
+            idx < numMeals && (!desc || desc.trim() === '')
+          );
+          if (hasEmptyMeals) {
+            newFieldErrors[field] = true;
+            hasErrors = true;
+          }
+        }
+        return;
+      }
+      
       // For other fields, empty value means missing
       if (!formData[field]) {
         newFieldErrors[field] = true;
@@ -649,6 +856,51 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       // Calculate age from date_of_birth
       const age = calculateAge(formData.date_of_birth);
+      
+      // Calculate daily calories and macros
+      let dailyCalories = null;
+      let macros = null;
+      let mealPlanStructure = null;
+      
+      if (allOnboardingFields.includes('date_of_birth') && 
+          allOnboardingFields.includes('gender') && 
+          allOnboardingFields.includes('weight_kg') && 
+          allOnboardingFields.includes('height_cm') && 
+          allOnboardingFields.includes('activity_level') && 
+          allOnboardingFields.includes('goal')) {
+        
+        dailyCalories = calculateDailyCalories(
+          age,
+          formData.gender,
+          parseFloat(formData.weight_kg),
+          parseFloat(formData.height_cm),
+          formData.activity_level,
+          formData.goal
+        );
+        
+        if (dailyCalories) {
+          macros = calculateMacros(dailyCalories);
+        }
+      }
+      
+      // Create meal plan structure
+      if (allOnboardingFields.includes('number_of_meals') && formData.number_of_meals) {
+        const numMeals = parseInt(formData.number_of_meals);
+        const caloriesPerMeal = dailyCalories ? Math.round(dailyCalories / numMeals) : 0;
+        const pctPerMeal = parseFloat((100 / numMeals).toFixed(1));
+        
+        mealPlanStructure = formData.meal_descriptions.slice(0, numMeals).map((description, index) => {
+          // Use the selected meal name, or fallback to default
+          const selectedMealName = formData.meal_names[index] || getMealName(numMeals, index, false);
+          return {
+            meal: selectedMealName,
+            calories: caloriesPerMeal,
+            description: description || '',
+            calories_pct: pctPerMeal
+          };
+        });
+      }
+      
       console.log('📝 Fields shown in onboarding:', allOnboardingFields);
       console.log('📋 Current formData:', formData);
       console.log('🔍 Age calculation:', {
@@ -656,6 +908,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         calculated_age: age,
         date_of_birth_in_fields: allOnboardingFields.includes('date_of_birth')
       });
+      console.log('🔍 Calories calculation:', dailyCalories);
+      console.log('🔍 Macros calculation:', macros);
+      console.log('🔍 Meal plan structure:', mealPlanStructure);
       console.log('🔍 Gender check:', { 
         inFields: allOnboardingFields.includes('gender'), 
         value: formData.gender,
@@ -793,6 +1048,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         Activity_level: formData.activity_level,
         goal: formData.goal,
         client_preference: formData.client_preference || null,
+        number_of_meals: allOnboardingFields.includes('number_of_meals') && formData.number_of_meals ? parseInt(formData.number_of_meals) : undefined,
+        meal_plan_structure: allOnboardingFields.includes('meal_descriptions') && mealPlanStructure ? mealPlanStructure : undefined,
+        daily_target_total_calories: dailyCalories || undefined,
+        macros: macros || undefined,
         onboarding_done: true,
         updated_at: new Date().toISOString()
       };
@@ -867,22 +1126,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     }
   };
 
-  const handleSkip = async () => {
-    setLoading(true);
-    try {
-      // Don't mark onboarding as completed when skipped
-      // This allows the onboarding to show again when they return to the profile page
-      // Just close the modal without updating onboarding_completed
-      // Pass false to indicate it was skipped (not completed)
-      onClose(false);
-    } catch (err) {
-      console.error('Error skipping onboarding:', err);
-      // Close anyway, but indicate it was skipped
-      onClose(false);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -1370,6 +1613,65 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               />
             </div>
           )}
+
+          {currentFields.includes('number_of_meals') && (
+            <div className="group">
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'כמה ארוחות ביום?' : 'How many meals per day?'}
+              </label>
+              <select
+                name="number_of_meals"
+                value={formData.number_of_meals}
+                onChange={handleInputChange}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('number_of_meals')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+              >
+                <option value="">{language === 'hebrew' ? 'בחר מספר ארוחות' : 'Select number of meals'}</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                  <option key={num} value={num}>{num}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {currentFields.includes('meal_descriptions') && formData.number_of_meals && parseInt(formData.number_of_meals) > 0 && (
+            <div className="space-y-3 sm:space-y-4">
+              <div className={`text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
+                {language === 'hebrew' ? 'מה תרצה לאכול בכל ארוחה?' : 'What would you like to eat in each meal?'}
+              </div>
+              {Array.from({ length: parseInt(formData.number_of_meals) }).map((_, index) => {
+                const numMeals = parseInt(formData.number_of_meals);
+                const defaultMealName = getMealName(numMeals, index, language === 'hebrew');
+                const currentMealName = formData.meal_names[index] || defaultMealName;
+                const allMealNames = getAllMealNames(language === 'hebrew');
+                
+                return (
+                  <div key={index} className="group">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <label className={`block text-xs sm:text-sm font-medium ${themeClasses.textSecondary} flex-shrink-0`}>
+                        {language === 'hebrew' ? 'שם ארוחה:' : 'Meal Name:'}
+                      </label>
+                      <select
+                        value={currentMealName}
+                        onChange={(e) => handleMealNameChange(index, e.target.value)}
+                        className={`flex-1 px-2 py-1.5 text-xs sm:text-sm ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+                      >
+                        {allMealNames.map((name) => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <textarea
+                      value={formData.meal_descriptions[index] || ''}
+                      onChange={(e) => handleMealDescriptionChange(index, e.target.value)}
+                      rows="2"
+                      className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('meal_descriptions')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                      placeholder={language === 'hebrew' ? 'לדוגמה: ביצים, לחם וירקות' : 'e.g., eggs, bread and vegetables'}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Error Message */}
@@ -1394,15 +1696,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 className={`px-4 py-2 sm:px-6 sm:py-2.5 md:px-8 md:py-3.5 border-2 border-gray-600/50 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm md:text-base ${themeClasses.textSecondary} hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 ← {language === 'hebrew' ? 'קודם' : 'Previous'}
-              </button>
-            )}
-            {currentStep === 0 && (
-              <button
-                onClick={handleSkip}
-                disabled={loading}
-                className={`px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-3.5 text-xs sm:text-sm md:text-base text-gray-400 hover:text-white font-semibold transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {language === 'hebrew' ? 'דלג' : 'Skip'}
               </button>
             )}
           </div>

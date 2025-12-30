@@ -332,7 +332,7 @@ function HomePage() {
                 {language === 'hebrew' ? 'BetterChoice AI' : 'BetterChoice AI'}
               </span>
               <br />
-              <span className={`${themeClasses.textPrimary} text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-normal whitespace-nowrap`}>
+              <span className={`${themeClasses.textPrimary} text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-normal`}>
                 {language === 'hebrew' 
                   ? 'תזונה שעובדת בשבילך, כל יום.' 
                   : 'Nutrition that works for you, every day.'}
@@ -555,26 +555,44 @@ function HomePage() {
                       >
                         <div className="max-w-[85%]">
                           <div className={`${isDarkMode ? 'bg-gray-700' : 'bg-white'} rounded-lg rounded-tl-none p-4 shadow-sm`}>
-                            <div className={`${isDarkMode ? 'text-gray-100' : 'text-gray-800'} text-sm space-y-2`}>
-                              <div>
-                                <span className="font-semibold">*{language === 'hebrew' ? 'ציון' : 'Rating'}*</span>: 8/10
-                              </div>
-                              <div>
-                                <span className="font-semibold">*{language === 'hebrew' ? 'סיבה' : 'Reason'}*</span>: {language === 'hebrew' 
-                                  ? 'כמות גבוהה של קלוריות, פחמימות פשוטות ושומן. חסרים ירקות.'
-                                  : 'High in calories, simple carbohydrates, and fats. Lacking vegetables.'}
-                              </div>
-                              <div>
-                                <span className="font-semibold">*{language === 'hebrew' ? 'התאמה לתוכנית' : 'Plan Match'}*</span>: 😊 {language === 'hebrew' ? 'בחירה טובה' : 'Good choice'}
-                              </div>
-                              <div className="pt-2 border-t border-gray-300">
-                                <span className="font-semibold">📊 *{language === 'hebrew' ? 'ניתוח' : 'Analysis'}*</span>:
-                                <div className="mt-2 text-xs space-y-1 font-mono">
-                                  <div>{language === 'hebrew' ? 'סה״כ' : 'Total'}: 1202 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 60ג&apos; {language === 'hebrew' ? 'חלבון' : 'protein'} | 126ג&apos; {language === 'hebrew' ? 'פחמימה' : 'carbs'} | 44ג&apos; {language === 'hebrew' ? 'שומן' : 'fat'}</div>
-                                  <div>1. {language === 'hebrew' ? 'קציצות ברוטב עגבניות (כ-5 קציצות (240ג&apos;) עם 175ג&apos; רוטב)' : 'Meatballs in tomato sauce (~5 meatballs (240g) with 175g sauce)'}: 812 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 52ג&apos; {language === 'hebrew' ? 'P' : 'P'} | 42ג&apos; {language === 'hebrew' ? 'C' : 'C'} | 43ג&apos; {language === 'hebrew' ? 'F' : 'F'}</div>
-                                  <div>2. {language === 'hebrew' ? 'אורז לבן (כ-300ג&apos;)' : 'White rice (~300g)'}: 390 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 8ג&apos; {language === 'hebrew' ? 'P' : 'P'} | 84ג&apos; {language === 'hebrew' ? 'C' : 'C'} | 1ג&apos; {language === 'hebrew' ? 'F' : 'F'}</div>
+                            <div className={`${isDarkMode ? 'text-gray-100' : 'text-gray-800'} text-sm`}>
+                              {language === 'hebrew' ? (
+                                <div className="space-y-2" dir="rtl">
+                                  <div>
+                                    ציון: 8/10 סיבה: כמות גבוהה של קלוריות, פחמימות פשוטות ושומן. חסרים ירקות.
+                                  </div>
+                                  <div>
+                                    התאמה לתוכנית: 😊 בחירה טובה
+                                  </div>
+                                  <div>
+                                    📊 ניתוח: סה״כ: 1202 קק״ל | 60ג&apos; חלבון | 126ג&apos; פחמימה | 44ג&apos; שומן
+                                  </div>
+                                  <div className="pt-2 border-t border-gray-300 space-y-1 text-xs font-mono">
+                                    <div>קציצות ברוטב עגבניות (כ-5 קציצות (240ג&apos;) עם 175ג&apos; רוטב): 812 קק״ל | 52ג&apos; חלבון | 42ג&apos; פחמימה | 43ג&apos; שומן</div>
+                                    <div>אורז לבן (כ-300ג&apos;): 390 קק״ל | 8ג&apos; חלבון | 84ג&apos; פחמימה | 1ג&apos; שומן</div>
+                                  </div>
                                 </div>
-                              </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <div>
+                                    <span className="font-semibold">*Rating*</span>: 8/10
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold">*Reason*</span>: High in calories, simple carbohydrates, and fats. Lacking vegetables.
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold">*Plan Match*</span>: 😊 Good choice
+                                  </div>
+                                  <div className="pt-2 border-t border-gray-300">
+                                    <span className="font-semibold">📊 *Analysis*</span>:
+                                    <div className="mt-2 text-xs space-y-1 font-mono">
+                                      <div>Total: 1202 kcal | 60g protein | 126g carbs | 44g fat</div>
+                                      <div>1. Meatballs in tomato sauce (~5 meatballs (240g) with 175g sauce): 812 kcal | 52g P | 42g C | 43g F</div>
+                                      <div>2. White rice (~300g): 390 kcal | 8g P | 84g C | 1g F</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                           
@@ -677,26 +695,44 @@ function HomePage() {
                       >
                         <div className="max-w-[85%]">
                           <div className={`${isDarkMode ? 'bg-gray-700' : 'bg-white'} rounded-lg rounded-tl-none p-4 shadow-sm`}>
-                            <div className={`${isDarkMode ? 'text-gray-100' : 'text-gray-800'} text-sm space-y-2`}>
-                              <div>
-                                <span className="font-semibold">*{language === 'hebrew' ? 'ציון' : 'Rating'}*</span>: 6/10
-                              </div>
-                              <div>
-                                <span className="font-semibold">*{language === 'hebrew' ? 'סיבה' : 'Reason'}*</span>: {language === 'hebrew' 
-                                  ? 'ערך קלורי ושומן גבוהים מאוד, בעיקר בשל כמות גדולה של גבינת שמנת.'
-                                  : 'Very high in calories and fat, primarily due to the large amount of cream cheese.'}
-                              </div>
-                              <div>
-                                <span className="font-semibold">*{language === 'hebrew' ? 'התאמה לתוכנית' : 'Plan Match'}*</span>: ❌ {language === 'hebrew' ? 'בחירה פחות מומלצת' : 'Poor choice'}
-                              </div>
-                              <div className="pt-2 border-t border-gray-300">
-                                <span className="font-semibold">📊 *{language === 'hebrew' ? 'ניתוח' : 'Analysis'}*</span>:
-                                <div className="mt-2 text-xs space-y-1 font-mono">
-                                  <div>{language === 'hebrew' ? 'סה״כ' : 'Total'}: 1020 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 43ג&apos; {language === 'hebrew' ? 'חלבון' : 'protein'} | 67ג&apos; {language === 'hebrew' ? 'פחמימה' : 'carbs'} | 70ג&apos; {language === 'hebrew' ? 'שומן' : 'fat'}</div>
-                                  <div>1. {language === 'hebrew' ? 'טוסט חיטה מלאה עם גבינת שמנת (כ-230ג&apos;)' : 'Whole wheat toast with cream cheese (~230g)'}: 720 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 25ג&apos; {language === 'hebrew' ? 'P' : 'P'} | 65ג&apos; {language === 'hebrew' ? 'C' : 'C'} | 45ג&apos; {language === 'hebrew' ? 'F' : 'F'}</div>
-                                  <div>2. {language === 'hebrew' ? 'חביתה פשוטה (כ-200ג&apos;)' : 'Simple omelet (~200g)'}: 300 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 18ג&apos; {language === 'hebrew' ? 'P' : 'P'} | 2ג&apos; {language === 'hebrew' ? 'C' : 'C'} | 25ג&apos; {language === 'hebrew' ? 'F' : 'F'}</div>
+                            <div className={`${isDarkMode ? 'text-gray-100' : 'text-gray-800'} text-sm`}>
+                              {language === 'hebrew' ? (
+                                <div className="space-y-2" dir="rtl">
+                                  <div>
+                                    ציון: 6/10 סיבה: ערך קלורי ושומן גבוהים מאוד, בעיקר בשל כמות גדולה של גבינת שמנת.
+                                  </div>
+                                  <div>
+                                    התאמה לתוכנית: ❌ בחירה פחות מומלצת
+                                  </div>
+                                  <div>
+                                    📊 ניתוח: סה״כ: 1020 קק״ל | 43ג&apos; חלבון | 67ג&apos; פחמימה | 70ג&apos; שומן
+                                  </div>
+                                  <div className="pt-2 border-t border-gray-300 space-y-1 text-xs font-mono">
+                                    <div>טוסט חיטה מלאה עם גבינת שמנת (כ-230ג&apos;): 720 קק״ל | 25ג&apos; חלבון | 65ג&apos; פחמימה | 45ג&apos; שומן</div>
+                                    <div>חביתה פשוטה (כ-200ג&apos;): 300 קק״ל | 18ג&apos; חלבון | 2ג&apos; פחמימה | 25ג&apos; שומן</div>
+                                  </div>
                                 </div>
-                              </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <div>
+                                    <span className="font-semibold">*Rating*</span>: 6/10
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold">*Reason*</span>: Very high in calories and fat, primarily due to the large amount of cream cheese.
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold">*Plan Match*</span>: ❌ Poor choice
+                                  </div>
+                                  <div className="pt-2 border-t border-gray-300">
+                                    <span className="font-semibold">📊 *Analysis*</span>:
+                                    <div className="mt-2 text-xs space-y-1 font-mono">
+                                      <div>Total: 1020 kcal | 43g protein | 67g carbs | 70g fat</div>
+                                      <div>1. Whole wheat toast with cream cheese (~230g): 720 kcal | 25g P | 65g C | 45g F</div>
+                                      <div>2. Simple omelet (~200g): 300 kcal | 18g P | 2g C | 25g F</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                           
@@ -748,7 +784,7 @@ function HomePage() {
                         <div className={`${isDarkMode ? 'bg-green-700' : 'bg-[#dcf8c6]'} rounded-lg rounded-tr-none p-3 shadow-sm`}>
                           <p className={`${isDarkMode ? 'text-white' : 'text-gray-800'} text-sm`}>
                             {language === 'hebrew' 
-                              ? 'אכלתי קרפ 240ג&apos; עם חלב מרוכז ממותק.'
+                              ? 'אכלתי קרפ 240 גרם עם חלב מרוכז ממותק.'
                               : 'I ate a 240g crepe with sweetened condensed milk.'}
                           </p>
                         </div>
@@ -790,25 +826,42 @@ function HomePage() {
                       >
                         <div className="max-w-[85%]">
                           <div className={`${isDarkMode ? 'bg-gray-700' : 'bg-white'} rounded-lg rounded-tl-none p-4 shadow-sm`}>
-                            <div className={`${isDarkMode ? 'text-gray-100' : 'text-gray-800'} text-sm space-y-2`}>
-                              <div>
-                                <span className="font-semibold">*{language === 'hebrew' ? 'ציון' : 'Rating'}*</span>: 3/10
-                              </div>
-                              <div>
-                                <span className="font-semibold">*{language === 'hebrew' ? 'סיבה' : 'Reason'}*</span>: {language === 'hebrew' 
-                                  ? 'עשיר בסוכר ופחמימות פשוטות, בעל ערך תזונתי נמוך.'
-                                  : 'High in sugar and simple carbohydrates with low nutritional value.'}
-                              </div>
-                              <div>
-                                <span className="font-semibold">*{language === 'hebrew' ? 'התאמה לתוכנית' : 'Plan Match'}*</span>: ❌ {language === 'hebrew' ? 'בחירה לא מומלצת' : 'Very poor choice'}
-                              </div>
-                              <div className="pt-2 border-t border-gray-300">
-                                <span className="font-semibold">📊 *{language === 'hebrew' ? 'ניתוח' : 'Analysis'}*</span>:
-                                <div className="mt-2 text-xs space-y-1 font-mono">
-                                  <div>{language === 'hebrew' ? 'סה״כ' : 'Total'}: 500 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 12ג&apos; {language === 'hebrew' ? 'חלבון' : 'protein'} | 75ג&apos; {language === 'hebrew' ? 'פחמימה' : 'carbs'} | 28ג&apos; {language === 'hebrew' ? 'שומן' : 'fat'}</div>
-                                  <div>1. {language === 'hebrew' ? 'קרפ שוקולד עם חלב מרוכז ממותק (כ-240ג&apos;)' : 'Chocolate crepe with sweetened condensed milk (~240g)'}: 500 {language === 'hebrew' ? 'קק״ל' : 'kcal'} | 12ג&apos; {language === 'hebrew' ? 'P' : 'P'} | 75ג&apos; {language === 'hebrew' ? 'C' : 'C'} | 28ג&apos; {language === 'hebrew' ? 'F' : 'F'}</div>
+                            <div className={`${isDarkMode ? 'text-gray-100' : 'text-gray-800'} text-sm`}>
+                              {language === 'hebrew' ? (
+                                <div className="space-y-2" dir="rtl">
+                                  <div>
+                                    ציון: 3/10 סיבה: עשיר בסוכר ופחמימות פשוטות, בעל ערך תזונתי נמוך.
+                                  </div>
+                                  <div>
+                                    התאמה לתוכנית: ❌ בחירה לא מומלצת
+                                  </div>
+                                  <div>
+                                    📊 ניתוח: סה״כ: 500 קק״ל | 12ג&apos; חלבון | 75ג&apos; פחמימה | 28ג&apos; שומן
+                                  </div>
+                                  <div className="pt-2 border-t border-gray-300 space-y-1 text-xs font-mono">
+                                    <div>קרפ שוקולד עם חלב מרוכז ממותק (כ-240ג&apos;): 500 קק״ל | 12ג&apos; חלבון | 75ג&apos; פחמימה | 28ג&apos; שומן</div>
+                                  </div>
                                 </div>
-                              </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <div>
+                                    <span className="font-semibold">*Rating*</span>: 3/10
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold">*Reason*</span>: High in sugar and simple carbohydrates with low nutritional value.
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold">*Plan Match*</span>: ❌ Very poor choice
+                                  </div>
+                                  <div className="pt-2 border-t border-gray-300">
+                                    <span className="font-semibold">📊 *Analysis*</span>:
+                                    <div className="mt-2 text-xs space-y-1 font-mono">
+                                      <div>Total: 500 kcal | 12g protein | 75g carbs | 28g fat</div>
+                                      <div>1. Chocolate crepe with sweetened condensed milk (~240g): 500 kcal | 12g P | 75g C | 28g F</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                           
