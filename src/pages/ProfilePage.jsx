@@ -864,12 +864,6 @@ const ProfilePage = () => {
       label: language === 'hebrew' ? 'תוכניות מנוי' : 'Subscription Plans',
       icon: '💳',
       description: language === 'hebrew' ? 'בחר את התוכנית המתאימה לך' : 'Choose your perfect plan'
-    },
-    { 
-      id: 'settings', 
-      label: language === 'hebrew' ? 'הגדרות' : 'Settings',
-      icon: '⚙️',
-      description: language === 'hebrew' ? 'התאם אישית את האתר' : 'Customize your website experience'
     }
   ];
 
@@ -993,26 +987,30 @@ const ProfilePage = () => {
         {/* Header */}
         <div className="p-6 border-b-2 border-emerald-500/20 relative z-10">
           <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="relative">
-                <img src="/favicon.ico" alt="BetterChoice Logo" className={`w-12 h-12 rounded-lg shadow-lg ring-2 ring-emerald-500/20 ${direction === 'rtl' ? 'ml-3' : 'mr-3'}`} />
-                <div className={`absolute -top-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse ${direction === 'rtl' ? '-left-1' : '-right-1'}`} />
+            <div className="flex items-center gap-4">
+              <div className={`flex flex-col items-center ${direction === 'rtl' ? 'ml-2' : 'mr-2'}`}>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 to-teal-400/20 rounded-xl blur-md group-hover:blur-lg transition-all duration-300"></div>
+                  <img src="/favicon.ico" alt="BetterChoice Logo" className="relative w-20 h-20 rounded-xl shadow-xl ring-2 ring-emerald-500/30 group-hover:ring-emerald-400/50 transition-all duration-300" />
+                  <div className={`absolute -top-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse ${direction === 'rtl' ? '-left-1' : '-right-1'} shadow-lg shadow-emerald-500/50`} />
+                </div>
+                <a
+                  href={language === 'hebrew' ? 'https://wa.me/message/B2LIFC7FLCCMN1' : 'https://wa.me/message/YH4IM5MWPY4HI1'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`mt-3 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-br from-green-500 via-green-600 to-green-700 hover:from-green-600 hover:via-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300 hover:scale-105 active:scale-95 text-xs font-semibold min-w-[90px]`}
+                  aria-label={language === 'hebrew' ? 'צור קשר ב-WhatsApp' : 'Contact us on WhatsApp'}
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                  </svg>
+                  <span className="whitespace-nowrap">{language === 'hebrew' ? 'ל-AI שלנו' : 'AI Chat'}</span>
+                </a>
               </div>
-              <div className={direction === 'rtl' ? 'text-right' : 'text-left'}>
-                <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
-                <p className={`${themeClasses.textSecondary} text-sm`}>{t.profile.title}</p>
+              <div className={`${direction === 'rtl' ? 'text-right' : 'text-left'} -mt-8`}>
+                <h1 className={`${themeClasses.textPrimary} text-2xl font-bold bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 bg-clip-text text-transparent leading-tight`}>BetterChoice</h1>
+                <p className={`${themeClasses.textSecondary} text-sm mt-0.5 opacity-90`}>{t.profile.title}</p>
               </div>
-              <a
-                href={language === 'hebrew' ? 'https://wa.me/message/B2LIFC7FLCCMN1' : 'https://wa.me/message/YH4IM5MWPY4HI1'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${direction === 'rtl' ? 'mr-3' : 'ml-3'} p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center`}
-                aria-label={language === 'hebrew' ? 'צור קשר ב-WhatsApp' : 'Contact us on WhatsApp'}
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                </svg>
-              </a>
             </div>
             
           </div>
@@ -1036,7 +1034,7 @@ const ProfilePage = () => {
                 ref={(el) => {
                   if (el) tabRefs.current[tab.id] = el;
                 }}
-                data-tour={tab.id === 'profile' ? 'profile-tab' : tab.id === 'myPlan' ? 'myplan-tab' : tab.id === 'dailyLog' ? 'dailylog-tab' : tab.id === 'messages' ? 'messages-tab' : tab.id === 'pricing' ? 'pricing-tab' : tab.id === 'settings' ? 'settings-tab' : null}
+                data-tour={tab.id === 'profile' ? 'profile-tab' : tab.id === 'myPlan' ? 'myplan-tab' : tab.id === 'dailyLog' ? 'dailylog-tab' : tab.id === 'messages' ? 'messages-tab' : tab.id === 'pricing' ? 'pricing-tab' : null}
                 onClick={() => {
                   setActiveTab(tab.id);
                   // Update indicator position immediately on click
@@ -1101,40 +1099,56 @@ const ProfilePage = () => {
         {/* Bottom Controls */}
         <div className="p-6 border-t-2 border-emerald-500/20 relative z-10">
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3">
               {/* Language Control */}
-              <div className="flex items-center">
-                <button 
-                  onClick={toggleLanguage}
-                  className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40`}
-                >
-                  <div className="flex items-center">
-                    <svg className="w-5 h-5 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
-                    </svg>
-                    <span className="text-blue-400 text-sm font-medium">{language === 'hebrew' ? 'עב' : 'En'}</span>
-                  </div>
-                </button>
-                <span className={`${themeClasses.textSecondary} text-sm ml-3`}>Language</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <button 
+                    onClick={toggleLanguage}
+                    className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40`}
+                  >
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
+                      </svg>
+                      <span className="text-blue-400 text-sm font-medium">{language === 'hebrew' ? 'עב' : 'En'}</span>
+                    </div>
+                  </button>
+                  <span className={`${themeClasses.textSecondary} text-sm ${direction === 'rtl' ? 'mr-4' : 'ml-4'}`}>Language</span>
+                </div>
+
+                {/* Theme Control */}
+                <div className="flex items-center">
+                  <button 
+                    onClick={toggleTheme}
+                    className={`${themeClasses.bgCard} border-2 border-emerald-500/30 rounded-full p-3 hover:${themeClasses.bgSecondary} transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-110`}
+                  >
+                    {isDarkMode ? (
+                      <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                      </svg>
+                    )}
+                  </button>
+                  <span className={`${themeClasses.textSecondary} text-sm ${direction === 'rtl' ? 'mr-4' : 'ml-4'}`}>Theme</span>
+                </div>
               </div>
 
-              {/* Theme Control */}
+              {/* Settings Control - Gear Icon */}
               <div className="flex items-center">
                 <button 
-                  onClick={toggleTheme}
-                  className={`${themeClasses.bgCard} border-2 border-emerald-500/30 rounded-full p-3 hover:${themeClasses.bgSecondary} transition-all duration-300 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-110`}
+                  onClick={() => setActiveTab('settings')}
+                  className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-gray-400/20 hover:border-gray-400/40`}
                 >
-                  {isDarkMode ? (
-                    <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd"/>
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
-                    </svg>
-                  )}
+                  <svg className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-900'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
                 </button>
-                <span className={`${themeClasses.textSecondary} text-sm ml-3`}>Theme</span>
+                <span className={`${themeClasses.textSecondary} text-sm ${direction === 'rtl' ? 'mr-4' : 'ml-4'}`}>{language === 'hebrew' ? 'הגדרות' : 'Settings'}</span>
               </div>
             </div>
 
@@ -1211,26 +1225,16 @@ const ProfilePage = () => {
               </button>
               
               {/* Centered logo and text */}
-              <div className="flex items-center flex-1 justify-center">
-                <div className="relative">
-                  <img src="/favicon.ico" alt="BetterChoice Logo" className={`w-12 h-12 ${direction === 'rtl' ? 'ml-3' : 'mr-3'} rounded-xl shadow-lg ring-2 ring-emerald-500/20`} />
-                  <div className={`absolute -top-1 ${direction === 'rtl' ? '-left-1' : '-right-1'} w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse shadow-lg shadow-emerald-500/50`} />
+              <div className="flex items-center flex-1 justify-center gap-2.5">
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 to-teal-400/20 rounded-lg blur-sm group-hover:blur-md transition-all duration-300"></div>
+                  <img src="/favicon.ico" alt="BetterChoice Logo" className="relative w-12 h-12 rounded-lg shadow-lg ring-2 ring-emerald-500/30 group-hover:ring-emerald-400/50 transition-all duration-300" />
+                  <div className={`absolute -top-0.5 ${direction === 'rtl' ? '-left-0.5' : '-right-0.5'} w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse shadow-md shadow-emerald-500/50`} />
                 </div>
                 <div className={direction === 'rtl' ? 'text-right' : 'text-left'}>
-                  <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
-                  <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
+                  <h1 className={`${themeClasses.textPrimary} text-lg font-bold bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 bg-clip-text text-transparent leading-tight`}>BetterChoice</h1>
+                  <p className={`${themeClasses.textSecondary} text-xs mt-0.5 opacity-90`}>{t.profile.title}</p>
                 </div>
-                <a
-                  href={language === 'hebrew' ? 'https://wa.me/message/B2LIFC7FLCCMN1' : 'https://wa.me/message/YH4IM5MWPY4HI1'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`${direction === 'rtl' ? 'mr-3' : 'ml-3'} p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center`}
-                  aria-label={language === 'hebrew' ? 'צור קשר ב-WhatsApp' : 'Contact us on WhatsApp'}
-                >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                  </svg>
-                </a>
               </div>
               
             </div>
@@ -1275,26 +1279,30 @@ const ProfilePage = () => {
             {/* Header in drawer */}
             <div className="p-4 pb-3 border-b-2 border-emerald-500/20">
               <div className={`flex items-center justify-between ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
-                <div className={`flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
-                  <div className="relative">
-                    <img src="/favicon.ico" alt="BetterChoice Logo" className={`w-12 h-12 ${direction === 'rtl' ? 'ml-3' : 'mr-3'} rounded-xl shadow-lg ring-2 ring-emerald-500/20`} />
-                    <div className={`absolute -top-1 ${direction === 'rtl' ? '-left-1' : '-right-1'} w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse shadow-lg shadow-emerald-500/50`} />
+                <div className={`flex items-center gap-3 ${direction === 'rtl' ? 'flex-row-reverse' : ''}`}>
+                  <div className={`flex flex-col items-center ${direction === 'rtl' ? 'ml-2' : 'mr-2'}`}>
+                    <div className="relative group">
+                      <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 to-teal-400/20 rounded-xl blur-md group-hover:blur-lg transition-all duration-300"></div>
+                      <img src="/favicon.ico" alt="BetterChoice Logo" className="relative w-16 h-16 rounded-xl shadow-xl ring-2 ring-emerald-500/30 group-hover:ring-emerald-400/50 transition-all duration-300" />
+                      <div className={`absolute -top-1 ${direction === 'rtl' ? '-left-1' : '-right-1'} w-4 h-4 bg-emerald-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse shadow-lg shadow-emerald-500/50`} />
+                    </div>
+                    <a
+                      href={language === 'hebrew' ? 'https://wa.me/message/B2LIFC7FLCCMN1' : 'https://wa.me/message/YH4IM5MWPY4HI1'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`mt-2 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-gradient-to-br from-green-500 via-green-600 to-green-700 hover:from-green-600 hover:via-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300 hover:scale-105 active:scale-95 text-xs font-semibold min-w-[70px]`}
+                      aria-label={language === 'hebrew' ? 'צור קשר ב-WhatsApp' : 'Contact us on WhatsApp'}
+                    >
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                      </svg>
+                      <span className="whitespace-nowrap">{language === 'hebrew' ? 'ל-AI שלנו' : 'AI Chat'}</span>
+                    </a>
                   </div>
-                  <div className={direction === 'rtl' ? 'text-right' : 'text-left'}>
-                    <h1 className={`${themeClasses.textPrimary} text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent`}>BetterChoice</h1>
-                    <p className={`${themeClasses.textSecondary} text-xs mt-0.5`}>{t.profile.title}</p>
+                  <div className={`${direction === 'rtl' ? 'text-right' : 'text-left'} -mt-1`}>
+                    <h1 className={`${themeClasses.textPrimary} text-lg font-bold bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 bg-clip-text text-transparent leading-tight`}>BetterChoice</h1>
+                    <p className={`${themeClasses.textSecondary} text-xs mt-0.5 opacity-90`}>{t.profile.title}</p>
                   </div>
-                  <a
-                    href={language === 'hebrew' ? 'https://wa.me/message/B2LIFC7FLCCMN1' : 'https://wa.me/message/YH4IM5MWPY4HI1'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`${direction === 'rtl' ? 'mr-3' : 'ml-3'} p-2 rounded-lg bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center`}
-                    aria-label={language === 'hebrew' ? 'צור קשר ב-WhatsApp' : 'Contact us on WhatsApp'}
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                    </svg>
-                  </a>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1316,7 +1324,7 @@ const ProfilePage = () => {
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
-                    data-tour={tab.id === 'profile' ? 'profile-tab' : tab.id === 'myPlan' ? 'myplan-tab' : tab.id === 'dailyLog' ? 'dailylog-tab' : tab.id === 'messages' ? 'messages-tab' : tab.id === 'pricing' ? 'pricing-tab' : tab.id === 'settings' ? 'settings-tab' : null}
+                    data-tour={tab.id === 'profile' ? 'profile-tab' : tab.id === 'myPlan' ? 'myplan-tab' : tab.id === 'dailyLog' ? 'dailylog-tab' : tab.id === 'messages' ? 'messages-tab' : tab.id === 'pricing' ? 'pricing-tab' : null}
                     onClick={() => {
                       setActiveTab(tab.id);
                       setIsMobileNavOpen(false);
@@ -1345,18 +1353,34 @@ const ProfilePage = () => {
 
             {/* Theme and Language Controls - Mobile */}
             <div className="px-4 py-3 border-t-2 border-emerald-500/20 bg-gradient-to-b from-transparent to-emerald-500/5 space-y-3">
-              <div className="flex items-center justify-between">
-                <button 
-                  onClick={toggleLanguage}
-                  className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl px-4 py-2.5 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40 active:scale-95`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={toggleLanguage}
+                    className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl px-4 py-2.5 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-blue-400/20 hover:border-blue-400/40 active:scale-95`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"/>
+                      </svg>
+                      <span className="text-blue-400 text-sm font-semibold">{language === 'hebrew' ? 'עב' : 'En'}</span>
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setIsMobileNavOpen(false);
+                    }}
+                    className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-2.5 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-gray-400/20 hover:border-gray-400/40 active:scale-95`}
+                    aria-label={language === 'hebrew' ? 'הגדרות' : 'Settings'}
+                  >
+                    <svg className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-900'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    <span className="text-blue-400 text-sm font-semibold">{language === 'hebrew' ? 'עב' : 'En'}</span>
-                  </div>
-                </button>
+                  </button>
+                </div>
 
                 <button 
                   onClick={toggleTheme}
@@ -3409,7 +3433,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
 
           // Generate unique filename
           const timestamp = Date.now();
-          const filename = `${user.id}/${timestamp}.jpeg`;
+          const filename = `${userCode}/${timestamp}.jpeg`;
 
           // Check if user is authenticated
           const { data: { session } } = await supabase.auth.getSession();
@@ -9461,13 +9485,13 @@ const SettingsTab = ({ themeClasses, language, userCode }) => {
                     ? 'איך להציג כמויות מזון'
                     : 'How to display food quantities'}
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   {['grams', 'household', 'both'].map((option) => (
                     <button
                       key={option}
                       onClick={() => handleToggle('portion_display', option)}
                       disabled={saving}
-                      className={`flex-1 px-4 py-2 rounded-lg border-2 transition-all ${
+                      className={`flex-1 px-4 py-3 sm:py-2 rounded-lg border-2 transition-all text-sm sm:text-base font-medium min-h-[44px] sm:min-h-0 ${
                         portionDisplay === option
                           ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
                           : `${themeClasses.borderPrimary} ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:border-emerald-300`

@@ -152,7 +152,7 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
                   : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
               } hover:scale-105`}
             >
-              {showUSD ? '$' : '₪'}
+              {showUSD ? '₪' : '$'}
             </button>
           </div>
         </div>
