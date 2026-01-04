@@ -8512,6 +8512,7 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [messagesContainerRef, setMessagesContainerRef] = useState(null);
   const [isUserAtBottom, setIsUserAtBottom] = useState(true); // Track if user is at bottom of chat
+  const [selectedImage, setSelectedImage] = useState(null); // Track selected image for modal
 
   useEffect(() => {
     const loadMessages = async () => {
@@ -8534,6 +8535,7 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
             message: msg.message,
             content: msg.content,
             attachments: msg.attachments,
+            topic: msg.topic,
             sender: msg.role === 'user' ? 'user' : 'bot',
             timestamp: new Date(msg.created_at),
             created_at: msg.created_at
@@ -8588,6 +8590,7 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
             message: msg.message,
             content: msg.content,
             attachments: msg.attachments,
+            topic: msg.topic,
             sender: msg.role === 'user' ? 'user' : 'bot',
             timestamp: new Date(msg.created_at),
             created_at: msg.created_at
@@ -8723,6 +8726,7 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
           message: msg.message,
           content: msg.content,
           attachments: msg.attachments,
+          topic: msg.topic,
           sender: msg.role === 'user' ? 'user' : 'bot',
           timestamp: new Date(msg.created_at),
           created_at: msg.created_at
@@ -8866,8 +8870,98 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
     return currentDay.getTime() !== previousDay.getTime();
   };
 
+  // Helper function to normalize data URIs with proper MIME types
+  const normalizeDataUri = (dataUri, mediaType) => {
+    if (!dataUri || !dataUri.startsWith('data:')) {
+      return dataUri;
+    }
+    
+    // If it already has a proper MIME type, return as is
+    if (dataUri.match(/^data:[a-z]+\/[a-z0-9+-]+;base64,/)) {
+      return dataUri;
+    }
+    
+    // Fix data:audio;base64, to have a proper MIME type
+    if (mediaType === 'audio' && dataUri.startsWith('data:audio;base64,')) {
+      try {
+        const base64Data = dataUri.substring(dataUri.indexOf(',') + 1);
+        const binaryString = atob(base64Data.substring(0, 100));
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Detect audio format from file headers
+        // Ogg/Opus (most common for WhatsApp): bytes start with 0x4F 0x67 0x67 0x53 ("OggS")
+        if (bytes[0] === 0x4F && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
+          return dataUri.replace('data:audio;base64,', 'data:audio/ogg;base64,');
+        }
+        // MP3 detection
+        if ((bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) || 
+            (bytes[0] === 0xFF && (bytes[1] & 0xE0) === 0xE0)) {
+          return dataUri.replace('data:audio;base64,', 'data:audio/mpeg;base64,');
+        }
+        // WAV detection
+        if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+          return dataUri.replace('data:audio;base64,', 'data:audio/wav;base64,');
+        }
+        // Default to ogg for unknown (most compatible)
+        return dataUri.replace('data:audio;base64,', 'data:audio/ogg;base64,');
+      } catch (e) {
+        // Fallback to ogg if detection fails
+        return dataUri.replace('data:audio;base64,', 'data:audio/ogg;base64,');
+      }
+    }
+    
+    // Fix data:image;base64, to have a proper MIME type
+    if (mediaType === 'image' && dataUri.startsWith('data:image;base64,')) {
+      return dataUri.replace('data:image;base64,', 'data:image/png;base64,');
+    }
+    
+    return dataUri;
+  };
+
+  // Function to handle image click (open in modal)
+  const handleImageClick = (imageSrc) => {
+    setSelectedImage(imageSrc);
+  };
+
+  // Function to close image modal
+  const handleCloseImageModal = () => {
+    setSelectedImage(null);
+  };
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    if (!selectedImage) return;
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setSelectedImage(null);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [selectedImage]);
+
   // Function to render message content with attachments and formatting (same logic as Chat.jsx)
   const renderMessageContent = (msg) => {
+    // Check both message and content columns for base64 data
+    const messageData = msg.message || msg.content || '';
+    const trimmedMessageData = messageData.trim();
+    const topic = msg.topic;
+    const topicLower = topic ? topic.toLowerCase() : '';
+    
+    // Detect base64 image
+    const hasBase64Image = topicLower === 'image' && trimmedMessageData.startsWith('data:image');
+    
+    // Detect base64 audio  
+    const hasBase64Audio = topicLower === 'audio' && trimmedMessageData.startsWith('data:audio');
+    
+    // Normalize the data before rendering
+    const normalizedImageData = hasBase64Image ? normalizeDataUri(trimmedMessageData, 'image') : null;
+    const normalizedAudioData = hasBase64Audio ? normalizeDataUri(trimmedMessageData, 'audio') : null;
+    
     // Get content from message or content field
     let content = msg.message || msg.content || '';
     
@@ -8893,10 +8987,81 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
     content = content.replace(/button:\s*[^\n]+/gi, ''); // Remove button: patterns
     content = content.trim();
     
+    // Filter out base64 data from text rendering
+    // Only show text if it's not base64 data and not empty
+    const isBase64Data = hasBase64Image || hasBase64Audio || 
+                         content.startsWith('data:image') || content.startsWith('data:audio');
+    const text = content && content.trim() && !isBase64Data ? content : '';
+    
+    // Render base64 media before attachments
+    const base64MediaElements = [];
+    
+    // Render base64 images
+    if (hasBase64Image) {
+      base64MediaElements.push(
+        <div key="base64-image" className="mb-3">
+          {normalizedImageData ? (
+            <img
+              src={normalizedImageData}
+              alt="Client image"
+              className="rounded-lg max-w-full max-h-64 object-cover shadow-sm border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity duration-200"
+              onClick={() => handleImageClick(normalizedImageData)}
+              onError={(e) => {
+                console.error('Failed to load base64 image', e);
+              }}
+            />
+          ) : (
+            <div>Image data not found</div>
+          )}
+        </div>
+      );
+    }
+    
+    // Render base64 audio with enhanced UI
+    if (hasBase64Audio) {
+      base64MediaElements.push(
+        <div key="base64-audio" className="mb-3">
+          {normalizedAudioData ? (
+            <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg shadow-sm">
+              <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-slate-700 mb-2">
+                  🎵 Audio Message
+                </div>
+                <audio
+                  src={normalizedAudioData}
+                  controls
+                  className="w-full h-10"
+                  preload="metadata"
+                  onError={(e) => {
+                    console.error('Failed to load base64 audio', e);
+                  }}
+                  onLoadedMetadata={(e) => {
+                    console.log('Audio loaded successfully');
+                  }}
+                >
+                  Your browser does not support the audio tag.
+                </audio>
+              </div>
+            </div>
+          ) : (
+            <div>Audio data not found</div>
+          )}
+        </div>
+      );
+    }
+    
     // Handle attachments if they exist
     if (msg.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
       return (
         <div className="space-y-2">
+          {/* Render base64 media first */}
+          {base64MediaElements}
+          
           {msg.attachments.map((attachment, idx) => {
             const url = attachment.url || attachment;
             const type = attachment.type || attachment.mime_type || '';
@@ -8909,7 +9074,7 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
                   alt="Attachment"
                   className="max-w-full h-auto rounded-lg mt-2 shadow-md cursor-pointer"
                   style={{ maxHeight: '300px' }}
-                  onClick={() => window.open(url, '_blank')}
+                  onClick={() => handleImageClick(url)}
                   onError={(e) => {
                     e.target.style.display = 'none';
                   }}
@@ -8947,8 +9112,22 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
               );
             }
           })}
-          {content && (
-            <div className="whitespace-pre-wrap break-words">{content}</div>
+          {/* Only show text if it's not base64 data */}
+          {text && (
+            <div className="whitespace-pre-wrap break-words">{text}</div>
+          )}
+        </div>
+      );
+    }
+    
+    // If we have base64 media but no attachments, render base64 media
+    if (base64MediaElements.length > 0) {
+      return (
+        <div className="space-y-2">
+          {base64MediaElements}
+          {/* Only show text if it's not base64 data */}
+          {text && (
+            <div className="whitespace-pre-wrap break-words">{text}</div>
           )}
         </div>
       );
@@ -8967,7 +9146,7 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
             alt="Food analysis image"
             className="max-w-full h-auto rounded-lg mt-2 shadow-md cursor-pointer"
             style={{ maxHeight: '300px' }}
-            onClick={() => window.open(part, '_blank')}
+            onClick={() => handleImageClick(part)}
             onError={(e) => {
               e.target.style.display = 'none';
             }}
@@ -9174,6 +9353,50 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
               </div>
             )}
       </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4"
+          onClick={handleCloseImageModal}
+          style={{ backdropFilter: 'blur(4px)' }}
+        >
+          <div className="relative max-w-7xl max-h-full">
+            {/* Close Button */}
+            <button
+              onClick={handleCloseImageModal}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors duration-200 z-10"
+              aria-label="Close image"
+            >
+              <svg
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+            
+            {/* Image */}
+            <img
+              src={selectedImage}
+              alt="Full size"
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+              onError={(e) => {
+                console.error('Failed to load image in modal', e);
+                handleCloseImageModal();
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
