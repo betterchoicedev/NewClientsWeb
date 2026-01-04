@@ -1,43 +1,27 @@
 import { supabase, supabaseSecondary } from './supabaseClient'
 
+// API URL helper
+const getApiUrl = () => process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+
 // Check if email already exists in both databases
 export const checkEmailExists = async (email) => {
   try {
     const normalizedEmail = email.toLowerCase();
     
-    // Check PRIMARY database (clients table)
-    const { data: primaryData, error: primaryError } = await supabase
-      .from('clients')
-      .select('email')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/auth/check-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normalizedEmail })
+    });
 
-    if (primaryError && primaryError.code !== 'PGRST116') {
-      return { exists: false, error: primaryError };
+    const result = await response.json();
+
+    if (!response.ok) {
+      return { exists: false, error: { message: result.error } };
     }
 
-    if (primaryData) {
-      return { exists: true, error: null };
-    }
-
-    // Check SECONDARY database (chat_users table) if available
-    if (supabaseSecondary) {
-      const { data: secondaryData, error: secondaryError } = await supabaseSecondary
-        .from('chat_users')
-        .select('email')
-        .eq('email', normalizedEmail)
-        .maybeSingle();
-
-      if (secondaryError && secondaryError.code !== 'PGRST116') {
-        return { exists: false, error: secondaryError };
-      }
-
-      if (secondaryData) {
-        return { exists: true, error: null };
-      }
-    }
-
-    return { exists: false, error: null };
+    return { exists: result.exists, error: null };
   } catch (error) {
     console.error('Error checking email:', error);
     return { exists: false, error };
@@ -55,59 +39,22 @@ export const normalizePhoneForDatabase = (phone) => {
 // Check if phone number already exists in both databases
 export const checkPhoneExists = async (phone) => {
   try {
-    // Normalize phone number (remove spaces and dashes) before checking
-    // This ensures we check against the format we store in the database
     const normalizedPhone = normalizePhoneForDatabase(phone);
+    
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/auth/check-phone`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: normalizedPhone })
+    });
 
-    // Check PRIMARY database (clients table) with normalized phone
-    const { data: primaryData, error: primaryError } = await supabase
-      .from('clients')
-      .select('phone')
-      .eq('phone', normalizedPhone)
-      .maybeSingle();
+    const result = await response.json();
 
-    if (primaryError && primaryError.code !== 'PGRST116') {
-      return { exists: false, error: primaryError };
+    if (!response.ok) {
+      return { exists: false, error: { message: result.error } };
     }
 
-    if (primaryData) {
-      return { exists: true, error: null };
-    }
-
-    // Check SECONDARY database (chat_users table) - check both phone_number and whatsapp_number
-    if (supabaseSecondary) {
-      // Check phone_number column with normalized phone
-      const { data: secondaryDataByPhone, error: secondaryError1 } = await supabaseSecondary
-        .from('chat_users')
-        .select('phone_number, whatsapp_number')
-        .eq('phone_number', normalizedPhone)
-        .maybeSingle();
-
-      if (secondaryError1 && secondaryError1.code !== 'PGRST116') {
-        return { exists: false, error: secondaryError1 };
-      }
-
-      if (secondaryDataByPhone) {
-        return { exists: true, error: null };
-      }
-
-      // Check whatsapp_number column with normalized phone
-      const { data: secondaryDataByWhatsApp, error: secondaryError2 } = await supabaseSecondary
-        .from('chat_users')
-        .select('phone_number, whatsapp_number')
-        .eq('whatsapp_number', normalizedPhone)
-        .maybeSingle();
-
-      if (secondaryError2 && secondaryError2.code !== 'PGRST116') {
-        return { exists: false, error: secondaryError2 };
-      }
-
-      if (secondaryDataByWhatsApp) {
-        return { exists: true, error: null };
-      }
-    }
-
-    return { exists: false, error: null };
+    return { exists: result.exists, error: null };
   } catch (error) {
     console.error('Error checking phone:', error);
     return { exists: false, error };
@@ -291,6 +238,7 @@ export const generateUniqueUserCode = async () => {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   let attempts = 0;
   const maxAttempts = 100; // Prevent infinite loops
+  const apiUrl = getApiUrl();
 
   while (attempts < maxAttempts) {
     // Generate random 6-letter code
@@ -299,47 +247,26 @@ export const generateUniqueUserCode = async () => {
       userCode += letters.charAt(Math.floor(Math.random() * letters.length));
     }
 
-    // Check if this code already exists in PRIMARY database (clients table)
     try {
-      const { data: primaryData, error: primaryError } = await supabase
-        .from('clients')
-        .select('user_code')
-        .eq('user_code', userCode)
-        .maybeSingle();
+      const response = await fetch(`${apiUrl}/api/auth/check-user-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userCode })
+      });
 
-      // If found in primary database, code exists - try again
-      if (primaryData) {
-        attempts++;
-        continue;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to check user code');
       }
 
-      // If error other than "not found", throw it
-      if (primaryError && primaryError.code !== 'PGRST116') {
-        throw primaryError;
+      // If code doesn't exist, we can use it
+      if (!result.exists) {
+        return userCode;
       }
 
-      // Check SECONDARY database (chat_users table) if available
-      if (supabaseSecondary) {
-        const { data: secondaryData, error: secondaryError } = await supabaseSecondary
-          .from('chat_users')
-          .select('user_code')
-          .eq('user_code', userCode)
-          .maybeSingle();
-
-        // If found in secondary database, code exists - try again
-        if (secondaryData) {
-          attempts++;
-          continue;
-        }
-
-        // If error other than "not found", throw it
-        if (secondaryError && secondaryError.code !== 'PGRST116') {
-          throw secondaryError;
-        }
-      }
-
-      // Code is unique in both databases
-      return userCode;
+      // Code exists, try again
+      attempts++;
     } catch (error) {
       console.error('Error checking user code uniqueness:', error);
       throw error;
@@ -358,222 +285,72 @@ export const createClientRecord = async (userId, userData, providerId = null) =>
     // Normalize phone number before saving (remove spaces and dashes)
     const normalizedPhone = userData.phone ? normalizePhoneForDatabase(userData.phone) : null;
     
-    // Use the service role key for this operation
-    const serviceRoleKey = process.env.REACT_APP_SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (!serviceRoleKey) {
-      // Fallback to regular client
-      const clientInsertData = {
-        user_id: userId,
-        full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
-        email: userData.email,
-        phone: normalizedPhone,
-        user_code: userCode,
-        status: 'active'
-      };
-
-      const { data, error } = await supabase
-        .from('clients')
-        .insert([clientInsertData])
-        .select()
-
-      if (error) {
-        console.error('Client record creation error:', error);
-        throw error;
-      }
-      
-      // Also create record in chat_users table (secondary database)
-      let chatUserCreated = false;
-      let chatUserDataResult = null;
-      if (supabaseSecondary && data && data[0]) {
-        try {
-          // Use provided provider_id from referral link, or find the default "better choice" company manager
-          // Check if providerId is a valid non-empty string (UUID)
-          let finalProviderId = null;
-          if (providerId && typeof providerId === 'string' && providerId.trim().length > 0) {
-            finalProviderId = providerId.trim();
-          }
-          
-          if (!finalProviderId) {
-            try {
-              // Use the "better choice" company ID directly
-              const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
-              
-              // Find the first company_manager for this company
-              const { data: managerData, error: managerError } = await supabaseSecondary
-                .from('profiles')
-                .select('id')
-                .eq('company_id', betterChoiceCompanyId)
-                .eq('role', 'company_manager')
-                .order('created_at', { ascending: true })
-                .limit(1)
-                .single();
-
-              if (!managerError && managerData) {
-                finalProviderId = managerData.id;
-              }
-            } catch (providerError) {
-              console.error('Error finding default provider:', providerError);
-              // Continue without provider_id if we can't find it
-            }
-          }
-
-          const chatUserData = {
-            user_code: userCode,
-            full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
-            email: userData.email,
-            phone_number: normalizedPhone,
-            whatsapp_number: normalizedPhone, // Also set whatsapp_number for WhatsApp registrations
-            platform: userData.platform || 'whatsapp',
-            provider_id: finalProviderId, // Use referral provider_id or default company manager
-            activated: true, // Set activated to true
-            is_verified: false,
-            language: 'en',
-            created_at: new Date().toISOString()
-          };
-
-          const { data: chatUserResult, error: chatUserError } = await supabaseSecondary
-            .from('chat_users')
-            .insert([chatUserData])
-            .select();
-
-          if (chatUserError) {
-            // Don't throw - continue even if chat_users creation fails
-          } else {
-            chatUserCreated = true;
-            chatUserDataResult = chatUserResult;
-          }
-        } catch (chatError) {
-          // Don't throw - continue even if chat_users creation fails
-        }
-      }
-      
-      return { 
-        data, 
-        error: null,
-        chatUserCreated,
-        chatUserData: chatUserDataResult
-      }
-    }
-
-    // Use service role client for admin operations
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseAdmin = createClient(
-      process.env.REACT_APP_SUPABASE_URL,
-      serviceRoleKey
-    );
-
-    const clientInsertData = {
-      user_id: userId,
-      full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
-      email: userData.email,
-      phone: normalizedPhone,
-      user_code: userCode,
-      status: 'active'
-    };
-
-    const { data, error } = await supabaseAdmin
-      .from('clients')
-      .insert([clientInsertData])
-      .select()
-
-    if (error) {
-      console.error('Client record creation error:', error);
-      throw error;
-    }
-    
-    // Also create record in chat_users table (secondary database)
-    let chatUserCreated = false;
-    let chatUserDataResult = null;
-    if (supabaseSecondary && data && data[0]) {
+    // Get default provider if not provided
+    let finalProviderId = providerId;
+    if (!finalProviderId || (typeof finalProviderId === 'string' && finalProviderId.trim().length === 0)) {
       try {
-        // Use provided provider_id from referral link, or find the default "better choice" company manager
-        // Check if providerId is a valid non-empty string (UUID)
-        let finalProviderId = null;
-        if (providerId && typeof providerId === 'string' && providerId.trim().length > 0) {
-          finalProviderId = providerId.trim();
-        }
+        const apiUrl = getApiUrl();
+        const providerResponse = await fetch(`${apiUrl}/api/auth/default-provider`);
+        const providerResult = await providerResponse.json();
         
-        if (!finalProviderId) {
-          try {
-            // Use the "better choice" company ID directly
-            const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
-            
-            // Find the first company_manager for this company
-            const { data: managerData, error: managerError } = await supabaseSecondary
-              .from('profiles')
-              .select('id')
-              .eq('company_id', betterChoiceCompanyId)
-              .eq('role', 'company_manager')
-              .order('created_at', { ascending: true })
-              .limit(1)
-              .single();
-
-            if (!managerError && managerData) {
-              finalProviderId = managerData.id;
-            }
-          } catch (providerError) {
-            console.error('Error finding default provider:', providerError);
-            // Continue without provider_id if we can't find it
-          }
+        if (providerResponse.ok && providerResult.provider_id) {
+          finalProviderId = providerResult.provider_id;
         }
-
-        const chatUserData = {
-          user_code: userCode,
-          full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
-          email: userData.email,
-          phone_number: normalizedPhone,
-          whatsapp_number: normalizedPhone, // Also set whatsapp_number for WhatsApp registrations
-          platform: userData.platform || 'whatsapp',
-          provider_id: finalProviderId, // Use referral provider_id or default company manager
-          activated: true, // Set activated to true
-          is_verified: false,
-          language: 'en',
-          created_at: new Date().toISOString()
-        };
-
-        const { data: chatUserResult, error: chatUserError } = await supabaseSecondary
-          .from('chat_users')
-          .insert([chatUserData])
-          .select();
-
-        if (chatUserError) {
-          // Don't throw - continue even if chat_users creation fails
-        } else {
-          chatUserCreated = true;
-          chatUserDataResult = chatUserResult;
-        }
-      } catch (chatError) {
-        // Don't throw - continue even if chat_users creation fails
+      } catch (providerError) {
+        console.error('Error finding default provider:', providerError);
       }
     }
     
-    return { 
-      data, 
-      error: null,
-      chatUserCreated,
-      chatUserData: chatUserDataResult
+    // Create client record via API
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/auth/create-client`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        userData: {
+          ...userData,
+          phone: normalizedPhone
+        },
+        userCode,
+        providerId: finalProviderId
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Client record creation error:', result.error);
+      throw new Error(result.error);
     }
+
+    return { 
+      data: result.data, 
+      error: null,
+      chatUserCreated: result.chatUserCreated,
+      chatUserData: result.chatUserData
+    };
   } catch (error) {
-    console.error('Create client record error:', error)
-    return { data: null, error }
+    console.error('Create client record error:', error);
+    return { data: null, error };
   }
 }
 
 // Get client record by user ID
 export const getClientRecord = async (userId) => {
   try {
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('user_id', userId)
-      .single()
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/auth/client/${userId}`);
+    const result = await response.json();
 
-    if (error) throw error
-    return { data, error: null }
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to get client record');
+    }
+
+    return { data: result.data, error: null };
   } catch (error) {
-    console.error('Get client record error:', error)
-    return { data: null, error }
+    console.error('Get client record error:', error);
+    return { data: null, error };
   }
 }
 
@@ -586,65 +363,23 @@ export const updateClientRecord = async (userId, updates) => {
       normalizedUpdates.phone = normalizePhoneForDatabase(normalizedUpdates.phone);
     }
     
-    const { data, error } = await supabase
-      .from('clients')
-      .update(normalizedUpdates)
-      .eq('user_id', userId)
-      .select()
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/auth/client/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates: normalizedUpdates })
+    });
 
-    if (error) throw error
-    
-    // If secondary DB is available and we have user_code, also update chat_users
-    if (supabaseSecondary && data && data[0] && data[0].user_code) {
-      try {
-        // Get the chat_users id using user_code
-        const { data: chatUser, error: chatUserError } = await supabaseSecondary
-          .from('chat_users')
-          .select('id')
-          .eq('user_code', data[0].user_code)
-          .single();
+    const result = await response.json();
 
-        if (!chatUserError && chatUser) {
-          // Map updates to chat_users fields
-          const chatUpdates = {};
-          
-          // Map fields that exist in both tables
-          if (updates.full_name) chatUpdates.full_name = updates.full_name;
-          if (updates.email) chatUpdates.email = updates.email;
-          // Normalize phone number before saving to chat_users
-          if (updates.phone) {
-            const normalizedPhone = normalizePhoneForDatabase(updates.phone);
-            chatUpdates.phone_number = normalizedPhone;
-            chatUpdates.whatsapp_number = normalizedPhone;
-          }
-          if (updates.region) chatUpdates.region = updates.region;
-          if (updates.city) chatUpdates.city = updates.city;
-          if (updates.timezone) chatUpdates.timezone = updates.timezone;
-          if (updates.age) chatUpdates.age = updates.age;
-          if (updates.gender) chatUpdates.gender = updates.gender;
-          if (updates.birth_date) chatUpdates.date_of_birth = updates.birth_date;
-          if (updates.food_allergies) chatUpdates.food_allergies = updates.food_allergies;
-          if (updates.updated_at) chatUpdates.updated_at = updates.updated_at;
-
-          // Only update if there are fields to update
-          if (Object.keys(chatUpdates).length > 0) {
-            await supabaseSecondary
-              .from('chat_users')
-              .update(chatUpdates)
-              .eq('id', chatUser.id);
-            
-            console.log('Chat user synced successfully');
-          }
-        }
-      } catch (syncError) {
-        console.error('Error syncing to chat_users:', syncError);
-        // Don't throw - continue even if sync fails
-      }
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to update client record');
     }
-    
-    return { data, error: null }
+
+    console.log('Chat user synced successfully');
+    return { data: result.data, error: null };
   } catch (error) {
-    console.error('Update client record error:', error)
-    return { data: null, error }
+    console.error('Update client record error:', error);
+    return { data: null, error };
   }
 }

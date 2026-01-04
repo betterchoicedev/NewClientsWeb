@@ -9,29 +9,29 @@ const isSecondaryAvailable = () => {
   return true;
 };
 
+// API URL helper
+const getApiUrl = () => process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+
 // MEAL PLANS
 export const getMealPlan = async (userCode) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
     console.log('Searching for meal plan with userCode:', userCode);
     
-    const { data, error } = await supabaseSecondary
-      .from('meal_plans_and_schemas')
-      .select('*')
-      .eq('user_code', userCode)
-      .eq('record_type', 'meal_plan')
-      .eq('status', 'active')
-      .single();
+    const apiUrl = getApiUrl();
+    const url = new URL(`${apiUrl}/api/meal-plan`);
+    url.searchParams.append('userCode', userCode);
 
-    console.log('Meal plan query result:', { data, error });
+    const response = await fetch(url.toString());
+    const result = await response.json();
 
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching meal plan:', error);
-      return { data: null, error };
+    console.log('Meal plan query result:', result);
+
+    if (!response.ok) {
+      console.error('Error fetching meal plan:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error fetching meal plan:', error);
     return { data: null, error };
@@ -39,21 +39,17 @@ export const getMealPlan = async (userCode) => {
 };
 
 export const getMealPlanSchemas = async () => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    const { data, error } = await supabaseSecondary
-      .from('meal_plans_and_schemas')
-      .select('*')
-      .eq('record_type', 'schema')
-      .order('created_at', { ascending: false });
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/meal-plan-schemas`);
+    const result = await response.json();
 
-    if (error) {
-      console.error('Error fetching meal plan schemas:', error);
-      return { data: null, error };
+    if (!response.ok) {
+      console.error('Error fetching meal plan schemas:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error fetching meal plan schemas:', error);
     return { data: null, error };
@@ -61,35 +57,22 @@ export const getMealPlanSchemas = async () => {
 };
 
 export const createMealPlan = async (dietitianId, userCode, mealPlanData) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    const { data, error } = await supabaseSecondary
-      .from('meal_plans_and_schemas')
-      .insert([{
-        record_type: 'meal_plan',
-        dietitian_id: dietitianId,
-        user_code: userCode,
-        meal_plan_name: mealPlanData.meal_plan_name,
-        meal_plan: mealPlanData.meal_plan,
-        status: mealPlanData.status || 'draft',
-        active_from: mealPlanData.active_from,
-        active_until: mealPlanData.active_until,
-        daily_total_calories: mealPlanData.daily_total_calories,
-        macros_target: mealPlanData.macros_target,
-        recommendations: mealPlanData.recommendations,
-        dietary_restrictions: mealPlanData.dietary_restrictions,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }])
-      .select();
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/meal-plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dietitianId, userCode, mealPlanData })
+    });
 
-    if (error) {
-      console.error('Error creating meal plan:', error);
-      return { data: null, error };
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error creating meal plan:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error creating meal plan:', error);
     return { data: null, error };
@@ -97,32 +80,22 @@ export const createMealPlan = async (dietitianId, userCode, mealPlanData) => {
 };
 
 export const updateMealPlan = async (mealPlanId, mealPlanData) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    const { data, error } = await supabaseSecondary
-      .from('meal_plans_and_schemas')
-      .update({
-        meal_plan_name: mealPlanData.meal_plan_name,
-        meal_plan: mealPlanData.meal_plan,
-        status: mealPlanData.status,
-        active_from: mealPlanData.active_from,
-        active_until: mealPlanData.active_until,
-        daily_total_calories: mealPlanData.daily_total_calories,
-        macros_target: mealPlanData.macros_target,
-        recommendations: mealPlanData.recommendations,
-        dietary_restrictions: mealPlanData.dietary_restrictions,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', mealPlanId)
-      .select();
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/meal-plan/${mealPlanId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mealPlanData })
+    });
 
-    if (error) {
-      console.error('Error updating meal plan:', error);
-      return { data: null, error };
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error updating meal plan:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error updating meal plan:', error);
     return { data: null, error };
@@ -131,46 +104,23 @@ export const updateMealPlan = async (mealPlanId, mealPlanData) => {
 
 // FOOD LOGS
 export const getFoodLogs = async (userCode, date = null) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
     console.log('Fetching food logs for userCode:', userCode, 'date:', date);
     
-    // First get user_id from chat_users table using user_code
-    const { data: userData, error: userError } = await supabaseSecondary
-      .from('chat_users')
-      .select('id')
-      .eq('user_code', userCode)
-      .single();
+    const apiUrl = getApiUrl();
+    const url = new URL(`${apiUrl}/api/food-logs`);
+    url.searchParams.append('userCode', userCode);
+    if (date) url.searchParams.append('date', date);
 
-    if (userError) {
-      console.error('Error fetching user:', userError);
-      return { data: null, error: userError };
+    const response = await fetch(url.toString());
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error fetching food logs:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    if (!userData) {
-      return { data: null, error: { message: 'User not found' } };
-    }
-
-    // Now get food logs for this user
-    let query = supabaseSecondary
-      .from('food_logs')
-      .select('*')
-      .eq('user_id', userData.id)
-      .order('created_at', { ascending: false });
-
-    if (date) {
-      query = query.eq('log_date', date);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching food logs:', error);
-      return { data: null, error };
-    }
-
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error fetching food logs:', error);
     return { data: null, error };
@@ -178,51 +128,24 @@ export const getFoodLogs = async (userCode, date = null) => {
 };
 
 export const createFoodLog = async (userCode, foodLogData) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
     console.log('Creating food log for userCode:', userCode, 'data:', foodLogData);
     
-    // First get user_id from chat_users table using user_code
-    const { data: userData, error: userError } = await supabaseSecondary
-      .from('chat_users')
-      .select('id')
-      .eq('user_code', userCode)
-      .single();
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/food-logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userCode, foodLogData })
+    });
 
-    if (userError) {
-      console.error('Error fetching user:', userError);
-      return { data: null, error: userError };
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error creating food log:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    if (!userData) {
-      return { data: null, error: { message: 'User not found' } };
-    }
-
-    // Create food log entry - ensure all required fields have valid values
-    const insertData = {
-      user_id: userData.id,
-      meal_label: foodLogData.meal_label,
-      food_items: foodLogData.food_items || [],
-      log_date: foodLogData.log_date || new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString()
-    };
-
-    console.log('Inserting food log data:', JSON.stringify(insertData, null, 2));
-
-    const { data, error } = await supabaseSecondary
-      .from('food_logs')
-      .insert([insertData])
-      .select();
-
-    if (error) {
-      console.error('Error creating food log:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
-      console.error('Failed insert data:', JSON.stringify(insertData, null, 2));
-      return { data: null, error };
-    }
-
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error creating food log:', error);
     return { data: null, error };
@@ -230,36 +153,22 @@ export const createFoodLog = async (userCode, foodLogData) => {
 };
 
 export const updateFoodLog = async (foodLogId, foodLogData) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    // Build update object with only provided fields
-    const updateData = {
-      updated_at: new Date().toISOString()
-    };
-    
-    // Only include fields that are explicitly provided
-    if (foodLogData.meal_label !== undefined) updateData.meal_label = foodLogData.meal_label;
-    if (foodLogData.food_items !== undefined) updateData.food_items = foodLogData.food_items;
-    if (foodLogData.image_url !== undefined) updateData.image_url = foodLogData.image_url;
-    if (foodLogData.total_calories !== undefined) updateData.total_calories = foodLogData.total_calories;
-    if (foodLogData.total_protein_g !== undefined) updateData.total_protein_g = foodLogData.total_protein_g;
-    if (foodLogData.total_carbs_g !== undefined) updateData.total_carbs_g = foodLogData.total_carbs_g;
-    if (foodLogData.total_fat_g !== undefined) updateData.total_fat_g = foodLogData.total_fat_g;
-    if (foodLogData.log_date !== undefined) updateData.log_date = foodLogData.log_date;
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/food-logs/${foodLogId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ foodLogData })
+    });
 
-    const { data, error } = await supabaseSecondary
-      .from('food_logs')
-      .update(updateData)
-      .eq('id', foodLogId)
-      .select();
+    const result = await response.json();
 
-    if (error) {
-      console.error('Error updating food log:', error);
-      return { data: null, error };
+    if (!response.ok) {
+      console.error('Error updating food log:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error updating food log:', error);
     return { data: null, error };
@@ -267,21 +176,20 @@ export const updateFoodLog = async (foodLogId, foodLogData) => {
 };
 
 export const deleteFoodLog = async (foodLogId) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    const { data, error } = await supabaseSecondary
-      .from('food_logs')
-      .delete()
-      .eq('id', foodLogId)
-      .select();
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/food-logs/${foodLogId}`, {
+      method: 'DELETE'
+    });
 
-    if (error) {
-      console.error('Error deleting food log:', error);
-      return { data: null, error };
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error deleting food log:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error deleting food log:', error);
     return { data: null, error };
@@ -290,68 +198,23 @@ export const deleteFoodLog = async (foodLogId) => {
 
 // CHAT MESSAGES
 export const getChatMessages = async (userCode, beforeTimestamp = null) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
     console.log('Fetching chat messages for userCode:', userCode, 'beforeTimestamp:', beforeTimestamp);
     
-    // First get user_id from chat_users table using user_code
-    const { data: userData, error: userError } = await supabaseSecondary
-      .from('chat_users')
-      .select('id')
-      .eq('user_code', userCode)
-      .single();
+    const apiUrl = getApiUrl();
+    const url = new URL(`${apiUrl}/api/chat-messages`);
+    url.searchParams.append('userCode', userCode);
+    if (beforeTimestamp) url.searchParams.append('beforeTimestamp', beforeTimestamp);
 
-    if (userError) {
-      console.error('Error fetching user:', userError);
-      return { data: null, error: userError };
+    const response = await fetch(url.toString());
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error fetching chat messages:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    if (!userData) {
-      return { data: null, error: { message: 'User not found' } };
-    }
-
-    // Get conversations for this user
-    const { data: conversations, error: conversationsError } = await supabaseSecondary
-      .from('chat_conversations')
-      .select('id')
-      .eq('user_id', userData.id)
-      .order('started_at', { ascending: false });
-
-    if (conversationsError) {
-      console.error('Error fetching conversations:', conversationsError);
-      return { data: null, error: conversationsError };
-    }
-
-    if (!conversations || conversations.length === 0) {
-      return { data: [], error: null };
-    }
-
-    // Get messages for all conversations
-    const conversationIds = conversations.map(conv => conv.id);
-    
-    // Build query for messages
-    let query = supabaseSecondary
-      .from('chat_messages')
-      .select('*')
-      .in('conversation_id', conversationIds);
-
-    // If beforeTimestamp is provided, get messages older than that timestamp
-    if (beforeTimestamp) {
-      query = query.lt('created_at', beforeTimestamp);
-    }
-
-    // Order by created_at descending (newest first) and limit to 20
-    query = query.order('created_at', { ascending: false }).limit(20);
-
-    const { data: messages, error: messagesError } = await query;
-
-    if (messagesError) {
-      console.error('Error fetching messages:', messagesError);
-      return { data: null, error: messagesError };
-    }
-
-    return { data: messages || [], error: null };
+    return { data: result.data || [], error: null };
   } catch (error) {
     console.error('Unexpected error fetching chat messages:', error);
     return { data: null, error };
@@ -359,88 +222,24 @@ export const getChatMessages = async (userCode, beforeTimestamp = null) => {
 };
 
 export const createChatMessage = async (userCode, messageData) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
     console.log('Creating chat message for userCode:', userCode, 'data:', messageData);
     
-    // First get user_id from chat_users table using user_code
-    const { data: userData, error: userError } = await supabaseSecondary
-      .from('chat_users')
-      .select('id')
-      .eq('user_code', userCode)
-      .single();
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/chat-messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userCode, messageData })
+    });
 
-    if (userError) {
-      console.error('Error fetching user:', userError);
-      return { data: null, error: userError };
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error creating chat message:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    if (!userData) {
-      return { data: null, error: { message: 'User not found' } };
-    }
-
-    // Get or create conversation for this user
-    let { data: conversation, error: conversationError } = await supabaseSecondary
-      .from('chat_conversations')
-      .select('id')
-      .eq('user_id', userData.id)
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (conversationError && conversationError.code !== 'PGRST116') {
-      console.error('Error fetching conversation:', conversationError);
-      return { data: null, error: conversationError };
-    }
-
-    // If no conversation exists, create one
-    if (!conversation) {
-      const { data: newConversation, error: createError } = await supabaseSecondary
-        .from('chat_conversations')
-        .insert([{
-          user_id: userData.id,
-          started_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
-
-      if (createError) {
-        console.error('Error creating conversation:', createError);
-        return { data: null, error: createError };
-      }
-
-      conversation = newConversation;
-    }
-
-    // Create message
-    const messageInsert = {
-      conversation_id: conversation.id,
-      role: messageData.role || 'user',
-      topic: messageData.topic,
-      extension: messageData.extension,
-      attachments: messageData.attachments,
-      created_at: new Date().toISOString()
-    };
-
-    // Add message or content based on role
-    if (messageData.role === 'assistant') {
-      messageInsert.message = messageData.message;
-    } else {
-      messageInsert.content = messageData.content;
-    }
-
-    const { data, error } = await supabaseSecondary
-      .from('chat_messages')
-      .insert([messageInsert])
-      .select();
-
-    if (error) {
-      console.error('Error creating chat message:', error);
-      return { data: null, error };
-    }
-
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error creating chat message:', error);
     return { data: null, error };
@@ -449,26 +248,17 @@ export const createChatMessage = async (userCode, messageData) => {
 
 // COMPANY MANAGEMENT
 export const getCompaniesWithManagers = async () => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-
   try {
-    const { data, error } = await supabaseSecondary
-      .from('companies')
-      .select('id, name, managers:profiles!profiles_company_id_fkey(id, name, role)')
-      .order('name', { ascending: true });
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/companies`);
+    const result = await response.json();
 
-    if (error) {
-      console.error('Error fetching companies:', error);
-      return { data: null, error };
+    if (!response.ok) {
+      console.error('Error fetching companies:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    const formattedCompanies = (data || []).map((company) => ({
-      id: company.id,
-      name: company.name,
-      managers: (company.managers || []).filter((manager) => manager.role === 'company_manager')
-    }));
-
-    return { data: formattedCompanies, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error fetching companies:', error);
     return { data: null, error };
@@ -476,21 +266,20 @@ export const getCompaniesWithManagers = async () => {
 };
 
 export const getClientCompanyAssignment = async (userCode) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-
   try {
-    const { data, error } = await supabaseSecondary
-      .from('chat_users')
-      .select('provider_id, provider:profiles!chat_users_provider_id_fkey(id, name, company_id)')
-      .eq('user_code', userCode)
-      .single();
+    const apiUrl = getApiUrl();
+    const url = new URL(`${apiUrl}/api/client-company-assignment`);
+    url.searchParams.append('userCode', userCode);
 
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching client assignment:', error);
-      return { data: null, error };
+    const response = await fetch(url.toString());
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error fetching client assignment:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data: data || null, error: null };
+    return { data: result.data || null, error: null };
   } catch (error) {
     console.error('Unexpected error fetching client assignment:', error);
     return { data: null, error };
@@ -498,70 +287,43 @@ export const getClientCompanyAssignment = async (userCode) => {
 };
 
 export const assignClientToCompany = async (userCode, companyId) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-
   try {
-    let managerId = null;
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/assign-client-company`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userCode, companyId })
+    });
 
-    if (companyId) {
-      const { data: manager, error: managerError } = await supabaseSecondary
-        .from('profiles')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('role', 'company_manager')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single();
+    const result = await response.json();
 
-      if (managerError && managerError.code !== 'PGRST116') {
-        console.error('Error fetching company manager:', managerError);
-        return { data: null, error: managerError };
-      }
-
-      if (!manager) {
-        const customError = { message: 'No manager found for the selected company.' };
-        return { data: null, error: customError };
-      }
-
-      managerId = manager.id;
+    if (!response.ok) {
+      console.error('Error assigning client to company:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    const { data, error } = await supabaseSecondary
-      .from('chat_users')
-      .update({ provider_id: managerId })
-      .eq('user_code', userCode)
-      .select('provider_id')
-      .single();
-
-    if (error) {
-      console.error('Error assigning provider to client:', error);
-      return { data: null, error };
-    }
-
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
-    console.error('Unexpected error assigning provider:', error);
+    console.error('Unexpected error assigning client to company:', error);
     return { data: null, error };
   }
 };
 
 export const getUserMealPlanHistory = async (userCode) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    const { data, error } = await supabaseSecondary
-      .from('meal_plans_and_schemas')
-      .select('*')
-      .eq('user_code', userCode)
-      .eq('record_type', 'meal_plan')
-      .order('created_at', { ascending: false });
+    const apiUrl = getApiUrl();
+    const url = new URL(`${apiUrl}/api/meal-plan-history`);
+    url.searchParams.append('userCode', userCode);
 
-    if (error) {
-      console.error('Error fetching meal plan history:', error);
-      return { data: null, error };
+    const response = await fetch(url.toString());
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error fetching meal plan history:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error fetching meal plan history:', error);
     return { data: null, error };
@@ -571,21 +333,20 @@ export const getUserMealPlanHistory = async (userCode) => {
 
 // MESSAGES
 export const getMessages = async (userId) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    const { data, error } = await supabaseSecondary
-      .from('messages')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
+    const apiUrl = getApiUrl();
+    const url = new URL(`${apiUrl}/api/messages`);
+    url.searchParams.append('userId', userId);
 
-    if (error) {
-      console.error('Error fetching messages:', error);
-      return { data: null, error };
+    const response = await fetch(url.toString());
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error fetching messages:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error fetching messages:', error);
     return { data: null, error };
@@ -593,24 +354,22 @@ export const getMessages = async (userId) => {
 };
 
 export const sendMessage = async (userId, messageData) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    const { data, error } = await supabaseSecondary
-      .from('messages')
-      .insert([{
-        user_id: userId,
-        ...messageData,
-        created_at: new Date().toISOString()
-      }])
-      .select();
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, messageData })
+    });
 
-    if (error) {
-      console.error('Error sending message:', error);
-      return { data: null, error };
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error sending message:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error sending message:', error);
     return { data: null, error };
@@ -618,21 +377,20 @@ export const sendMessage = async (userId, messageData) => {
 };
 
 export const markMessageAsRead = async (messageId) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    const { data, error } = await supabaseSecondary
-      .from('messages')
-      .update({ read_at: new Date().toISOString() })
-      .eq('id', messageId)
-      .select();
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/messages/${messageId}/read`, {
+      method: 'PUT'
+    });
 
-    if (error) {
-      console.error('Error marking message as read:', error);
-      return { data: null, error };
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error marking message as read:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error marking message as read:', error);
     return { data: null, error };
@@ -641,6 +399,33 @@ export const markMessageAsRead = async (messageId) => {
 
 // FOOD DATABASE (for searching foods)
 export const searchFoods = async (query, limit = 20) => {
+  try {
+    console.log('🔍 Fetching suggestions from ingridientsroee table for query:', query);
+    
+    const apiUrl = getApiUrl();
+    const url = new URL(`${apiUrl}/api/foods/search`);
+    url.searchParams.append('query', query);
+    url.searchParams.append('limit', limit.toString());
+
+    const response = await fetch(url.toString());
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error searching foods:', result.error);
+      return { data: null, error: { message: result.error } };
+    }
+
+    console.log('📊 Final transformed data:', result.data?.length || 0, 'items');
+    return { data: result.data, error: null };
+  } catch (error) {
+    console.error('Unexpected error searching foods:', error);
+    return { data: null, error };
+  }
+};
+
+// OLD IMPLEMENTATION (COMMENTED OUT FOR REFERENCE)
+/*
+export const searchFoods_OLD = async (query, limit = 20) => {
   if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
   
   try {
@@ -942,23 +727,20 @@ export const searchFoods = async (query, limit = 20) => {
     return { data: null, error };
   }
 };
+*/
 
 export const getFoodById = async (foodId) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
-    const { data, error } = await supabaseSecondary
-      .from('ingridientsroee')
-      .select('*')
-      .eq('id', foodId)
-      .single();
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/foods/${foodId}`);
+    const result = await response.json();
 
-    if (error) {
-      console.error('Error fetching food by ID:', error);
-      return { data: null, error };
+    if (!response.ok) {
+      console.error('Error fetching food by ID:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error fetching food by ID:', error);
     return { data: null, error };
@@ -967,30 +749,24 @@ export const getFoodById = async (foodId) => {
 
 // Debug function to check meal plans
 export const debugMealPlans = async (userCode) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
     console.log('Debug: Checking all meal plans for userCode:', userCode);
     
-    // Check all meal plans for this user (any status)
-    const { data: allPlans, error: allError } = await supabaseSecondary
-      .from('meal_plans_and_schemas')
-      .select('*')
-      .eq('user_code', userCode)
-      .eq('record_type', 'meal_plan');
+    const apiUrl = getApiUrl();
+    const url = new URL(`${apiUrl}/api/debug/meal-plans`);
+    url.searchParams.append('userCode', userCode);
 
-    console.log('All meal plans for user:', { allPlans, allError });
+    const response = await fetch(url.toString());
+    const result = await response.json();
 
-    // Check all meal plans in the database (for debugging)
-    const { data: allPlansInDb, error: allDbError } = await supabaseSecondary
-      .from('meal_plans_and_schemas')
-      .select('user_code, status, record_type, meal_plan_name')
-      .eq('record_type', 'meal_plan')
-      .limit(10);
+    console.log('All meal plans for user:', result);
 
-    console.log('All meal plans in database (first 10):', { allPlansInDb, allDbError });
+    if (!response.ok) {
+      console.error('Debug error:', result.error);
+      return { data: null, error: { message: result.error } };
+    }
 
-    return { data: { allPlans, allPlansInDb }, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Debug error:', error);
     return { data: null, error };
@@ -999,24 +775,22 @@ export const debugMealPlans = async (userCode) => {
 
 // WEIGHT LOGS
 export const getWeightLogs = async (userCode) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
     console.log('Fetching weight logs for userCode:', userCode);
     
-    // Fetch weight logs using user_code directly (since the table has user_code column)
-    const { data, error } = await supabaseSecondary
-      .from('weight_logs')
-      .select('*')
-      .eq('user_code', userCode)
-      .order('measurement_date', { ascending: true });
+    const apiUrl = getApiUrl();
+    const url = new URL(`${apiUrl}/api/weight-logs`);
+    url.searchParams.append('userCode', userCode);
 
-    if (error) {
-      console.error('Error fetching weight logs:', error);
-      return { data: null, error };
+    const response = await fetch(url.toString());
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error fetching weight logs:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    return { data: data || [], error: null };
+    return { data: result.data || [], error: null };
   } catch (error) {
     console.error('Unexpected error fetching weight logs:', error);
     return { data: null, error };
@@ -1024,53 +798,24 @@ export const getWeightLogs = async (userCode) => {
 };
 
 export const createWeightLog = async (userCode, weightLogData) => {
-  if (!isSecondaryAvailable()) return { data: null, error: { message: 'Secondary database not available' } };
-  
   try {
     console.log('Creating weight log for userCode:', userCode, 'data:', weightLogData);
     
-    // Build the insert data object with user_code and measurement_date
-    const insertData = {
-      user_code: userCode,
-      measurement_date: weightLogData.measurement_date || new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString()
-    };
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/weight-logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userCode, weightLogData })
+    });
 
-    // Add measurement values based on what's provided
-    if (weightLogData.weight_kg !== undefined && weightLogData.weight_kg !== null && weightLogData.weight_kg !== '') {
-      insertData.weight_kg = parseFloat(weightLogData.weight_kg);
-    }
-    if (weightLogData.body_fat_percentage !== undefined && weightLogData.body_fat_percentage !== null && weightLogData.body_fat_percentage !== '') {
-      insertData.body_fat_percentage = parseFloat(weightLogData.body_fat_percentage);
-    }
-    if (weightLogData.waist_circumference_cm !== undefined && weightLogData.waist_circumference_cm !== null && weightLogData.waist_circumference_cm !== '') {
-      insertData.waist_circumference_cm = parseFloat(weightLogData.waist_circumference_cm);
-    }
-    if (weightLogData.hip_circumference_cm !== undefined && weightLogData.hip_circumference_cm !== null && weightLogData.hip_circumference_cm !== '') {
-      insertData.hip_circumference_cm = parseFloat(weightLogData.hip_circumference_cm);
-    }
-    if (weightLogData.arm_circumference_cm !== undefined && weightLogData.arm_circumference_cm !== null && weightLogData.arm_circumference_cm !== '') {
-      insertData.arm_circumference_cm = parseFloat(weightLogData.arm_circumference_cm);
-    }
-    if (weightLogData.neck_circumference_cm !== undefined && weightLogData.neck_circumference_cm !== null && weightLogData.neck_circumference_cm !== '') {
-      insertData.neck_circumference_cm = parseFloat(weightLogData.neck_circumference_cm);
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Error creating weight log:', result.error);
+      return { data: null, error: { message: result.error } };
     }
 
-    console.log('Inserting weight log data:', JSON.stringify(insertData, null, 2));
-
-    const { data, error } = await supabaseSecondary
-      .from('weight_logs')
-      .insert([insertData])
-      .select();
-
-    if (error) {
-      console.error('Error creating weight log:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
-      console.error('Failed insert data:', JSON.stringify(insertData, null, 2));
-      return { data: null, error };
-    }
-
-    return { data, error: null };
+    return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error creating weight log:', error);
     return { data: null, error };

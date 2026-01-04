@@ -1435,6 +1435,2199 @@ async function handlePaymentFailed(invoice) {
 }
 
 // ====================================
+// USER API ENDPOINTS
+// ====================================
+
+// Get user_code by email
+app.get('/api/user/user-code', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ error: 'email is required' });
+    }
+
+    console.log('🔍 Fetching user_code for email:', email);
+
+    const { data: clientData, error } = await supabase
+      .from('clients')
+      .select('user_code')
+      .eq('email', email)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.json({ data: null });
+      }
+      console.error('❌ Error fetching user_code:', error);
+      return res.status(500).json({ 
+        error: 'Failed to fetch user_code',
+        message: error.message 
+      });
+    }
+
+    res.json({ data: clientData });
+  } catch (error) {
+    console.error('❌ Error in user/user-code endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Get user language preference by user_id
+app.get('/api/user/language', async (req, res) => {
+  try {
+    const { user_id } = req.query;
+
+    if (!user_id) {
+      return res.status(400).json({ error: 'user_id is required' });
+    }
+
+    console.log('🌐 Fetching user language for user_id:', user_id);
+
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
+      .select('user_language')
+      .eq('user_id', user_id)
+      .single();
+
+    if (clientError) {
+      if (clientError.code === 'PGRST116') {
+        // No rows returned - return null
+        return res.json({ data: null });
+      }
+      console.error('❌ Error fetching user language:', clientError);
+      return res.status(500).json({ 
+        error: 'Failed to fetch user language',
+        message: clientError.message 
+      });
+    }
+
+    res.json({ data: clientData });
+  } catch (error) {
+    console.error('❌ Error in user/language endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Get user settings by user_code
+app.get('/api/user/settings', async (req, res) => {
+  try {
+    const { user_code } = req.query;
+
+    if (!user_code) {
+      return res.status(400).json({ error: 'user_code is required' });
+    }
+
+    console.log('⚙️ Fetching settings for user_code:', user_code);
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('show_calories, show_macros, portion_display, measurement_system, weight_unit, decimal_places')
+      .eq('user_code', user_code)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.json({ data: null });
+      }
+      console.error('❌ Error fetching settings:', error);
+      return res.status(500).json({ 
+        error: 'Failed to fetch settings',
+        message: error.message 
+      });
+    }
+
+    res.json({ data });
+  } catch (error) {
+    console.error('❌ Error in user/settings endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Update user settings
+app.post('/api/user/settings', async (req, res) => {
+  try {
+    const { user_code, settings } = req.body;
+
+    if (!user_code) {
+      return res.status(400).json({ error: 'user_code is required' });
+    }
+
+    if (!settings) {
+      return res.status(400).json({ error: 'settings is required' });
+    }
+
+    console.log('💾 Updating settings for user_code:', user_code);
+
+    const { error } = await supabase
+      .from('clients')
+      .update(settings)
+      .eq('user_code', user_code);
+
+    if (error) {
+      console.error('❌ Error updating settings:', error);
+      return res.status(500).json({ 
+        error: 'Failed to update settings',
+        message: error.message 
+      });
+    }
+
+    res.json({ success: true, message: 'Settings updated successfully' });
+  } catch (error) {
+    console.error('❌ Error in user/settings update endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// ====================================
+// ONBOARDING API ENDPOINTS
+// ====================================
+
+// Get client data by user_id
+app.get('/api/onboarding/client-data', async (req, res) => {
+  try {
+    const { user_id } = req.query;
+
+    if (!user_id) {
+      return res.status(400).json({ error: 'user_id is required' });
+    }
+
+    console.log('📋 Fetching client data for user_id:', user_id);
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('user_id', user_id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows returned - not an error, just no data
+        return res.json({ data: null });
+      }
+      console.error('❌ Error fetching client data:', error);
+      return res.status(500).json({ 
+        error: 'Failed to fetch client data',
+        message: error.message 
+      });
+    }
+
+    res.json({ data });
+  } catch (error) {
+    console.error('❌ Error in onboarding/client-data endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Get chat user meal data by user_code
+app.get('/api/onboarding/chat-user-meal-data', async (req, res) => {
+  try {
+    const { user_code } = req.query;
+
+    if (!user_code) {
+      return res.status(400).json({ error: 'user_code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    console.log('📋 Fetching chat user meal data for user_code:', user_code);
+
+    const { data: chatData, error: chatError } = await chatSupabase
+      .from('chat_users')
+      .select('number_of_meals, meal_plan_structure')
+      .eq('user_code', user_code)
+      .single();
+
+    if (chatError) {
+      if (chatError.code === 'PGRST116') {
+        // No rows returned - not an error, just no data
+        return res.json({ data: null });
+      }
+      console.error('❌ Error fetching chat user meal data:', chatError);
+      return res.status(500).json({ 
+        error: 'Failed to fetch chat user meal data',
+        message: chatError.message 
+      });
+    }
+
+    res.json({ data: chatData });
+  } catch (error) {
+    console.error('❌ Error in onboarding/chat-user-meal-data endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Check if phone number exists
+app.post('/api/onboarding/check-phone', async (req, res) => {
+  try {
+    const { phone, user_id, user_code } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ error: 'phone is required' });
+    }
+
+    console.log('📞 Checking phone existence:', phone);
+
+    // Check in clients table
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
+      .select('phone, user_id')
+      .eq('phone', phone)
+      .maybeSingle();
+
+    // If found and it's not the current user's phone, it exists
+    if (clientData && clientData.user_id !== user_id) {
+      return res.json({ exists: true, table: 'clients' });
+    }
+
+    // Check in chat_users table (if secondary DB is available)
+    if (chatSupabase) {
+      // Check phone_number column
+      const { data: chatUserDataByPhone } = await chatSupabase
+        .from('chat_users')
+        .select('phone_number, whatsapp_number, user_code')
+        .eq('phone_number', phone)
+        .maybeSingle();
+
+      // Check whatsapp_number column
+      const { data: chatUserDataByWhatsApp } = await chatSupabase
+        .from('chat_users')
+        .select('phone_number, whatsapp_number, user_code')
+        .eq('whatsapp_number', phone)
+        .maybeSingle();
+
+      const chatUserData = chatUserDataByPhone || chatUserDataByWhatsApp;
+
+      // If found and it's not the current user's phone (check by user_code if available)
+      if (chatUserData) {
+        // If we have userCode, check if it matches
+        if (user_code && chatUserData.user_code === user_code) {
+          // It's the same user, so it's okay
+          return res.json({ exists: false });
+        } else if (!user_code || chatUserData.user_code !== user_code) {
+          // Different user has this phone number
+          return res.json({ exists: true, table: 'chat_users' });
+        }
+      }
+    }
+
+    res.json({ exists: false });
+  } catch (error) {
+    console.error('❌ Error in onboarding/check-phone endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Update client data
+app.post('/api/onboarding/update-client', async (req, res) => {
+  try {
+    const { user_id, clientData } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: 'user_id is required' });
+    }
+
+    if (!clientData) {
+      return res.status(400).json({ error: 'clientData is required' });
+    }
+
+    console.log('💾 Updating client data for user_id:', user_id);
+
+    const { data: updateData, error: profileError } = await supabase
+      .from('clients')
+      .update(clientData)
+      .eq('user_id', user_id)
+      .select();
+
+    if (profileError) {
+      console.error('❌ Error updating client:', profileError);
+      return res.status(500).json({ 
+        error: 'Failed to update client',
+        message: profileError.message 
+      });
+    }
+
+    res.json({ data: updateData });
+  } catch (error) {
+    console.error('❌ Error in onboarding/update-client endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// Update chat user data
+app.post('/api/onboarding/update-chat-user', async (req, res) => {
+  try {
+    const { user_code, chatUserData } = req.body;
+
+    if (!user_code) {
+      return res.status(400).json({ error: 'user_code is required' });
+    }
+
+    if (!chatUserData) {
+      return res.status(400).json({ error: 'chatUserData is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    console.log('💾 Updating chat user data for user_code:', user_code);
+
+    // Find chat user by user_code
+    const { data: chatUser, error: chatUserError } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('user_code', user_code)
+      .single();
+
+    if (chatUserError || !chatUser) {
+      console.error('❌ Chat user not found:', chatUserError);
+      return res.status(404).json({ 
+        error: 'Chat user not found',
+        message: chatUserError?.message 
+      });
+    }
+
+    // Update chat user
+    const { error: chatUpdateError } = await chatSupabase
+      .from('chat_users')
+      .update(chatUserData)
+      .eq('id', chatUser.id);
+
+    if (chatUpdateError) {
+      console.error('❌ Error updating chat user:', chatUpdateError);
+      return res.status(500).json({ 
+        error: 'Failed to update chat user',
+        message: chatUpdateError.message 
+      });
+    }
+
+    res.json({ success: true, message: 'Chat user updated successfully' });
+  } catch (error) {
+    console.error('❌ Error in onboarding/update-chat-user endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// ====================================
+// PROFILE PAGE API ROUTES
+// ====================================
+
+// Get active client meal plan
+app.get('/api/profile/meal-plan', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    const { data, error } = await supabase
+      .from('client_meal_plans')
+      .select('*')
+      .eq('user_code', userCode)
+      .eq('active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching client meal plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update client meal plan (clear old edited plan)
+app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
+  try {
+    const { planId } = req.body;
+    if (!planId) {
+      return res.status(400).json({ error: 'Plan ID is required' });
+    }
+
+    const { error } = await supabase
+      .from('client_meal_plans')
+      .update({
+        client_edited_meal_plan: null,
+        edited_plan_date: null,
+      })
+      .eq('id', planId);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error clearing edited meal plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update client meal plan (save edited plan)
+app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
+  try {
+    const { planId, mealPlan } = req.body;
+    if (!planId || !mealPlan) {
+      return res.status(400).json({ error: 'Plan ID and meal plan data are required' });
+    }
+
+    const today = new Date().toISOString();
+    const { error } = await supabase
+      .from('client_meal_plans')
+      .update({
+        client_edited_meal_plan: mealPlan,
+        edited_plan_date: today,
+      })
+      .eq('id', planId);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving edited meal plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get client data for onboarding check
+app.get('/api/profile/client', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching client data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Load profile data from clients table
+app.get('/api/profile/load', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    res.json({ data });
+  } catch (error) {
+    console.error('Error loading profile data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Load chat_users data
+app.get('/api/profile/chat-user', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('chat_users')
+      .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    res.json({ data });
+  } catch (error) {
+    console.error('Error loading chat_users data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save profile data
+app.post('/api/profile/save', async (req, res) => {
+  try {
+    const { userId, profileData } = req.body;
+    if (!userId || !profileData) {
+      return res.status(400).json({ error: 'User ID and profile data are required' });
+    }
+
+    // Check if record exists
+    const { data: existingData, error: checkError } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    let result;
+    if (!existingData) {
+      // Insert new record
+      result = await supabase
+        .from('clients')
+        .insert(profileData)
+        .select();
+    } else {
+      // Update existing record
+      result = await supabase
+        .from('clients')
+        .update(profileData)
+        .eq('user_id', userId)
+        .select();
+    }
+
+    const { data, error } = result;
+    if (error) throw error;
+
+    res.json({ data });
+  } catch (error) {
+    console.error('Error saving profile data:', error);
+    res.status(500).json({ error: error.message, code: error.code });
+  }
+});
+
+// Sync profile data to chat_users
+app.post('/api/profile/sync-chat-user', async (req, res) => {
+  try {
+    const { userCode, chatUserData } = req.body;
+    if (!userCode || !chatUserData) {
+      return res.status(400).json({ error: 'User code and chat user data are required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    // Get chat_users id
+    const { data: chatUser, error: chatUserError } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (chatUserError) throw chatUserError;
+    if (!chatUser) {
+      return res.status(404).json({ error: 'Chat user not found' });
+    }
+
+    // Update chat_users
+    const { error } = await chatSupabase
+      .from('chat_users')
+      .update(chatUserData)
+      .eq('id', chatUser.id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error syncing to chat_users:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save profile image URL
+app.post('/api/profile/save-image-url', async (req, res) => {
+  try {
+    const { userId, imageUrl } = req.body;
+    if (!userId || !imageUrl) {
+      return res.status(400).json({ error: 'User ID and image URL are required' });
+    }
+
+    // Check if record exists
+    const { data: existingData, error: checkError } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!existingData) {
+      // Insert new record with minimal data
+      const { error: insertError } = await supabase
+        .from('clients')
+        .insert({
+          user_id: userId,
+          profile_image_url: imageUrl,
+          updated_at: new Date().toISOString()
+        });
+
+      if (insertError) throw insertError;
+    } else {
+      // Update existing record
+      const { error: updateError } = await supabase
+        .from('clients')
+        .update({
+          profile_image_url: imageUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+
+      if (updateError) throw updateError;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving profile image URL:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get user_code from clients table
+app.get('/api/profile/user-code', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const { data, error } = await supabase
+      .from('clients')
+      .select('user_code')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    res.json({ user_code: data?.user_code || null });
+  } catch (error) {
+    console.error('Error fetching user_code:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload profile image (with cropping on server)
+app.post('/api/profile/upload-image', async (req, res) => {
+  try {
+    const { userId, imageData, bucketName } = req.body;
+    if (!userId || !imageData) {
+      return res.status(400).json({ error: 'User ID and image data are required' });
+    }
+
+    // Get user_code
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
+      .select('user_code')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (clientError || !clientData) {
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+
+    const userCode = clientData.user_code;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code not found' });
+    }
+
+    // Decode base64 image
+    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // Generate filename
+    const timestamp = Date.now();
+    const filename = `${userCode}/${timestamp}.jpeg`;
+
+    // Upload to Supabase Storage
+    const bucket = bucketName || process.env.REACT_APP_SUPABASE_STORAGE_BUCKET_NAME || 'profile-pictures';
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(filename, buffer, {
+        contentType: 'image/jpeg',
+        upsert: false,
+        cacheControl: '3600',
+        metadata: {
+          userId: userId,
+          userCode: userCode,
+          uploadedAt: new Date().toISOString()
+        }
+      });
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(uploadData.path);
+
+    res.json({ publicUrl: urlData.publicUrl, path: uploadData.path });
+  } catch (error) {
+    console.error('Error uploading profile image:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Load client data for meal plan generation (from chat_users and clients)
+app.get('/api/profile/client-data-full', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    // Load from chat_users
+    const { data: chatData, error: chatError } = await chatSupabase
+      .from('chat_users')
+      .select('*')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (chatError && chatError.code !== 'PGRST116') {
+      throw chatError;
+    }
+
+    // Load from clients
+    const { data: clientsData, error: clientsError } = await supabase
+      .from('clients')
+      .select('onboarding_completed')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (clientsError && clientsError.code !== 'PGRST116') {
+      throw clientsError;
+    }
+
+    // Merge the data
+    const mergedData = {
+      ...chatData,
+      onboarding_completed: clientsData?.onboarding_completed || false
+    };
+
+    res.json({ data: mergedData });
+  } catch (error) {
+    console.error('Error loading client data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save meal plan to both databases
+app.post('/api/profile/meal-plan/create', async (req, res) => {
+  try {
+    const { planId, userCode, mealPlanName, template, menuData, dailyCalories, macros } = req.body;
+    if (!planId || !userCode || !mealPlanName || !menuData) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const now = new Date().toISOString();
+
+    // Save to meal_plans_and_schemas (secondary database)
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { error: secondaryError } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .insert({
+        id: planId,
+        record_type: 'meal_plan',
+        user_code: userCode,
+        meal_plan_name: mealPlanName,
+        schema: template,
+        meal_plan: menuData,
+        status: 'active',
+        daily_total_calories: dailyCalories,
+        macros_target: macros,
+        active_from: now,
+        created_at: now,
+        updated_at: now
+      });
+
+    if (secondaryError) throw secondaryError;
+
+    // Save to client_meal_plans (main database)
+    const { error: mainError } = await supabase
+      .from('client_meal_plans')
+      .insert({
+        id: planId,
+        user_code: userCode,
+        original_meal_plan_id: planId,
+        meal_plan_name: mealPlanName,
+        dietitian_meal_plan: menuData,
+        active: true,
+        daily_total_calories: dailyCalories,
+        macros_target: macros,
+        created_at: now,
+        updated_at: now
+      });
+
+    if (mainError) {
+      // Rollback secondary save
+      await chatSupabase
+        .from('meal_plans_and_schemas')
+        .delete()
+        .eq('id', planId);
+      throw mainError;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error creating meal plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get provider_id from chat_users
+app.get('/api/profile/provider', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('chat_users')
+      .select('provider_id')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    res.json({ provider_id: data?.provider_id || null });
+  } catch (error) {
+    console.error('Error fetching provider_id:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Check if system message already exists
+app.get('/api/profile/system-message-exists', async (req, res) => {
+  try {
+    const { providerId, userCode, title } = req.query;
+    if (!providerId || !userCode || !title) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('system_messages')
+      .select('id')
+      .eq('directed_to', providerId)
+      .eq('message_type', 'info')
+      .eq('title', title)
+      .ilike('content', `%${userCode}%`)
+      .eq('is_active', true);
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    res.json({ exists: data && data.length > 0 });
+  } catch (error) {
+    console.error('Error checking system message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create system message
+app.post('/api/profile/system-message', async (req, res) => {
+  try {
+    const { title, content, messageType, priority, directedTo } = req.body;
+    if (!title || !content || !directedTo) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('system_messages')
+      .insert({
+        title,
+        content,
+        message_type: messageType || 'info',
+        priority: priority || 'medium',
+        is_active: true,
+        directed_to: directedTo
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error creating system message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user language in clients table
+app.post('/api/profile/update-language', async (req, res) => {
+  try {
+    const { userCode, language } = req.body;
+    if (!userCode || !language) {
+      return res.status(400).json({ error: 'User code and language are required' });
+    }
+
+    const { error } = await supabase
+      .from('clients')
+      .update({ user_language: language })
+      .eq('user_code', userCode);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating language:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ====================================
+// SECONDARY CLIENT API ROUTES (Food Logs, Chat, Weight, etc.)
+// ====================================
+
+// Get food logs
+app.get('/api/food-logs', async (req, res) => {
+  try {
+    const { userCode, date } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    // Get user_id from chat_users
+    const { data: userData, error: userError } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (userError || !userData) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get food logs
+    let query = chatSupabase
+      .from('food_logs')
+      .select('*')
+      .eq('user_id', userData.id)
+      .order('created_at', { ascending: false });
+
+    if (date) {
+      query = query.eq('log_date', date);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching food logs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create food log
+app.post('/api/food-logs', async (req, res) => {
+  try {
+    const { userCode, foodLogData } = req.body;
+    if (!userCode || !foodLogData) {
+      return res.status(400).json({ error: 'User code and food log data are required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    // Get user_id from chat_users
+    const { data: userData, error: userError } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (userError || !userData) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Create food log
+    const insertData = {
+      user_id: userData.id,
+      meal_label: foodLogData.meal_label,
+      food_items: foodLogData.food_items || [],
+      log_date: foodLogData.log_date || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    };
+
+    const { data, error } = await chatSupabase
+      .from('food_logs')
+      .insert([insertData])
+      .select();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error creating food log:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update food log
+app.put('/api/food-logs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { foodLogData } = req.body;
+    
+    if (!foodLogData) {
+      return res.status(400).json({ error: 'Food log data is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+    
+    if (foodLogData.meal_label !== undefined) updateData.meal_label = foodLogData.meal_label;
+    if (foodLogData.food_items !== undefined) updateData.food_items = foodLogData.food_items;
+    if (foodLogData.image_url !== undefined) updateData.image_url = foodLogData.image_url;
+    if (foodLogData.total_calories !== undefined) updateData.total_calories = foodLogData.total_calories;
+    if (foodLogData.total_protein_g !== undefined) updateData.total_protein_g = foodLogData.total_protein_g;
+    if (foodLogData.total_carbs_g !== undefined) updateData.total_carbs_g = foodLogData.total_carbs_g;
+    if (foodLogData.total_fat_g !== undefined) updateData.total_fat_g = foodLogData.total_fat_g;
+    if (foodLogData.log_date !== undefined) updateData.log_date = foodLogData.log_date;
+
+    const { data, error } = await chatSupabase
+      .from('food_logs')
+      .update(updateData)
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error updating food log:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete food log
+app.delete('/api/food-logs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('food_logs')
+      .delete()
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error deleting food log:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get chat messages
+app.get('/api/chat-messages', async (req, res) => {
+  try {
+    const { userCode, beforeTimestamp } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    // Get user_id from chat_users
+    const { data: userData, error: userError } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (userError || !userData) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get conversations
+    const { data: conversations, error: conversationsError } = await chatSupabase
+      .from('chat_conversations')
+      .select('id')
+      .eq('user_id', userData.id)
+      .order('started_at', { ascending: false });
+
+    if (conversationsError) throw conversationsError;
+
+    if (!conversations || conversations.length === 0) {
+      return res.json({ data: [] });
+    }
+
+    const conversationIds = conversations.map(conv => conv.id);
+    
+    let query = chatSupabase
+      .from('chat_messages')
+      .select('*')
+      .in('conversation_id', conversationIds);
+
+    if (beforeTimestamp) {
+      query = query.lt('created_at', beforeTimestamp);
+    }
+
+    query = query.order('created_at', { ascending: false }).limit(20);
+
+    const { data: messages, error: messagesError } = await query;
+    if (messagesError) throw messagesError;
+
+    res.json({ data: messages || [] });
+  } catch (error) {
+    console.error('Error fetching chat messages:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create chat message
+app.post('/api/chat-messages', async (req, res) => {
+  try {
+    const { userCode, messageData } = req.body;
+    if (!userCode || !messageData) {
+      return res.status(400).json({ error: 'User code and message data are required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    // Get user_id from chat_users
+    const { data: userData, error: userError } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (userError || !userData) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get or create conversation
+    let { data: conversation, error: conversationError } = await chatSupabase
+      .from('chat_conversations')
+      .select('id')
+      .eq('user_id', userData.id)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!conversation) {
+      const { data: newConversation, error: createError } = await chatSupabase
+        .from('chat_conversations')
+        .insert([{
+          user_id: userData.id,
+          started_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (createError) throw createError;
+      conversation = newConversation;
+    }
+
+    // Create message
+    const messageInsert = {
+      conversation_id: conversation.id,
+      role: messageData.role || 'user',
+      topic: messageData.topic,
+      extension: messageData.extension,
+      attachments: messageData.attachments,
+      created_at: new Date().toISOString()
+    };
+
+    if (messageData.role === 'assistant') {
+      messageInsert.message = messageData.message;
+    } else {
+      messageInsert.content = messageData.content;
+    }
+
+    const { data, error } = await chatSupabase
+      .from('chat_messages')
+      .insert([messageInsert])
+      .select();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error creating chat message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get weight logs
+app.get('/api/weight-logs', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('weight_logs')
+      .select('*')
+      .eq('user_code', userCode)
+      .order('measurement_date', { ascending: true });
+
+    if (error) throw error;
+    res.json({ data: data || [] });
+  } catch (error) {
+    console.error('Error fetching weight logs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create weight log
+app.post('/api/weight-logs', async (req, res) => {
+  try {
+    const { userCode, weightLogData } = req.body;
+    if (!userCode || !weightLogData) {
+      return res.status(400).json({ error: 'User code and weight log data are required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const insertData = {
+      user_code: userCode,
+      measurement_date: weightLogData.measurement_date || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    };
+
+    if (weightLogData.weight_kg !== undefined && weightLogData.weight_kg !== null && weightLogData.weight_kg !== '') {
+      insertData.weight_kg = parseFloat(weightLogData.weight_kg);
+    }
+    if (weightLogData.body_fat_percentage !== undefined && weightLogData.body_fat_percentage !== null && weightLogData.body_fat_percentage !== '') {
+      insertData.body_fat_percentage = parseFloat(weightLogData.body_fat_percentage);
+    }
+    if (weightLogData.waist_circumference_cm !== undefined && weightLogData.waist_circumference_cm !== null && weightLogData.waist_circumference_cm !== '') {
+      insertData.waist_circumference_cm = parseFloat(weightLogData.waist_circumference_cm);
+    }
+    if (weightLogData.hip_circumference_cm !== undefined && weightLogData.hip_circumference_cm !== null && weightLogData.hip_circumference_cm !== '') {
+      insertData.hip_circumference_cm = parseFloat(weightLogData.hip_circumference_cm);
+    }
+    if (weightLogData.arm_circumference_cm !== undefined && weightLogData.arm_circumference_cm !== null && weightLogData.arm_circumference_cm !== '') {
+      insertData.arm_circumference_cm = parseFloat(weightLogData.arm_circumference_cm);
+    }
+    if (weightLogData.neck_circumference_cm !== undefined && weightLogData.neck_circumference_cm !== null && weightLogData.neck_circumference_cm !== '') {
+      insertData.neck_circumference_cm = parseFloat(weightLogData.neck_circumference_cm);
+    }
+
+    const { data, error } = await chatSupabase
+      .from('weight_logs')
+      .insert([insertData])
+      .select();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error creating weight log:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Search foods
+app.get('/api/foods/search', async (req, res) => {
+  try {
+    const { query, limit = 20 } = req.query;
+    if (!query) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const isHebrewQuery = /[\u0590-\u05FF]/.test(query);
+    const queryWords = query.trim().split(/\s+/).filter(word => word.length > 0);
+    let allData = [];
+    
+    if (queryWords.length === 1) {
+      const word = queryWords[0];
+      const startsWithPattern = `${word}%`;
+      const containsPattern = `%${word}%`;
+      const searchColumn = isHebrewQuery ? 'name' : 'english_name';
+      
+      const { data: startsWithData } = await chatSupabase
+        .from('ingridientsroee')
+        .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
+        .ilike(searchColumn, startsWithPattern)
+        .limit(50);
+      
+      if (startsWithData) {
+        allData = startsWithData;
+      }
+      
+      if (allData.length < 20) {
+        const { data: containsData } = await chatSupabase
+          .from('ingridientsroee')
+          .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
+          .ilike(searchColumn, containsPattern)
+          .limit(50);
+        
+        if (containsData) {
+          const existingIds = new Set(allData.map(item => item.id));
+          const newItems = containsData.filter(item => !existingIds.has(item.id));
+          allData = [...allData, ...newItems];
+        }
+      }
+    } else {
+      const searchColumn = isHebrewQuery ? 'name' : 'english_name';
+      const wordsConditions = queryWords.map(word => 
+        `${searchColumn}.ilike.%${word}%`
+      );
+      
+      const { data: wordsData } = await chatSupabase
+        .from('ingridientsroee')
+        .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
+        .or(wordsConditions.join(','))
+        .limit(200);
+      
+      if (wordsData) {
+        allData = wordsData.filter(item => {
+          const searchText = isHebrewQuery 
+            ? ((item.name || '').toLowerCase())
+            : ((item.english_name || '').toLowerCase());
+          
+          return queryWords.every(word => 
+            searchText.includes(word.toLowerCase())
+          );
+        });
+      }
+    }
+    
+    // Transform and limit data
+    const transformedData = allData.slice(0, parseInt(limit)).map(ingredient => ({
+      id: ingredient.id,
+      name: isHebrewQuery ? (ingredient.name || ingredient.english_name || '') : (ingredient.english_name || ingredient.name || ''),
+      item: isHebrewQuery ? (ingredient.name || ingredient.english_name || '') : (ingredient.english_name || ingredient.name || ''),
+      english_name: ingredient.english_name || '',
+      calories: ingredient.calories_energy || 0,
+      protein: ingredient.protein_g || 0,
+      fat: ingredient.fat_g || 0,
+      carbs: ingredient.carbohydrates_g || 0,
+      brand: '',
+      household_measure: '',
+      'portionSI(gram)': 100,
+      UPC: null
+    }));
+    
+    res.json({ data: transformedData });
+  } catch (error) {
+    console.error('Error searching foods:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get companies with managers
+app.get('/api/companies', async (req, res) => {
+  try {
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('companies')
+      .select('id, name, managers:profiles!profiles_company_id_fkey(id, name, role)')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    const formattedCompanies = (data || []).map((company) => ({
+      id: company.id,
+      name: company.name,
+      managers: (company.managers || []).filter((manager) => manager.role === 'company_manager')
+    }));
+
+    res.json({ data: formattedCompanies });
+  } catch (error) {
+    console.error('Error fetching companies:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get client company assignment
+app.get('/api/client-company-assignment', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('chat_users')
+      .select('provider_id, provider:profiles!chat_users_provider_id_fkey(id, name, company_id)')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    res.json({ data: data || null });
+  } catch (error) {
+    console.error('Error fetching client assignment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Assign client to company
+app.post('/api/assign-client-company', async (req, res) => {
+  try {
+    const { userCode, companyId } = req.body;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    let managerId = null;
+
+    if (companyId) {
+      const { data: manager, error: managerError } = await chatSupabase
+        .from('profiles')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('role', 'company_manager')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (managerError) throw managerError;
+
+      if (!manager) {
+        return res.status(404).json({ error: 'No manager found for the selected company' });
+      }
+
+      managerId = manager.id;
+    }
+
+    const { data, error } = await chatSupabase
+      .from('chat_users')
+      .update({ provider_id: managerId })
+      .eq('user_code', userCode)
+      .select('provider_id')
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error assigning client to company:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get meal plan by user code
+app.get('/api/meal-plan', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .select('*')
+      .eq('user_code', userCode)
+      .eq('record_type', 'meal_plan')
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching meal plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get meal plan schemas
+app.get('/api/meal-plan-schemas', async (req, res) => {
+  try {
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .select('*')
+      .eq('record_type', 'schema')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching meal plan schemas:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create meal plan
+app.post('/api/meal-plan', async (req, res) => {
+  try {
+    const { dietitianId, userCode, mealPlanData } = req.body;
+    if (!userCode || !mealPlanData) {
+      return res.status(400).json({ error: 'User code and meal plan data are required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .insert([{
+        record_type: 'meal_plan',
+        dietitian_id: dietitianId,
+        user_code: userCode,
+        meal_plan_name: mealPlanData.meal_plan_name,
+        meal_plan: mealPlanData.meal_plan,
+        status: mealPlanData.status || 'draft',
+        active_from: mealPlanData.active_from,
+        active_until: mealPlanData.active_until,
+        daily_total_calories: mealPlanData.daily_total_calories,
+        macros_target: mealPlanData.macros_target,
+        recommendations: mealPlanData.recommendations,
+        dietary_restrictions: mealPlanData.dietary_restrictions,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }])
+      .select();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error creating meal plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update meal plan
+app.put('/api/meal-plan/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { mealPlanData } = req.body;
+    
+    if (!mealPlanData) {
+      return res.status(400).json({ error: 'Meal plan data is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .update({
+        meal_plan_name: mealPlanData.meal_plan_name,
+        meal_plan: mealPlanData.meal_plan,
+        status: mealPlanData.status,
+        active_from: mealPlanData.active_from,
+        active_until: mealPlanData.active_until,
+        daily_total_calories: mealPlanData.daily_total_calories,
+        macros_target: mealPlanData.macros_target,
+        recommendations: mealPlanData.recommendations,
+        dietary_restrictions: mealPlanData.dietary_restrictions,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error updating meal plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get meal plan history
+app.get('/api/meal-plan-history', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .select('*')
+      .eq('user_code', userCode)
+      .eq('record_type', 'meal_plan')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching meal plan history:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get messages
+app.get('/api/messages', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('messages')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send message
+app.post('/api/messages', async (req, res) => {
+  try {
+    const { userId, messageData } = req.body;
+    if (!userId || !messageData) {
+      return res.status(400).json({ error: 'User ID and message data are required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('messages')
+      .insert([{
+        user_id: userId,
+        ...messageData,
+        created_at: new Date().toISOString()
+      }])
+      .select();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark message as read
+app.put('/api/messages/:id/read', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error marking message as read:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get food by ID
+app.get('/api/foods/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('ingridientsroee')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching food by ID:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug meal plans
+app.get('/api/debug/meal-plans', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data: allPlans, error: allError } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .select('*')
+      .eq('user_code', userCode)
+      .eq('record_type', 'meal_plan');
+
+    const { data: allPlansInDb, error: allDbError } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .select('user_code, status, record_type, meal_plan_name')
+      .eq('record_type', 'meal_plan')
+      .limit(10);
+
+    res.json({ data: { allPlans, allPlansInDb }, allError, allDbError });
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ====================================
+// AUTH API ROUTES
+// ====================================
+
+// Check if email exists
+app.post('/api/auth/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const normalizedEmail = email.toLowerCase();
+    
+    // Check PRIMARY database (clients table)
+    const { data: primaryData, error: primaryError } = await supabase
+      .from('clients')
+      .select('email')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (primaryError && primaryError.code !== 'PGRST116') {
+      throw primaryError;
+    }
+
+    if (primaryData) {
+      return res.json({ exists: true });
+    }
+
+    // Check SECONDARY database (chat_users table)
+    if (chatSupabase) {
+      const { data: secondaryData, error: secondaryError } = await chatSupabase
+        .from('chat_users')
+        .select('email')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+
+      if (secondaryError && secondaryError.code !== 'PGRST116') {
+        throw secondaryError;
+      }
+
+      if (secondaryData) {
+        return res.json({ exists: true });
+      }
+    }
+
+    res.json({ exists: false });
+  } catch (error) {
+    console.error('Error checking email:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Check if phone exists
+app.post('/api/auth/check-phone', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone is required' });
+    }
+
+    // Check PRIMARY database (clients table)
+    const { data: primaryData, error: primaryError } = await supabase
+      .from('clients')
+      .select('phone')
+      .eq('phone', phone)
+      .maybeSingle();
+
+    if (primaryError && primaryError.code !== 'PGRST116') {
+      throw primaryError;
+    }
+
+    if (primaryData) {
+      return res.json({ exists: true });
+    }
+
+    // Check SECONDARY database (chat_users table)
+    if (chatSupabase) {
+      const { data: secondaryDataByPhone, error: secondaryError1 } = await chatSupabase
+        .from('chat_users')
+        .select('phone_number, whatsapp_number')
+        .eq('phone_number', phone)
+        .maybeSingle();
+
+      if (secondaryError1 && secondaryError1.code !== 'PGRST116') {
+        throw secondaryError1;
+      }
+
+      if (secondaryDataByPhone) {
+        return res.json({ exists: true });
+      }
+
+      const { data: secondaryDataByWhatsApp, error: secondaryError2 } = await chatSupabase
+        .from('chat_users')
+        .select('phone_number, whatsapp_number')
+        .eq('whatsapp_number', phone)
+        .maybeSingle();
+
+      if (secondaryError2 && secondaryError2.code !== 'PGRST116') {
+        throw secondaryError2;
+      }
+
+      if (secondaryDataByWhatsApp) {
+        return res.json({ exists: true });
+      }
+    }
+
+    res.json({ exists: false });
+  } catch (error) {
+    console.error('Error checking phone:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Check if user code exists
+app.post('/api/auth/check-user-code', async (req, res) => {
+  try {
+    const { userCode } = req.body;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    // Check PRIMARY database
+    const { data: primaryData, error: primaryError } = await supabase
+      .from('clients')
+      .select('user_code')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (primaryError && primaryError.code !== 'PGRST116') {
+      throw primaryError;
+    }
+
+    if (primaryData) {
+      return res.json({ exists: true });
+    }
+
+    // Check SECONDARY database
+    if (chatSupabase) {
+      const { data: secondaryData, error: secondaryError } = await chatSupabase
+        .from('chat_users')
+        .select('user_code')
+        .eq('user_code', userCode)
+        .maybeSingle();
+
+      if (secondaryError && secondaryError.code !== 'PGRST116') {
+        throw secondaryError;
+      }
+
+      if (secondaryData) {
+        return res.json({ exists: true });
+      }
+    }
+
+    res.json({ exists: false });
+  } catch (error) {
+    console.error('Error checking user code:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get default provider (company manager)
+app.get('/api/auth/default-provider', async (req, res) => {
+  try {
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
+    
+    const { data: managerData, error: managerError } = await chatSupabase
+      .from('profiles')
+      .select('id')
+      .eq('company_id', betterChoiceCompanyId)
+      .eq('role', 'company_manager')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (managerError && managerError.code !== 'PGRST116') {
+      throw managerError;
+    }
+
+    res.json({ provider_id: managerData?.id || null });
+  } catch (error) {
+    console.error('Error getting default provider:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create client record
+app.post('/api/auth/create-client', async (req, res) => {
+  try {
+    const { userId, userData, userCode, providerId } = req.body;
+    if (!userId || !userData || !userCode) {
+      return res.status(400).json({ error: 'User ID, user data, and user code are required' });
+    }
+
+    const clientInsertData = {
+      user_id: userId,
+      full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+      email: userData.email,
+      phone: userData.phone,
+      user_code: userCode,
+      status: 'active'
+    };
+
+    const { data, error } = await supabase
+      .from('clients')
+      .insert([clientInsertData])
+      .select();
+
+    if (error) throw error;
+
+    // Also create record in chat_users table (secondary database)
+    let chatUserCreated = false;
+    let chatUserDataResult = null;
+    
+    if (chatSupabase && data && data[0]) {
+      try {
+        const chatUserData = {
+          user_code: userCode,
+          full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+          email: userData.email,
+          phone_number: userData.phone,
+          whatsapp_number: userData.phone,
+          platform: userData.platform || 'whatsapp',
+          provider_id: providerId || null,
+          activated: true,
+          is_verified: false,
+          language: 'en',
+          created_at: new Date().toISOString()
+        };
+
+        const { data: chatUserResult, error: chatUserError } = await chatSupabase
+          .from('chat_users')
+          .insert([chatUserData])
+          .select();
+
+        if (!chatUserError) {
+          chatUserCreated = true;
+          chatUserDataResult = chatUserResult;
+        }
+      } catch (chatError) {
+        console.error('Error creating chat user:', chatError);
+      }
+    }
+
+    res.json({ 
+      data, 
+      chatUserCreated,
+      chatUserData: chatUserDataResult
+    });
+  } catch (error) {
+    console.error('Error creating client record:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get client record
+app.get('/api/auth/client/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error getting client record:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update client record
+app.put('/api/auth/client/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { updates } = req.body;
+    
+    if (!updates) {
+      return res.status(400).json({ error: 'Updates are required' });
+    }
+
+    const { data, error } = await supabase
+      .from('clients')
+      .update(updates)
+      .eq('user_id', userId)
+      .select();
+
+    if (error) throw error;
+
+    // If secondary DB is available and we have user_code, also update chat_users
+    if (chatSupabase && data && data[0] && data[0].user_code) {
+      try {
+        const { data: chatUser, error: chatUserError } = await chatSupabase
+          .from('chat_users')
+          .select('id')
+          .eq('user_code', data[0].user_code)
+          .maybeSingle();
+
+        if (!chatUserError && chatUser) {
+          const chatUpdates = {};
+          
+          if (updates.full_name) chatUpdates.full_name = updates.full_name;
+          if (updates.email) chatUpdates.email = updates.email;
+          if (updates.phone) {
+            chatUpdates.phone_number = updates.phone;
+            chatUpdates.whatsapp_number = updates.phone;
+          }
+          if (updates.region) chatUpdates.region = updates.region;
+          if (updates.city) chatUpdates.city = updates.city;
+          if (updates.timezone) chatUpdates.timezone = updates.timezone;
+          if (updates.age) chatUpdates.age = updates.age;
+          if (updates.gender) chatUpdates.gender = updates.gender;
+          if (updates.birth_date) chatUpdates.date_of_birth = updates.birth_date;
+          if (updates.food_allergies) chatUpdates.food_allergies = updates.food_allergies;
+          if (updates.updated_at) chatUpdates.updated_at = updates.updated_at;
+
+          if (Object.keys(chatUpdates).length > 0) {
+            await chatSupabase
+              .from('chat_users')
+              .update(chatUpdates)
+              .eq('id', chatUser.id);
+          }
+        }
+      } catch (syncError) {
+        console.error('Error syncing to chat_users:', syncError);
+      }
+    }
+
+    res.json({ data });
+  } catch (error) {
+    console.error('Error updating client record:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ====================================
 // CONTACT FORM ENDPOINT
 // ====================================
 

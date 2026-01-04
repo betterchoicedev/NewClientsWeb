@@ -5,7 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useStripe } from '../context/StripeContext';
 import { useSettings } from '../context/SettingsContext';
-import { supabase, supabaseSecondary } from '../supabase/supabaseClient';
+import { supabase } from '../supabase/supabaseClient';
 import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, getChatMessages, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany, getWeightLogs, createWeightLog } from '../supabase/secondaryClient';
 import { normalizePhoneForDatabase, signOut } from '../supabase/auth';
 import { getAllProducts, getProductsByCategory, getProduct } from '../config/stripe-products';
@@ -18,21 +18,17 @@ import { translateMenu } from '../services/translateService';
 // Function to get active meal plan from client_meal_plans table
 const getClientMealPlan = async (userCode) => {
   try {
-    const { data, error } = await supabase
-      .from('client_meal_plans')
-      .select('*')
-      .eq('user_code', userCode)
-      .eq('active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const response = await fetch(`${apiUrl}/api/profile/meal-plan?userCode=${encodeURIComponent(userCode)}`);
+    const result = await response.json();
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // No active meal plan found
-        return { data: null, error: null };
-      }
-      return { data: null, error };
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to fetch meal plan');
+    }
+
+    const data = result.data;
+    if (!data) {
+      return { data: null, error: null };
     }
 
     // Check if today is in the active_days
@@ -57,19 +53,21 @@ const getClientMealPlan = async (userCode) => {
       console.log(`Clearing old edited meal plan from ${editedPlanDate} (today is ${todayDate})`);
       
       // Clear the old edited plan
-      const { error: clearError } = await supabase
-        .from('client_meal_plans')
-        .update({
-          client_edited_meal_plan: null,
-          edited_plan_date: null,
-        })
-        .eq('id', data.id);
+      try {
+        const clearResponse = await fetch(`${apiUrl}/api/profile/meal-plan/clear-edited`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planId: data.id })
+        });
 
-      if (clearError) {
+        if (!clearResponse.ok) {
+          console.error('Error clearing old edited meal plan');
+        } else {
+          console.log('✅ Cleared old edited meal plan from database');
+        }
+      } catch (clearError) {
         console.error('Error clearing old edited meal plan:', clearError);
         // Continue anyway - we'll just use the original plan
-      } else {
-        console.log('✅ Cleared old edited meal plan from database');
       }
     }
 
@@ -109,7 +107,7 @@ const ProfilePage = () => {
   const navigate = useNavigate();
   const { language, t, direction, toggleLanguage, isTransitioning } = useLanguage();
   const { isDarkMode, toggleTheme, themeClasses } = useTheme();
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState('dailyLog');
   const [profileData, setProfileData] = useState({
     firstName: '',
     lastName: '',
@@ -148,8 +146,6 @@ const ProfilePage = () => {
   const [isModalAnimating, setIsModalAnimating] = useState(false);
 
   const loadCompanyOptions = useCallback(async () => {
-    if (!supabaseSecondary) return;
-
     try {
       setIsLoadingCompanies(true);
       setCompanyError('');
@@ -170,7 +166,7 @@ const ProfilePage = () => {
   }, []);
 
   const loadCompanyAssignment = useCallback(async (currentUserCode) => {
-    if (!supabaseSecondary || !currentUserCode) return;
+    if (!currentUserCode) return;
 
     try {
       const { data, error } = await getClientCompanyAssignment(currentUserCode);
@@ -205,22 +201,16 @@ const ProfilePage = () => {
 
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const response = await fetch(`${apiUrl}/api/profile/client?userId=${encodeURIComponent(user.id)}`);
+      const result = await response.json();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error checking onboarding status:', error);
-        console.error('Error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
+      if (!response.ok) {
+        console.error('Error checking onboarding status:', result.error);
         return;
       }
+
+      const data = result.data;
 
       if (data) {
         setUserCode(data.user_code);
@@ -381,26 +371,29 @@ const ProfilePage = () => {
         console.log('Loading profile data for user:', user.id);
       }
       
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      
       // First, load from clients table (primary database) to get user_code
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      const response = await fetch(`${apiUrl}/api/profile/load?userId=${encodeURIComponent(user.id)}`);
+      const result = await response.json();
+
+      if (!response.ok && response.status !== 404) {
+        console.error('Detailed error loading profile:', result.error);
+        return;
+      }
+
+      const data = result.data;
       
       // Then, try to load from chat_users table (secondary database) if user_code exists
       let chatUserData = null;
       const userCode = data?.user_code || profileData.userCode;
-      if (supabaseSecondary && userCode) {
+      if (userCode) {
         try {
-          const { data: chatUser, error: chatUserError } = await supabaseSecondary
-            .from('chat_users')
-            .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language')
-            .eq('user_code', userCode)
-            .single();
+          const chatResponse = await fetch(`${apiUrl}/api/profile/chat-user?userCode=${encodeURIComponent(userCode)}`);
+          const chatResult = await chatResponse.json();
           
-          if (!chatUserError && chatUser) {
-            chatUserData = chatUser;
+          if (chatResponse.ok && chatResult.data) {
+            chatUserData = chatResult.data;
             if (process.env.NODE_ENV === 'development') {
               console.log('Profile data loaded from chat_users:', chatUserData);
             }
@@ -408,16 +401,6 @@ const ProfilePage = () => {
         } catch (chatError) {
           console.error('Error loading from chat_users:', chatError);
         }
-      }
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Detailed error loading profile:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        return;
       }
 
       if (data || chatUserData) {
@@ -568,67 +551,29 @@ const ProfilePage = () => {
 
       console.log('Attempting to save profile data:', dataToSave);
 
-      // First, check if a record exists for this user
-      const { data: existingData, error: checkError } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      
+      // Save to clients table
+      const response = await fetch(`${apiUrl}/api/profile/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, profileData: dataToSave })
+      });
 
-      let result;
-      if (checkError && checkError.code === 'PGRST116') {
-        // No existing record, insert new one
-        result = await supabase
-          .from('clients')
-          .insert(dataToSave)
-          .select();
-      } else if (existingData) {
-        // Record exists, update it
-        result = await supabase
-          .from('clients')
-          .update({
-            full_name: dataToSave.full_name,
-            email: dataToSave.email,
-            phone: dataToSave.phone,
-            birth_date: dataToSave.birth_date,
-            age: dataToSave.age,
-            gender: dataToSave.gender,
-            dietary_preferences: dataToSave.dietary_preferences,
-            food_allergies: dataToSave.food_allergies,
-            medical_conditions: dataToSave.medical_conditions,
-            user_code: dataToSave.user_code,
-            region: dataToSave.region,
-            city: dataToSave.city,
-            timezone: dataToSave.timezone,
-            user_language: dataToSave.user_language,
-            profile_image_url: dataToSave.profile_image_url || null,
-            updated_at: dataToSave.updated_at
-          })
-          .eq('user_id', user.id)
-          .select();
-      } else {
-        throw checkError;
-      }
+      const result = await response.json();
 
-      const { data, error } = result;
-
-      if (error) {
-        console.error('Detailed error saving profile:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
+      if (!response.ok) {
+        console.error('Detailed error saving profile:', result.error);
         
         // Provide more specific error messages based on error type
         let errorMessage = 'Error saving profile';
-        if (error.code === '23505') {
+        if (result.code === '23505') {
           errorMessage = 'Email address already exists. Please use a different email.';
-        } else if (error.code === '23503') {
+        } else if (result.code === '23503') {
           errorMessage = 'Invalid user reference. Please try logging in again.';
-        } else if (error.message.includes('permission')) {
+        } else if (result.error && result.error.includes('permission')) {
           errorMessage = 'Permission denied. Please check your account status.';
-        } else if (error.message.includes('network') || error.message.includes('timeout')) {
+        } else if (result.error && (result.error.includes('network') || result.error.includes('timeout'))) {
           errorMessage = 'Network error. Please check your connection and try again.';
         }
         
@@ -636,50 +581,43 @@ const ProfilePage = () => {
         setSaveStatus('error');
         console.error('User-friendly error:', errorMessage);
       } else {
+        const data = result.data;
         console.log('Profile saved successfully:', data);
         
         // Sync to chat_users table (secondary database)
-        if (supabaseSecondary && data && data[0] && profileData.userCode) {
+        if (data && data[0] && profileData.userCode) {
           try {
             console.log('Syncing profile to chat_users for user_code:', profileData.userCode);
             
-            // Get the chat_users id using user_code
-            const { data: chatUser, error: chatUserError } = await supabaseSecondary
-              .from('chat_users')
-              .select('id')
-              .eq('user_code', profileData.userCode)
-              .single();
+            // Map profile data to chat_users fields - sync all fields
+            const chatUpdates = {
+              full_name: dataToSave.full_name,
+              email: dataToSave.email,
+              phone_number: dataToSave.phone,
+              whatsapp_number: dataToSave.phone, // Also update whatsapp_number
+              region: dataToSave.region,
+              city: dataToSave.city,
+              timezone: dataToSave.timezone,
+              age: dataToSave.age,
+              gender: dataToSave.gender,
+              date_of_birth: dataToSave.birth_date,
+              food_allergies: dataToSave.food_allergies, // text field
+              client_preference: dataToSave.dietary_preferences || null, // jsonb field - save value directly
+              medical_conditions: dataToSave.medical_conditions, // text field
+              language: dataToSave.user_language, // Map user_language to language
+              updated_at: dataToSave.updated_at
+            };
 
-            if (!chatUserError && chatUser) {
-              // Map profile data to chat_users fields - sync all fields
-              const chatUpdates = {
-                full_name: dataToSave.full_name,
-                email: dataToSave.email,
-                phone_number: dataToSave.phone,
-                whatsapp_number: dataToSave.phone, // Also update whatsapp_number
-                region: dataToSave.region,
-                city: dataToSave.city,
-                timezone: dataToSave.timezone,
-                age: dataToSave.age,
-                gender: dataToSave.gender,
-                date_of_birth: dataToSave.birth_date,
-                food_allergies: dataToSave.food_allergies, // text field
-                client_preference: dataToSave.dietary_preferences || null, // jsonb field - save value directly
-                medical_conditions: dataToSave.medical_conditions, // text field
-                language: dataToSave.user_language, // Map user_language to language
-                updated_at: dataToSave.updated_at
-              };
+            const syncResponse = await fetch(`${apiUrl}/api/profile/sync-chat-user`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userCode: profileData.userCode, chatUserData: chatUpdates })
+            });
 
-              const { error: chatUpdateError } = await supabaseSecondary
-                .from('chat_users')
-                .update(chatUpdates)
-                .eq('id', chatUser.id);
-              
-              if (chatUpdateError) {
-                console.error('Error updating chat_users:', chatUpdateError);
-              } else {
-                console.log('Chat user synced successfully with all fields');
-              }
+            if (!syncResponse.ok) {
+              console.error('Error updating chat_users');
+            } else {
+              console.log('Chat user synced successfully with all fields');
             }
           } catch (syncError) {
             console.error('Error syncing to chat_users:', syncError);
@@ -771,42 +709,19 @@ const ProfilePage = () => {
   // Function to save only the profile image URL (called after image upload)
   const saveProfileImageUrl = async (imageUrl) => {
     try {
-      // Check if a record exists for this user
-      const { data: existingData, error: checkError } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      
+      const response = await fetch(`${apiUrl}/api/profile/save-image-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, imageUrl })
+      });
 
-      if (checkError && checkError.code === 'PGRST116') {
-        // No existing record, we need to create one with minimal data
-        // But we should still save the image URL - create with just user_id and profile_image_url
-        const { error: insertError } = await supabase
-          .from('clients')
-          .insert({
-            user_id: user.id,
-            profile_image_url: imageUrl,
-            updated_at: new Date().toISOString()
-          });
+      const result = await response.json();
 
-        if (insertError) {
-          console.error('Error saving profile image URL:', insertError);
-          return { error: insertError };
-        }
-      } else if (existingData) {
-        // Record exists, update just the profile_image_url
-        const { error: updateError } = await supabase
-          .from('clients')
-          .update({
-            profile_image_url: imageUrl,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', user.id);
-
-        if (updateError) {
-          console.error('Error updating profile image URL:', updateError);
-          return { error: updateError };
-        }
+      if (!response.ok) {
+        console.error('Error saving profile image URL:', result.error);
+        return { error: new Error(result.error) };
       }
 
       // Update local state
@@ -836,22 +751,16 @@ const ProfilePage = () => {
 
   const tabs = [
     { 
-      id: 'profile', 
-      label: t.profile.tabs.profile,
-      icon: '👤',
-      description: language === 'hebrew' ? 'נהל את הפרטים האישיים שלך' : 'Manage your personal information'
+      id: 'dailyLog', 
+      label: t.profile.tabs.dailyLog,
+      icon: '📝',
+      description: language === 'hebrew' ? 'עקוב אחר צריכת המזון שלך' : 'Track your food intake'
     },
     { 
       id: 'myPlan', 
       label: t.profile.tabs.myPlan,
       icon: '🍽️',
       description: language === 'hebrew' ? 'תוכנית תזונה וכושר מותאמת אישית' : 'Personalized nutrition and fitness plan'
-    },
-    { 
-      id: 'dailyLog', 
-      label: t.profile.tabs.dailyLog,
-      icon: '📝',
-      description: language === 'hebrew' ? 'עקוב אחר צריכת המזון שלך' : 'Track your food intake'
     },
     { 
       id: 'messages', 
@@ -864,6 +773,12 @@ const ProfilePage = () => {
       label: language === 'hebrew' ? 'תוכניות מנוי' : 'Subscription Plans',
       icon: '💳',
       description: language === 'hebrew' ? 'בחר את התוכנית המתאימה לך' : 'Choose your perfect plan'
+    },
+    { 
+      id: 'profile', 
+      label: t.profile.tabs.profile,
+      icon: '👤',
+      description: language === 'hebrew' ? 'נהל את הפרטים האישיים שלך' : 'Manage your personal information'
     }
   ];
 
@@ -1137,54 +1052,40 @@ const ProfilePage = () => {
                 </div>
               </div>
 
-              {/* Settings Control - Gear Icon */}
-              <div className="flex items-center">
-                <button 
-                  onClick={() => setActiveTab('settings')}
-                  className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-gray-400/20 hover:border-gray-400/40`}
+              {/* Settings and Logout Controls */}
+              <div className="flex items-center justify-between gap-3">
+                {/* Settings Control - Gear Icon */}
+                <div className="flex items-center">
+                  <button 
+                    onClick={() => setActiveTab('settings')}
+                    className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-gray-400/20 hover:border-gray-400/40`}
+                  >
+                    <svg className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-900'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
+                  <span className={`${themeClasses.textSecondary} text-sm ${direction === 'rtl' ? 'mr-4' : 'ml-4'}`}>{language === 'hebrew' ? 'הגדרות' : 'Settings'}</span>
+                </div>
+
+                {/* Logout Button */}
+                <button
+                  onClick={() => {
+                    setIsModalAnimating(true);
+                    setShowLogoutConfirm(true);
+                    setTimeout(() => setIsModalAnimating(false), 600);
+                  }}
+                  className={`flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''} p-3 rounded-xl transition-all duration-300 hover:scale-105 active:scale-95 ${themeClasses.bgSecondary} border border-red-500/20 hover:border-red-500/40 hover:shadow-md`}
                 >
-                  <svg className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-gray-900'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-red-500/20 to-pink-500/20 ${direction === 'rtl' ? 'ml-2' : 'mr-2'}`}>
+                    <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </div>
+                  <span className={`${themeClasses.textSecondary} text-sm`}>{language === 'hebrew' ? 'התנתק' : 'Logout'}</span>
                 </button>
-                <span className={`${themeClasses.textSecondary} text-sm ${direction === 'rtl' ? 'mr-4' : 'ml-4'}`}>{language === 'hebrew' ? 'הגדרות' : 'Settings'}</span>
               </div>
             </div>
-
-            {/* Logout Button */}
-            <button
-              onClick={() => {
-                setIsModalAnimating(true);
-                setShowLogoutConfirm(true);
-                setTimeout(() => setIsModalAnimating(false), 600);
-              }}
-              className={`w-full flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''} p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-95 ${themeClasses.bgSecondary} border border-red-500/20 hover:border-red-500/40 hover:shadow-md`}
-            >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-red-500/20 to-pink-500/20 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'ml-3' : 'mr-3'}`}>
-                <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </div>
-              <div className={`flex-1 min-w-0 overflow-hidden ${direction === 'rtl' ? 'text-right' : 'text-left'}`}>
-                <div className={`font-semibold text-red-500 text-sm`} style={{
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
-                }}>
-                  {language === 'hebrew' ? 'התנתק' : 'Logout'}
-                </div>
-                <div className={`text-xs ${themeClasses.textMuted}`} style={{
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  wordBreak: 'break-word'
-                }}>
-                  {language === 'hebrew' ? 'התנתק מהחשבון שלך' : 'Sign out of your account'}
-                </div>
-              </div>
-            </button>
           </div>
         </div>
       </div>
@@ -1380,6 +1281,22 @@ const ProfilePage = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </button>
+
+                  {/* Logout Button - Mobile */}
+                  <button
+                    onClick={() => {
+                      setIsModalAnimating(true);
+                      setShowLogoutConfirm(true);
+                      setIsMobileNavOpen(false);
+                      setTimeout(() => setIsModalAnimating(false), 600);
+                    }}
+                    className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-2.5 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-red-500/20 hover:border-red-500/40 active:scale-95`}
+                    aria-label={language === 'hebrew' ? 'התנתק' : 'Logout'}
+                  >
+                    <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </button>
                 </div>
 
                 <button 
@@ -1397,27 +1314,6 @@ const ProfilePage = () => {
                   )}
                 </button>
               </div>
-
-              {/* Logout Button - Mobile */}
-              <button
-                onClick={() => {
-                  setIsModalAnimating(true);
-                  setShowLogoutConfirm(true);
-                  setIsMobileNavOpen(false);
-                  setTimeout(() => setIsModalAnimating(false), 600);
-                }}
-                className={`w-full flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''} gap-3 px-4 py-3 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-95 ${themeClasses.bgSecondary} border border-red-500/20 hover:border-red-500/40 hover:shadow-lg`}
-              >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-red-500/20 to-pink-500/20">
-                  <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                </div>
-                <div className={`flex-1 ${direction === 'rtl' ? 'text-right' : 'text-left'}`}>
-                  <div className="text-sm font-semibold text-red-500">{language === 'hebrew' ? 'התנתק' : 'Logout'}</div>
-                  <div className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>{language === 'hebrew' ? 'התנתק מהחשבון שלך' : 'Sign out of your account'}</div>
-                </div>
-              </button>
             </div>
           </div>
         </div>
@@ -3405,25 +3301,19 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
           }
 
           // Get user_code from clients table
-          const { data: clientData, error: clientError } = await supabase
-            .from('clients')
-            .select('user_code')
-            .eq('user_id', user.id)
-            .single();
+          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+          const userCodeResponse = await fetch(`${apiUrl}/api/profile/user-code?userId=${encodeURIComponent(user.id)}`);
+          const userCodeResult = await userCodeResponse.json();
 
-          if (clientError) {
-            if (clientError.code === 'PGRST116') {
-              setImageError(language === 'hebrew' ? 'פרופיל לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User profile not found. Please complete your profile setup first.');
-            } else {
-              console.error('Error fetching user_code:', clientError);
-              setImageError(language === 'hebrew' ? 'שגיאה בטעינת פרטי המשתמש' : 'Error loading user information');
-            }
+          if (!userCodeResponse.ok) {
+            console.error('Error fetching user_code:', userCodeResult.error);
+            setImageError(language === 'hebrew' ? 'שגיאה בטעינת פרטי המשתמש' : 'Error loading user information');
             setUploadingImage(false);
             setShowCropModal(false);
             return;
           }
 
-          const userCode = clientData?.user_code;
+          const userCode = userCodeResult.user_code;
           if (!userCode) {
             setImageError(language === 'hebrew' ? 'קוד משתמש לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User code not found. Please complete your profile setup first.');
             setUploadingImage(false);
@@ -4295,34 +4185,16 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       if (!userCode) return;
       
       try {
-        // Load from chat_users
-        const { data: chatData, error: chatError } = await supabaseSecondary
-          .from('chat_users')
-          .select('*')
-          .eq('user_code', userCode)
-          .single();
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+        const response = await fetch(`${apiUrl}/api/profile/client-data-full?userCode=${encodeURIComponent(userCode)}`);
+        const result = await response.json();
         
-        if (chatError) {
-          console.error('Error loading chat_users data:', chatError);
+        if (!response.ok) {
+          console.error('Error loading client data:', result.error);
           return;
         }
         
-        // Check if onboarding is completed in clients table
-        const { data: clientsData, error: clientsError } = await supabase
-          .from('clients')
-          .select('onboarding_completed')
-          .eq('user_code', userCode)
-          .single();
-        
-        if (clientsError) {
-          console.error('Error loading clients data:', clientsError);
-        }
-        
-        // Merge the data
-        setClientData({
-          ...chatData,
-          onboarding_completed: clientsData?.onboarding_completed || false
-        });
+        setClientData(result.data);
       } catch (err) {
         console.error('Error fetching client data:', err);
       }
@@ -4498,58 +4370,29 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                         'Client';
       const mealPlanName = `${clientName}'s Meal Plan`;
 
-      // Save to meal_plans_and_schemas (secondary database)
-      const { error: secondaryError } = await supabaseSecondary
-        .from('meal_plans_and_schemas')
-        .insert({
-          id: newPlanId,
-          record_type: 'meal_plan',
-          user_code: userCode,
-          meal_plan_name: mealPlanName,
-          schema: template,
-          meal_plan: menuData,
-          status: 'active',
-          daily_total_calories: dailyCalories,
-          macros_target: macros,
-          active_from: now,
-          created_at: now,
-          updated_at: now
-        });
+      // Save to both databases via API
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const saveResponse = await fetch(`${apiUrl}/api/profile/meal-plan/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planId: newPlanId,
+          userCode,
+          mealPlanName,
+          template,
+          menuData,
+          dailyCalories,
+          macros
+        })
+      });
 
-      if (secondaryError) {
-        console.error('❌ Error saving to meal_plans_and_schemas:', secondaryError);
+      const saveResult = await saveResponse.json();
+
+      if (!saveResponse.ok) {
+        console.error('❌ Error saving meal plan:', saveResult.error);
         throw new Error(language === 'hebrew' 
-          ? 'שגיאה בשמירה למאגר משני'
-          : 'Error saving to secondary database');
-      }
-
-      // Save to client_meal_plans (main database)
-      const { error: mainError } = await supabase
-        .from('client_meal_plans')
-        .insert({
-          id: newPlanId,
-          user_code: userCode,
-          original_meal_plan_id: newPlanId,
-          meal_plan_name: mealPlanName,
-          dietitian_meal_plan: menuData,
-          active: true,
-          daily_total_calories: dailyCalories,
-          macros_target: macros,
-          created_at: now,
-          updated_at: now
-        });
-
-      if (mainError) {
-        console.error('❌ Error saving to client_meal_plans:', mainError);
-        // Rollback secondary save
-        await supabaseSecondary
-          .from('meal_plans_and_schemas')
-          .delete()
-          .eq('id', newPlanId);
-        
-        throw new Error(language === 'hebrew' 
-          ? 'שגיאה בשמירה למאגר ראשי'
-          : 'Error saving to main database');
+          ? 'שגיאה בשמירת תוכנית התזונה'
+          : 'Error saving meal plan');
       }
 
       console.log('✅ Menu saved successfully to both databases!');
@@ -5094,21 +4937,22 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         note: updatedPlanData.note || '',
       };
 
-      // Get today's date
-      const today = new Date().toISOString();
-
-      // Update the client_edited_meal_plan field with today's date
-      const { error: updateError } = await supabase
-        .from('client_meal_plans')
-        .update({
-          client_edited_meal_plan: mealPlanToSave,
-          edited_plan_date: today,
+      // Save via API
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const response = await fetch(`${apiUrl}/api/profile/meal-plan/save-edited`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planId: updatedPlanData.id,
+          mealPlan: mealPlanToSave
         })
-        .eq('id', updatedPlanData.id);
+      });
 
-      if (updateError) {
-        console.error('Error saving meal plan:', updateError);
-        throw updateError;
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('Error saving meal plan:', result.error);
+        throw new Error(result.error);
       }
 
       console.log('✅ Meal plan saved successfully for today');
@@ -5407,17 +5251,16 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     }
 
     try {
-      // Clear the edited plan from database
-      const { error: clearError } = await supabase
-        .from('client_meal_plans')
-        .update({
-          client_edited_meal_plan: null,
-          edited_plan_date: null,
-        })
-        .eq('id', planData.id);
+      // Clear the edited plan from database via API
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const response = await fetch(`${apiUrl}/api/profile/meal-plan/clear-edited`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId: planData.id })
+      });
 
-      if (clearError) {
-        console.error('Error clearing edited plan:', clearError);
+      if (!response.ok) {
+        console.error('Error clearing edited plan');
       }
 
       // Update local state to show original plan
@@ -5453,19 +5296,13 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     try {
       setIsContactingDietitian(true);
 
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+
       // Get provider_id from chat_users table
-      if (!supabaseSecondary) {
-        throw new Error('Secondary database not available');
-      }
+      const providerResponse = await fetch(`${apiUrl}/api/profile/provider?userCode=${encodeURIComponent(userCode)}`);
+      const providerResult = await providerResponse.json();
 
-      const { data: chatUser, error: chatUserError } = await supabaseSecondary
-        .from('chat_users')
-        .select('provider_id')
-        .eq('user_code', userCode)
-        .single();
-
-      if (chatUserError) {
-        console.error('Error fetching chat user:', chatUserError);
+      if (!providerResponse.ok) {
         throw new Error(
           language === 'hebrew'
             ? 'לא נמצא דיאטנית משויכת'
@@ -5473,7 +5310,8 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         );
       }
 
-      if (!chatUser || !chatUser.provider_id) {
+      const providerId = providerResult.provider_id;
+      if (!providerId) {
         throw new Error(
           language === 'hebrew'
             ? 'לא נמצא דיאטנית משויכת'
@@ -5486,21 +5324,15 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         ? 'בקשה לתוכנית תזונה מותאמת'
         : 'Request for Personalized Meal Plan';
       
-      const { data: existingMessages, error: checkError } = await supabaseSecondary
-        .from('system_messages')
-        .select('id')
-        .eq('directed_to', chatUser.provider_id)
-        .eq('message_type', 'info')
-        .eq('title', requestTitle)
-        .ilike('content', `%${userCode}%`)
-        .eq('is_active', true);
+      const checkResponse = await fetch(
+        `${apiUrl}/api/profile/system-message-exists?` + 
+        `providerId=${encodeURIComponent(providerId)}&` +
+        `userCode=${encodeURIComponent(userCode)}&` +
+        `title=${encodeURIComponent(requestTitle)}`
+      );
+      const checkResult = await checkResponse.json();
 
-      if (checkError) {
-        console.error('Error checking existing messages:', checkError);
-        // Continue anyway - we'll try to create the message
-      }
-
-      if (existingMessages && existingMessages.length > 0) {
+      if (checkResponse.ok && checkResult.exists) {
         // Request already exists
         alert(
           language === 'hebrew'
@@ -5512,35 +5344,28 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       }
 
       // Create system message in secondary database
-      const { data: messageData, error: messageError } = await supabaseSecondary
-        .from('system_messages')
-        .insert({
-          title: language === 'hebrew'
-            ? 'בקשה לתוכנית תזונה מותאמת'
-            : 'Request for Personalized Meal Plan',
+      const messageResponse = await fetch(`${apiUrl}/api/profile/system-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: requestTitle,
           content: language === 'hebrew'
             ? `הלקוח ${userCode} מבקש תוכנית תזונה מותאמת ומדויקת יותר.`
             : `Client ${userCode} is requesting a better and more precise personalized meal plan.`,
-          message_type: 'info',
+          messageType: 'info',
           priority: 'medium',
-          is_active: true,
-          directed_to: chatUser.provider_id
+          directedTo: providerId
         })
-        .select()
-        .single();
+      });
 
-      if (messageError) {
-        console.error('Error creating system message:', messageError);
-        console.error('Message error details:', {
-          code: messageError.code,
-          message: messageError.message,
-          details: messageError.details,
-          hint: messageError.hint
-        });
+      const messageResult = await messageResponse.json();
+
+      if (!messageResponse.ok) {
+        console.error('Error creating system message:', messageResult.error);
         throw new Error(
           language === 'hebrew'
-            ? `שגיאה בשליחת הבקשה: ${messageError.message || 'שגיאה לא ידועה'}`
-            : `Error sending request: ${messageError.message || 'Unknown error'}`
+            ? `שגיאה בשליחת הבקשה: ${messageResult.error || 'שגיאה לא ידועה'}`
+            : `Error sending request: ${messageResult.error || 'Unknown error'}`
         );
       }
 
@@ -9381,13 +9206,15 @@ const SettingsTab = ({ themeClasses, language, userCode }) => {
         toggleLanguage(value);
         // Update in database via profile update
         if (userCode) {
-          const { error } = await supabase
-            .from('clients')
-            .update({ user_language: value })
-            .eq('user_code', userCode);
-          
-          if (error) {
-            console.error('Error updating language:', error);
+          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+          const response = await fetch(`${apiUrl}/api/profile/update-language`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userCode, language: value })
+          });
+
+          if (!response.ok) {
+            console.error('Error updating language');
           }
         }
       } else {

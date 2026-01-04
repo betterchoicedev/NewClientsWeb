@@ -1,5 +1,4 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { supabase } from '../supabase/supabaseClient';
 import { useAuth } from './AuthContext';
 
 const SettingsContext = createContext();
@@ -24,19 +23,20 @@ export const SettingsProvider = ({ children }) => {
     }
 
     try {
-      // Get user_code from auth metadata or fetch from clients table
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      
+      // Get user_code from auth metadata or fetch via API
       let userCode = user.user_metadata?.user_code;
       
-      if (!userCode) {
-        // Try to get from clients table using email
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('user_code')
-          .eq('email', user.email)
-          .single();
+      if (!userCode && user.email) {
+        // Try to get from clients table using email via API
+        const userCodeResponse = await fetch(`${apiUrl}/api/user/user-code?email=${encodeURIComponent(user.email)}`);
         
-        if (clientData) {
-          userCode = clientData.user_code;
+        if (userCodeResponse.ok) {
+          const result = await userCodeResponse.json();
+          if (result.data) {
+            userCode = result.data.user_code;
+          }
         }
       }
 
@@ -45,17 +45,17 @@ export const SettingsProvider = ({ children }) => {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('clients')
-        .select('show_calories, show_macros, portion_display, measurement_system, weight_unit, decimal_places')
-        .eq('user_code', userCode)
-        .single();
+      // Fetch settings via API
+      const settingsResponse = await fetch(`${apiUrl}/api/user/settings?user_code=${encodeURIComponent(userCode)}`);
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching settings:', error);
+      if (!settingsResponse.ok) {
+        console.error('Error fetching settings:', settingsResponse.statusText);
         setSettings(prev => ({ ...prev, loading: false }));
         return;
       }
+
+      const settingsResult = await settingsResponse.json();
+      const data = settingsResult.data;
 
       if (data) {
         setSettings({
@@ -81,6 +81,8 @@ export const SettingsProvider = ({ children }) => {
     if (!user?.id) return;
 
     try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      
       // Update local state immediately for instant UI feedback
       setSettings(prev => ({
         ...prev,
@@ -90,15 +92,14 @@ export const SettingsProvider = ({ children }) => {
       // Get user_code
       let userCode = user.user_metadata?.user_code;
       
-      if (!userCode) {
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('user_code')
-          .eq('email', user.email)
-          .single();
+      if (!userCode && user.email) {
+        const userCodeResponse = await fetch(`${apiUrl}/api/user/user-code?email=${encodeURIComponent(user.email)}`);
         
-        if (clientData) {
-          userCode = clientData.user_code;
+        if (userCodeResponse.ok) {
+          const result = await userCodeResponse.json();
+          if (result.data) {
+            userCode = result.data.user_code;
+          }
         }
       }
 
@@ -111,13 +112,20 @@ export const SettingsProvider = ({ children }) => {
       // Convert camelCase to snake_case for database columns
       const columnName = settingName.replace(/([A-Z])/g, '_$1').toLowerCase();
       
-      const { error } = await supabase
-        .from('clients')
-        .update({ [columnName]: newValue })
-        .eq('user_code', userCode);
+      // Update via API
+      const response = await fetch(`${apiUrl}/api/user/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_code: userCode,
+          settings: { [columnName]: newValue }
+        })
+      });
 
-      if (error) {
-        console.error('Error updating setting:', error);
+      if (!response.ok) {
+        console.error('Error updating setting:', response.statusText);
         // Revert on error
         await fetchSettings();
       }
@@ -133,6 +141,8 @@ export const SettingsProvider = ({ children }) => {
     if (!user?.id) return;
 
     try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      
       // Update local state immediately
       setSettings(prev => ({
         ...prev,
@@ -142,15 +152,14 @@ export const SettingsProvider = ({ children }) => {
       // Get user_code
       let userCode = user.user_metadata?.user_code;
       
-      if (!userCode) {
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('user_code')
-          .eq('email', user.email)
-          .single();
+      if (!userCode && user.email) {
+        const userCodeResponse = await fetch(`${apiUrl}/api/user/user-code?email=${encodeURIComponent(user.email)}`);
         
-        if (clientData) {
-          userCode = clientData.user_code;
+        if (userCodeResponse.ok) {
+          const result = await userCodeResponse.json();
+          if (result.data) {
+            userCode = result.data.user_code;
+          }
         }
       }
 
@@ -167,14 +176,20 @@ export const SettingsProvider = ({ children }) => {
         dbSettings[columnName] = newSettings[key];
       });
 
-      // Update database
-      const { error } = await supabase
-        .from('clients')
-        .update(dbSettings)
-        .eq('user_code', userCode);
+      // Update database via API
+      const response = await fetch(`${apiUrl}/api/user/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_code: userCode,
+          settings: dbSettings
+        })
+      });
 
-      if (error) {
-        console.error('Error updating settings:', error);
+      if (!response.ok) {
+        console.error('Error updating settings:', response.statusText);
         // Revert on error
         await fetchSettings();
       }

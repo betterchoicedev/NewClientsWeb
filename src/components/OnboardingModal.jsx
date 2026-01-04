@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import { supabase, supabaseSecondary } from '../supabase/supabaseClient';
 import { normalizePhoneForDatabase } from '../supabase/auth';
 
 const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
@@ -333,22 +332,31 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const loadExistingData = async () => {
     setCheckingData(true);
     try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      
+      // Fetch client data via API
+      const clientResponse = await fetch(`${apiUrl}/api/onboarding/client-data?user_id=${encodeURIComponent(user.id)}`);
+      
+      if (!clientResponse.ok) {
+        throw new Error('Failed to fetch client data');
+      }
+      
+      const clientResult = await clientResponse.json();
+      const data = clientResult.data;
+      const error = clientResult.error ? { code: clientResult.error } : null;
 
-      // Also check chat_users for number_of_meals
+      // Also check chat_users for number_of_meals via API
       let chatUserMealData = null;
-      if (supabaseSecondary && userCode) {
+      if (userCode) {
         try {
-          const { data: chatData } = await supabaseSecondary
-            .from('chat_users')
-            .select('number_of_meals, meal_plan_structure')
-            .eq('user_code', userCode)
-            .single();
-          chatUserMealData = chatData;
+          const mealDataResponse = await fetch(`${apiUrl}/api/onboarding/chat-user-meal-data?user_code=${encodeURIComponent(userCode)}`);
+          
+          if (mealDataResponse.ok) {
+            const mealDataResult = await mealDataResponse.json();
+            chatUserMealData = mealDataResult.data;
+          } else {
+            console.error('Error loading chat_users meal data:', mealDataResponse.statusText);
+          }
         } catch (err) {
           console.error('Error loading chat_users meal data:', err);
         }
@@ -664,6 +672,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   // Check if phone number exists in both clients and chat_users tables
   const checkPhoneExistsInBothTables = async (phoneNumber) => {
     try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      
       // Normalize phone number first (remove spaces, dashes, etc.)
       let formattedPhone = normalizePhoneForDatabase(phoneNumber.trim());
       
@@ -675,53 +685,25 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         formattedPhone = formData.phoneCountryCode + formattedPhone;
       }
 
-      // Check in clients table
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('phone, user_id')
-        .eq('phone', formattedPhone)
-        .maybeSingle();
+      // Check phone existence via API
+      const response = await fetch(`${apiUrl}/api/onboarding/check-phone`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone: formattedPhone,
+          user_id: user?.id,
+          user_code: userCode
+        })
+      });
 
-      // If found and it's not the current user's phone, it exists
-      if (clientData) {
-        if (clientData.user_id !== user?.id) {
-          return { exists: true, table: 'clients' };
-        }
-        // If it's the current user's phone, it's okay - they're keeping their existing number
+      if (!response.ok) {
+        throw new Error('Failed to check phone number');
       }
 
-      // Check in chat_users table (if secondary DB is available)
-      if (supabaseSecondary) {
-        // Check phone_number column
-        const { data: chatUserDataByPhone, error: chatUserError1 } = await supabaseSecondary
-          .from('chat_users')
-          .select('phone_number, whatsapp_number, user_code')
-          .eq('phone_number', formattedPhone)
-          .maybeSingle();
-
-        // Check whatsapp_number column
-        const { data: chatUserDataByWhatsApp, error: chatUserError2 } = await supabaseSecondary
-          .from('chat_users')
-          .select('phone_number, whatsapp_number, user_code')
-          .eq('whatsapp_number', formattedPhone)
-          .maybeSingle();
-
-        const chatUserData = chatUserDataByPhone || chatUserDataByWhatsApp;
-
-        // If found and it's not the current user's phone (check by user_code if available)
-        if (chatUserData) {
-          // If we have userCode, check if it matches
-          if (userCode && chatUserData.user_code === userCode) {
-            // It's the same user, so it's okay
-            return { exists: false };
-          } else if (!userCode || chatUserData.user_code !== userCode) {
-            // Different user has this phone number
-            return { exists: true, table: 'chat_users' };
-          }
-        }
-      }
-
-      return { exists: false };
+      const result = await response.json();
+      return result;
     } catch (error) {
       console.error('Error checking phone number:', error);
       // On error, don't block - let it proceed but log the error
@@ -1086,43 +1068,50 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       console.log('💾 Saving to clients:', clientData);
       
-      // Update clients
-      const { data: updateData, error: profileError } = await supabase
-        .from('clients')
-        .update(clientData)
-        .eq('user_id', user.id)
-        .select();
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      
+      // Update clients via API
+      const clientUpdateResponse = await fetch(`${apiUrl}/api/onboarding/update-client`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          clientData: clientData
+        })
+      });
 
-      if (profileError) {
-        console.error('Error updating clients:', profileError);
-        throw profileError;
+      if (!clientUpdateResponse.ok) {
+        const errorResult = await clientUpdateResponse.json();
+        throw new Error(errorResult.message || 'Failed to update client');
       }
+
+      const clientUpdateResult = await clientUpdateResponse.json();
+      const updateData = clientUpdateResult.data;
 
       console.log('✅ Clients table updated successfully:', updateData);
 
-      // Update chat_users if secondary DB is available
-      if (supabaseSecondary && userCode) {
+      // Update chat_users via API if userCode is available
+      if (userCode) {
         try {
-          const { data: chatUser, error: chatUserError } = await supabaseSecondary
-            .from('chat_users')
-            .select('id')
-            .eq('user_code', userCode)
-            .single();
+          const chatUpdateResponse = await fetch(`${apiUrl}/api/onboarding/update-chat-user`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              user_code: userCode,
+              chatUserData: chatUserData
+            })
+          });
 
-          if (!chatUserError && chatUser) {
-            const { error: chatUpdateError } = await supabaseSecondary
-              .from('chat_users')
-              .update(chatUserData)
-              .eq('id', chatUser.id);
-
-            if (chatUpdateError) {
-              console.error('Error updating chat_users:', chatUpdateError);
-              // Don't throw - continue even if chat_users update fails
-            } else {
-              console.log('✅ Chat users table updated successfully');
-            }
+          if (chatUpdateResponse.ok) {
+            console.log('✅ Chat users table updated successfully');
           } else {
-            console.warn('⚠️ Chat user not found or error:', chatUserError);
+            const chatError = await chatUpdateResponse.json();
+            console.error('Error updating chat_users:', chatError);
+            // Don't throw - continue even if chat_users update fails
           }
         } catch (syncError) {
           console.error('Error syncing to chat_users:', syncError);

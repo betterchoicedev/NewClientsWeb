@@ -4,7 +4,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { signIn, signInWithGoogle, resetPassword } from '../supabase/auth';
-import { supabase } from '../supabase/supabaseClient';
 
 function LoginPage() {
   const { language, direction, t, isTransitioning, toggleLanguage } = useLanguage();
@@ -118,27 +117,31 @@ function LoginPage() {
         // Login successful - fetch user's language preference and sync
         if (data?.user?.id) {
           try {
-            const { data: clientData, error: clientError } = await supabase
-              .from('clients')
-              .select('user_language')
-              .eq('user_id', data.user.id)
-              .single();
-
-            if (!clientError && clientData?.user_language) {
-              // Map language codes to web language
-              const languageMap = {
-                'en': 'english',
-                'he': 'hebrew',
-                'english': 'english',
-                'hebrew': 'hebrew'
-              };
+            const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+            const response = await fetch(`${apiUrl}/api/user/language?user_id=${encodeURIComponent(data.user.id)}`);
+            
+            if (response.ok) {
+              const result = await response.json();
+              const clientData = result.data;
               
-              const webLanguage = languageMap[clientData.user_language.toLowerCase()] || 'english';
-              
-              // Only change if different from current language
-              if (language !== webLanguage) {
-                toggleLanguage();
+              if (clientData?.user_language) {
+                // Map language codes to web language
+                const languageMap = {
+                  'en': 'english',
+                  'he': 'hebrew',
+                  'english': 'english',
+                  'hebrew': 'hebrew'
+                };
+                
+                const webLanguage = languageMap[clientData.user_language.toLowerCase()] || 'english';
+                
+                // Only change if different from current language
+                if (language !== webLanguage) {
+                  toggleLanguage();
+                }
               }
+            } else {
+              console.error('Error fetching language preference:', response.statusText);
             }
           } catch (langError) {
             console.error('Error fetching language preference:', langError);

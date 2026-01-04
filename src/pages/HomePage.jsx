@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import * as CookieConsent from 'vanilla-cookieconsent';
 import Navigation from '../components/Navigation';
-import { supabase, supabaseSecondary } from '../supabase/supabaseClient';
+// Removed supabase imports - using API endpoints instead
 import { useStripe } from '../context/StripeContext';
 import { STRIPE_PRODUCTS, PRODUCT_CONFIG } from '../config/stripe-products';
 
@@ -104,24 +104,26 @@ function HomePage() {
       // Normalize phone number if provided (remove spaces and dashes)
       const normalizedPhone = contactForm.phone ? contactForm.phone.replace(/[\s\-\(\)\.]/g, '') : null;
       
-      // Send directly to Supabase
-      const { data, error } = await supabase
-        .from('contact_messages')
-        .insert([
-          {
-            full_name: contactForm.fullName,
-            email: contactForm.email,
-            phone: normalizedPhone,
-            message: contactForm.message,
-            user_agent: navigator.userAgent,
-            created_at: new Date().toISOString()
-          }
-        ])
-        .select();
+      // Send via API
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const response = await fetch(`${apiUrl}/api/contact`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName: contactForm.fullName,
+          email: contactForm.email,
+          phone: normalizedPhone,
+          message: contactForm.message,
+          timestamp: new Date().toISOString()
+        })
+      });
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw new Error('Failed to save message');
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API error:', errorData);
+        throw new Error(errorData.message || 'Failed to save message');
       }
 
       alert(language === 'hebrew' ? 
