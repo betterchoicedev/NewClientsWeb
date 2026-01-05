@@ -7075,11 +7075,188 @@ const MacroSummaryCircles = ({
   );
 };
 
+// Calendar Picker Component - Compact Design
+const CalendarPicker = ({ selectedDate, onDateSelect, themeClasses, isDarkMode, language, direction, clientRegion }) => {
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const date = new Date(selectedDate);
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  });
+
+  const sundayStartRegions = [
+    'north_america', 'mexico', 'latam_south_america', 'japan', 'korea',
+    'india_south_asia', 'indonesia_malaysia', 'southeast_asia', 'israel'
+  ];
+  const startFromSunday = clientRegion && sundayStartRegions.some(region => 
+    region.toLowerCase() === clientRegion.toLowerCase()
+  );
+
+  const dayNames = startFromSunday
+    ? (language === 'hebrew' 
+        ? ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש']
+        : ['S', 'M', 'T', 'W', 'T', 'F', 'S'])
+    : (language === 'hebrew'
+        ? ['ב', 'ג', 'ד', 'ה', 'ו', 'ש', 'א']
+        : ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
+
+  const monthNames = language === 'hebrew'
+    ? ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+    : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const navigateMonth = (direction) => {
+    setCurrentMonth(prev => {
+      const newDate = new Date(prev);
+      if (direction === 'prev') {
+        newDate.setMonth(prev.getMonth() - 1);
+      } else {
+        newDate.setMonth(prev.getMonth() + 1);
+      }
+      return newDate;
+    });
+  };
+
+  const navigateYear = (direction) => {
+    setCurrentMonth(prev => {
+      const newDate = new Date(prev);
+      if (direction === 'prev') {
+        newDate.setFullYear(prev.getFullYear() - 1);
+      } else {
+        newDate.setFullYear(prev.getFullYear() + 1);
+      }
+      return newDate;
+    });
+  };
+
+  const getDaysInMonth = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    
+    let startingDay = firstDay.getDay();
+    if (!startFromSunday) {
+      startingDay = startingDay === 0 ? 6 : startingDay - 1;
+    }
+
+    const days = [];
+    
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDay; i++) {
+      days.push(null);
+    }
+    
+    // Add all days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(year, month, day));
+    }
+    
+    return days;
+  };
+
+  const days = getDaysInMonth();
+  const today = new Date();
+  const selectedDateObj = new Date(selectedDate);
+
+  return (
+    <div className="w-full max-w-sm mx-auto">
+      {/* Compact Month/Year Navigation */}
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={() => navigateYear('prev')}
+          className={`w-7 h-7 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-md flex items-center justify-center transition-all duration-200 active:scale-95`}
+          aria-label={language === 'hebrew' ? 'שנה קודמת' : 'Previous year'}
+        >
+          <svg className={`w-3 h-3 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+          </svg>
+        </button>
+        <button
+          onClick={() => navigateMonth('prev')}
+          className={`w-7 h-7 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-md flex items-center justify-center transition-all duration-200 active:scale-95`}
+          aria-label={language === 'hebrew' ? 'חודש קודם' : 'Previous month'}
+        >
+          <svg className={`w-4 h-4 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        
+        <div className={`${themeClasses.textPrimary} font-semibold text-sm sm:text-base px-2`}>
+          {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+        </div>
+        
+        <button
+          onClick={() => navigateMonth('next')}
+          className={`w-7 h-7 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-md flex items-center justify-center transition-all duration-200 active:scale-95`}
+          aria-label={language === 'hebrew' ? 'חודש הבא' : 'Next month'}
+        >
+          <svg className={`w-4 h-4 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+        <button
+          onClick={() => navigateYear('next')}
+          className={`w-7 h-7 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-md flex items-center justify-center transition-all duration-200 active:scale-95`}
+          aria-label={language === 'hebrew' ? 'שנה הבאה' : 'Next year'}
+        >
+          <svg className={`w-3 h-3 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Compact Day Names Header */}
+      <div className="grid grid-cols-7 gap-0.5 mb-1.5">
+        {dayNames.map((dayName, index) => (
+          <div
+            key={index}
+            className={`${themeClasses.textSecondary} text-[10px] sm:text-xs font-medium text-center py-1`}
+          >
+            {dayName}
+          </div>
+        ))}
+      </div>
+
+      {/* Compact Calendar Grid */}
+      <div className="grid grid-cols-7 gap-0.5">
+        {days.map((day, index) => {
+          if (!day) {
+            return <div key={`empty-${index}`} className="aspect-square" />;
+          }
+
+          const dayDate = day.toISOString().split('T')[0];
+          const isToday = day.toDateString() === today.toDateString();
+          const isSelected = day.toDateString() === selectedDateObj.toDateString();
+          const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
+
+          return (
+            <button
+              key={dayDate}
+              onClick={() => onDateSelect(dayDate)}
+              className={`aspect-square rounded-md transition-all duration-150 active:scale-90 text-xs sm:text-sm ${
+                isSelected
+                  ? 'bg-emerald-500 text-white font-bold shadow-md'
+                  : isToday
+                  ? `${themeClasses.bgSecondary} border border-emerald-500 ${themeClasses.textPrimary} font-semibold`
+                  : isCurrentMonth
+                  ? `${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} ${themeClasses.textPrimary} hover:bg-emerald-500/20`
+                  : `${themeClasses.bgCard} ${themeClasses.textMuted} opacity-40`
+              }`}
+            >
+              {day.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Weekly Summary Component
 const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, settings, clientRegion, direction, selectedDate, setSelectedDate, onDateClick }) => {
   const [weekFoodLogs, setWeekFoodLogs] = useState({});
   const [loading, setLoading] = useState(true);
   const [mealPlanTargets, setMealPlanTargets] = useState(null);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [weekStartDate, setWeekStartDate] = useState(() => {
     const date = new Date(selectedDate);
     const dayOfWeek = date.getDay();
@@ -7316,7 +7493,7 @@ const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, 
 
     return (
       <div 
-        className={`${themeClasses.bgCard} rounded-2xl p-4 border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} hover:border-emerald-500/50 transition-all duration-300 cursor-pointer`}
+        className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl p-3 sm:p-4 border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} hover:border-emerald-500/50 transition-all duration-300 cursor-pointer active:scale-95 overflow-hidden`}
         onClick={() => {
           setSelectedDate(date);
           if (onDateClick) {
@@ -7324,15 +7501,15 @@ const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, 
           }
         }}
       >
-        <div className="text-center mb-3">
+        <div className="text-center mb-2 sm:mb-3">
           <div className={`${themeClasses.textSecondary} text-xs font-medium mb-1`}>{dayName}</div>
-          <div className={`${themeClasses.textPrimary} text-lg font-bold`}>{dayNumber}</div>
+          <div className={`${themeClasses.textPrimary} text-base sm:text-lg font-bold`}>{dayNumber}</div>
           <div className={`${themeClasses.textMuted} text-xs`}>{monthName}</div>
         </div>
         
-        <div className="flex justify-center mb-3">
+        <div className="flex justify-center mb-2 sm:mb-3">
           <svg 
-            className="transform -rotate-90 w-32 h-32" 
+            className="transform -rotate-90 w-24 h-24 sm:w-32 sm:h-32" 
             viewBox="0 0 120 120"
           >
             {/* Outer Circle Background */}
@@ -7422,7 +7599,7 @@ const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, 
 
         {/* Center Calories */}
         <div className="text-center mb-2">
-          <div className={`${themeClasses.textPrimary} text-xl font-bold`}>
+          <div className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>
             {totals.totalCalories.toLocaleString()}
           </div>
           <div className={`${themeClasses.textMuted} text-xs`}>
@@ -7432,18 +7609,33 @@ const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, 
 
         {/* Macro Summary */}
         {settings.showMacros && (
-          <div className="flex justify-between text-xs">
-            <div className="text-center">
-              <div className="text-purple-400 font-medium">{formatWeight(totals.totalProtein)}</div>
-              <div className={`${themeClasses.textMuted}`}>P</div>
+          <div className="flex flex-col gap-1 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0"></div>
+                <span className={`${themeClasses.textMuted} text-xs`}>P</span>
+              </div>
+              <div className="text-purple-400 font-medium text-xs">
+                {formatWeight(totals.totalProtein)}
+              </div>
             </div>
-            <div className="text-center">
-              <div className="text-blue-400 font-medium">{formatWeight(totals.totalCarbs)}</div>
-              <div className={`${themeClasses.textMuted}`}>C</div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0"></div>
+                <span className={`${themeClasses.textMuted} text-xs`}>C</span>
+              </div>
+              <div className="text-blue-400 font-medium text-xs">
+                {formatWeight(totals.totalCarbs)}
+              </div>
             </div>
-            <div className="text-center">
-              <div className="text-amber-400 font-medium">{formatWeight(totals.totalFat)}</div>
-              <div className={`${themeClasses.textMuted}`}>F</div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"></div>
+                <span className={`${themeClasses.textMuted} text-xs`}>F</span>
+              </div>
+              <div className="text-amber-400 font-medium text-xs">
+                {formatWeight(totals.totalFat)}
+              </div>
             </div>
           </div>
         )}
@@ -7471,30 +7663,56 @@ const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, 
   return (
     <div className="animate-fadeIn">
       {/* Week Navigation */}
-      <div className={`mb-6 ${themeClasses.bgCard} rounded-xl p-4 border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className={`${themeClasses.textPrimary} text-2xl font-bold`}>
+      <div className={`mb-6 ${themeClasses.bgCard} rounded-xl p-3 sm:p-4 border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+        {/* Title */}
+        <div className="mb-3 sm:mb-4">
+          <h2 className={`${themeClasses.textPrimary} text-xl sm:text-2xl font-bold`}>
             {language === 'hebrew' ? 'סיכום שבועי' : 'Weekly Summary'}
           </h2>
-          <div className="flex items-center gap-2">
+        </div>
+        
+        {/* Navigation Controls */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-2">
+          {/* Date Navigation */}
+          <div className="flex items-center justify-center sm:justify-start gap-2 flex-1">
             <button 
               onClick={() => navigateWeek('prev')}
-              className={`w-10 h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300 active:scale-95`}
+              className={`w-10 h-10 sm:w-10 sm:h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300 active:scale-95 flex-shrink-0`}
+              aria-label={language === 'hebrew' ? 'שבוע קודם' : 'Previous week'}
             >
               <svg className={`w-5 h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <div className={`${themeClasses.textPrimary} text-sm font-medium px-4`}>
-              {weekStartObj.getDate()} {monthNames[weekStartObj.getMonth()]} - {weekEndObj.getDate()} {monthNames[weekEndObj.getMonth()]}
+            <div className={`${themeClasses.textPrimary} text-xs sm:text-sm font-medium px-2 sm:px-4 text-center sm:text-left min-w-0 flex-1`}>
+              <div className="block sm:hidden">
+                {weekStartObj.getDate()}/{weekStartObj.getMonth() + 1} - {weekEndObj.getDate()}/{weekEndObj.getMonth() + 1}
+              </div>
+              <div className="hidden sm:block">
+                {weekStartObj.getDate()} {monthNames[weekStartObj.getMonth()]} - {weekEndObj.getDate()} {monthNames[weekEndObj.getMonth()]}
+              </div>
             </div>
             <button 
               onClick={() => navigateWeek('next')}
-              className={`w-10 h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300 active:scale-95`}
+              className={`w-10 h-10 sm:w-10 sm:h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300 active:scale-95 flex-shrink-0`}
+              aria-label={language === 'hebrew' ? 'שבוע הבא' : 'Next week'}
             >
               <svg className={`w-5 h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
+            </button>
+          </div>
+          
+          {/* Calendar and This Week Buttons */}
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button 
+              onClick={() => setShowCalendar(!showCalendar)}
+              className={`${showCalendar ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-600 hover:bg-gray-700'} text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-300 text-sm active:scale-95 flex-1 sm:flex-initial flex items-center justify-center gap-2`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="hidden sm:inline">{language === 'hebrew' ? 'לוח שנה' : 'Calendar'}</span>
             </button>
             <button 
               onClick={() => {
@@ -7514,8 +7732,9 @@ const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, 
                   startOfWeek.setDate(new Date(today).getDate() - dayOfWeek + 1);
                 }
                 setWeekStartDate(startOfWeek.toISOString().split('T')[0]);
+                setShowCalendar(false);
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 text-sm active:scale-95"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-300 text-sm active:scale-95 flex-1 sm:flex-initial"
             >
               {language === 'hebrew' ? 'השבוע' : 'This Week'}
             </button>
@@ -7523,8 +7742,40 @@ const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, 
         </div>
       </div>
 
+      {/* Calendar Picker */}
+      {showCalendar && (
+        <div className={`mb-6 ${themeClasses.bgCard} rounded-xl p-4 border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} animate-slideInUp`}>
+          <CalendarPicker
+            selectedDate={weekStartDate}
+            onDateSelect={(date) => {
+              const dayOfWeek = new Date(date).getDay();
+              const sundayStartRegions = [
+                'north_america', 'mexico', 'latam_south_america', 'japan', 'korea',
+                'india_south_asia', 'indonesia_malaysia', 'southeast_asia', 'israel'
+              ];
+              const startFromSunday = clientRegion && sundayStartRegions.some(region => 
+                region.toLowerCase() === clientRegion.toLowerCase()
+              );
+              const startOfWeek = new Date(date);
+              if (startFromSunday) {
+                startOfWeek.setDate(new Date(date).getDate() - dayOfWeek);
+              } else {
+                startOfWeek.setDate(new Date(date).getDate() - dayOfWeek + 1);
+              }
+              setWeekStartDate(startOfWeek.toISOString().split('T')[0]);
+              setShowCalendar(false);
+            }}
+            themeClasses={themeClasses}
+            isDarkMode={isDarkMode}
+            language={language}
+            direction={direction}
+            clientRegion={clientRegion}
+          />
+        </div>
+      )}
+
       {/* 7 Day Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
         {weekDates.map((date, index) => {
           const totals = calculateDayTotals(date);
           return (
