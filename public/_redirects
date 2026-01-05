@@ -1,5 +1,8 @@
 # Handle client-side routing for React Router
 /*    /index.html   200
 
+# Cache-busting redirects for WhatsApp link previews
+/v5    /    301
+
 # API redirects (if needed)
 /api/*  /.netlify/functions/:splat  200
