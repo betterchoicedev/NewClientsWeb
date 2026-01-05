@@ -14,7 +14,7 @@ export async function sendWhatsAppOTP(phoneNumber, otpCode) {
 
     const payload = {
         "phone_number": phoneNumber,
-        "template_id": "auth_hebrew ",
+        "template_id": "auth_hebrew",
         "language": "he",
        
     };

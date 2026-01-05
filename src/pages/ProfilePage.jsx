@@ -15,6 +15,24 @@ import AddIngredientModal from '../components/AddIngredientModal';
 import IngredientPortionModal from '../components/IngredientPortionModal';
 import { translateMenu } from '../services/translateService';
 
+// Function to get training plan from training_plans table
+const getTrainingPlan = async (userCode) => {
+  try {
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const response = await fetch(`${apiUrl}/api/training-plan?userCode=${encodeURIComponent(userCode)}`);
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to fetch training plan');
+    }
+
+    return { data: result.data, error: null };
+  } catch (err) {
+    console.error('Error fetching training plan:', err);
+    return { data: null, error: err };
+  }
+};
+
 // Function to get active meal plan from client_meal_plans table
 const getClientMealPlan = async (userCode) => {
   try {
@@ -752,9 +770,9 @@ const ProfilePage = () => {
   const tabs = [
     { 
       id: 'dailyLog', 
-      label: t.profile.tabs.dailyLog,
+      label: language === 'hebrew' ? 'יומן בריאות' : 'Health Diary',
       icon: '📝',
-      description: language === 'hebrew' ? 'עקוב אחר צריכת המזון שלך' : 'Track your food intake'
+      description: language === 'hebrew' ? 'מעקב, הבנה והתקדמות' : 'Tracking, Understanding, and Progress'
     },
     { 
       id: 'myPlan', 
@@ -1029,7 +1047,7 @@ const ProfilePage = () => {
                       <span className="text-blue-400 text-sm font-medium">{language === 'hebrew' ? 'עב' : 'En'}</span>
                     </div>
                   </button>
-                  <span className={`${themeClasses.textSecondary} text-sm ${direction === 'rtl' ? 'mr-4' : 'ml-4'}`}>Language</span>
+                  <span className={`${themeClasses.textSecondary} text-sm ${direction === 'rtl' ? 'mr-4' : 'ml-4'}`}>{language === 'hebrew' ? 'שפה' : 'Language'}</span>
                 </div>
 
                 {/* Theme Control */}
@@ -1048,7 +1066,7 @@ const ProfilePage = () => {
                       </svg>
                     )}
                   </button>
-                  <span className={`${themeClasses.textSecondary} text-sm ${direction === 'rtl' ? 'mr-4' : 'ml-4'}`}>Theme</span>
+                  <span className={`${themeClasses.textSecondary} text-sm ${direction === 'rtl' ? 'mr-4' : 'ml-4'}`}>{language === 'hebrew' ? 'ערכת נושא' : 'Theme'}</span>
                 </div>
               </div>
 
@@ -3977,6 +3995,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const { settings } = useSettings();
   const { isDarkMode } = useTheme();
   const { user } = useAuth();
+  const [activeSubTab, setActiveSubTab] = useState('mealPlan'); // 'mealPlan' or 'trainingPlan'
   const [loading, setLoading] = useState(true);
   const [planData, setPlanData] = useState(null);
   const [originalPlanData, setOriginalPlanData] = useState(null);
@@ -3984,6 +4003,9 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const [expandedMeals, setExpandedMeals] = useState({});
   const [expandedAlternatives, setExpandedAlternatives] = useState({});
   const [isTranslating, setIsTranslating] = useState(false);
+  const [trainingPlanData, setTrainingPlanData] = useState(null);
+  const [trainingPlanLoading, setTrainingPlanLoading] = useState(false);
+  const [trainingPlanError, setTrainingPlanError] = useState('');
   
   // Menu generation states
   const [isGenerating, setIsGenerating] = useState(false);
@@ -4050,6 +4072,39 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const [selectedAlternativeIndex, setSelectedAlternativeIndex] = useState(null); // For alternatives array
   const [isAddAlternativeIngredientModalVisible, setIsAddAlternativeIngredientModalVisible] = useState(false);
   const [isEditAlternativePortionModalVisible, setIsEditAlternativePortionModalVisible] = useState(false);
+
+  // Load training plan when trainingPlan sub-tab is active
+  useEffect(() => {
+    const loadTrainingPlan = async () => {
+      if (!userCode || activeSubTab !== 'trainingPlan') {
+        return;
+      }
+
+      if (trainingPlanData) {
+        return; // Already loaded
+      }
+
+      try {
+        setTrainingPlanLoading(true);
+        setTrainingPlanError('');
+        const { data, error } = await getTrainingPlan(userCode);
+        
+        if (error) {
+          console.error('Error loading training plan:', error);
+          setTrainingPlanError(error.message);
+        } else {
+          setTrainingPlanData(data);
+        }
+      } catch (err) {
+        console.error('Error loading training plan:', err);
+        setTrainingPlanError(err.message || 'Failed to load training plan');
+      } finally {
+        setTrainingPlanLoading(false);
+      }
+    };
+
+    loadTrainingPlan();
+  }, [userCode, activeSubTab, trainingPlanData]);
 
   useEffect(() => {
     const loadMealPlan = async () => {
@@ -5390,6 +5445,45 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 
   return (
     <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
+      {/* Sub-tabs Navigation */}
+      <div className={`mb-4 sm:mb-6 flex gap-1 sm:gap-2 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+        <button
+          onClick={() => setActiveSubTab('mealPlan')}
+          className={`px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-300 border-b-2 ${
+            activeSubTab === 'mealPlan'
+              ? `${themeClasses.textPrimary} border-emerald-500`
+              : `${themeClasses.textSecondary} border-transparent hover:border-emerald-500/50`
+          }`}
+        >
+          {language === 'hebrew' ? 'תוכנית תזונה' : 'Meal Plan'}
+        </button>
+        <button
+          onClick={() => setActiveSubTab('trainingPlan')}
+          className={`px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-300 border-b-2 ${
+            activeSubTab === 'trainingPlan'
+              ? `${themeClasses.textPrimary} border-emerald-500`
+              : `${themeClasses.textSecondary} border-transparent hover:border-emerald-500/50`
+          }`}
+        >
+          {language === 'hebrew' ? 'תוכנית אימונים' : 'Training Plan'}
+        </button>
+      </div>
+
+      {/* Training Plan Sub-tab Content */}
+      {activeSubTab === 'trainingPlan' && (
+        <TrainingPlanTab
+          themeClasses={themeClasses}
+          language={language}
+          trainingPlanData={trainingPlanData}
+          loading={trainingPlanLoading}
+          error={trainingPlanError}
+          isDarkMode={isDarkMode}
+        />
+      )}
+
+      {/* Meal Plan Sub-tab Content */}
+      {activeSubTab === 'mealPlan' && (
+        <>
       {/* Daily Summary Section */}
       <div className="mb-6 sm:mb-8 md:mb-10 lg:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
         borderLeft: '3px solid',
@@ -5705,16 +5799,16 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
             return (
               <div 
                 key={index} 
-                className={`${themeClasses.bgCard} border border-emerald-500/30 rounded-2xl p-4 sm:p-6 md:p-8 shadow-xl shadow-emerald-500/10 transform hover:scale-[1.02] transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-500/20 animate-slideInUp`}
+                className={`${themeClasses.bgCard} border border-emerald-500/30 rounded-2xl p-4 sm:p-6 md:p-8 shadow-xl shadow-emerald-500/10 transform hover:scale-[1.02] transition-all duration-300 hover:shadow-2xl hover:shadow-emerald-500/20 animate-slideInUp group`}
                 style={{ animationDelay: `${0.6 + index * 0.1}s` }}
               >
                 {/* Meal Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
                   <div className="flex items-center">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center mr-3 sm:mr-4 shadow-lg shadow-emerald-500/25">
-                      <span className="text-xl sm:text-2xl animate-bounce" style={{ animationDelay: `${index * 0.2}s` }}>{getMealIcon(meal.meal)}</span>
+                      <span className="text-xl sm:text-2xl group-hover:animate-bounce transition-transform duration-300">{getMealIcon(meal.meal)}</span>
                   </div>
-                    <div>
+                    <div className="text-left">
                       <p className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium mb-1`}>
                         {meal.meal}
                       </p>
@@ -5724,14 +5818,6 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                     </div>
                     </div>
                   <div className="flex items-center gap-2 sm:gap-4 self-end sm:self-auto">
-                    <button className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-700 rounded-xl flex items-center justify-center hover:bg-slate-600 transition-all duration-300 hover:scale-110 hover:shadow-lg shadow-md">
-                      <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </button>
-                    <span className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium hidden sm:inline`}>
-                      {language === 'hebrew' ? 'החלף' : 'Replace'}
-                    </span>
                     <button 
                       onClick={() => toggleMealExpansion(index)}
                       className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center hover:bg-slate-600 transition-all duration-300 hover:scale-110 shadow-md"
@@ -6240,6 +6326,308 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         ingredient={editingIngredient}
         clientRegion={clientRegion}
       />
+        </>
+      )}
+    </div>
+  );
+};
+
+// Training Plan Tab Component
+const TrainingPlanTab = ({ themeClasses, language, trainingPlanData, loading, error, isDarkMode }) => {
+  const [expandedWeeks, setExpandedWeeks] = useState({});
+  const [expandedDays, setExpandedDays] = useState({});
+
+  const toggleWeek = (weekNumber) => {
+    setExpandedWeeks(prev => ({
+      ...prev,
+      [weekNumber]: !prev[weekNumber]
+    }));
+  };
+
+  const toggleDay = (weekNumber, dayNumber) => {
+    const key = `${weekNumber}-${dayNumber}`;
+    setExpandedDays(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4"></div>
+          <p className={themeClasses.textSecondary}>
+            {language === 'hebrew' ? 'טוען תוכנית אימונים...' : 'Loading training plan...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !trainingPlanData) {
+    return (
+      <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn flex items-center justify-center`}>
+        <div className="max-w-2xl w-full text-center">
+          <div className="flex justify-center mb-6">
+            <div className="w-24 h-24 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+          <h2 className={`${themeClasses.textPrimary} text-3xl sm:text-4xl font-bold mb-4`}>
+            {language === 'hebrew' ? 'אין תוכנית אימונים זמינה' : 'No Training Plan Available'}
+          </h2>
+          <p className={`${themeClasses.textSecondary} text-lg sm:text-xl`}>
+            {error 
+              ? (language === 'hebrew' ? `שגיאה: ${error}` : `Error: ${error}`)
+              : (language === 'hebrew' 
+                  ? 'עדיין לא נוצרה עבורך תוכנית אימונים. אנא צור קשר עם המאמן שלך.'
+                  : 'No training plan has been created for you yet. Please contact your trainer.')
+            }
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const planStructure = trainingPlanData.plan_structure || {};
+  const weeks = planStructure.weeks || [];
+
+  return (
+    <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
+      {/* Plan Header */}
+      <div className="mb-6 sm:mb-8 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
+        borderLeft: '3px solid',
+        borderLeftColor: isDarkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)',
+        borderRight: '2px solid',
+        borderRightColor: isDarkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.15)',
+        borderTop: '2px solid',
+        borderTopColor: isDarkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.15)',
+        borderBottom: '2px solid',
+        borderBottomColor: isDarkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.15)',
+        boxShadow: isDarkMode 
+          ? 'inset 1px 0 0 rgba(59, 130, 246, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)' 
+          : 'inset 1px 0 0 rgba(59, 130, 246, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+      }}>
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-indigo-500/5 pointer-events-none rounded-xl" />
+        <div className="relative z-10">
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mr-4 shadow-lg shadow-blue-500/25">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className={`${themeClasses.textPrimary} text-2xl sm:text-3xl font-bold tracking-tight`}>
+                {trainingPlanData.plan_name || (language === 'hebrew' ? 'תוכנית אימונים' : 'Training Plan')}
+              </h2>
+              {trainingPlanData.description && (
+                <p className={`${themeClasses.textSecondary} text-sm sm:text-base mt-1`}>
+                  {trainingPlanData.description}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Plan Info */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+            {trainingPlanData.goal && (
+              <div>
+                <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mb-1`}>
+                  {language === 'hebrew' ? 'מטרה' : 'Goal'}
+                </p>
+                <p className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold`}>
+                  {trainingPlanData.goal}
+                </p>
+              </div>
+            )}
+            {trainingPlanData.difficulty_level && (
+              <div>
+                <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mb-1`}>
+                  {language === 'hebrew' ? 'רמת קושי' : 'Difficulty'}
+                </p>
+                <p className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold`}>
+                  {trainingPlanData.difficulty_level}
+                </p>
+              </div>
+            )}
+            {trainingPlanData.duration_weeks && (
+              <div>
+                <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mb-1`}>
+                  {language === 'hebrew' ? 'משך זמן' : 'Duration'}
+                </p>
+                <p className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold`}>
+                  {trainingPlanData.duration_weeks} {language === 'hebrew' ? 'שבועות' : 'weeks'}
+                </p>
+              </div>
+            )}
+            {trainingPlanData.weekly_frequency && (
+              <div>
+                <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mb-1`}>
+                  {language === 'hebrew' ? 'תדירות שבועית' : 'Weekly Frequency'}
+                </p>
+                <p className={`${themeClasses.textPrimary} text-sm sm:text-base font-semibold`}>
+                  {trainingPlanData.weekly_frequency} {language === 'hebrew' ? 'פעמים' : 'times/week'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Weeks */}
+      {weeks.length > 0 ? (
+        <div className="space-y-4">
+          {weeks.map((week, weekIndex) => {
+            const weekNumber = week.week_number || weekIndex + 1;
+            const isWeekExpanded = expandedWeeks[weekNumber];
+            
+            return (
+              <div
+                key={weekIndex}
+                className={`${themeClasses.bgCard} rounded-xl p-4 sm:p-6 shadow-lg border ${themeClasses.borderPrimary} animate-slideInUp`}
+                style={{ animationDelay: `${weekIndex * 0.1}s` }}
+              >
+                {/* Week Header */}
+                <button
+                  onClick={() => toggleWeek(weekNumber)}
+                  className="w-full flex items-center justify-between mb-4"
+                >
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3 shadow-md">
+                      <span className="text-white font-bold text-lg">{weekNumber}</span>
+                    </div>
+                    <div className="text-left">
+                      <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>
+                        {language === 'hebrew' ? `שבוע ${weekNumber}` : `Week ${weekNumber}`}
+                      </h3>
+                      {week.focus && (
+                        <p className={`${themeClasses.textSecondary} text-sm mt-1`}>
+                          {week.focus}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <svg
+                    className={`w-5 h-5 ${themeClasses.textSecondary} transition-transform duration-300 ${isWeekExpanded ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {/* Week Days */}
+                {isWeekExpanded && week.days && week.days.length > 0 && (
+                  <div className="space-y-3 mt-4">
+                    {week.days.map((day, dayIndex) => {
+                      const dayNumber = day.day_number || dayIndex + 1;
+                      const dayKey = `${weekNumber}-${dayNumber}`;
+                      const isDayExpanded = expandedDays[dayKey];
+                      
+                      return (
+                        <div
+                          key={dayIndex}
+                          className={`${themeClasses.bgSecondary} rounded-lg p-4 border ${themeClasses.borderPrimary}`}
+                        >
+                          {/* Day Header */}
+                          <button
+                            onClick={() => toggleDay(weekNumber, dayNumber)}
+                            className="w-full flex items-center justify-between"
+                          >
+                            <div className="flex items-center">
+                              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center mr-3">
+                                <span className="text-white font-bold text-sm">{dayNumber}</span>
+                              </div>
+                              <h4 className={`${themeClasses.textPrimary} text-base sm:text-lg font-semibold`}>
+                                {day.day_name || (language === 'hebrew' ? `יום ${dayNumber}` : `Day ${dayNumber}`)}
+                              </h4>
+                            </div>
+                            <svg
+                              className={`w-5 h-5 ${themeClasses.textSecondary} transition-transform duration-300 ${isDayExpanded ? 'rotate-180' : ''}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+
+                          {/* Exercises */}
+                          {isDayExpanded && day.exercises && day.exercises.length > 0 && (
+                            <div className="mt-4 space-y-3">
+                              {day.exercises
+                                .sort((a, b) => (a.order || 0) - (b.order || 0))
+                                .map((exercise, exerciseIndex) => (
+                                  <div
+                                    key={exerciseIndex}
+                                    className={`${themeClasses.bgCard} rounded-lg p-4 border ${themeClasses.borderPrimary}`}
+                                  >
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div className="flex-1">
+                                        <h5 className={`${themeClasses.textPrimary} font-bold text-base mb-1`}>
+                                          {exercise.exercise_name}
+                                        </h5>
+                                        <div className="flex flex-wrap gap-3 text-sm">
+                                          <span className={`${themeClasses.textSecondary}`}>
+                                            <span className="font-semibold">{language === 'hebrew' ? 'סטים:' : 'Sets:'}</span> {exercise.sets}
+                                          </span>
+                                          <span className={`${themeClasses.textSecondary}`}>
+                                            <span className="font-semibold">{language === 'hebrew' ? 'חזרות:' : 'Reps:'}</span> {exercise.reps}
+                                          </span>
+                                          {exercise.rest_seconds && (
+                                            <span className={`${themeClasses.textSecondary}`}>
+                                              <span className="font-semibold">{language === 'hebrew' ? 'מנוחה:' : 'Rest:'}</span> {exercise.rest_seconds}s
+                                            </span>
+                                          )}
+                                          {exercise.target_weight_kg && (
+                                            <span className={`${themeClasses.textSecondary}`}>
+                                              <span className="font-semibold">{language === 'hebrew' ? 'משקל:' : 'Weight:'}</span> {exercise.target_weight_kg}kg
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {exercise.notes && (
+                                      <p className={`${themeClasses.textSecondary} text-sm mt-2 italic`}>
+                                        {exercise.notes}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className={`${themeClasses.bgCard} rounded-xl p-8 text-center`}>
+          <p className={themeClasses.textSecondary}>
+            {language === 'hebrew' ? 'אין שבועות זמינים בתוכנית' : 'No weeks available in plan'}
+          </p>
+        </div>
+      )}
+
+      {/* Notes */}
+      {trainingPlanData.notes && (
+        <div className={`${themeClasses.bgCard} rounded-xl p-4 sm:p-6 mt-6 border ${themeClasses.borderPrimary}`}>
+          <h3 className={`${themeClasses.textPrimary} font-bold text-lg mb-2`}>
+            {language === 'hebrew' ? 'הערות' : 'Notes'}
+          </h3>
+          <p className={themeClasses.textSecondary}>
+            {trainingPlanData.notes}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
@@ -6687,11 +7075,476 @@ const MacroSummaryCircles = ({
   );
 };
 
+// Weekly Summary Component
+const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, settings, clientRegion, direction, selectedDate, setSelectedDate, onDateClick }) => {
+  const [weekFoodLogs, setWeekFoodLogs] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [mealPlanTargets, setMealPlanTargets] = useState(null);
+  const [weekStartDate, setWeekStartDate] = useState(() => {
+    const date = new Date(selectedDate);
+    const dayOfWeek = date.getDay();
+    const sundayStartRegions = [
+      'north_america', 'mexico', 'latam_south_america', 'japan', 'korea',
+      'india_south_asia', 'indonesia_malaysia', 'southeast_asia', 'israel'
+    ];
+    const startFromSunday = clientRegion && sundayStartRegions.some(region => 
+      region.toLowerCase() === clientRegion.toLowerCase()
+    );
+    const startOfWeek = new Date(date);
+    if (startFromSunday) {
+      startOfWeek.setDate(date.getDate() - dayOfWeek);
+    } else {
+      startOfWeek.setDate(date.getDate() - dayOfWeek + 1);
+    }
+    return startOfWeek.toISOString().split('T')[0];
+  });
+
+  // Generate week dates
+  const generateWeekDates = (startDate) => {
+    const date = new Date(startDate);
+    const weekDates = [];
+    for (let i = 0; i < 7; i++) {
+      const currentDate = new Date(date);
+      currentDate.setDate(date.getDate() + i);
+      weekDates.push(currentDate.toISOString().split('T')[0]);
+    }
+    return weekDates;
+  };
+
+  const weekDates = generateWeekDates(weekStartDate);
+
+  // Sync weekStartDate when selectedDate changes externally
+  useEffect(() => {
+    const date = new Date(selectedDate);
+    const dayOfWeek = date.getDay();
+    const sundayStartRegions = [
+      'north_america', 'mexico', 'latam_south_america', 'japan', 'korea',
+      'india_south_asia', 'indonesia_malaysia', 'southeast_asia', 'israel'
+    ];
+    const startFromSunday = clientRegion && sundayStartRegions.some(region => 
+      region.toLowerCase() === clientRegion.toLowerCase()
+    );
+    const startOfWeek = new Date(date);
+    if (startFromSunday) {
+      startOfWeek.setDate(date.getDate() - dayOfWeek);
+    } else {
+      startOfWeek.setDate(date.getDate() - dayOfWeek + 1);
+    }
+    const newWeekStart = startOfWeek.toISOString().split('T')[0];
+    setWeekStartDate(prev => {
+      if (prev !== newWeekStart) {
+        return newWeekStart;
+      }
+      return prev;
+    });
+  }, [selectedDate, clientRegion]);
+
+  // Navigate weeks
+  const navigateWeek = (direction) => {
+    const currentDate = new Date(weekStartDate);
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7));
+    setWeekStartDate(newDate.toISOString().split('T')[0]);
+  };
+
+  // Load meal plan targets
+  useEffect(() => {
+    const loadMealPlanTargets = async () => {
+      if (!userCode) return;
+      try {
+        const { data: mealPlanData, error } = await getClientMealPlan(userCode);
+        if (!error && mealPlanData) {
+          let targets = {
+            calories: mealPlanData.daily_total_calories || 2000,
+            protein: 150,
+            carbs: 250,
+            fat: 65
+          };
+          if (mealPlanData.macros_target) {
+            targets = {
+              calories: mealPlanData.daily_total_calories || 2000,
+              protein: mealPlanData.macros_target.protein || 150,
+              carbs: mealPlanData.macros_target.carbs || 250,
+              fat: mealPlanData.macros_target.fat || 65
+            };
+          }
+          setMealPlanTargets(targets);
+        }
+      } catch (err) {
+        console.error('Error loading meal plan targets:', err);
+      }
+    };
+    loadMealPlanTargets();
+  }, [userCode]);
+
+  // Load food logs for all days in the week
+  useEffect(() => {
+    const loadWeekFoodLogs = async () => {
+      if (!userCode) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const logsByDate = {};
+        
+        // Load logs for each day in parallel
+        const logPromises = weekDates.map(async (date) => {
+          const { data, error } = await getFoodLogs(userCode, date);
+          if (!error && data) {
+            logsByDate[date] = data || [];
+          } else {
+            logsByDate[date] = [];
+          }
+        });
+
+        await Promise.all(logPromises);
+        setWeekFoodLogs(logsByDate);
+      } catch (err) {
+        console.error('Error loading week food logs:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadWeekFoodLogs();
+  }, [userCode, weekStartDate]);
+
+  // Calculate totals for a specific date
+  const calculateDayTotals = (date) => {
+    const logs = weekFoodLogs[date] || [];
+    let totalCalories = 0;
+    let totalProtein = 0;
+    let totalCarbs = 0;
+    let totalFat = 0;
+
+    logs.forEach((log) => {
+      if (log.food_items) {
+        try {
+          const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+          if (Array.isArray(foodItems)) {
+            totalCalories += foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
+            totalProtein += foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
+            totalCarbs += foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
+            totalFat += foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
+          }
+        } catch (e) {
+          // Fallback to old columns
+          totalCalories += log.total_calories || 0;
+          totalProtein += log.total_protein_g || 0;
+          totalCarbs += log.total_carbs_g || 0;
+          totalFat += log.total_fat_g || 0;
+        }
+      } else {
+        totalCalories += log.total_calories || 0;
+        totalProtein += log.total_protein_g || 0;
+        totalCarbs += log.total_carbs_g || 0;
+        totalFat += log.total_fat_g || 0;
+      }
+    });
+
+    return { totalCalories, totalProtein, totalCarbs, totalFat };
+  };
+
+  // Helper functions
+  const formatNumber = (num) => {
+    const number = typeof num === 'number' ? num : parseFloat(num);
+    if (isNaN(number) || number === null || number === undefined) {
+      return '0';
+    }
+    if (settings.decimalPlaces === 0) {
+      return Math.round(number).toString();
+    }
+    return number.toFixed(settings.decimalPlaces);
+  };
+
+  const convertWeight = (grams) => {
+    const number = typeof grams === 'number' ? grams : parseFloat(grams);
+    if (isNaN(number) || number === null || number === undefined) {
+      return 0;
+    }
+    if (settings.weightUnit === 'ounces') {
+      return number * 0.035274;
+    }
+    return number;
+  };
+
+  const formatWeight = (grams) => {
+    const value = convertWeight(grams);
+    const unit = settings.weightUnit === 'ounces' ? 'oz' : 'g';
+    return `${formatNumber(value)}${unit}`;
+  };
+
+  const dayNames = language === 'hebrew' 
+    ? ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת']
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  const monthNames = language === 'hebrew'
+    ? ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+    : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  const dailyGoals = mealPlanTargets || {
+    calories: 2000,
+    protein: 150,
+    carbs: 250,
+    fat: 65
+  };
+
+  // Mini SVG Circle Component for each day
+  const DaySummarySVG = ({ date, totals }) => {
+    const caloriesPercent = Math.round((totals.totalCalories / dailyGoals.calories) * 100);
+    const proteinPercent = Math.round((totals.totalProtein / dailyGoals.protein) * 100);
+    const carbsPercent = Math.round((totals.totalCarbs / dailyGoals.carbs) * 100);
+    const fatPercent = Math.round((totals.totalFat / dailyGoals.fat) * 100);
+
+    const outerRadius = 45;
+    const innerRadius = 35;
+    const outerCircumference = 2 * Math.PI * outerRadius;
+    const circumference = 2 * Math.PI * innerRadius;
+    const segmentLength = circumference / 3;
+
+    const caloriesNormalLength = Math.min(caloriesPercent, 100) / 100 * outerCircumference;
+    const proteinNormalLength = Math.min(proteinPercent, 100) / 100 * segmentLength;
+    const carbsNormalLength = Math.min(carbsPercent, 100) / 100 * segmentLength;
+    const fatNormalLength = Math.min(fatPercent, 100) / 100 * segmentLength;
+
+    const dateObj = new Date(date);
+    const dayName = dayNames[dateObj.getDay()];
+    const dayNumber = dateObj.getDate();
+    const monthName = monthNames[dateObj.getMonth()];
+
+    return (
+      <div 
+        className={`${themeClasses.bgCard} rounded-2xl p-4 border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} hover:border-emerald-500/50 transition-all duration-300 cursor-pointer`}
+        onClick={() => {
+          setSelectedDate(date);
+          if (onDateClick) {
+            onDateClick();
+          }
+        }}
+      >
+        <div className="text-center mb-3">
+          <div className={`${themeClasses.textSecondary} text-xs font-medium mb-1`}>{dayName}</div>
+          <div className={`${themeClasses.textPrimary} text-lg font-bold`}>{dayNumber}</div>
+          <div className={`${themeClasses.textMuted} text-xs`}>{monthName}</div>
+        </div>
+        
+        <div className="flex justify-center mb-3">
+          <svg 
+            className="transform -rotate-90 w-32 h-32" 
+            viewBox="0 0 120 120"
+          >
+            {/* Outer Circle Background */}
+            <circle
+              cx="60"
+              cy="60"
+              r={outerRadius}
+              fill="none"
+              stroke={isDarkMode ? 'rgba(100, 100, 100, 0.15)' : 'rgba(200, 200, 200, 0.2)'}
+              strokeWidth="4"
+            />
+            
+            {/* Inner Circle Background */}
+            <circle
+              cx="60"
+              cy="60"
+              r={innerRadius}
+              fill="none"
+              stroke={isDarkMode ? 'rgba(100, 100, 100, 0.15)' : 'rgba(200, 200, 200, 0.2)'}
+              strokeWidth="4"
+            />
+            
+            {/* Outer Circle - Calories */}
+            {settings.showCalories && caloriesNormalLength > 0 && (
+              <circle
+                cx="60"
+                cy="60"
+                r={outerRadius}
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray={`${caloriesNormalLength} ${outerCircumference}`}
+                className="transition-all duration-1000 ease-out"
+              />
+            )}
+            
+            {/* Inner Circle - Macros */}
+            {settings.showMacros && (
+              <>
+                {proteinNormalLength > 0 && (
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r={innerRadius}
+                    fill="none"
+                    stroke="#a855f7"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeDasharray={`${proteinNormalLength} ${circumference}`}
+                    strokeDashoffset="0"
+                    className="transition-all duration-1000 ease-out"
+                  />
+                )}
+                {carbsNormalLength > 0 && (
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r={innerRadius}
+                    fill="none"
+                    stroke="#3b82f6"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeDasharray={`${carbsNormalLength} ${circumference}`}
+                    strokeDashoffset={-segmentLength}
+                    className="transition-all duration-1000 ease-out"
+                  />
+                )}
+                {fatNormalLength > 0 && (
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r={innerRadius}
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeDasharray={`${fatNormalLength} ${circumference}`}
+                    strokeDashoffset={-segmentLength * 2}
+                    className="transition-all duration-1000 ease-out"
+                  />
+                )}
+              </>
+            )}
+          </svg>
+        </div>
+
+        {/* Center Calories */}
+        <div className="text-center mb-2">
+          <div className={`${themeClasses.textPrimary} text-xl font-bold`}>
+            {totals.totalCalories.toLocaleString()}
+          </div>
+          <div className={`${themeClasses.textMuted} text-xs`}>
+            {language === 'hebrew' ? 'קלוריות' : 'calories'}
+          </div>
+        </div>
+
+        {/* Macro Summary */}
+        {settings.showMacros && (
+          <div className="flex justify-between text-xs">
+            <div className="text-center">
+              <div className="text-purple-400 font-medium">{formatWeight(totals.totalProtein)}</div>
+              <div className={`${themeClasses.textMuted}`}>P</div>
+            </div>
+            <div className="text-center">
+              <div className="text-blue-400 font-medium">{formatWeight(totals.totalCarbs)}</div>
+              <div className={`${themeClasses.textMuted}`}>C</div>
+            </div>
+            <div className="text-center">
+              <div className="text-amber-400 font-medium">{formatWeight(totals.totalFat)}</div>
+              <div className={`${themeClasses.textMuted}`}>F</div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className={themeClasses.textSecondary}>
+            {language === 'hebrew' ? 'טוען סיכום שבועי...' : 'Loading weekly summary...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const weekStartObj = new Date(weekStartDate);
+  const weekEndObj = new Date(weekStartDate);
+  weekEndObj.setDate(weekStartObj.getDate() + 6);
+
+  return (
+    <div className="animate-fadeIn">
+      {/* Week Navigation */}
+      <div className={`mb-6 ${themeClasses.bgCard} rounded-xl p-4 border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className={`${themeClasses.textPrimary} text-2xl font-bold`}>
+            {language === 'hebrew' ? 'סיכום שבועי' : 'Weekly Summary'}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => navigateWeek('prev')}
+              className={`w-10 h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300 active:scale-95`}
+            >
+              <svg className={`w-5 h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div className={`${themeClasses.textPrimary} text-sm font-medium px-4`}>
+              {weekStartObj.getDate()} {monthNames[weekStartObj.getMonth()]} - {weekEndObj.getDate()} {monthNames[weekEndObj.getMonth()]}
+            </div>
+            <button 
+              onClick={() => navigateWeek('next')}
+              className={`w-10 h-10 ${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-lg flex items-center justify-center transition-all duration-300 active:scale-95`}
+            >
+              <svg className={`w-5 h-5 ${themeClasses.textPrimary} ${direction === 'rtl' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            <button 
+              onClick={() => {
+                const today = new Date().toISOString().split('T')[0];
+                const dayOfWeek = new Date(today).getDay();
+                const sundayStartRegions = [
+                  'north_america', 'mexico', 'latam_south_america', 'japan', 'korea',
+                  'india_south_asia', 'indonesia_malaysia', 'southeast_asia', 'israel'
+                ];
+                const startFromSunday = clientRegion && sundayStartRegions.some(region => 
+                  region.toLowerCase() === clientRegion.toLowerCase()
+                );
+                const startOfWeek = new Date(today);
+                if (startFromSunday) {
+                  startOfWeek.setDate(new Date(today).getDate() - dayOfWeek);
+                } else {
+                  startOfWeek.setDate(new Date(today).getDate() - dayOfWeek + 1);
+                }
+                setWeekStartDate(startOfWeek.toISOString().split('T')[0]);
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 text-sm active:scale-95"
+            >
+              {language === 'hebrew' ? 'השבוע' : 'This Week'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 7 Day Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
+        {weekDates.map((date, index) => {
+          const totals = calculateDayTotals(date);
+          return (
+            <DaySummarySVG 
+              key={date} 
+              date={date} 
+              totals={totals}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Daily Log Tab Component
 const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direction }) => {
   const { settings } = useSettings();
   const { isDarkMode } = useTheme();
-  const [activeSubTab, setActiveSubTab] = useState('dailyLog'); // 'dailyLog' or 'analytics'
+  const [activeSubTab, setActiveSubTab] = useState('dailyLog'); // 'dailyLog', 'analytics', or 'weeklySummary'
   const [foodLogs, setFoodLogs] = useState([]);
   const [mealPlanTargets, setMealPlanTargets] = useState(null);
   const [mealPlanMeals, setMealPlanMeals] = useState([]);
@@ -7444,9 +8297,36 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
   // Generate week dates
   const generateWeekDates = (selectedDate) => {
     const date = new Date(selectedDate);
-    const dayOfWeek = date.getDay();
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
     const startOfWeek = new Date(date);
-    startOfWeek.setDate(date.getDate() - dayOfWeek + 1); // Start from Monday
+    
+    // Regions that start the week on Sunday:
+    // United States, Canada, most of the Americas (like Brazil, Mexico, Colombia), 
+    // Japan, South Korea, India, Indonesia, Pakistan, the Philippines, Israel
+    const sundayStartRegions = [
+      'north_america',      // United States, Canada
+      'mexico',             // Mexico
+      'latam_south_america', // Brazil, Colombia, South America
+      'japan',              // Japan
+      'korea',              // South Korea
+      'india_south_asia',   // India, Pakistan
+      'indonesia_malaysia', // Indonesia
+      'southeast_asia',     // Philippines
+      'israel'              // Israel
+    ];
+    
+    // Check if region should start from Sunday (case-insensitive)
+    const startFromSunday = clientRegion && sundayStartRegions.some(region => 
+      region.toLowerCase() === clientRegion.toLowerCase()
+    );
+    
+    if (startFromSunday) {
+      // Start from Sunday (dayOfWeek 0)
+      startOfWeek.setDate(date.getDate() - dayOfWeek);
+    } else {
+      // Start from Monday (dayOfWeek 1)
+      startOfWeek.setDate(date.getDate() - dayOfWeek + 1);
+    }
     
     const weekDates = [];
     for (let i = 0; i < 7; i++) {
@@ -7491,6 +8371,16 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         >
           {language === 'hebrew' ? 'אנליטיקה' : 'Analytics'}
         </button>
+        <button
+          onClick={() => setActiveSubTab('weeklySummary')}
+          className={`px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-300 border-b-2 ${
+            activeSubTab === 'weeklySummary'
+              ? `${themeClasses.textPrimary} border-emerald-500`
+              : `${themeClasses.textSecondary} border-transparent hover:border-emerald-500/50`
+          }`}
+        >
+          {language === 'hebrew' ? 'סיכום שבועי' : 'Weekly Summary'}
+        </button>
       </div>
 
       {/* Analytics Sub-tab Content */}
@@ -7511,6 +8401,22 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
             onAddLog={() => setActiveSubTab('dailyLog')}
           />
         </>
+      )}
+
+      {/* Weekly Summary Sub-tab Content */}
+      {activeSubTab === 'weeklySummary' && (
+        <WeeklySummaryComponent
+          userCode={userCode}
+          themeClasses={themeClasses}
+          language={language}
+          isDarkMode={isDarkMode}
+          settings={settings}
+          clientRegion={clientRegion}
+          direction={direction}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          onDateClick={() => setActiveSubTab('dailyLog')}
+        />
       )}
 
       {/* Daily Log Sub-tab Content */}
@@ -7732,7 +8638,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
           return (
               <div 
                 key={meal} 
-                className={`${themeClasses.bgCard} border border-blue-500/30 rounded-2xl p-6 shadow-xl shadow-blue-500/10 transform hover:scale-[1.01] transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/20 animate-slideInUp lg:relative`}
+                className={`${themeClasses.bgCard} border border-blue-500/30 rounded-2xl p-6 shadow-xl shadow-blue-500/10 transform hover:scale-[1.01] transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/20 animate-slideInUp lg:relative group`}
                 style={{ 
                   animationDelay: `${0.9 + index * 0.1}s`,
                 }}
@@ -7762,7 +8668,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                 <div className="relative z-10">
                 <div className="flex items-center mb-4 sm:mb-6">
                   <div className={`w-14 h-14 sm:w-16 sm:h-16 lg:w-12 lg:h-12 bg-gradient-to-br ${getMealColor(meal)} rounded-2xl lg:rounded-xl flex items-center justify-center mr-4 shadow-xl lg:shadow-lg`}>
-                    <span className="text-3xl sm:text-4xl lg:text-2xl animate-bounce" style={{ animationDelay: `${index * 0.2}s` }}>{getMealIcon(meal)}</span>
+                    <span className="text-3xl sm:text-4xl lg:text-2xl group-hover:animate-bounce transition-transform duration-300">{getMealIcon(meal)}</span>
                   </div>
                       <div className="flex-1">
                     <p className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium mb-1 uppercase tracking-wide`}>

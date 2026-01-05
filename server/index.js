@@ -2998,6 +2998,35 @@ app.post('/api/assign-client-company', async (req, res) => {
   }
 });
 
+// Get training plan by user code
+app.get('/api/training-plan', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('training_plans')
+      .select('*')
+      .eq('user_code', userCode)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching training plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get meal plan by user code
 app.get('/api/meal-plan', async (req, res) => {
   try {
