@@ -810,6 +810,51 @@ app.post('/api/stripe/process-checkout-session', async (req, res) => {
 // WEBHOOK HANDLER FUNCTIONS
 // ====================================
 
+// Helper function to update clients table subscription info by email
+async function updateClientsSubscription(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt) {
+  if (!customerEmail) {
+    return;
+  }
+
+  try {
+    // Find client by email
+    const { data: client, error: findError } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('email', customerEmail)
+      .maybeSingle();
+
+    if (findError) {
+      console.warn(`⚠️ Error finding client with email: ${customerEmail}`, findError);
+      return;
+    }
+
+    if (!client) {
+      console.warn(`⚠️ Could not find client with email: ${customerEmail}`);
+      return;
+    }
+
+    // Update client by id
+    const { error: updateError } = await supabase
+      .from('clients')
+      .update({
+        subscription_status: subscriptionStatus || 'none',
+        subscription_type: subscriptionType,
+        subscription_expires_at: subscriptionExpiresAt,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', client.id);
+
+    if (updateError) {
+      console.error('❌ Error updating clients subscription info:', updateError);
+    } else {
+      console.log(`✅ clients subscription info updated for email: ${customerEmail}`);
+    }
+  } catch (error) {
+    console.error('❌ Error in updateClientsSubscription:', error);
+  }
+}
+
 // Helper function to update chat_users subscription info by email
 async function updateChatUserSubscription(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt) {
   if (!chatSupabase || !customerEmail) {
@@ -838,7 +883,8 @@ async function updateChatUserSubscription(customerEmail, subscriptionStatus, sub
       .update({
         subscription_status: subscriptionStatus,
         subscription_type: subscriptionType,
-        subscription_expires_at: subscriptionExpiresAt
+        subscription_expires_at: subscriptionExpiresAt,
+        updated_at: new Date().toISOString()
       })
       .eq('id', chatUser.id);
 
@@ -850,6 +896,15 @@ async function updateChatUserSubscription(customerEmail, subscriptionStatus, sub
   } catch (error) {
     console.error('❌ Error in updateChatUserSubscription:', error);
   }
+}
+
+// Helper function to update both clients and chat_users subscription info
+async function updateSubscriptionInfo(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt) {
+  // Update both tables in parallel
+  await Promise.all([
+    updateClientsSubscription(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt),
+    updateChatUserSubscription(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt)
+  ]);
 }
 
 async function handleCheckoutCompleted(session) {
@@ -1048,14 +1103,14 @@ async function handleSubscriptionCreated(subscription) {
     } else {
       console.log('✅ Subscription record saved successfully:', insertedData);
 
-      // Also update chat_users subscription info in the chat Supabase project
+      // Also update clients and chat_users subscription info
       // Get customer email from Stripe
       try {
         const customer = await stripe.customers.retrieve(subscription.customer);
         const customerEmail = customer.email;
         
         if (customerEmail) {
-          await updateChatUserSubscription(
+          await updateSubscriptionInfo(
             customerEmail,
             subscription.status,
             subscriptionType,
@@ -1065,7 +1120,7 @@ async function handleSubscriptionCreated(subscription) {
           console.warn('⚠️ No email found for customer:', subscription.customer);
         }
       } catch (customerError) {
-        console.error('❌ Error retrieving customer for chat_users update:', customerError);
+        console.error('❌ Error retrieving customer for subscription info update:', customerError);
       }
     }
     
@@ -1179,14 +1234,14 @@ async function handleSubscriptionUpdated(subscription) {
     } else {
       console.log('✅ Subscription updated successfully');
 
-      // Also update chat_users subscription info in the chat Supabase project
+      // Also update clients and chat_users subscription info
       // Get customer email from Stripe
       try {
         const customer = await stripe.customers.retrieve(subscription.customer);
         const customerEmail = customer.email;
         
         if (customerEmail) {
-          await updateChatUserSubscription(
+          await updateSubscriptionInfo(
             customerEmail,
             subscription.status,
             subscriptionType,
@@ -1196,7 +1251,7 @@ async function handleSubscriptionUpdated(subscription) {
           console.warn('⚠️ No email found for customer:', subscription.customer);
         }
       } catch (customerError) {
-        console.error('❌ Error retrieving customer for chat_users update:', customerError);
+        console.error('❌ Error retrieving customer for subscription info update:', customerError);
       }
     }
     
@@ -1270,14 +1325,14 @@ async function handleSubscriptionDeleted(subscription) {
     } else {
       console.log('✅ Subscription marked as cancelled successfully');
 
-      // Also update chat_users subscription info in the chat Supabase project
+      // Also update clients and chat_users subscription info
       // Get customer email from Stripe
       try {
         const customer = await stripe.customers.retrieve(subscription.customer);
         const customerEmail = customer.email;
         
         if (customerEmail) {
-          await updateChatUserSubscription(
+          await updateSubscriptionInfo(
             customerEmail,
             'cancelled',
             null,
@@ -1287,7 +1342,7 @@ async function handleSubscriptionDeleted(subscription) {
           console.warn('⚠️ No email found for customer:', subscription.customer);
         }
       } catch (customerError) {
-        console.error('❌ Error retrieving customer for chat_users update:', customerError);
+        console.error('❌ Error retrieving customer for subscription info update:', customerError);
       }
     }
     
