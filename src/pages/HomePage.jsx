@@ -375,7 +375,7 @@ function HomePage() {
                 } text-white px-10 sm:px-12 py-4 sm:py-5 rounded-full text-lg sm:text-xl font-medium transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center w-full sm:w-auto`}
               >
                 <span className="mr-2 text-xl">✨</span>
-                {language === 'hebrew' ? 'אני מוכן להרגיש טוב יותר' : 'I\'m ready to feel better'}
+                {language === 'hebrew' ? 'אני רוצה להרגיש טוב יותר' : 'I\'m ready to feel better'}
                 <span className="ml-2">→</span>
               </button>
              

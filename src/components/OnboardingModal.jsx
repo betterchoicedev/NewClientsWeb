@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import { normalizePhoneForDatabase } from '../supabase/auth';
+import { normalizePhoneForDatabase, createClientRecord } from '../supabase/auth';
 
 const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const { language, t, direction, toggleLanguage } = useLanguage();
@@ -197,7 +197,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     },
     {
       title: language === 'hebrew' ? 'תזונה ומטרות' : 'Nutrition & Goals',
-      fields: ['food_allergies', 'food_limitations', 'activity_level', 'goal', 'client_preference']
+      fields: ['activity_level', 'goal']
+    },
+    {
+      title: language === 'hebrew' ? 'העדפות ותזונה' : 'Food Preferences',
+      fields: ['food_allergies', 'food_limitations', 'client_preference']
     },
     {
       title: language === 'hebrew' ? 'תכנון ארוחות' : 'Meal Planning',
@@ -1070,7 +1074,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       
       const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
       
-      // Update clients via API
+      let updateData = null;
+      let finalUserCode = userCode;
+      
+      // Update clients via API (this should handle both INSERT and UPDATE)
       const clientUpdateResponse = await fetch(`${apiUrl}/api/onboarding/update-client`, {
         method: 'POST',
         headers: {
@@ -1084,16 +1091,116 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       if (!clientUpdateResponse.ok) {
         const errorResult = await clientUpdateResponse.json();
-        throw new Error(errorResult.message || 'Failed to update client');
+        const errorMessage = errorResult.message || 'Failed to update client';
+        console.error('❌ Client update error:', errorResult);
+        
+        // If the error suggests the record doesn't exist, try to create it
+        // This can happen with Google signups where the client record wasn't created yet
+        if (errorMessage.includes('not found') || errorMessage.includes('does not exist') || errorResult.code === 'PGRST116') {
+          console.log('🔄 Client record not found, attempting to create it...');
+          
+          try {
+            // Create the client record first using the createClientRecord function
+            const userDataForCreation = {
+              email: user.email || null,
+              first_name: clientData.first_name || null,
+              last_name: clientData.last_name || null,
+              phone: clientData.phone || null,
+              user_language: clientData.user_language || 'en',
+              city: clientData.city || null,
+              region: clientData.region || null,
+              timezone: clientData.timezone || null,
+              birth_date: clientData.birth_date || null,
+              gender: clientData.gender || null,
+              current_weight: clientData.current_weight || null,
+              target_weight: clientData.target_weight || null,
+              height: clientData.height || null,
+              food_allergies: clientData.food_allergies || null,
+              food_limitations: clientData.food_limitations || null,
+              activity_level: clientData.activity_level || null,
+              goal: clientData.goal || null,
+              client_preference: clientData.client_preference || null,
+              medical_conditions: clientData.medical_conditions || null
+            };
+            
+            const createResult = await createClientRecord(user.id, userDataForCreation);
+            
+            if (createResult.error) {
+              throw new Error(`Failed to create client record: ${createResult.error.message || createResult.error}`);
+            }
+            
+            console.log('✅ Client record created successfully:', createResult.data);
+            
+            // Get userCode from creation result
+            if (createResult.data?.user_code) {
+              finalUserCode = createResult.data.user_code;
+              console.log('📝 Got userCode from client creation:', finalUserCode);
+            }
+            
+            // Now update with the onboarding_completed flag and any additional data
+            const updateAfterCreateResponse = await fetch(`${apiUrl}/api/onboarding/update-client`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                user_id: user.id,
+                clientData: {
+                  ...clientData,
+                  onboarding_completed: true
+                }
+              })
+            });
+            
+            if (updateAfterCreateResponse.ok) {
+              const updateAfterCreateResult = await updateAfterCreateResponse.json();
+              updateData = updateAfterCreateResult.data;
+              console.log('✅ Client record updated after creation:', updateData);
+            } else {
+              // If update fails, use the creation data
+              updateData = createResult.data;
+              console.warn('⚠️ Failed to update client after creation, using creation data');
+            }
+            
+          } catch (createError) {
+            console.error('❌ Failed to create client record:', createError);
+            throw new Error(`Failed to create or update client: ${createError.message || errorMessage}`);
+          }
+        } else {
+          throw new Error(errorMessage);
+        }
+      } else {
+        // Update was successful
+        const clientUpdateResult = await clientUpdateResponse.json();
+        updateData = clientUpdateResult.data;
+        console.log('✅ Clients table updated successfully:', updateData);
       }
 
-      const clientUpdateResult = await clientUpdateResponse.json();
-      const updateData = clientUpdateResult.data;
+      // Get userCode from the API response if not available from props
+      // This handles cases where Google signup didn't create a client record yet
+      if (!finalUserCode && updateData && updateData.user_code) {
+        finalUserCode = updateData.user_code;
+        console.log('📝 Got userCode from API response:', finalUserCode);
+      }
+      
+      // If still no userCode, try to fetch it from the client record
+      if (!finalUserCode) {
+        try {
+          const clientDataResponse = await fetch(`${apiUrl}/api/onboarding/client-data?user_id=${encodeURIComponent(user.id)}`);
+          if (clientDataResponse.ok) {
+            const clientDataResult = await clientDataResponse.json();
+            if (clientDataResult.data && clientDataResult.data.user_code) {
+              finalUserCode = clientDataResult.data.user_code;
+              console.log('📝 Got userCode from client-data API:', finalUserCode);
+            }
+          }
+        } catch (fetchError) {
+          console.error('Error fetching userCode:', fetchError);
+        }
+      }
 
-      console.log('✅ Clients table updated successfully:', updateData);
-
-      // Update chat_users via API if userCode is available
-      if (userCode) {
+      // Update chat_users via API - try with userCode from props, API response, or fetch
+      if (finalUserCode) {
         try {
           const chatUpdateResponse = await fetch(`${apiUrl}/api/onboarding/update-chat-user`, {
             method: 'POST',
@@ -1101,7 +1208,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              user_code: userCode,
+              user_code: finalUserCode,
               chatUserData: chatUserData
             })
           });
@@ -1117,6 +1224,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           console.error('Error syncing to chat_users:', syncError);
           // Don't throw - continue even if sync fails
         }
+      } else {
+        console.warn('⚠️ No userCode available - chat_users table was not updated. This may happen for new Google signups.');
       }
 
       console.log('✅ Onboarding data saved successfully, closing modal...');
