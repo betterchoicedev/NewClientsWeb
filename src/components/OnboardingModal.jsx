@@ -1077,103 +1077,153 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       let updateData = null;
       let finalUserCode = userCode;
       
-      // Update clients via API (this should handle both INSERT and UPDATE)
-      const clientUpdateResponse = await fetch(`${apiUrl}/api/onboarding/update-client`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: user.id,
-          clientData: clientData
-        })
-      });
-
-      if (!clientUpdateResponse.ok) {
-        const errorResult = await clientUpdateResponse.json();
-        const errorMessage = errorResult.message || 'Failed to update client';
-        console.error('❌ Client update error:', errorResult);
-        
-        // If the error suggests the record doesn't exist, try to create it
-        // This can happen with Google signups where the client record wasn't created yet
-        if (errorMessage.includes('not found') || errorMessage.includes('does not exist') || errorResult.code === 'PGRST116') {
-          console.log('🔄 Client record not found, attempting to create it...');
-          
-          try {
-            // Create the client record first using the createClientRecord function
-            const userDataForCreation = {
-              email: user.email || null,
-              first_name: clientData.first_name || null,
-              last_name: clientData.last_name || null,
-              phone: clientData.phone || null,
-              user_language: clientData.user_language || 'en',
-              city: clientData.city || null,
-              region: clientData.region || null,
-              timezone: clientData.timezone || null,
-              birth_date: clientData.birth_date || null,
-              gender: clientData.gender || null,
-              current_weight: clientData.current_weight || null,
-              target_weight: clientData.target_weight || null,
-              height: clientData.height || null,
-              food_allergies: clientData.food_allergies || null,
-              food_limitations: clientData.food_limitations || null,
-              activity_level: clientData.activity_level || null,
-              goal: clientData.goal || null,
-              client_preference: clientData.client_preference || null,
-              medical_conditions: clientData.medical_conditions || null
-            };
-            
-            const createResult = await createClientRecord(user.id, userDataForCreation);
-            
-            if (createResult.error) {
-              throw new Error(`Failed to create client record: ${createResult.error.message || createResult.error}`);
+      // First, check if client record exists
+      let clientExists = false;
+      try {
+        const checkClientResponse = await fetch(`${apiUrl}/api/onboarding/client-data?user_id=${encodeURIComponent(user.id)}`);
+        if (checkClientResponse.ok) {
+          const checkResult = await checkClientResponse.json();
+          if (checkResult.data && checkResult.data.user_id) {
+            clientExists = true;
+            // Get userCode if available
+            if (checkResult.data.user_code && !finalUserCode) {
+              finalUserCode = checkResult.data.user_code;
+              console.log('📝 Got userCode from existing client:', finalUserCode);
             }
-            
-            console.log('✅ Client record created successfully:', createResult.data);
-            
-            // Get userCode from creation result
-            if (createResult.data?.user_code) {
-              finalUserCode = createResult.data.user_code;
-              console.log('📝 Got userCode from client creation:', finalUserCode);
-            }
-            
-            // Now update with the onboarding_completed flag and any additional data
-            const updateAfterCreateResponse = await fetch(`${apiUrl}/api/onboarding/update-client`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                user_id: user.id,
-                clientData: {
-                  ...clientData,
-                  onboarding_completed: true
-                }
-              })
-            });
-            
-            if (updateAfterCreateResponse.ok) {
-              const updateAfterCreateResult = await updateAfterCreateResponse.json();
-              updateData = updateAfterCreateResult.data;
-              console.log('✅ Client record updated after creation:', updateData);
-            } else {
-              // If update fails, use the creation data
-              updateData = createResult.data;
-              console.warn('⚠️ Failed to update client after creation, using creation data');
-            }
-            
-          } catch (createError) {
-            console.error('❌ Failed to create client record:', createError);
-            throw new Error(`Failed to create or update client: ${createError.message || errorMessage}`);
           }
-        } else {
+        }
+      } catch (checkError) {
+        console.log('ℹ️ Could not check if client exists, will try to create/update:', checkError);
+      }
+      
+      // If client doesn't exist, create it first (common with Google signups)
+      if (!clientExists) {
+        console.log('🔄 Client record does not exist, creating it first...');
+        
+        try {
+          // Create the client record first using the createClientRecord function
+          const userDataForCreation = {
+            email: user.email || null,
+            first_name: clientData.first_name || null,
+            last_name: clientData.last_name || null,
+            phone: clientData.phone || null,
+            user_language: clientData.user_language || 'en',
+            city: clientData.city || null,
+            region: clientData.region || null,
+            timezone: clientData.timezone || null,
+            birth_date: clientData.birth_date || null,
+            gender: clientData.gender || null,
+            current_weight: clientData.current_weight || null,
+            target_weight: clientData.target_weight || null,
+            height: clientData.height || null,
+            food_allergies: clientData.food_allergies || null,
+            food_limitations: clientData.food_limitations || null,
+            activity_level: clientData.activity_level || null,
+            goal: clientData.goal || null,
+            client_preference: clientData.client_preference || null,
+            medical_conditions: clientData.medical_conditions || null
+          };
+          
+          console.log('📝 Creating client record with data:', userDataForCreation);
+          const createResult = await createClientRecord(user.id, userDataForCreation);
+          
+          if (createResult.error) {
+            console.error('❌ createClientRecord error:', createResult.error);
+            throw new Error(`Failed to create client record: ${createResult.error.message || JSON.stringify(createResult.error)}`);
+          }
+          
+          if (!createResult.data) {
+            throw new Error('Client record creation returned no data');
+          }
+          
+          console.log('✅ Client record created successfully:', createResult.data);
+          
+          // Get userCode from creation result - check multiple possible locations
+          if (createResult.data) {
+            if (createResult.data.user_code) {
+              finalUserCode = createResult.data.user_code;
+              console.log('📝 Got userCode from client creation (data.user_code):', finalUserCode);
+            } else if (createResult.data.data && createResult.data.data.user_code) {
+              finalUserCode = createResult.data.data.user_code;
+              console.log('📝 Got userCode from client creation (data.data.user_code):', finalUserCode);
+            }
+          }
+          
+          // If still no userCode, fetch it from the newly created record
+          if (!finalUserCode) {
+            try {
+              const fetchClientResponse = await fetch(`${apiUrl}/api/onboarding/client-data?user_id=${encodeURIComponent(user.id)}`);
+              if (fetchClientResponse.ok) {
+                const fetchResult = await fetchClientResponse.json();
+                if (fetchResult.data && fetchResult.data.user_code) {
+                  finalUserCode = fetchResult.data.user_code;
+                  console.log('📝 Got userCode by fetching after creation:', finalUserCode);
+                }
+              }
+            } catch (fetchError) {
+              console.warn('⚠️ Could not fetch userCode after creation:', fetchError);
+            }
+          }
+          
+          // Set updateData to the creation result
+          updateData = createResult.data;
+          
+        } catch (createError) {
+          console.error('❌ Failed to create client record:', createError);
+          throw new Error(`Failed to create client record: ${createError.message || 'Unknown error'}`);
+        }
+      }
+      
+      // Now update the client with onboarding_completed flag and any additional data
+      // This will work whether we just created it or it already existed
+      try {
+        const clientUpdateResponse = await fetch(`${apiUrl}/api/onboarding/update-client`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: user.id,
+            clientData: {
+              ...clientData,
+              onboarding_completed: true
+            }
+          })
+        });
+
+        if (!clientUpdateResponse.ok) {
+          const errorResult = await clientUpdateResponse.json();
+          const errorMessage = errorResult.message || 'Failed to update client';
+          console.error('❌ Client update error:', errorResult);
+          
+          // If we just created the record, this is a problem
+          if (!clientExists) {
+            throw new Error(`Failed to update client after creation: ${errorMessage}`);
+          }
+          
+          // If record existed, throw the error
           throw new Error(errorMessage);
         }
-      } else {
+
         // Update was successful
         const clientUpdateResult = await clientUpdateResponse.json();
         updateData = clientUpdateResult.data;
         console.log('✅ Clients table updated successfully:', updateData);
+        
+        // Get userCode from update response if not already set
+        if (!finalUserCode && updateData && updateData.user_code) {
+          finalUserCode = updateData.user_code;
+          console.log('📝 Got userCode from update response:', finalUserCode);
+        }
+        
+      } catch (updateError) {
+        // If update fails but we just created the record, that's a problem
+        if (!clientExists) {
+          console.error('❌ Failed to update client after creation:', updateError);
+          throw updateError;
+        }
+        // If record existed, we can continue (some data might have been saved)
+        console.warn('⚠️ Client update failed but record exists:', updateError);
       }
 
       // Get userCode from the API response if not available from props
