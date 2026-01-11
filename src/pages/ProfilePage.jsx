@@ -1075,6 +1075,7 @@ const ProfilePage = () => {
                 {/* Settings Control - Gear Icon */}
                 <div className="flex items-center">
                   <button 
+                    data-tour="settings-button"
                     onClick={() => setActiveTab('settings')}
                     className={`${themeClasses.bgSecondary} hover:${themeClasses.bgPrimary} rounded-xl p-3 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 border border-gray-400/20 hover:border-gray-400/40`}
                   >
@@ -1287,6 +1288,7 @@ const ProfilePage = () => {
                   </button>
 
                   <button 
+                    data-tour="settings-button"
                     onClick={() => {
                       setActiveTab('settings');
                       setIsMobileNavOpen(false);

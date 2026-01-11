@@ -6,7 +6,7 @@ import { normalizePhoneForDatabase, createClientRecord } from '../supabase/auth'
 const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const { language, t, direction, toggleLanguage } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(-1); // -1 for welcome screen, 0+ for form steps
   const [loading, setLoading] = useState(false);
   const [checkingData, setCheckingData] = useState(true);
   const [error, setError] = useState('');
@@ -30,7 +30,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     food_limitations: '',
     activity_level: '',
     goal: '',
-    client_preference: '',
     region: '',
     medical_conditions: '',
     timezone: '',
@@ -38,6 +37,23 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     meal_descriptions: [],
     meal_names: []
   });
+
+  // Separate state for date of birth inputs
+  const [dobDay, setDobDay] = useState('');
+  const [dobMonth, setDobMonth] = useState('');
+  const [dobYear, setDobYear] = useState('');
+
+  // Unit preferences for weight and height
+  const [weightUnit, setWeightUnit] = useState('kg'); // 'kg' or 'lbs'
+  const [heightUnit, setHeightUnit] = useState('cm'); // 'cm' or 'inches'
+
+  // Food allergies state - track selected allergies and other text
+  const [selectedAllergies, setSelectedAllergies] = useState([]);
+  const [allergiesOtherText, setAllergiesOtherText] = useState('');
+
+  // Food limitations state - track selected limitations and other text
+  const [selectedLimitations, setSelectedLimitations] = useState([]);
+  const [limitationsOtherText, setLimitationsOtherText] = useState('');
 
   // Popular country codes with phone number validation rules
   const countryCodes = [
@@ -145,6 +161,145 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     { value: 'other', labelHe: 'אחר', labelEn: 'Other' }
   ];
 
+  // Days 1-31 for date of birth
+  const days = Array.from({ length: 31 }, (_, i) => i + 1);
+
+  // Months with bilingual labels
+  const months = [
+    { value: '1', labelHe: 'ינואר', labelEn: 'January' },
+    { value: '2', labelHe: 'פברואר', labelEn: 'February' },
+    { value: '3', labelHe: 'מרץ', labelEn: 'March' },
+    { value: '4', labelHe: 'אפריל', labelEn: 'April' },
+    { value: '5', labelHe: 'מאי', labelEn: 'May' },
+    { value: '6', labelHe: 'יוני', labelEn: 'June' },
+    { value: '7', labelHe: 'יולי', labelEn: 'July' },
+    { value: '8', labelHe: 'אוגוסט', labelEn: 'August' },
+    { value: '9', labelHe: 'ספטמבר', labelEn: 'September' },
+    { value: '10', labelHe: 'אוקטובר', labelEn: 'October' },
+    { value: '11', labelHe: 'נובמבר', labelEn: 'November' },
+    { value: '12', labelHe: 'דצמבר', labelEn: 'December' }
+  ];
+
+  // Years from 1900 to current year + 10 years for date of birth
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: currentYear - 1900 + 11 }, (_, i) => currentYear + 10 - i);
+
+  // Gender options with bilingual labels
+  const genderOptions = [
+    { value: 'male', labelHe: 'זכר', labelEn: 'Male' },
+    { value: 'female', labelHe: 'נקבה', labelEn: 'Female' },
+    { value: 'other', labelHe: 'אחר', labelEn: 'Other' }
+  ];
+
+  // Activity level options with bilingual labels
+  const activityLevelOptions = [
+    { value: 'sedentary', labelHe: 'יושבני - מעט או ללא פעילות גופנית', labelEn: 'Sedentary - Little or no exercise' },
+    { value: 'light', labelHe: 'פעילות קלה - 1-3 פעמים בשבוע', labelEn: 'Light Activity - 1-3 days/week' },
+    { value: 'moderate', labelHe: 'פעילות בינונית - 3-5 פעמים בשבוע', labelEn: 'Moderate Activity - 3-5 days/week' },
+    { value: 'active', labelHe: 'פעיל - 6-7 פעמים בשבוע', labelEn: 'Active - 6-7 days/week' },
+    { value: 'extreme', labelHe: 'קיצוני - פעילות אינטנסיבית/עבודה פיזית', labelEn: 'Extreme - Very hard exercise/physical job' }
+  ];
+
+  // Goal options with bilingual labels
+  const goalOptions = [
+    { value: 'lose', labelHe: 'ירידה במשקל', labelEn: 'Lose Weight' },
+    { value: 'cut', labelHe: 'CUT', labelEn: 'CUT' },
+    { value: 'maintain', labelHe: 'שמירה על משקל', labelEn: 'Maintain Weight' },
+    { value: 'gain', labelHe: 'עלייה במשקל', labelEn: 'Gain Weight' },
+    { value: 'muscle', labelHe: 'בניית שרירים', labelEn: 'Build Muscle' },
+    { value: 'improve_performance', labelHe: 'שיפור ביצועים', labelEn: 'Improve Performance' },
+    { value: 'improve_health', labelHe: 'שיפור בריאות', labelEn: 'Improve Health' }
+  ];
+
+  // Food allergies options with bilingual labels
+  const allergiesOptions = [
+    { value: 'peanuts', labelHe: 'בוטנים', labelEn: 'Peanuts' },
+    { value: 'tree_nuts', labelHe: 'אגוזי עץ', labelEn: 'Tree Nuts' },
+    { value: 'milk', labelHe: 'חלב', labelEn: 'Milk/Dairy' },
+    { value: 'eggs', labelHe: 'ביצים', labelEn: 'Eggs' },
+    { value: 'wheat', labelHe: 'חיטה', labelEn: 'Wheat' },
+    { value: 'soy', labelHe: 'סויה', labelEn: 'Soy' },
+    { value: 'fish', labelHe: 'דגים', labelEn: 'Fish' },
+    { value: 'seafood', labelHe: 'פירות ים', labelEn: 'Seafood' }
+  ];
+
+  // Food limitations options with bilingual labels
+  const limitationsOptions = [
+    { value: 'vegetarian', labelHe: 'צמחוני', labelEn: 'Vegetarian' },
+    { value: 'vegan', labelHe: 'טבעוני', labelEn: 'Vegan' },
+    { value: 'pescatarian', labelHe: 'פסקטריאני', labelEn: 'Pescatarian' },
+    { value: 'kosher', labelHe: 'כשר', labelEn: 'Kosher' },
+    { value: 'halal', labelHe: 'חלאל', labelEn: 'Halal' },
+    { value: 'gluten_free', labelHe: 'ללא גלוטן', labelEn: 'Gluten-free' },
+    { value: 'dairy_free', labelHe: 'ללא חלב', labelEn: 'Dairy-free' }
+  ];
+
+  // Weight options in kg (30-200 kg with 1 kg increments)
+  const weightOptionsKg = Array.from({ length: 171 }, (_, i) => 30 + i);
+  // Weight options in lbs (66-441 lbs, approximately 1 lb increments)
+  const minKg = 30;
+  const maxKg = 200;
+  const minLbs = Math.round(minKg * 2.20462); // ~66 lbs
+  const maxLbs = Math.round(maxKg * 2.20462); // ~441 lbs
+  const weightOptionsLbs = Array.from({ length: maxLbs - minLbs + 1 }, (_, i) => minLbs + i);
+
+  // Height options in cm (100-250 cm with 1 cm increments)
+  const heightOptionsCm = Array.from({ length: 151 }, (_, i) => 100 + i);
+  // Height options in inches (39-98 inches, approximately)
+  const minCm = 100;
+  const maxCm = 250;
+  const minInches = Math.round(minCm / 2.54); // ~39 inches
+  const maxInches = Math.round(maxCm / 2.54); // ~98 inches
+  const heightOptionsInches = Array.from({ length: maxInches - minInches + 1 }, (_, i) => minInches + i);
+
+  // Conversion functions
+  const kgToLbs = (kg) => Math.round(parseFloat(kg) * 2.20462);
+  const lbsToKg = (lbs) => Math.round((parseFloat(lbs) / 2.20462) * 10) / 10; // Round to 1 decimal
+  const cmToInches = (cm) => Math.round(parseFloat(cm) / 2.54);
+  const inchesToCm = (inches) => Math.round(parseFloat(inches) * 2.54);
+
+  // Helper to get displayed weight value (in selected unit)
+  const getDisplayedWeight = () => {
+    if (!formData.weight_kg) return '';
+    if (weightUnit === 'lbs') {
+      const lbsValue = kgToLbs(formData.weight_kg);
+      // Find closest matching option
+      const closest = weightOptionsLbs.reduce((prev, curr) => 
+        Math.abs(curr - lbsValue) < Math.abs(prev - lbsValue) ? curr : prev
+      );
+      return closest.toString();
+    }
+    return formData.weight_kg;
+  };
+
+  // Helper to get displayed height value (in selected unit)
+  const getDisplayedHeight = () => {
+    if (!formData.height_cm) return '';
+    if (heightUnit === 'inches') {
+      const inchesValue = cmToInches(formData.height_cm);
+      // Find closest matching option
+      const closest = heightOptionsInches.reduce((prev, curr) => 
+        Math.abs(curr - inchesValue) < Math.abs(prev - inchesValue) ? curr : prev
+      );
+      return closest.toString();
+    }
+    return formData.height_cm;
+  };
+
+  // Helper to get displayed target weight value (in selected unit)
+  const getDisplayedTargetWeight = () => {
+    if (!formData.target_weight) return '';
+    if (weightUnit === 'lbs') {
+      const lbsValue = kgToLbs(formData.target_weight);
+      // Find closest matching option
+      const closest = weightOptionsLbs.reduce((prev, curr) => 
+        Math.abs(curr - lbsValue) < Math.abs(prev - lbsValue) ? curr : prev
+      );
+      return closest.toString();
+    }
+    return formData.target_weight;
+  };
+
   // Function to validate phone number based on country code
   const validatePhoneNumber = (phone, countryCode) => {
     // Normalize phone number (remove spaces, dashes, parentheses, dots, etc.)
@@ -188,20 +343,64 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   // All possible fields organized by step
   const allSteps = [
     {
-      title: language === 'hebrew' ? 'מידע אישי בסיסי' : 'Basic Personal Information',
-      fields: ['first_name', 'last_name', 'phone', 'language', 'city', 'region', 'timezone']
+      title: language === 'hebrew' ? 'שם פרטי ומשפחה' : 'First & Last Name',
+      fields: ['first_name', 'last_name']
     },
     {
-      title: language === 'hebrew' ? 'פרטי בריאות' : 'Health Information',
-      fields: ['date_of_birth', 'gender', 'weight_kg', 'target_weight', 'height_cm', 'medical_conditions']
+      title: language === 'hebrew' ? 'מספר טלפון' : 'Phone Number',
+      fields: ['phone']
     },
     {
-      title: language === 'hebrew' ? 'תזונה ומטרות' : 'Nutrition & Goals',
-      fields: ['activity_level', 'goal']
+      title: language === 'hebrew' ? 'שפה מועדפת' : 'Preferred Language',
+      fields: ['language']
     },
     {
-      title: language === 'hebrew' ? 'העדפות ותזונה' : 'Food Preferences',
-      fields: ['food_allergies', 'food_limitations', 'client_preference']
+      title: language === 'hebrew' ? 'עיר' : 'City',
+      fields: ['city']
+    },
+    {
+      title: language === 'hebrew' ? 'אזור' : 'Region',
+      fields: ['region']
+    },
+    {
+      title: language === 'hebrew' ? 'אזור זמן' : 'Timezone',
+      fields: ['timezone']
+    },
+    {
+      title: language === 'hebrew' ? 'תאריך לידה' : 'Date of Birth',
+      fields: ['date_of_birth']
+    },
+    {
+      title: language === 'hebrew' ? 'מין' : 'Gender',
+      fields: ['gender']
+    },
+    {
+      title: language === 'hebrew' ? 'גובה ומשקל נוכחי' : 'Height & Current Weight',
+      fields: ['height_cm', 'weight_kg']
+    },
+    {
+      title: language === 'hebrew' ? 'משקל מטרה' : 'Target Weight',
+      fields: ['target_weight']
+    },
+    {
+      title: language === 'hebrew' ? 'מצבים רפואיים' : 'Medical Conditions',
+      fields: ['medical_conditions']
+    },
+    {
+      title: language === 'hebrew' ? 'רמת פעילות' : 'Activity Level',
+      fields: ['activity_level']
+    },
+    {
+      title: language === 'hebrew' ? 'מטרה' : 'Goal',
+      fields: ['goal']
+    },
+    {
+      title: language === 'hebrew' ? 'אלרגיות למזון' : 'Food Allergies',
+      fields: ['food_allergies']
+    },
+    {
+      title: language === 'hebrew' ? 'הגבלות תזונתיות' : 'Food Limitations',
+      fields: ['food_limitations']
     },
     {
       title: language === 'hebrew' ? 'תכנון ארוחות' : 'Meal Planning',
@@ -309,6 +508,61 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     };
   };
 
+  // Save form data to localStorage whenever it changes (only if modal is open and we have progress)
+  useEffect(() => {
+    if (isOpen && user && currentStep >= 0) {
+      const saveData = {
+        formData,
+        currentStep,
+        dobDay,
+        dobMonth,
+        dobYear,
+        weightUnit,
+        heightUnit,
+        selectedAllergies,
+        allergiesOtherText,
+        selectedLimitations,
+        limitationsOtherText
+      };
+      localStorage.setItem(`onboarding_${user.id}`, JSON.stringify(saveData));
+    }
+  }, [formData, currentStep, dobDay, dobMonth, dobYear, weightUnit, heightUnit, selectedAllergies, allergiesOtherText, selectedLimitations, limitationsOtherText, isOpen, user]);
+
+  // Restore current step from localStorage when modal opens (before loadExistingData runs)
+  useEffect(() => {
+    if (isOpen && user) {
+      try {
+        const savedData = localStorage.getItem(`onboarding_${user.id}`);
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          // Restore current step if we have saved progress (not just welcome screen)
+          if (parsed.currentStep !== undefined && parsed.currentStep >= 0) {
+            setCurrentStep(parsed.currentStep);
+            // Restore UI state (units, date fields, selections)
+            setDobDay(parsed.dobDay || '');
+            setDobMonth(parsed.dobMonth || '');
+            setDobYear(parsed.dobYear || '');
+            setWeightUnit(parsed.weightUnit || 'kg');
+            setHeightUnit(parsed.heightUnit || 'cm');
+            setSelectedAllergies(parsed.selectedAllergies || []);
+            setAllergiesOtherText(parsed.allergiesOtherText || '');
+            setSelectedLimitations(parsed.selectedLimitations || []);
+            setLimitationsOtherText(parsed.limitationsOtherText || '');
+            // Restore form data (will be merged with database data by loadExistingData)
+            setFormData(prev => ({ ...prev, ...parsed.formData }));
+            return; // Don't reset to welcome if we have saved progress
+          }
+        }
+      } catch (error) {
+        console.error('Error restoring onboarding data:', error);
+      }
+      // Only reset to welcome if no saved progress
+      setCurrentStep(-1);
+      setError('');
+      setFieldErrors({});
+    }
+  }, [isOpen, user]);
+
   // Auto-detect timezone on mount
   useEffect(() => {
     if (isOpen && !formData.timezone) {
@@ -388,30 +642,148 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           ? chatUserMealData.meal_plan_structure.map(m => m.meal || '')
           : [];
         
+        const birthDate = data.birth_date || '';
+        const { day, month, year } = splitDateOfBirth(birthDate);
+        // Convert date to DD-MM-YYYY format for internal storage (database uses YYYY-MM-DD)
+        const dateInInternalFormat = birthDate && day && month && year ? combineDateOfBirth(day, month, year) : '';
+        
         setFormData(prev => ({
           ...prev,
-          first_name: data.first_name || '',
-          last_name: data.last_name || '',
-          phone: data.phone || '',
-          language: data.user_language || 'en',
-          city: data.city || '',
-          region: data.region || '',
-          timezone: data.timezone || '',
-          date_of_birth: data.birth_date || '',
-          gender: data.gender || '',
-          weight_kg: data.current_weight ? data.current_weight.toString() : '',
-          target_weight: data.target_weight ? data.target_weight.toString() : '',
-          height_cm: data.height ? data.height.toString() : '',
-          food_allergies: data.food_allergies || '',
-          food_limitations: data.food_limitations || '',
-          activity_level: data.activity_level || '',
-          goal: data.goal || '',
-          client_preference: typeof data.client_preference === 'string' ? data.client_preference : (data.client_preference?.preference || '') || (typeof data.dietary_preferences === 'string' ? data.dietary_preferences : (data.dietary_preferences?.preference || '')),
-          medical_conditions: data.medical_conditions || '',
-          number_of_meals: chatUserMealData?.number_of_meals ? chatUserMealData.number_of_meals.toString() : '',
-          meal_descriptions: mealDescriptions,
-          meal_names: mealNames
+          // Only update fields that have values in the database, preserve existing values otherwise
+          first_name: data.first_name || prev.first_name || '',
+          last_name: data.last_name || prev.last_name || '',
+          phone: data.phone || prev.phone || '',
+          language: data.user_language || prev.language || 'en',
+          city: data.city || prev.city || '',
+          region: data.region || prev.region || '',
+          timezone: data.timezone || prev.timezone || '',
+          date_of_birth: dateInInternalFormat || prev.date_of_birth || '',
+          gender: data.gender || prev.gender || '',
+          weight_kg: data.current_weight ? data.current_weight.toString() : (prev.weight_kg || ''),
+          target_weight: data.target_weight ? data.target_weight.toString() : (prev.target_weight || ''),
+          height_cm: data.height ? data.height.toString() : (prev.height_cm || ''),
+          food_allergies: data.food_allergies || prev.food_allergies || '',
+          food_limitations: data.food_limitations || prev.food_limitations || '',
+          activity_level: data.activity_level || prev.activity_level || '',
+          goal: data.goal || prev.goal || '',
+          medical_conditions: data.medical_conditions || prev.medical_conditions || '',
+          number_of_meals: chatUserMealData?.number_of_meals ? chatUserMealData.number_of_meals.toString() : (prev.number_of_meals || ''),
+          meal_descriptions: mealDescriptions.length > 0 ? mealDescriptions : (prev.meal_descriptions || []),
+          meal_names: mealNames.length > 0 ? mealNames : (prev.meal_names || [])
         }));
+
+        // Set separate date fields
+        setDobDay(day);
+        setDobMonth(month);
+        setDobYear(year);
+
+        // Parse food_allergies to populate selectedAllergies and allergiesOtherText
+        if (data.food_allergies && data.food_allergies.trim()) {
+          const allergiesText = data.food_allergies;
+          const parsedAllergies = [];
+          const otherTextParts = [];
+          
+          // Check if "Other:" or "אחר:" exists in the text (for backward compatibility with old data)
+          const otherMatch = allergiesText.match(/(?:אחר|Other):\s*(.+)/i);
+          if (otherMatch) {
+            parsedAllergies.push('other');
+            otherTextParts.push(otherMatch[1].trim());
+          }
+          
+          // Split text by comma and check each part
+          const parts = allergiesText.split(',').map(p => p.trim()).filter(p => p);
+          parts.forEach(part => {
+            // Skip if this part was already processed as "Other:" text
+            if (otherMatch && part.includes(otherMatch[1])) {
+              return;
+            }
+            
+            // Check if this part exactly matches any predefined option label
+            let matched = false;
+            allergiesOptions.forEach(option => {
+              const labelHe = option.labelHe;
+              const labelEn = option.labelEn;
+              
+              // Exact match (case insensitive)
+              if (part.toLowerCase() === labelHe.toLowerCase() || part.toLowerCase() === labelEn.toLowerCase()) {
+                if (!parsedAllergies.includes(option.value)) {
+                  parsedAllergies.push(option.value);
+                }
+                matched = true;
+              }
+            });
+            
+            // If it doesn't match any predefined option, it's "other" text
+            if (!matched) {
+              otherTextParts.push(part);
+            }
+          });
+          
+          const otherText = otherTextParts.join(', ').trim();
+          if (otherText && !parsedAllergies.includes('other')) {
+            parsedAllergies.push('other');
+          }
+          
+          setSelectedAllergies(parsedAllergies.length > 0 ? parsedAllergies : ['none']);
+          setAllergiesOtherText(otherText);
+        } else {
+          setSelectedAllergies(['none']);
+          setAllergiesOtherText('');
+        }
+
+        // Parse food_limitations to populate selectedLimitations and limitationsOtherText
+        if (data.food_limitations && data.food_limitations.trim()) {
+          const limitationsText = data.food_limitations;
+          const parsedLimitations = [];
+          const otherTextParts = [];
+          
+          // Check if "Other:" or "אחר:" exists in the text (for backward compatibility with old data)
+          const otherMatch = limitationsText.match(/(?:אחר|Other):\s*(.+)/i);
+          if (otherMatch) {
+            parsedLimitations.push('other');
+            otherTextParts.push(otherMatch[1].trim());
+          }
+          
+          // Split text by comma and check each part
+          const parts = limitationsText.split(',').map(p => p.trim()).filter(p => p);
+          parts.forEach(part => {
+            // Skip if this part was already processed as "Other:" text
+            if (otherMatch && part.includes(otherMatch[1])) {
+              return;
+            }
+            
+            // Check if this part exactly matches any predefined option label
+            let matched = false;
+            limitationsOptions.forEach(option => {
+              const labelHe = option.labelHe;
+              const labelEn = option.labelEn;
+              
+              // Exact match (case insensitive)
+              if (part.toLowerCase() === labelHe.toLowerCase() || part.toLowerCase() === labelEn.toLowerCase()) {
+                if (!parsedLimitations.includes(option.value)) {
+                  parsedLimitations.push(option.value);
+                }
+                matched = true;
+              }
+            });
+            
+            // If it doesn't match any predefined option, it's "other" text
+            if (!matched) {
+              otherTextParts.push(part);
+            }
+          });
+          
+          const otherText = otherTextParts.join(', ').trim();
+          if (otherText && !parsedLimitations.includes('other')) {
+            parsedLimitations.push('other');
+          }
+          
+          setSelectedLimitations(parsedLimitations.length > 0 ? parsedLimitations : ['none']);
+          setLimitationsOtherText(otherText);
+        } else {
+          setSelectedLimitations(['none']);
+          setLimitationsOtherText('');
+        }
       }
 
       // Determine which fields are missing
@@ -525,12 +897,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.log('✓ Goal has value:', data?.goal);
       }
       
-      if (isEmpty(data?.client_preference)) {
-        missingFields.push('client_preference');
-      } else {
-        console.log('✓ Client preference has value:', data?.client_preference);
-      }
-      
       if (isEmpty(data?.medical_conditions)) {
         missingFields.push('medical_conditions');
       } else {
@@ -587,11 +953,41 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         meal_descriptions: newMealDescriptions,
         meal_names: newMealNames
       }));
+    } else if (name === 'weight_kg') {
+      // Convert from displayed unit (kg or lbs) to kg for storage
+      let kgValue = value;
+      if (weightUnit === 'lbs' && value) {
+        kgValue = lbsToKg(value).toString();
+      }
+      setFormData(prev => ({
+        ...prev,
+        weight_kg: kgValue
+      }));
+    } else if (name === 'target_weight') {
+      // Convert from displayed unit (kg or lbs) to kg for storage
+      let kgValue = value;
+      if (weightUnit === 'lbs' && value) {
+        kgValue = lbsToKg(value).toString();
+      }
+      setFormData(prev => ({
+        ...prev,
+        target_weight: kgValue
+      }));
+    } else if (name === 'height_cm') {
+      // Convert from displayed unit (cm or inches) to cm for storage
+      let cmValue = value;
+      if (heightUnit === 'inches' && value) {
+        cmValue = inchesToCm(value).toString();
+      }
+      setFormData(prev => ({
+        ...prev,
+        height_cm: cmValue
+      }));
     } else {
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
     }
     
     // Clear error for this field when user starts typing
@@ -606,6 +1002,22 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     if (error && name === 'phone') {
       setError('');
     }
+  };
+
+  // Handler for weight unit toggle
+  const handleWeightUnitToggle = (newUnit) => {
+    if (newUnit === weightUnit) return;
+    setWeightUnit(newUnit);
+    // Note: formData.weight_kg is always stored in kg, we just change what we display
+    // The select value will be converted on-the-fly in the value prop
+  };
+
+  // Handler for height unit toggle
+  const handleHeightUnitToggle = (newUnit) => {
+    if (newUnit === heightUnit) return;
+    setHeightUnit(newUnit);
+    // Note: formData.height_cm is always stored in cm, we just change what we display
+    // The select value will be converted on-the-fly in the value prop
   };
 
   const handleMealDescriptionChange = (index, value) => {
@@ -638,6 +1050,40 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     });
   };
 
+  const handleDateChange = (type, value) => {
+    let newDay = dobDay;
+    let newMonth = dobMonth;
+    let newYear = dobYear;
+    
+    // Update the specific date field
+    if (type === 'day') {
+      newDay = value || '';
+      setDobDay(value || '');
+    } else if (type === 'month') {
+      newMonth = value || '';
+      setDobMonth(value || '');
+    } else if (type === 'year') {
+      newYear = value || '';
+      setDobYear(value || '');
+    }
+
+    // Combine and update formData.date_of_birth
+    const combinedDate = combineDateOfBirth(newDay, newMonth, newYear);
+    setFormData(prev => ({
+      ...prev,
+      date_of_birth: combinedDate
+    }));
+    
+    // Clear error for date_of_birth when user selects
+    if (fieldErrors['date_of_birth']) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors['date_of_birth'];
+        return newErrors;
+      });
+    }
+  };
+
   const handleNoneClick = (fieldName) => {
     setFormData(prev => ({
       ...prev,
@@ -652,6 +1098,236 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       });
     }
   };
+
+  // Handler for allergy selection toggle
+  const handleAllergyToggle = (allergyValue) => {
+    if (allergyValue === 'none') {
+      setSelectedAllergies(['none']);
+      setAllergiesOtherText('');
+      setFormData(prev => ({
+        ...prev,
+        food_allergies: ''
+      }));
+      if (fieldErrors['food_allergies']) {
+        setFieldErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors['food_allergies'];
+          return newErrors;
+        });
+      }
+    } else if (allergyValue === 'other') {
+      // Toggle other - if already selected, deselect it
+      const hasOther = selectedAllergies.includes('other');
+      if (hasOther) {
+        const newAllergies = selectedAllergies.filter(a => a !== 'other');
+        // If no allergies left, set to none
+        if (newAllergies.length === 0 || (newAllergies.length === 1 && newAllergies[0] === 'none')) {
+          setSelectedAllergies(['none']);
+          setAllergiesOtherText('');
+          updateFoodAllergiesValue(['none'], '');
+        } else {
+          setSelectedAllergies(newAllergies);
+          setAllergiesOtherText('');
+          updateFoodAllergiesValue(newAllergies, '');
+        }
+      } else {
+        // Remove 'none' if it exists when selecting other
+        const newAllergies = selectedAllergies.filter(a => a !== 'none');
+        newAllergies.push('other');
+        setSelectedAllergies(newAllergies);
+        updateFoodAllergiesValue(newAllergies, allergiesOtherText);
+      }
+    } else {
+      // Toggle regular allergy
+      const isSelected = selectedAllergies.includes(allergyValue);
+      let newAllergies;
+      if (isSelected) {
+        newAllergies = selectedAllergies.filter(a => a !== allergyValue);
+        // If no allergies left, set to none
+        if (newAllergies.length === 0) {
+          newAllergies = ['none'];
+        }
+      } else {
+        // Remove 'none' if it exists when selecting an allergy
+        newAllergies = selectedAllergies.filter(a => a !== 'none');
+        newAllergies.push(allergyValue);
+      }
+      setSelectedAllergies(newAllergies);
+      updateFoodAllergiesValue(newAllergies, allergiesOtherText);
+    }
+    
+    // Clear error for food_allergies when selecting
+    if (fieldErrors['food_allergies']) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors['food_allergies'];
+        return newErrors;
+      });
+    }
+  };
+
+  // Helper function to update food_allergies value in formData
+  const updateFoodAllergiesValue = (allergies, otherText) => {
+    // If none is selected or no allergies, set empty string
+    if (allergies.includes('none') || allergies.length === 0) {
+      setFormData(prev => ({
+        ...prev,
+        food_allergies: ''
+      }));
+      return;
+    }
+    
+    const allergyLabels = allergies
+      .filter(a => a !== 'other' && a !== 'none')
+      .map(a => {
+        const option = allergiesOptions.find(opt => opt.value === a);
+        return option ? (language === 'hebrew' ? option.labelHe : option.labelEn) : '';
+      })
+      .filter(label => label);
+    
+    const parts = [];
+    if (allergyLabels.length > 0) {
+      parts.push(allergyLabels.join(', '));
+    }
+    if (allergies.includes('other') && otherText.trim()) {
+      parts.push(otherText.trim());
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      food_allergies: parts.join(', ')
+    }));
+  };
+
+  // Handler for other text change
+  const handleAllergiesOtherTextChange = (value) => {
+    setAllergiesOtherText(value);
+    updateFoodAllergiesValue(selectedAllergies, value);
+    
+    // Clear error for food_allergies when typing
+    if (fieldErrors['food_allergies']) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors['food_allergies'];
+        return newErrors;
+      });
+    }
+  };
+
+  // Handler for limitation selection toggle
+  const handleLimitationToggle = (limitationValue) => {
+    if (limitationValue === 'none') {
+      setSelectedLimitations(['none']);
+      setLimitationsOtherText('');
+      setFormData(prev => ({
+        ...prev,
+        food_limitations: ''
+      }));
+      if (fieldErrors['food_limitations']) {
+        setFieldErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors['food_limitations'];
+          return newErrors;
+        });
+      }
+    } else if (limitationValue === 'other') {
+      // Toggle other - if already selected, deselect it
+      const hasOther = selectedLimitations.includes('other');
+      if (hasOther) {
+        const newLimitations = selectedLimitations.filter(l => l !== 'other');
+        // If no limitations left, set to none
+        if (newLimitations.length === 0 || (newLimitations.length === 1 && newLimitations[0] === 'none')) {
+          setSelectedLimitations(['none']);
+          setLimitationsOtherText('');
+          updateFoodLimitationsValue(['none'], '');
+        } else {
+          setSelectedLimitations(newLimitations);
+          setLimitationsOtherText('');
+          updateFoodLimitationsValue(newLimitations, '');
+        }
+      } else {
+        // Remove 'none' if it exists when selecting other
+        const newLimitations = selectedLimitations.filter(l => l !== 'none');
+        newLimitations.push('other');
+        setSelectedLimitations(newLimitations);
+        updateFoodLimitationsValue(newLimitations, limitationsOtherText);
+      }
+    } else {
+      // Toggle regular limitation
+      const isSelected = selectedLimitations.includes(limitationValue);
+      let newLimitations;
+      if (isSelected) {
+        newLimitations = selectedLimitations.filter(l => l !== limitationValue);
+        // If no limitations left, set to none
+        if (newLimitations.length === 0) {
+          newLimitations = ['none'];
+        }
+      } else {
+        // Remove 'none' if it exists when selecting a limitation
+        newLimitations = selectedLimitations.filter(l => l !== 'none');
+        newLimitations.push(limitationValue);
+      }
+      setSelectedLimitations(newLimitations);
+      updateFoodLimitationsValue(newLimitations, limitationsOtherText);
+    }
+    
+    // Clear error for food_limitations when selecting
+    if (fieldErrors['food_limitations']) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors['food_limitations'];
+        return newErrors;
+      });
+    }
+  };
+
+  // Helper function to update food_limitations value in formData
+  const updateFoodLimitationsValue = (limitations, otherText) => {
+    // If none is selected or no limitations, set empty string
+    if (limitations.includes('none') || limitations.length === 0) {
+      setFormData(prev => ({
+        ...prev,
+        food_limitations: ''
+      }));
+      return;
+    }
+    
+    const limitationLabels = limitations
+      .filter(l => l !== 'other' && l !== 'none')
+      .map(l => {
+        const option = limitationsOptions.find(opt => opt.value === l);
+        return option ? (language === 'hebrew' ? option.labelHe : option.labelEn) : '';
+      })
+      .filter(label => label);
+    
+    const parts = [];
+    if (limitationLabels.length > 0) {
+      parts.push(limitationLabels.join(', '));
+    }
+    if (limitations.includes('other') && otherText.trim()) {
+      parts.push(otherText.trim());
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      food_limitations: parts.join(', ')
+    }));
+  };
+
+  // Handler for limitations other text change
+  const handleLimitationsOtherTextChange = (value) => {
+    setLimitationsOtherText(value);
+    updateFoodLimitationsValue(selectedLimitations, value);
+    
+    // Clear error for food_limitations when typing
+    if (fieldErrors['food_limitations']) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors['food_limitations'];
+        return newErrors;
+      });
+    }
+  };
   
   // Helper function to get border class based on field error
   const getBorderClass = (fieldName) => {
@@ -661,10 +1337,76 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     return 'border-gray-600/50 border-2';
   };
 
+  // Helper function to convert DD-MM-YYYY to YYYY-MM-DD
+  const convertDDMMYYYYToYYYYMMDD = (dateStr) => {
+    if (!dateStr) return '';
+    // Format: DD-MM-YYYY
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    return dateStr; // Return as-is if format doesn't match
+  };
+
+  // Helper function to convert YYYY-MM-DD to DD-MM-YYYY
+  const convertYYYYMMDDToDDMMYYYY = (dateStr) => {
+    if (!dateStr) return '';
+    // Format: YYYY-MM-DD
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const [year, month, day] = parts;
+      return `${day}-${month}-${year}`;
+    }
+    return dateStr; // Return as-is if format doesn't match
+  };
+
+  // Helper function to combine day, month, year into DD-MM-YYYY format
+  const combineDateOfBirth = (day, month, year) => {
+    if (!day || !month || !year) return '';
+    const paddedDay = day.padStart(2, '0');
+    const paddedMonth = month.padStart(2, '0');
+    return `${paddedDay}-${paddedMonth}-${year}`;
+  };
+
+  // Helper function to split date string into day, month, year
+  const splitDateOfBirth = (dateStr) => {
+    if (!dateStr) return { day: '', month: '', year: '' };
+    
+    // Try DD-MM-YYYY format first
+    let parts = dateStr.split('-');
+    if (parts.length === 3 && parts[0].length <= 2) {
+      return { 
+        day: parts[0] ? parts[0].padStart(2, '0') : '', 
+        month: parts[1] ? parts[1].padStart(2, '0') : '', 
+        year: parts[2] || '' 
+      };
+    }
+    
+    // Try YYYY-MM-DD format
+    if (parts.length === 3 && parts[0].length === 4) {
+      return { 
+        day: parts[2] ? parts[2].padStart(2, '0') : '', 
+        month: parts[1] ? parts[1].padStart(2, '0') : '', 
+        year: parts[0] || '' 
+      };
+    }
+    
+    return { day: '', month: '', year: '' };
+  };
+
   const calculateAge = (birthDate) => {
     if (!birthDate) return null;
+    
+    // Convert DD-MM-YYYY to YYYY-MM-DD if needed
+    let dateToParse = birthDate;
+    if (birthDate.includes('-') && birthDate.split('-')[0].length === 2) {
+      // Likely DD-MM-YYYY format
+      dateToParse = convertDDMMYYYYToYYYYMMDD(birthDate);
+    }
+    
     const today = new Date();
-    const birth = new Date(birthDate);
+    const birth = new Date(dateToParse);
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
@@ -716,11 +1458,17 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   };
 
   const handleNext = async () => {
+    // If on welcome screen, move to first form step
+    if (currentStep === -1) {
+      setCurrentStep(0);
+      return;
+    }
+    
     // Validate current step fields
     const currentStepFields = filteredSteps[currentStep]?.fields || [];
     
     // Fields that can be empty (None is a valid selection or auto-filled)
-    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations', 'client_preference'];
+    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations'];
     
     // Track field errors for this step
     const newFieldErrors = {};
@@ -817,7 +1565,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   };
 
   const handlePrevious = () => {
-    if (currentStep > 0) {
+    if (currentStep === 0) {
+      // Go back to welcome screen
+      setCurrentStep(-1);
+      setError('');
+      setFieldErrors({});
+    } else if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
       setError('');
       // Clear field errors when going back
@@ -972,7 +1725,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         clientData.timezone = formData.timezone;
       }
       if (allOnboardingFields.includes('date_of_birth') && formData.date_of_birth) {
-        clientData.birth_date = formData.date_of_birth;
+        // Convert DD-MM-YYYY to YYYY-MM-DD for database
+        clientData.birth_date = convertDDMMYYYYToYYYYMMDD(formData.date_of_birth);
       }
       if (allOnboardingFields.includes('date_of_birth') && age !== null && age !== undefined) {
         clientData.age = age;
@@ -1009,10 +1763,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       if (allOnboardingFields.includes('goal') && formData.goal) {
         clientData.goal = formData.goal;
       }
-      if (allOnboardingFields.includes('client_preference')) {
-        clientData.client_preference = formData.client_preference || null;
-        clientData.dietary_preferences = formData.client_preference || null; // Also save to dietary_preferences column
-      }
       if (allOnboardingFields.includes('medical_conditions')) {
         clientData.medical_conditions = formData.medical_conditions || null;
       }
@@ -1030,7 +1780,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         city: formData.city,
         region: formData.region,
         timezone: formData.timezone,
-        date_of_birth: allOnboardingFields.includes('date_of_birth') ? formData.date_of_birth : undefined,
+        date_of_birth: allOnboardingFields.includes('date_of_birth') && formData.date_of_birth ? convertDDMMYYYYToYYYYMMDD(formData.date_of_birth) : undefined,
         age: (allOnboardingFields.includes('date_of_birth') && age !== null && age !== undefined) ? age : undefined,
         gender: formData.gender,
         weight_kg: formData.weight_kg ? parseFloat(formData.weight_kg) : null,
@@ -1040,7 +1790,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         medical_conditions: allOnboardingFields.includes('medical_conditions') ? (formData.medical_conditions || null) : undefined,
         Activity_level: formData.activity_level,
         goal: formData.goal,
-        client_preference: formData.client_preference || null,
         number_of_meals: allOnboardingFields.includes('number_of_meals') && formData.number_of_meals ? parseInt(formData.number_of_meals) : undefined,
         meal_plan_structure: allOnboardingFields.includes('meal_descriptions') && mealPlanStructure ? mealPlanStructure : undefined,
         daily_target_total_calories: dailyCalories || undefined,
@@ -1120,7 +1869,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
             food_limitations: clientData.food_limitations || null,
             activity_level: clientData.activity_level || null,
             goal: clientData.goal || null,
-            client_preference: clientData.client_preference || null,
             medical_conditions: clientData.medical_conditions || null
           };
           
@@ -1280,6 +2028,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       console.log('✅ Onboarding data saved successfully, closing modal...');
       
+      // Clear saved onboarding data from localStorage since onboarding is complete
+      if (user?.id) {
+        localStorage.removeItem(`onboarding_${user.id}`);
+      }
+      
       // Onboarding complete - close modal with completion status
       // Only close if the main clients update was successful
       onClose(true);
@@ -1313,8 +2066,61 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     );
   }
 
+  // If no steps to fill, don't show onboarding
   if (filteredSteps.length === 0) {
     return null;
+  }
+
+  // Show welcome screen if currentStep is -1
+  if (currentStep === -1) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4" dir={direction}>
+        <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 p-6 sm:p-8 md:p-10 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto animate-scaleIn relative text-center`}>
+          {/* Decorative gradient overlay */}
+          <div className="absolute top-0 left-0 right-0 h-20 sm:h-32 bg-gradient-to-br from-established-500/20 via-emerald-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none"></div>
+          
+          {/* Language Toggle Button */}
+          <button
+            onClick={toggleLanguage}
+            className={`absolute top-2 right-2 sm:top-4 sm:right-4 md:top-6 ${direction === 'rtl' ? 'md:left-6 md:right-auto' : 'md:right-6'} z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all duration-200 text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
+            title={language === 'hebrew' ? 'Switch to English' : 'עברית'}
+          >
+            <span className="hidden sm:inline">{language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}</span>
+            <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
+          </button>
+          
+          {/* Welcome Content */}
+          <div className="relative mt-8 sm:mt-4 mb-8 sm:mb-10">
+            <div className="mb-6 sm:mb-8">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-gradient-to-br from-emerald-400 to-established-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-lg shadow-emerald-500/30">
+                <span className="text-3xl sm:text-4xl md:text-5xl">👋</span>
+              </div>
+              <h2 className={`text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-400 to-established-400 bg-clip-text text-transparent mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'שלום! ברוכים הבאים ל-BetterChoice' : 'Hi! Welcome to BetterChoice'}
+              </h2>
+              <p className={`${themeClasses.textSecondary} text-base sm:text-lg md:text-xl mb-2 sm:mb-3`}>
+                {language === 'hebrew' 
+                  ? 'אנחנו רוצים להכיר אותך קצת יותר טוב' 
+                  : 'We\'d like to get to know you a little better'}
+              </p>
+              <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-4 sm:mb-6`}>
+                {language === 'hebrew' 
+                  ? 'יש לנו כמה שאלות קצרות. זה לא ייקח הרבה זמן!' 
+                  : 'We have a few quick questions. It won\'t take long!'}
+              </p>
+            </div>
+            
+            {/* Get Started Button */}
+            <button
+              onClick={handleNext}
+              className="px-6 py-3 sm:px-8 sm:py-4 md:px-10 md:py-4 bg-emerald-500 text-white rounded-lg sm:rounded-xl font-semibold text-base sm:text-lg md:text-xl hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/30"
+            >
+              {language === 'hebrew' ? 'בואו נתחיל' : 'Get Started'} →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const currentFields = filteredSteps[currentStep]?.fields || [];
@@ -1342,7 +2148,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               {(currentStep + 1)}
             </div>
             <h2 className={`text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-established-400 bg-clip-text text-transparent ${themeClasses.textPrimary} leading-tight`}>
-              {language === 'hebrew' ? 'בואו נעשה כמה שאלות התחלה' : "Let's get started"}
+              {filteredSteps[currentStep]?.title || (language === 'hebrew' ? 'בואו נעשה כמה שאלות התחלה' : "Let's get started")}
             </h2>
           </div>
           <p className={`${themeClasses.textSecondary} text-xs sm:text-sm ml-10 sm:ml-12 md:ml-14`}>
@@ -1459,43 +2265,75 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('region') && (
             <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'אזור' : 'Region'}
               </label>
-              <select
-                name="region"
-                value={formData.region}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('region')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר אזור' : 'Select Region'}</option>
-                {regions.map((region) => (
-                  <option key={region.value} value={region.value}>
-                    {language === 'hebrew' ? region.labelHe : region.labelEn}
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 max-h-[400px] overflow-y-auto pr-2">
+                {regions.map((region) => {
+                  const isSelected = formData.region === region.value;
+                  return (
+                    <button
+                      key={region.value}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, region: region.value }));
+                        // Clear error for this field when selecting
+                        if (fieldErrors['region']) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors['region'];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                        isSelected
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      } ${fieldErrors['region'] && !isSelected ? 'border-red-500' : ''}`}
+                    >
+                      {language === 'hebrew' ? region.labelHe : region.labelEn}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           {currentFields.includes('timezone') && (
             <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'אזור זמן' : 'Timezone'}
               </label>
-              <select
-                name="timezone"
-                value={formData.timezone}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('timezone')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר אזור זמן' : 'Select timezone'}</option>
-                {timezones.map((tz) => (
-                  <option key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </option>
-                ))}
-              </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 max-h-[400px] overflow-y-auto pr-2">
+                {timezones.map((tz) => {
+                  const isSelected = formData.timezone === tz.value;
+                  return (
+                    <button
+                      key={tz.value}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, timezone: tz.value }));
+                        // Clear error for this field when selecting
+                        if (fieldErrors['timezone']) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors['timezone'];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                        isSelected
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      } ${fieldErrors['timezone'] && !isSelected ? 'border-red-500' : ''}`}
+                    >
+                      {tz.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -1504,86 +2342,233 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
                 {language === 'hebrew' ? 'תאריך לידה' : 'Date of Birth'}
               </label>
-              <input
-                type="date"
-                name="date_of_birth"
-                value={formData.date_of_birth}
-                onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('date_of_birth')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
-              />
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div>
+                  <label className={`block text-xs ${themeClasses.textSecondary} mb-1`}>
+                    {language === 'hebrew' ? 'יום' : 'Day'}
+                  </label>
+                  <select
+                    value={dobDay}
+                    onChange={(e) => handleDateChange('day', e.target.value)}
+                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('date_of_birth')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+                  >
+                    <option value="">{language === 'hebrew' ? 'יום' : 'Day'}</option>
+                    {days.map(day => (
+                      <option key={day} value={day.toString().padStart(2, '0')}>{day}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={`block text-xs ${themeClasses.textSecondary} mb-1`}>
+                    {language === 'hebrew' ? 'חודש' : 'Month'}
+                  </label>
+                  <select
+                    value={dobMonth}
+                    onChange={(e) => handleDateChange('month', e.target.value)}
+                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('date_of_birth')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+                  >
+                    <option value="">{language === 'hebrew' ? 'חודש' : 'Month'}</option>
+                    {months.map(month => (
+                      <option key={month.value} value={month.value.padStart(2, '0')}>
+                        {language === 'hebrew' ? month.labelHe : month.labelEn}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={`block text-xs ${themeClasses.textSecondary} mb-1`}>
+                    {language === 'hebrew' ? 'שנה' : 'Year'}
+                  </label>
+                  <select
+                    value={dobYear}
+                    onChange={(e) => handleDateChange('year', e.target.value)}
+                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('date_of_birth')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+                  >
+                    <option value="">{language === 'hebrew' ? 'שנה' : 'Year'}</option>
+                    {years.map(year => (
+                      <option key={year} value={year.toString()}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
           )}
 
           {currentFields.includes('gender') && (
             <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'מין' : 'Gender'}
               </label>
-              <select
-                name="gender"
-                value={formData.gender}
-                onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('gender')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר' : 'Select'}</option>
-                <option value="male">{language === 'hebrew' ? 'זכר' : 'Male'}</option>
-                <option value="female">{language === 'hebrew' ? 'נקבה' : 'Female'}</option>
-                <option value="other">{language === 'hebrew' ? 'אחר' : 'Other'}</option>
-              </select>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                {genderOptions.map((gender) => {
+                  const isSelected = formData.gender === gender.value;
+                  return (
+                    <button
+                      key={gender.value}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, gender: gender.value }));
+                        // Clear error for this field when selecting
+                        if (fieldErrors['gender']) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors['gender'];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                        isSelected
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      } ${fieldErrors['gender'] && !isSelected ? 'border-red-500' : ''}`}
+                    >
+                      {language === 'hebrew' ? gender.labelHe : gender.labelEn}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           {currentFields.includes('weight_kg') && (
             <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
-                {language === 'hebrew' ? 'משקל נוכחי (ק"ג)' : 'Current Weight (kg)'}
-              </label>
-              <input
-                type="number"
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
+                  {language === 'hebrew' ? 'משקל נוכחי' : 'Current Weight'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleWeightUnitToggle('kg')}
+                    className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-all duration-200 border-2 ${
+                      weightUnit === 'kg'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold'
+                        : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                    }`}
+                  >
+                    {language === 'hebrew' ? 'ק"ג' : 'kg'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleWeightUnitToggle('lbs')}
+                    className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-all duration-200 border-2 ${
+                      weightUnit === 'lbs'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold'
+                        : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                    }`}
+                  >
+                    {language === 'hebrew' ? 'ליטרה' : 'lbs'}
+                  </button>
+                </div>
+              </div>
+              <select
                 name="weight_kg"
-                value={formData.weight_kg}
+                value={getDisplayedWeight()}
                 onChange={handleInputChange}
-                min="0"
-                step="0.1"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('weight_kg')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
-                placeholder={language === 'hebrew' ? '70' : '70'}
-              />
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('weight_kg')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+              >
+                <option value="">{language === 'hebrew' ? 'בחר משקל' : 'Select Weight'}</option>
+                {(weightUnit === 'kg' ? weightOptionsKg : weightOptionsLbs).map((weight) => (
+                  <option key={weight} value={weight.toString()}>
+                    {weight} {weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליטרה' : 'lbs')}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
           {currentFields.includes('target_weight') && (
             <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
-                {language === 'hebrew' ? 'משקל מטרה (ק"ג)' : 'Target Weight (kg)'}
-              </label>
-              <input
-                type="number"
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
+                  {language === 'hebrew' ? 'משקל מטרה' : 'Target Weight'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleWeightUnitToggle('kg')}
+                    className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-all duration-200 border-2 ${
+                      weightUnit === 'kg'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold'
+                        : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                    }`}
+                  >
+                    {language === 'hebrew' ? 'ק"ג' : 'kg'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleWeightUnitToggle('lbs')}
+                    className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-all duration-200 border-2 ${
+                      weightUnit === 'lbs'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold'
+                        : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                    }`}
+                  >
+                    {language === 'hebrew' ? 'ליטרה' : 'lbs'}
+                  </button>
+                </div>
+              </div>
+              <select
                 name="target_weight"
-                value={formData.target_weight}
+                value={getDisplayedTargetWeight()}
                 onChange={handleInputChange}
-                min="0"
-                step="0.1"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('target_weight')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
-                placeholder={language === 'hebrew' ? '65' : '65'}
-              />
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('target_weight')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+              >
+                <option value="">{language === 'hebrew' ? 'בחר משקל מטרה' : 'Select Target Weight'}</option>
+                {(weightUnit === 'kg' ? weightOptionsKg : weightOptionsLbs).map((weight) => (
+                  <option key={weight} value={weight.toString()}>
+                    {weight} {weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליטרה' : 'lbs')}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
           {currentFields.includes('height_cm') && (
             <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
-                {language === 'hebrew' ? 'גובה (ס"מ)' : 'Height (cm)'}
-              </label>
-              <input
-                type="number"
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
+                  {language === 'hebrew' ? 'גובה' : 'Height'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleHeightUnitToggle('cm')}
+                    className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-all duration-200 border-2 ${
+                      heightUnit === 'cm'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold'
+                        : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                    }`}
+                  >
+                    {language === 'hebrew' ? 'ס"מ' : 'cm'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleHeightUnitToggle('inches')}
+                    className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-all duration-200 border-2 ${
+                      heightUnit === 'inches'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold'
+                        : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                    }`}
+                  >
+                    {language === 'hebrew' ? 'אינץ' : 'in'}
+                  </button>
+                </div>
+              </div>
+              <select
                 name="height_cm"
-                value={formData.height_cm}
+                value={getDisplayedHeight()}
                 onChange={handleInputChange}
-                min="0"
-                step="1"
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('height_cm')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
-                placeholder={language === 'hebrew' ? '175' : '175'}
-              />
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('height_cm')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
+              >
+                <option value="">{language === 'hebrew' ? 'בחר גובה' : 'Select Height'}</option>
+                {(heightUnit === 'cm' ? heightOptionsCm : heightOptionsInches).map((height) => (
+                  <option key={height} value={height.toString()}>
+                    {height} {heightUnit === 'cm' ? (language === 'hebrew' ? 'ס"מ' : 'cm') : (language === 'hebrew' ? 'אינץ' : 'in')}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -1627,159 +2612,215 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('food_allergies') && (
             <div className="group">
-              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
-                  {language === 'hebrew' ? 'אלרגיות למזון' : 'Food Allergies'}
-                </label>
+              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'אלרגיות למזון' : 'Food Allergies'}
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4">
+                {/* None option */}
                 <button
                   type="button"
-                  onClick={() => handleNoneClick('food_allergies')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
-                    !formData.food_allergies
-                      ? 'bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-400'
-                      : 'bg-gray-700/50 border-2 border-gray-600/50 text-gray-400 hover:bg-gray-600/50 hover:border-emerald-500/30 hover:text-emerald-400'
+                  onClick={() => handleAllergyToggle('none')}
+                  className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                    (selectedAllergies.length === 1 && selectedAllergies[0] === 'none') || (selectedAllergies.length === 0 && !formData.food_allergies)
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                      : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
                   }`}
                 >
-                  {!formData.food_allergies ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
                   {language === 'hebrew' ? 'אין' : 'None'}
                 </button>
+                
+                {/* Allergy options */}
+                {allergiesOptions.map((allergy) => {
+                  const isSelected = selectedAllergies.includes(allergy.value);
+                  return (
+                    <button
+                      key={allergy.value}
+                      type="button"
+                      onClick={() => handleAllergyToggle(allergy.value)}
+                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                        isSelected
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      } ${fieldErrors['food_allergies'] && !isSelected ? 'border-red-500' : ''}`}
+                    >
+                      {language === 'hebrew' ? allergy.labelHe : allergy.labelEn}
+                    </button>
+                  );
+                })}
+                
+                {/* Other option */}
+                <button
+                  type="button"
+                  onClick={() => handleAllergyToggle('other')}
+                  className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                    selectedAllergies.includes('other')
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                      : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                  } ${fieldErrors['food_allergies'] && !selectedAllergies.includes('other') ? 'border-red-500' : ''}`}
+                >
+                  {language === 'hebrew' ? 'אחר' : 'Other'}
+                </button>
               </div>
-              <textarea
-                name="food_allergies"
-                value={formData.food_allergies}
-                onChange={handleInputChange}
-                rows="3"
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${!formData.food_allergies ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
-                placeholder={!formData.food_allergies ? (language === 'hebrew' ? 'לא נבחר - לחץ כדי להוסיף' : 'None selected - click to add') : (language === 'hebrew' ? 'לדוגמה: בוטנים, חלב...' : 'e.g., peanuts, dairy...')}
-              />
+              
+              {/* Other text input (shown only when Other is selected) */}
+              {selectedAllergies.includes('other') && (
+                <div className="mt-3 sm:mt-4">
+                  <label className={`block text-xs sm:text-sm font-medium ${themeClasses.textSecondary} mb-1.5 sm:mb-2`}>
+                    {language === 'hebrew' ? 'פרט אחר' : 'Please specify other allergy'}
+                  </label>
+                  <input
+                    type="text"
+                    value={allergiesOtherText}
+                    onChange={(e) => handleAllergiesOtherTextChange(e.target.value)}
+                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 placeholder:text-gray-400`}
+                    placeholder={language === 'hebrew' ? 'הזן אלרגיה אחרת' : 'Enter other allergy'}
+                  />
+                </div>
+              )}
             </div>
           )}
 
           {currentFields.includes('food_limitations') && (
             <div className="group">
-              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
-                  {language === 'hebrew' ? 'הגבלות תזונתיות' : 'Food Limitations'}
-                </label>
+              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'הגבלות תזונתיות' : 'Food Limitations'}
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4">
+                {/* None option */}
                 <button
                   type="button"
-                  onClick={() => handleNoneClick('food_limitations')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
-                    !formData.food_limitations
-                      ? 'bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-400'
-                      : 'bg-gray-700/50 border-2 border-gray-600/50 text-gray-400 hover:bg-gray-600/50 hover:border-emerald-500/30 hover:text-emerald-400'
+                  onClick={() => handleLimitationToggle('none')}
+                  className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                    (selectedLimitations.length === 1 && selectedLimitations[0] === 'none') || (selectedLimitations.length === 0 && !formData.food_limitations)
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                      : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
                   }`}
                 >
-                  {!formData.food_limitations ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
                   {language === 'hebrew' ? 'אין' : 'None'}
                 </button>
+                
+                {/* Limitation options */}
+                {limitationsOptions.map((limitation) => {
+                  const isSelected = selectedLimitations.includes(limitation.value);
+                  return (
+                    <button
+                      key={limitation.value}
+                      type="button"
+                      onClick={() => handleLimitationToggle(limitation.value)}
+                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                        isSelected
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      } ${fieldErrors['food_limitations'] && !isSelected ? 'border-red-500' : ''}`}
+                    >
+                      {language === 'hebrew' ? limitation.labelHe : limitation.labelEn}
+                    </button>
+                  );
+                })}
+                
+                {/* Other option */}
+                <button
+                  type="button"
+                  onClick={() => handleLimitationToggle('other')}
+                  className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                    selectedLimitations.includes('other')
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                      : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                  } ${fieldErrors['food_limitations'] && !selectedLimitations.includes('other') ? 'border-red-500' : ''}`}
+                >
+                  {language === 'hebrew' ? 'אחר' : 'Other'}
+                </button>
               </div>
-              <textarea
-                name="food_limitations"
-                value={formData.food_limitations}
-                onChange={handleInputChange}
-                rows="3"
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${!formData.food_limitations ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
-                placeholder={!formData.food_limitations ? (language === 'hebrew' ? 'לא נבחר - לחץ כדי להוסיף' : 'None selected - click to add') : (language === 'hebrew' ? 'לדוגמה: צמחוני, כשר...' : 'e.g., vegetarian, kosher...')}
-              />
+              
+              {/* Other text input (shown only when Other is selected) */}
+              {selectedLimitations.includes('other') && (
+                <div className="mt-3 sm:mt-4">
+                  <label className={`block text-xs sm:text-sm font-medium ${themeClasses.textSecondary} mb-1.5 sm:mb-2`}>
+                    {language === 'hebrew' ? 'פרט אחר' : 'Please specify other limitation'}
+                  </label>
+                  <input
+                    type="text"
+                    value={limitationsOtherText}
+                    onChange={(e) => handleLimitationsOtherTextChange(e.target.value)}
+                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 placeholder:text-gray-400`}
+                    placeholder={language === 'hebrew' ? 'הזן הגבלה אחרת' : 'Enter other limitation'}
+                  />
+                </div>
+              )}
             </div>
           )}
 
           {currentFields.includes('activity_level') && (
             <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'רמת פעילות' : 'Activity Level'}
               </label>
-              <select
-                name="activity_level"
-                value={formData.activity_level}
-                onChange={handleInputChange}
-                className={`w-full px-4 py-3.5 ${themeClasses.bgCard} ${getBorderClass('activity_level')} rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר' : 'Select'}</option>
-                <option value="sedentary">{language === 'hebrew' ? 'יושבני - מעט או ללא פעילות גופנית' : 'Sedentary - Little or no exercise'}</option>
-                <option value="light">{language === 'hebrew' ? 'פעילות קלה - 1-3 פעמים בשבוע' : 'Light Activity - 1-3 days/week'}</option>
-                <option value="moderate">{language === 'hebrew' ? 'פעילות בינונית - 3-5 פעמים בשבוע' : 'Moderate Activity - 3-5 days/week'}</option>
-                <option value="active">{language === 'hebrew' ? 'פעיל - 6-7 פעמים בשבוע' : 'Active - 6-7 days/week'}</option>
-                <option value="extreme">{language === 'hebrew' ? 'קיצוני - פעילות אינטנסיבית/עבודה פיזית' : 'Extreme - Very hard exercise/physical job'}</option>
-              </select>
+              <div className="grid grid-cols-1 gap-2 sm:gap-3">
+                {activityLevelOptions.map((activity) => {
+                  const isSelected = formData.activity_level === activity.value;
+                  return (
+                    <button
+                      key={activity.value}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, activity_level: activity.value }));
+                        // Clear error for this field when selecting
+                        if (fieldErrors['activity_level']) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors['activity_level'];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                        isSelected
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      } ${fieldErrors['activity_level'] && !isSelected ? 'border-red-500' : ''}`}
+                    >
+                      {language === 'hebrew' ? activity.labelHe : activity.labelEn}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
           {currentFields.includes('goal') && (
             <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1.5 sm:mb-2`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'מטרה' : 'Goal'}
               </label>
-              <select
-                name="goal"
-                value={formData.goal}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('goal')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר מטרה' : 'Select a goal'}</option>
-                <option value="lose">{language === 'hebrew' ? 'ירידה במשקל' : 'Lose Weight'}</option>
-                <option value="cut">{language === 'hebrew' ? 'CUT' : 'CUT'}</option>
-                <option value="maintain">{language === 'hebrew' ? 'שמירה על משקל' : 'Maintain Weight'}</option>
-                <option value="gain">{language === 'hebrew' ? 'עלייה במשקל' : 'Gain Weight'}</option>
-                <option value="muscle">{language === 'hebrew' ? 'בניית שרירים' : 'Build Muscle'}</option>
-                <option value="improve_performance">{language === 'hebrew' ? 'שיפור ביצועים' : 'Improve Performance'}</option>
-                <option value="improve_health">{language === 'hebrew' ? 'שיפור בריאות' : 'Improve Health'}</option>
-              </select>
-            </div>
-          )}
-
-          {currentFields.includes('client_preference') && (
-            <div className="group">
-              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
-                  {language === 'hebrew' ? 'העדפות אישיות' : 'Personal Preferences'}
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handleNoneClick('client_preference')}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
-                    !formData.client_preference
-                      ? 'bg-emerald-500/20 border-2 border-emerald-500/50 text-emerald-400'
-                      : 'bg-gray-700/50 border-2 border-gray-600/50 text-gray-400 hover:bg-gray-600/50 hover:border-emerald-500/30 hover:text-emerald-400'
-                  }`}
-                >
-                  {!formData.client_preference ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
-                  {language === 'hebrew' ? 'אין' : 'None'}
-                </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                {goalOptions.map((goal) => {
+                  const isSelected = formData.goal === goal.value;
+                  return (
+                    <button
+                      key={goal.value}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, goal: goal.value }));
+                        // Clear error for this field when selecting
+                        if (fieldErrors['goal']) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors['goal'];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                        isSelected
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      } ${fieldErrors['goal'] && !isSelected ? 'border-red-500' : ''}`}
+                    >
+                      {language === 'hebrew' ? goal.labelHe : goal.labelEn}
+                    </button>
+                  );
+                })}
               </div>
-              <textarea
-                name="client_preference"
-                value={formData.client_preference}
-                onChange={handleInputChange}
-                rows="4"
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${!formData.client_preference ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
-                placeholder={!formData.client_preference ? (language === 'hebrew' ? 'לא נבחר - לחץ כדי להוסיף' : 'None selected - click to add') : (language === 'hebrew' ? 'מה אתה אוהב לאכול? מה אתה לא אוהב לאכול?' : 'What do you like to eat? What don\'t you like to eat?')}
-              />
             </div>
           )}
 
@@ -1858,7 +2899,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         {/* Buttons */}
         <div className="flex justify-between items-center mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-white/10 gap-2 sm:gap-3">
           <div>
-            {currentStep > 0 && (
+            {currentStep >= 0 && (
               <button
                 onClick={handlePrevious}
                 disabled={loading}

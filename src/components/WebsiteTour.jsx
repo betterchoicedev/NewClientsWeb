@@ -273,11 +273,11 @@ const WebsiteTour = () => {
           position: 'bottom'
         },
         {
-          target: 'profile-tab',
-          title: language === 'hebrew' ? 'כרטיסיית פרופיל' : 'Profile Tab',
+          target: 'dailylog-tab',
+          title: language === 'hebrew' ? 'כרטיסיית בריאות' : 'Health Tab',
           description: language === 'hebrew'
-            ? 'כאן תוכלו לנהל את הפרטים האישיים שלכם: שם, אימייל, טלפון, תאריך לידה, מיקום, והעדפות בריאות. כל המידע הזה עוזר לנו להתאים את התוכנית שלכם.'
-            : 'Here you can manage your personal information: name, email, phone, birth date, location, and health preferences. This information helps us personalize your plan.',
+            ? 'כאן תוכלו לעקוב אחר כל הנתונים הבריאותיים שלכם: צריכת מזון יומית, נתוני תזונה, משקל, סיכומים וגרפים. רשמו מה אכלתם בכל ארוחה, עקבו אחר הקלוריות והמקרו-נוטריינטים, ותראו את ההתקדמות שלכם בגרפים.'
+            : 'Here you can track all your health data: daily food intake, nutrition data, weight, summaries, and graphs. Log what you ate at each meal, track your calories and macronutrients, and view your progress through visual charts.',
           position: 'right',
           requiresDrawer: true
         },
@@ -287,15 +287,6 @@ const WebsiteTour = () => {
           description: language === 'hebrew'
             ? 'כאן תוכלו לראות את תוכנית התזונה היומית שלכם. תראו את כל הארוחות, המרכיבים, והערכים התזונתיים. תוכלו גם לערוך את התוכנית ולהוסיף מרכיבים.'
             : 'Here you can view your daily meal plan. You\'ll see all meals, ingredients, and nutritional values. You can also edit the plan and add ingredients.',
-          position: 'right',
-          requiresDrawer: true
-        },
-        {
-          target: 'dailylog-tab',
-          title: language === 'hebrew' ? 'כרטיסיית יומן יומי' : 'Daily Log Tab',
-          description: language === 'hebrew'
-            ? 'כאן תוכלו לעקוב אחר צריכת המזון היומית שלכם. רשמו מה אכלתם בכל ארוחה ועקבו אחר הקלוריות והמקרו-נוטריינטים שלכם.'
-            : 'Here you can track your daily food intake. Log what you ate at each meal and track your calories and macronutrients.',
           position: 'right',
           requiresDrawer: true
         },
@@ -318,8 +309,17 @@ const WebsiteTour = () => {
           requiresDrawer: true
         },
         {
-          target: 'settings-tab',
-          title: language === 'hebrew' ? 'כרטיסיית הגדרות' : 'Settings Tab',
+          target: 'profile-tab',
+          title: language === 'hebrew' ? 'כרטיסיית פרופיל' : 'Profile Tab',
+          description: language === 'hebrew'
+            ? 'כאן תוכלו לנהל את הפרטים האישיים שלכם: שם, אימייל, טלפון, תאריך לידה, מיקום, והעדפות בריאות. כל המידע הזה עוזר לנו להתאים את התוכנית שלכם.'
+            : 'Here you can manage your personal information: name, email, phone, birth date, location, and health preferences. This information helps us personalize your plan.',
+          position: 'right',
+          requiresDrawer: true
+        },
+        {
+          target: 'settings-button',
+          title: language === 'hebrew' ? 'כפתור הגדרות' : 'Settings Button',
           description: language === 'hebrew'
             ? 'כאן תוכלו להתאים אישית את ההגדרות של האתר שלכם: תצוגת קלוריות ומקרו, יחידות מדידה, שפה, ומצב כהה.'
             : 'Here you can customize your website settings: display calories and macros, measurement units, language, and dark mode.',
@@ -340,11 +340,11 @@ const WebsiteTour = () => {
         position: 'right'
       },
       {
-        target: 'profile-tab',
-        title: language === 'hebrew' ? 'כרטיסיית פרופיל' : 'Profile Tab',
+        target: 'dailylog-tab',
+        title: language === 'hebrew' ? 'כרטיסיית בריאות' : 'Health Tab',
         description: language === 'hebrew'
-          ? 'כאן תוכלו לנהל את הפרטים האישיים שלכם: שם, אימייל, טלפון, תאריך לידה, מיקום, והעדפות בריאות. כל המידע הזה עוזר לנו להתאים את התוכנית שלכם.'
-          : 'Here you can manage your personal information: name, email, phone, birth date, location, and health preferences. This information helps us personalize your plan.',
+          ? 'כאן תוכלו לעקוב אחר כל הנתונים הבריאותיים שלכם: צריכת מזון יומית, נתוני תזונה, משקל, סיכומים וגרפים. רשמו מה אכלתם בכל ארוחה, עקבו אחר הקלוריות והמקרו-נוטריינטים, ותראו את ההתקדמות שלכם בגרפים.'
+          : 'Here you can track all your health data: daily food intake, nutrition data, weight, summaries, and graphs. Log what you ate at each meal, track your calories and macronutrients, and view your progress through visual charts.',
         position: 'bottom'
       },
       {
@@ -353,14 +353,6 @@ const WebsiteTour = () => {
         description: language === 'hebrew'
           ? 'כאן תוכלו לראות את תוכנית התזונה היומית שלכם. תראו את כל הארוחות, המרכיבים, והערכים התזונתיים. תוכלו גם לערוך את התוכנית ולהוסיף מרכיבים.'
           : 'Here you can view your daily meal plan. You\'ll see all meals, ingredients, and nutritional values. You can also edit the plan and add ingredients.',
-        position: 'bottom'
-      },
-      {
-        target: 'dailylog-tab',
-        title: language === 'hebrew' ? 'כרטיסיית יומן יומי' : 'Daily Log Tab',
-        description: language === 'hebrew'
-          ? 'כאן תוכלו לעקוב אחר צריכת המזון היומית שלכם. רשמו מה אכלתם בכל ארוחה ועקבו אחר הקלוריות והמקרו-נוטריינטים שלכם.'
-          : 'Here you can track your daily food intake. Log what you ate at each meal and track your calories and macronutrients.',
         position: 'bottom'
       },
       {
@@ -380,12 +372,20 @@ const WebsiteTour = () => {
         position: 'bottom'
       },
       {
-        target: 'settings-tab',
-        title: language === 'hebrew' ? 'כרטיסיית הגדרות' : 'Settings Tab',
+        target: 'profile-tab',
+        title: language === 'hebrew' ? 'כרטיסיית פרופיל' : 'Profile Tab',
+        description: language === 'hebrew'
+          ? 'כאן תוכלו לנהל את הפרטים האישיים שלכם: שם, אימייל, טלפון, תאריך לידה, מיקום, והעדפות בריאות. כל המידע הזה עוזר לנו להתאים את התוכנית שלכם.'
+          : 'Here you can manage your personal information: name, email, phone, birth date, location, and health preferences. This information helps us personalize your plan.',
+        position: 'bottom'
+      },
+      {
+        target: 'settings-button',
+        title: language === 'hebrew' ? 'כפתור הגדרות' : 'Settings Button',
         description: language === 'hebrew'
           ? 'כאן תוכלו להתאים אישית את ההגדרות של האתר שלכם: תצוגת קלוריות ומקרו, יחידות מדידה, שפה, ומצב כהה.'
           : 'Here you can customize your website settings: display calories and macros, measurement units, language, and dark mode.',
-        position: 'bottom'
+        position: 'right'
       },
     ];
   };
