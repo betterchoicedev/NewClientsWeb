@@ -162,6 +162,7 @@ const ProfilePage = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isModalAnimating, setIsModalAnimating] = useState(false);
+  const [showWhatsAppPopup, setShowWhatsAppPopup] = useState(false);
 
   const loadCompanyOptions = useCallback(async () => {
     try {
@@ -309,6 +310,14 @@ const ProfilePage = () => {
     if (profileTourCompleted === 'true') {
       // Tour already completed, check onboarding
       checkOnboardingStatus();
+      
+      // Check if WhatsApp popup should be shown (only if not shown before)
+      const whatsappPopupShown = localStorage.getItem('whatsappPopupShown');
+      if (whatsappPopupShown !== 'true') {
+        setTimeout(() => {
+          setShowWhatsAppPopup(true);
+        }, 1000); // Show after 1 second delay
+      }
       return;
     }
 
@@ -317,6 +326,14 @@ const ProfilePage = () => {
       if (e.key === 'profileTourCompleted' && e.newValue === 'true') {
         console.log('✅ Profile tour completed (detected via storage event), checking onboarding...');
         checkOnboardingStatus();
+        
+        // Show WhatsApp popup if not shown before
+        const whatsappPopupShown = localStorage.getItem('whatsappPopupShown');
+        if (whatsappPopupShown !== 'true') {
+          setTimeout(() => {
+            setShowWhatsAppPopup(true);
+          }, 1000); // Show after 1 second delay
+        }
       }
     };
 
@@ -324,6 +341,14 @@ const ProfilePage = () => {
     const handleTourComplete = () => {
       console.log('✅ Profile tour completed (detected via custom event), checking onboarding...');
       checkOnboardingStatus();
+      
+      // Show WhatsApp popup if not shown before
+      const whatsappPopupShown = localStorage.getItem('whatsappPopupShown');
+      if (whatsappPopupShown !== 'true') {
+        setTimeout(() => {
+          setShowWhatsAppPopup(true);
+        }, 1000); // Show after 1 second delay
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -336,6 +361,14 @@ const ProfilePage = () => {
         console.log('✅ Profile tour completed (detected via polling), checking onboarding...');
         clearInterval(pollInterval);
         checkOnboardingStatus();
+        
+        // Show WhatsApp popup if not shown before
+        const whatsappPopupShown = localStorage.getItem('whatsappPopupShown');
+        if (whatsappPopupShown !== 'true') {
+          setTimeout(() => {
+            setShowWhatsAppPopup(true);
+          }, 1000); // Show after 1 second delay
+        }
       }
     }, 1000);
 
@@ -890,6 +923,17 @@ const ProfilePage = () => {
             opacity: 0.3;
           }
         }
+        @keyframes slideInFromButton {
+          from {
+            opacity: 0;
+            transform: scale(0.8) translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        
         @keyframes shake {
           0%, 100% {
             transform: translateX(0);
@@ -1401,6 +1445,157 @@ const ProfilePage = () => {
           user={user}
           userCode={userCode}
         />
+
+        {/* WhatsApp Popup Modal - Shows after tour completion - IMPORTANT */}
+        {showWhatsAppPopup && (
+          <div className="fixed inset-0 z-[100] overflow-y-auto" aria-labelledby="whatsapp-modal-title" role="dialog" aria-modal="true">
+            <div className="flex items-center justify-center min-h-screen pt-2 px-2 pb-2 text-center sm:block sm:p-0 sm:pt-4 sm:px-4 sm:pb-20">
+              {/* Background overlay - darker and more prominent */}
+              <div 
+                className="fixed inset-0 bg-black backdrop-blur-md transition-opacity duration-300 bg-opacity-80"
+                aria-hidden="true"
+              ></div>
+
+              {/* Center modal */}
+              <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+              
+              {/* Modal panel - larger and more prominent, fully responsive */}
+              <div className={`inline-block align-bottom ${themeClasses.bgCard} rounded-2xl sm:rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl w-full max-w-[calc(100vw-1rem)] border-2 sm:border-4 border-emerald-500/50`} style={{ animation: 'slideInFromButton 0.5s ease-out' }} dir={direction}>
+                {/* Animated gradient header */}
+                <div className="bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 px-4 py-5 sm:px-8 sm:pt-8 sm:pb-6 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/20 via-green-400/20 to-teal-400/20 animate-pulse"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-start justify-between mb-3 sm:mb-4 gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm animate-bounce flex-shrink-0">
+                            <span className="text-2xl sm:text-4xl">🤖</span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="text-xl sm:text-3xl md:text-4xl font-bold text-white leading-tight break-words" id="whatsapp-modal-title">
+                              {language === 'hebrew' ? 'הבוט AI שלכם מחכה!' : 'Your AI Bot is Waiting!'}
+                            </h3>
+                            <p className="text-emerald-100 text-xs sm:text-sm mt-1 font-medium">
+                              {language === 'hebrew' ? 'הכלי החשוב ביותר שלכם' : 'Your Most Important Tool'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowWhatsAppPopup(false);
+                          localStorage.setItem('whatsappPopupShown', 'true');
+                        }}
+                        className="text-white/80 hover:text-white transition-colors text-2xl sm:text-3xl font-bold hover:scale-110 active:scale-95 flex-shrink-0"
+                        aria-label={language === 'hebrew' ? 'סגור' : 'Close'}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Content section */}
+                <div className={`${themeClasses.bgCard} px-4 py-4 sm:px-8 sm:py-6`}>
+                  {/* Key features */}
+                  <div className="mb-4 sm:mb-6">
+                    <p className={`${themeClasses.textPrimary} text-base sm:text-xl font-semibold mb-3 sm:mb-4`}>
+                      {language === 'hebrew' 
+                        ? 'הבוט AI שלכם עושה הכל:'
+                        : 'Your AI Bot Does Everything:'}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                      {/* Feature 1 - Food Logging */}
+                      <div className={`${themeClasses.bgSecondary} rounded-lg sm:rounded-xl p-3 sm:p-4 border-2 border-emerald-500/30`}>
+                        <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">📝</div>
+                        <h4 className={`${themeClasses.textPrimary} font-bold mb-1 text-sm sm:text-base`}>
+                          {language === 'hebrew' ? 'רישום מזון' : 'Food Logging'}
+                        </h4>
+                        <p className={`${themeClasses.textSecondary} text-xs sm:text-sm leading-relaxed`}>
+                          {language === 'hebrew' 
+                            ? 'תיעוד כל ארוחה בקלות'
+                            : 'Log every meal easily'}
+                        </p>
+                      </div>
+                      
+                      {/* Feature 2 - Weight Tracking */}
+                      <div className={`${themeClasses.bgSecondary} rounded-lg sm:rounded-xl p-3 sm:p-4 border-2 border-emerald-500/30`}>
+                        <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">⚖️</div>
+                        <h4 className={`${themeClasses.textPrimary} font-bold mb-1 text-sm sm:text-base`}>
+                          {language === 'hebrew' ? 'מעקב משקל' : 'Weight Tracking'}
+                        </h4>
+                        <p className={`${themeClasses.textSecondary} text-xs sm:text-sm leading-relaxed`}>
+                          {language === 'hebrew' 
+                            ? 'עקוב אחר ההתקדמות שלך'
+                            : 'Track your progress'}
+                        </p>
+                      </div>
+                      
+                      {/* Feature 3 - Dietitian Consultations */}
+                      <div className={`${themeClasses.bgSecondary} rounded-lg sm:rounded-xl p-3 sm:p-4 border-2 border-emerald-500/30`}>
+                        <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">👩‍⚕️</div>
+                        <h4 className={`${themeClasses.textPrimary} font-bold mb-1 text-sm sm:text-base`}>
+                          {language === 'hebrew' ? 'ייעוץ דיאטני' : 'Dietitian Consultations'}
+                        </h4>
+                        <p className={`${themeClasses.textSecondary} text-xs sm:text-sm leading-relaxed`}>
+                          {language === 'hebrew' 
+                            ? 'כמו דיאטנית אמיתית'
+                            : 'Like a real dietitian'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Compelling message */}
+                  <div className={`${isDarkMode ? 'bg-emerald-900/30' : 'bg-emerald-50'} rounded-lg sm:rounded-xl p-3 sm:p-5 mb-4 sm:mb-6 border-2 ${isDarkMode ? 'border-emerald-500/50' : 'border-emerald-200'}`}>
+                    <p className={`${themeClasses.textPrimary} text-sm sm:text-base md:text-lg font-medium leading-relaxed`}>
+                      {language === 'hebrew' 
+                        ? '💚 זה הכלי המרכזי של BetterChoice - הבוט AI שלכם זמין 24/7 לעזור לכם עם כל שאלה, תיעוד מזון, מעקב משקל, והמלצות מותאמות אישית. התחילו עכשיו!'
+                        : '💚 This is BetterChoice\'s core tool - Your AI Bot is available 24/7 to help with any question, food logging, weight tracking, and personalized recommendations. Start now!'}
+                    </p>
+                  </div>
+                  
+                  {/* CTA Button - Large and prominent, responsive */}
+                  <div className="flex flex-col gap-2 sm:gap-3">
+                    <a
+                      href={language === 'hebrew' ? 'https://wa.me/message/B2LIFC7FLCCMN1' : 'https://wa.me/message/YH4IM5MWPY4HI1'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        setShowWhatsAppPopup(false);
+                        localStorage.setItem('whatsappPopupShown', 'true');
+                      }}
+                      className="flex items-center justify-center gap-2 sm:gap-3 px-4 py-3 sm:px-8 sm:py-5 rounded-xl sm:rounded-2xl bg-gradient-to-br from-green-500 via-green-600 to-green-700 hover:from-green-600 hover:via-green-700 hover:to-green-800 text-white shadow-2xl hover:shadow-green-500/50 transition-all duration-300 hover:scale-105 active:scale-95 font-bold text-base sm:text-lg md:text-xl relative overflow-hidden group"
+                      aria-label={language === 'hebrew' ? 'התחל עכשיו ב-WhatsApp' : 'Start Now on WhatsApp'}
+                    >
+                      {/* Animated background effect */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                      
+                      <svg className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 relative z-10" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                      </svg>
+                      <span className="relative z-10 text-center break-words">
+                        {language === 'hebrew' ? '🚀 התחילו עכשיו - דברו עם ה-AI' : '🚀 Start Now - Chat with AI'}
+                      </span>
+                      <span className="relative z-10 animate-pulse flex-shrink-0">→</span>
+                    </a>
+                    
+                    {/* Smaller dismiss button */}
+                    <button
+                      onClick={() => {
+                        setShowWhatsAppPopup(false);
+                        localStorage.setItem('whatsappPopupShown', 'true');
+                      }}
+                      className={`px-4 py-2 rounded-lg ${themeClasses.textSecondary} hover:${themeClasses.textPrimary} transition-all text-xs sm:text-sm opacity-60 hover:opacity-100`}
+                    >
+                      {language === 'hebrew' ? 'אני אתחיל מאוחר יותר' : 'I\'ll start later'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Logout Confirmation Modal */}
         {showLogoutConfirm && (
