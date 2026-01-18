@@ -458,6 +458,26 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     return isHebrew ? mealNamesHe : mealNamesEn;
   };
 
+  // Convert Hebrew meal name to English (always save in English)
+  const convertMealNameToEnglish = (mealName) => {
+    const mealNamesEn = ['Meal', 'Breakfast', 'Morning Snack', 'Brunch', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack', 'Late Dinner', 'Post-Workout Meal', 'Midnight Snack'];
+    const mealNamesHe = ['ארוחה', 'ארוחת בוקר', 'חטיף בוקר', 'בראנץ\'', 'ארוחת צהריים', 'חטיף צהריים', 'ארוחת ערב', 'חטיף ערב', 'ארוחת ערב מאוחרת', 'ארוחה לאחר אימון', 'חטיף לילה'];
+    
+    // If already in English, return as-is
+    if (mealNamesEn.includes(mealName)) {
+      return mealName;
+    }
+    
+    // Convert Hebrew to English
+    const hebrewIndex = mealNamesHe.indexOf(mealName);
+    if (hebrewIndex !== -1) {
+      return mealNamesEn[hebrewIndex];
+    }
+    
+    // If not found in either array, return as-is (fallback)
+    return mealName;
+  };
+
   // Get meal name based on number of meals and index (for default suggestions)
   const getMealName = (numMeals, index, isHebrew = false) => {
     if (numMeals === 1) {
@@ -1636,8 +1656,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         const pctPerMeal = parseFloat((100 / numMeals).toFixed(1));
         
         mealPlanStructure = formData.meal_descriptions.slice(0, numMeals).map((description, index) => {
-          // Use the selected meal name, or fallback to default
-          const selectedMealName = formData.meal_names[index] || getMealName(numMeals, index, false);
+          // Use the selected meal name, or fallback to default (always in English for defaults)
+          const selectedMealNameRaw = formData.meal_names[index] || getMealName(numMeals, index, false);
+          // Convert to English if it's in Hebrew (always save in English)
+          const selectedMealName = convertMealNameToEnglish(selectedMealNameRaw);
           return {
             meal: selectedMealName,
             calories: caloriesPerMeal,
