@@ -10307,8 +10307,24 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
     // Get content from message or content field
     let content = msg.message || msg.content || '';
     
-    // Parse JSON if message starts with {
-    if (content.trim().startsWith('{')) {
+    // Handle system_reply topic: extract response_text from agent_response JSON
+    if (topic === 'system_reply' && content.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed.agent_response) {
+          // agent_response is a JSON string, parse it to get response_text
+          const agentResponseParsed = JSON.parse(parsed.agent_response);
+          if (agentResponseParsed.response_text) {
+            content = agentResponseParsed.response_text;
+          }
+        }
+      } catch (e) {
+        // Not valid JSON or parsing failed, use as is
+        console.error('Error parsing system_reply JSON:', e);
+      }
+    }
+    // Parse JSON if message starts with { (for non-system_reply messages)
+    else if (content.trim().startsWith('{')) {
       try {
         const parsed = JSON.parse(content);
         if (parsed.response_text) {
