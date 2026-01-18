@@ -310,14 +310,6 @@ const ProfilePage = () => {
     if (profileTourCompleted === 'true') {
       // Tour already completed, check onboarding
       checkOnboardingStatus();
-      
-      // Check if WhatsApp popup should be shown (only if not shown before)
-      const whatsappPopupShown = localStorage.getItem('whatsappPopupShown');
-      if (whatsappPopupShown !== 'true') {
-        setTimeout(() => {
-          setShowWhatsAppPopup(true);
-        }, 1000); // Show after 1 second delay
-      }
       return;
     }
 
@@ -326,14 +318,6 @@ const ProfilePage = () => {
       if (e.key === 'profileTourCompleted' && e.newValue === 'true') {
         console.log('✅ Profile tour completed (detected via storage event), checking onboarding...');
         checkOnboardingStatus();
-        
-        // Show WhatsApp popup if not shown before
-        const whatsappPopupShown = localStorage.getItem('whatsappPopupShown');
-        if (whatsappPopupShown !== 'true') {
-          setTimeout(() => {
-            setShowWhatsAppPopup(true);
-          }, 1000); // Show after 1 second delay
-        }
       }
     };
 
@@ -341,14 +325,6 @@ const ProfilePage = () => {
     const handleTourComplete = () => {
       console.log('✅ Profile tour completed (detected via custom event), checking onboarding...');
       checkOnboardingStatus();
-      
-      // Show WhatsApp popup if not shown before
-      const whatsappPopupShown = localStorage.getItem('whatsappPopupShown');
-      if (whatsappPopupShown !== 'true') {
-        setTimeout(() => {
-          setShowWhatsAppPopup(true);
-        }, 1000); // Show after 1 second delay
-      }
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -361,14 +337,6 @@ const ProfilePage = () => {
         console.log('✅ Profile tour completed (detected via polling), checking onboarding...');
         clearInterval(pollInterval);
         checkOnboardingStatus();
-        
-        // Show WhatsApp popup if not shown before
-        const whatsappPopupShown = localStorage.getItem('whatsappPopupShown');
-        if (whatsappPopupShown !== 'true') {
-          setTimeout(() => {
-            setShowWhatsAppPopup(true);
-          }, 1000); // Show after 1 second delay
-        }
       }
     }, 1000);
 
@@ -384,6 +352,26 @@ const ProfilePage = () => {
       clearTimeout(timeout);
     };
   }, [user, checkOnboardingStatus]);
+
+  // Show WhatsApp popup only after onboarding is completed
+  useEffect(() => {
+    if (!user) return;
+    
+    // Only show popup if:
+    // 1. Onboarding is completed
+    // 2. Profile tour is completed (required for onboarding to run)
+    // 3. Popup hasn't been shown before
+    if (onboardingCompleted) {
+      const profileTourCompleted = localStorage.getItem('profileTourCompleted');
+      const whatsappPopupShown = localStorage.getItem('whatsappPopupShown');
+      
+      if (profileTourCompleted === 'true' && whatsappPopupShown !== 'true') {
+        setTimeout(() => {
+          setShowWhatsAppPopup(true);
+        }, 1000); // Show after 1 second delay
+      }
+    }
+  }, [onboardingCompleted, user]);
 
   useEffect(() => {
     loadCompanyOptions();
