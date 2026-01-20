@@ -33,6 +33,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     region: '',
     medical_conditions: '',
     timezone: '',
+    first_meal_time: '',
+    last_meal_time: '',
     number_of_meals: '',
     meal_descriptions: [],
     meal_names: []
@@ -252,6 +254,25 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const maxInches = Math.round(maxCm / 2.54); // ~98 inches
   const heightOptionsInches = Array.from({ length: maxInches - minInches + 1 }, (_, i) => minInches + i);
 
+  // Time options for first/last meal (30-minute intervals across the day)
+  const eatingWindowTimes = React.useMemo(() => {
+    const times = [];
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute of [0, 30]) {
+        const h = hour.toString().padStart(2, '0');
+        const m = minute.toString().padStart(2, '0');
+        times.push(`${h}:${m}`);
+      }
+    }
+    return times;
+  }, []);
+
+  // Available options for last meal time – cannot be earlier than first meal time
+  const getLastMealTimes = () => {
+    if (!formData.first_meal_time) return eatingWindowTimes;
+    return eatingWindowTimes.filter((time) => time >= formData.first_meal_time);
+  };
+
   // Conversion functions
   const kgToLbs = (kg) => Math.round(parseFloat(kg) * 2.20462);
   const lbsToKg = (lbs) => Math.round((parseFloat(lbs) / 2.20462) * 10) / 10; // Round to 1 decimal
@@ -401,6 +422,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     {
       title: language === 'hebrew' ? 'הגבלות תזונתיות' : 'Food Limitations',
       fields: ['food_limitations']
+    },
+    {
+      title: language === 'hebrew' ? 'חלון האכילה היומי' : 'Daily Eating Window',
+      fields: ['first_meal_time', 'last_meal_time']
     },
     {
       title: language === 'hebrew' ? 'תכנון ארוחות' : 'Meal Planning',
@@ -687,6 +712,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           activity_level: data.activity_level || prev.activity_level || '',
           goal: data.goal || prev.goal || '',
           medical_conditions: data.medical_conditions || prev.medical_conditions || '',
+          first_meal_time: chatUserMealData?.first_meal_time || prev.first_meal_time || '',
+          last_meal_time: chatUserMealData?.last_meal_time || prev.last_meal_time || '',
           number_of_meals: chatUserMealData?.number_of_meals ? chatUserMealData.number_of_meals.toString() : (prev.number_of_meals || ''),
           meal_descriptions: mealDescriptions.length > 0 ? mealDescriptions : (prev.meal_descriptions || []),
           meal_names: mealNames.length > 0 ? mealNames : (prev.meal_names || [])
@@ -935,6 +962,19 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.log('✓ Meal plan structure has value:', chatUserMealData?.meal_plan_structure);
       }
 
+      // First and last meal time (from chat_users)
+      if (isEmpty(chatUserMealData?.first_meal_time)) {
+        missingFields.push('first_meal_time');
+      } else {
+        console.log('✓ First meal time has value:', chatUserMealData?.first_meal_time);
+      }
+
+      if (isEmpty(chatUserMealData?.last_meal_time)) {
+        missingFields.push('last_meal_time');
+      } else {
+        console.log('✓ Last meal time has value:', chatUserMealData?.last_meal_time);
+      }
+
       console.log('📋 Missing fields to fill:', missingFields);
 
       // No need to store availableFields, we only need to set filteredSteps
@@ -1002,6 +1042,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       setFormData(prev => ({
         ...prev,
         height_cm: cmValue
+      }));
+    } else if (name === 'first_meal_time' || name === 'last_meal_time') {
+      // Simple time string (HH:MM)
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
       }));
     } else {
       setFormData(prev => ({
@@ -1812,6 +1858,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         medical_conditions: allOnboardingFields.includes('medical_conditions') ? (formData.medical_conditions || null) : undefined,
         Activity_level: formData.activity_level,
         goal: formData.goal,
+        first_meal_time: allOnboardingFields.includes('first_meal_time') && formData.first_meal_time ? formData.first_meal_time : undefined,
+        last_meal_time: allOnboardingFields.includes('last_meal_time') && formData.last_meal_time ? formData.last_meal_time : undefined,
         number_of_meals: allOnboardingFields.includes('number_of_meals') && formData.number_of_meals ? parseInt(formData.number_of_meals) : undefined,
         meal_plan_structure: allOnboardingFields.includes('meal_descriptions') && mealPlanStructure ? mealPlanStructure : undefined,
         daily_target_total_calories: dailyCalories || undefined,
@@ -2769,6 +2817,82 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                   />
                 </div>
               )}
+            </div>
+          )}
+
+          {currentFields.includes('first_meal_time') && currentFields.includes('last_meal_time') && (
+            <div className="group">
+              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'מתי אתה בדרך כלל אוכל את הארוחה הראשונה והאחרונה שלך ביום?' : 'When do you usually eat your first and last meal of the day?'}
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 items-start">
+                <div>
+                  <label className={`block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 ${themeClasses.textSecondary}`}>
+                    {language === 'hebrew' ? 'שעת הארוחה הראשונה' : 'First meal time'}
+                  </label>
+                  <div
+                    className={`w-full max-h-40 sm:max-h-64 overflow-y-auto rounded-lg sm:rounded-xl border-2 ${getBorderClass('first_meal_time')} ${themeClasses.bgCard} p-1`}
+                  >
+                    {eatingWindowTimes.map((time) => {
+                      const isSelected = formData.first_meal_time === time;
+                      return (
+                        <button
+                          key={time}
+                          type="button"
+                          onClick={() =>
+                            setFormData(prev => {
+                              const updated = { ...prev, first_meal_time: time };
+                              // Ensure last_meal_time is not earlier than first_meal_time
+                              if (
+                                updated.last_meal_time &&
+                                updated.last_meal_time < time
+                              ) {
+                                updated.last_meal_time = '';
+                              }
+                              return updated;
+                            })
+                          }
+                          className={`w-full text-left px-3 py-1.5 text-xs sm:text-sm rounded-md mb-0.5 last:mb-0 transition-all duration-150 ${
+                            isSelected
+                              ? 'bg-emerald-500/20 text-emerald-400 font-semibold'
+                              : `${themeClasses.bgCard} ${themeClasses.textPrimary} hover:bg-emerald-500/10`
+                          }`}
+                        >
+                          {time}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className={`block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 ${themeClasses.textSecondary}`}>
+                    {language === 'hebrew' ? 'שעת הארוחה האחרונה' : 'Last meal time'}
+                  </label>
+                  <div
+                    className={`w-full max-h-40 sm:max-h-64 overflow-y-auto rounded-lg sm:rounded-xl border-2 ${getBorderClass('last_meal_time')} ${themeClasses.bgCard} p-1`}
+                  >
+                    {[...getLastMealTimes()].reverse().map((time) => {
+                      const isSelected = formData.last_meal_time === time;
+                      return (
+                        <button
+                          key={time}
+                          type="button"
+                          onClick={() =>
+                            setFormData(prev => ({ ...prev, last_meal_time: time }))
+                          }
+                          className={`w-full text-left px-3 py-1.5 text-xs sm:text-sm rounded-md mb-0.5 last:mb-0 transition-all duration-150 ${
+                            isSelected
+                              ? 'bg-emerald-500/20 text-emerald-400 font-semibold'
+                              : `${themeClasses.bgCard} ${themeClasses.textPrimary} hover:bg-emerald-500/10`
+                          }`}
+                        >
+                          {time}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
