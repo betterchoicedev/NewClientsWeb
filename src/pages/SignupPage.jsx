@@ -22,6 +22,33 @@ function SignupPage() {
   const [success, setSuccess] = useState('');
   const [socialLoading, setSocialLoading] = useState(false);
   const [dietitianId, setDietitianId] = useState(null);
+  const [invitationToken, setInvitationToken] = useState(null);
+  const [hasInvitationToken, setHasInvitationToken] = useState(false);
+
+  // Function to check if invitation token exists in URL hash
+  const checkInvitationToken = () => {
+    try {
+      // Get the hash fragment (e.g., "#d=YTdhNzUxMzUtNzhiNi00ODQ4LWFkODQtYjUwZjAzZjMyNmZi")
+      const hash = window.location.hash;
+      
+      if (!hash || hash.length === 0) {
+        return false;
+      }
+      
+      // Check if 'd' parameter exists
+      const match = hash.match(/[#&]d=([^&]*)/);
+      
+      if (match && match[1]) {
+        setInvitationToken(match[1]);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking invitation token:', error);
+      return false;
+    }
+  };
 
   // Function to get dietitian ID from URL hash
   const getDietitianIdFromHash = () => {
@@ -61,23 +88,41 @@ function SignupPage() {
     }
   };
 
-  // Extract dietitian ID from URL hash on component mount and on hash changes
+
+  // Check for invitation token and extract dietitian ID on component mount
   useEffect(() => {
-    const extractAndStoreDietitianId = () => {
-      const id = getDietitianIdFromHash();
-      if (id) {
-        setDietitianId(id);
-        // Also store in sessionStorage as backup
-        sessionStorage.setItem('referral_dietitian_id', id);
+    const initializeSignup = () => {
+      // Check if invitation token exists in URL (just check for #d= parameter)
+      const hasToken = checkInvitationToken();
+      setHasInvitationToken(hasToken);
+      
+      if (hasToken) {
+        // Store token in sessionStorage for OAuth flows
+        const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1];
+        if (token) {
+          sessionStorage.setItem('invitation_token', token);
+        }
+      }
+
+      // Also extract dietitian ID if present (for referral tracking)
+      // Note: This might conflict with invitation token if both use #d= parameter
+      // We'll skip dietitian ID extraction if we have an invitation token
+      if (!hasToken) {
+        const id = getDietitianIdFromHash();
+        if (id) {
+          setDietitianId(id);
+          // Also store in sessionStorage as backup
+          sessionStorage.setItem('referral_dietitian_id', id);
+        }
       }
     };
     
-    // Extract on mount
-    extractAndStoreDietitianId();
+    // Initialize on mount
+    initializeSignup();
     
     // Also listen for hash changes (in case hash is added after page load)
     const handleHashChange = () => {
-      extractAndStoreDietitianId();
+      initializeSignup();
     };
     
     window.addEventListener('hashchange', handleHashChange);
@@ -85,7 +130,7 @@ function SignupPage() {
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
     };
-  }, []);
+  }, [invitationToken]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -103,10 +148,22 @@ function SignupPage() {
   };
 
   const handleGoogleSignUp = async () => {
+    // Check if invitation token exists in URL
+    if (!hasInvitationToken) {
+      setError(language === 'hebrew' 
+        ? 'נדרש קישור הזמנה תקף להרשמה' 
+        : 'A valid invitation link is required to sign up');
+      return;
+    }
+
     setSocialLoading(true);
     setError('');
     try {
-      // Store dietitian ID before OAuth redirect (hash will be lost during redirect)
+      // Store invitation token and dietitian ID before OAuth redirect (hash will be lost during redirect)
+      const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1];
+      if (token) {
+        sessionStorage.setItem('invitation_token', token);
+      }
       const id = dietitianId || getDietitianIdFromHash();
       if (id) {
         sessionStorage.setItem('referral_dietitian_id', id);
@@ -131,6 +188,15 @@ function SignupPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Check if invitation token exists in URL
+    if (!hasInvitationToken) {
+      setError(language === 'hebrew' 
+        ? 'נדרש קישור הזמנה תקף להרשמה. אנא השתמש בקישור ההזמנה שקיבלת.' 
+        : 'A valid invitation link is required to sign up. Please use the invitation link you received.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setSuccess('');
@@ -190,7 +256,8 @@ function SignupPage() {
               );
               return;
             }
-            // Clear stored dietitian ID after successful creation
+            // Clear stored invitation token and dietitian ID after successful creation
+            sessionStorage.removeItem('invitation_token');
             if (referralDietitianId) {
               sessionStorage.removeItem('referral_dietitian_id');
               setDietitianId(null);
@@ -272,14 +339,43 @@ function SignupPage() {
       {/* Main Content */}
       <main className={`flex-1 flex items-center justify-center py-6 sm:py-8 md:py-12 px-4 sm:px-6 lg:px-8 ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'}`}>
         <div className="max-w-md w-full space-y-6 sm:space-y-8">
-          <div className="text-center">
-            <h2 className={`text-2xl sm:text-3xl font-bold ${themeClasses.textPrimary} mb-2`}>
-              {language === 'hebrew' ? 'צור חשבון חדש' : 'Create your account'}
-            </h2>
-            <p className={`${themeClasses.textSecondary} text-sm sm:text-base px-2`}>
-              {language === 'hebrew' ? 'הצטרף לקהילה שלנו והתחל את המסע שלך לבריאות טובה יותר' : 'Join our community and start your journey to better health'}
-            </p>
-          </div>
+          {!hasInvitationToken ? (
+            <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-6 sm:p-8 text-center`}>
+              <div className="mb-4">
+                <svg className="mx-auto h-16 w-16 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h2 className={`text-2xl sm:text-3xl font-bold ${themeClasses.textPrimary} mb-2`}>
+                {language === 'hebrew' ? 'נדרש קישור הזמנה' : 'Invitation Required'}
+              </h2>
+              <p className={`${themeClasses.textSecondary} mb-4`}>
+                {language === 'hebrew' 
+                  ? 'ההרשמה פתוחה רק למי שקיבל קישור הזמנה. אם אתה מעוניין להצטרף, אנא הירשם לרשימת ההמתנה.' 
+                  : 'Signup is currently only available to those who have received an invitation link. If you\'re interested in joining, please join our waiting list.'}
+              </p>
+              {error && (
+                <div className={`${themeClasses.errorBg} px-4 py-3 rounded-lg mb-4 text-sm`}>
+                  {error}
+                </div>
+              )}
+              <Link 
+                to="/waiting-list"
+                className="inline-block bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all duration-300"
+              >
+                {language === 'hebrew' ? 'הצטרף לרשימת ההמתנה' : 'Join Waiting List'}
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="text-center">
+                <h2 className={`text-2xl sm:text-3xl font-bold ${themeClasses.textPrimary} mb-2`}>
+                  {language === 'hebrew' ? 'צור חשבון חדש' : 'Create your account'}
+                </h2>
+                <p className={`${themeClasses.textSecondary} text-sm sm:text-base px-2`}>
+                  {language === 'hebrew' ? 'הצטרף לקהילה שלנו והתחל את המסע שלך לבריאות טובה יותר' : 'Join our community and start your journey to better health'}
+                </p>
+              </div>
 
           <form className="mt-6 sm:mt-8 space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
             <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-4 sm:p-6 md:p-8`}>
@@ -457,6 +553,8 @@ function SignupPage() {
               </button>
             </div>
           </div>
+            </>
+          )}
         </div>
       </main>
 

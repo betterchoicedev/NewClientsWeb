@@ -3712,6 +3712,222 @@ app.put('/api/auth/client/:userId', async (req, res) => {
 });
 
 // ====================================
+// WAITING LIST API ROUTES
+// ====================================
+
+// Submit waiting list entry
+app.post('/api/waiting-list/submit', async (req, res) => {
+  try {
+    const { firstName, lastName, email, phone, goal, message } = req.body;
+
+    // Basic validation
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'First name, last name, and email are required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        error: 'Invalid email format',
+        message: 'Please provide a valid email address'
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase();
+
+    // Check if email already exists in waiting list
+    const { data: existingEntry, error: checkError } = await supabase
+      .from('waiting_list')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      throw checkError;
+    }
+
+    if (existingEntry) {
+      return res.status(400).json({
+        error: 'Email already registered',
+        message: 'This email is already on the waiting list'
+      });
+    }
+
+    // Save to Supabase
+    const { data, error } = await supabase
+      .from('waiting_list')
+      .insert([
+        {
+          first_name: firstName,
+          last_name: lastName,
+          email: normalizedEmail,
+          phone: phone || null,
+          goal: goal || null,
+          message: message || null,
+          created_at: new Date().toISOString()
+        }
+      ])
+      .select();
+
+    if (error) {
+      console.error('Error saving waiting list entry:', error);
+      throw error;
+    }
+
+    res.json({ 
+      success: true, 
+      data,
+      message: 'Successfully joined waiting list'
+    });
+  } catch (error) {
+    console.error('Error submitting waiting list entry:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to submit waiting list entry' 
+    });
+  }
+});
+
+// Validate invitation token
+app.get('/api/waiting-list/validate-token', async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ 
+        valid: false, 
+        error: 'Token is required' 
+      });
+    }
+
+    // Decode the token (it's base64 encoded UUID)
+    let decodedToken;
+    try {
+      decodedToken = Buffer.from(token, 'base64').toString('utf-8');
+      // Validate it looks like a UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(decodedToken)) {
+        return res.status(400).json({ 
+          valid: false, 
+          error: 'Invalid token format' 
+        });
+      }
+    } catch (decodeError) {
+      return res.status(400).json({ 
+        valid: false, 
+        error: 'Invalid token format' 
+      });
+    }
+
+    // Check if token exists in waiting_list table
+    // The token should match the invitation_token field (stored as UUID string)
+    const { data, error } = await supabase
+      .from('waiting_list')
+      .select('id, email, first_name, last_name, invitation_sent_at, invitation_used_at')
+      .eq('invitation_token', decodedToken)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    if (!data) {
+      return res.json({ 
+        valid: false, 
+        error: 'Invalid or expired invitation token' 
+      });
+    }
+
+    // Check if token has already been used
+    if (data.invitation_used_at) {
+      return res.json({ 
+        valid: false, 
+        error: 'This invitation has already been used',
+        used: true
+      });
+    }
+
+    res.json({ 
+      valid: true, 
+      data: {
+        id: data.id,
+        email: data.email,
+        firstName: data.first_name,
+        lastName: data.last_name
+      }
+    });
+  } catch (error) {
+    console.error('Error validating invitation token:', error);
+    res.status(500).json({ 
+      valid: false,
+      error: error.message || 'Failed to validate token' 
+    });
+  }
+});
+
+// Mark invitation as used
+app.post('/api/waiting-list/mark-used', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ 
+        error: 'Token is required' 
+      });
+    }
+
+    // Decode the token (it's base64 encoded UUID)
+    let decodedToken;
+    try {
+      decodedToken = Buffer.from(token, 'base64').toString('utf-8');
+      // Validate it looks like a UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(decodedToken)) {
+        return res.status(400).json({ 
+          error: 'Invalid token format' 
+        });
+      }
+    } catch (decodeError) {
+      return res.status(400).json({ 
+        error: 'Invalid token format' 
+      });
+    }
+
+    // Update the waiting_list entry to mark invitation as used
+    const { data, error } = await supabase
+      .from('waiting_list')
+      .update({ 
+        invitation_used_at: new Date().toISOString()
+      })
+      .eq('invitation_token', decodedToken)
+      .select();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({ 
+        error: 'Invitation token not found' 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Invitation marked as used' 
+    });
+  } catch (error) {
+    console.error('Error marking invitation as used:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to mark invitation as used' 
+    });
+  }
+});
+
+// ====================================
 // CONTACT FORM ENDPOINT
 // ====================================
 

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import WaitingListPage from './pages/WaitingListPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import WhatsAppRegisterPage from './pages/WhatsAppRegisterPage';
 import ProfilePage from './pages/ProfilePage';
@@ -42,6 +43,7 @@ function App() {
                   <Route path="/" element={<HomePage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/signup" element={<SignupPage />} />
+                  <Route path="/waiting-list" element={<WaitingListPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/register/:phoneNumber" element={<WhatsAppRegisterPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
