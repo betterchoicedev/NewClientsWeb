@@ -7632,10 +7632,15 @@ const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, 
 
     logs.forEach((log) => {
       const foodItems = parseFoodItems(log);
-      totalCalories += foodItems.reduce((sum, item) => sum + (item.cals || 0), 0) + (log.total_calories || 0);
-      totalProtein += foodItems.reduce((sum, item) => sum + (item.p || 0), 0) + (log.total_protein_g || 0);
-      totalCarbs += foodItems.reduce((sum, item) => sum + (item.c || 0), 0) + (log.total_carbs_g || 0);
-      totalFat += foodItems.reduce((sum, item) => sum + (item.f || 0), 0) + (log.total_fat_g || 0);
+      const logCaloriesFromItems = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
+      const logProteinFromItems = foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
+      const logCarbsFromItems = foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
+      const logFatFromItems = foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
+      // Use food_items totals if available, otherwise fallback to old columns
+      totalCalories += logCaloriesFromItems > 0 ? logCaloriesFromItems : (log.total_calories || 0);
+      totalProtein += logProteinFromItems > 0 ? logProteinFromItems : (log.total_protein_g || 0);
+      totalCarbs += logCarbsFromItems > 0 ? logCarbsFromItems : (log.total_carbs_g || 0);
+      totalFat += logFatFromItems > 0 ? logFatFromItems : (log.total_fat_g || 0);
     });
 
     return { totalCalories, totalProtein, totalCarbs, totalFat };
@@ -8643,29 +8648,29 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
   const totalCalories = foodLogs.reduce((sum, log) => {
     const foodItems = parseFoodItems(log);
     const logCalories = foodItems.reduce((itemSum, item) => itemSum + (item.cals || 0), 0);
-    // Fallback to old column if food_items is not available
-    return sum + logCalories + (log.total_calories || 0);
+    // Fallback to old column only if food_items is empty or not available
+    return sum + (logCalories > 0 ? logCalories : (log.total_calories || 0));
   }, 0);
   
   const totalProtein = foodLogs.reduce((sum, log) => {
     const foodItems = parseFoodItems(log);
     const logProtein = foodItems.reduce((itemSum, item) => itemSum + (item.p || 0), 0);
-    // Fallback to old column if food_items is not available
-    return sum + logProtein + (log.total_protein_g || 0);
+    // Fallback to old column only if food_items is empty or not available
+    return sum + (logProtein > 0 ? logProtein : (log.total_protein_g || 0));
   }, 0);
   
   const totalCarbs = foodLogs.reduce((sum, log) => {
     const foodItems = parseFoodItems(log);
     const logCarbs = foodItems.reduce((itemSum, item) => itemSum + (item.c || 0), 0);
-    // Fallback to old column if food_items is not available
-    return sum + logCarbs + (log.total_carbs_g || 0);
+    // Fallback to old column only if food_items is empty or not available
+    return sum + (logCarbs > 0 ? logCarbs : (log.total_carbs_g || 0));
   }, 0);
   
   const totalFat = foodLogs.reduce((sum, log) => {
     const foodItems = parseFoodItems(log);
     const logFat = foodItems.reduce((itemSum, item) => itemSum + (item.f || 0), 0);
-    // Fallback to old column if food_items is not available
-    return sum + logFat + (log.total_fat_g || 0);
+    // Fallback to old column only if food_items is empty or not available
+    return sum + (logFat > 0 ? logFat : (log.total_fat_g || 0));
   }, 0);
 
   // Get meals from meal plan, or fallback to default meals
@@ -9142,10 +9147,15 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                     {mealLogs.map((log, logIndex) => {
                       // Parse food_items JSON using helper function
                       const foodItems = parseFoodItems(log);
-                      const logCalories = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0) + (log.total_calories || 0);
-                      const logProtein = foodItems.reduce((sum, item) => sum + (item.p || 0), 0) + (log.total_protein_g || 0);
-                      const logCarbs = foodItems.reduce((sum, item) => sum + (item.c || 0), 0) + (log.total_carbs_g || 0);
-                      const logFat = foodItems.reduce((sum, item) => sum + (item.f || 0), 0) + (log.total_fat_g || 0);
+                      const logCaloriesFromItems = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
+                      const logProteinFromItems = foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
+                      const logCarbsFromItems = foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
+                      const logFatFromItems = foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
+                      // Use food_items totals if available, otherwise fallback to old columns
+                      const logCalories = logCaloriesFromItems > 0 ? logCaloriesFromItems : (log.total_calories || 0);
+                      const logProtein = logProteinFromItems > 0 ? logProteinFromItems : (log.total_protein_g || 0);
+                      const logCarbs = logCarbsFromItems > 0 ? logCarbsFromItems : (log.total_carbs_g || 0);
+                      const logFat = logFatFromItems > 0 ? logFatFromItems : (log.total_fat_g || 0);
                       
                       return (
                       <div 
@@ -9345,10 +9355,15 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                       
                       mealLogs.forEach((log) => {
                         const foodItems = parseFoodItems(log);
-                        mealTotalCalories += foodItems.reduce((sum, item) => sum + (item.cals || 0), 0) + (log.total_calories || 0);
-                        mealTotalProtein += foodItems.reduce((sum, item) => sum + (item.p || 0), 0) + (log.total_protein_g || 0);
-                        mealTotalCarbs += foodItems.reduce((sum, item) => sum + (item.c || 0), 0) + (log.total_carbs_g || 0);
-                        mealTotalFat += foodItems.reduce((sum, item) => sum + (item.f || 0), 0) + (log.total_fat_g || 0);
+                        const logCaloriesFromItems = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
+                        const logProteinFromItems = foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
+                        const logCarbsFromItems = foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
+                        const logFatFromItems = foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
+                        // Use food_items totals if available, otherwise fallback to old columns
+                        mealTotalCalories += logCaloriesFromItems > 0 ? logCaloriesFromItems : (log.total_calories || 0);
+                        mealTotalProtein += logProteinFromItems > 0 ? logProteinFromItems : (log.total_protein_g || 0);
+                        mealTotalCarbs += logCarbsFromItems > 0 ? logCarbsFromItems : (log.total_carbs_g || 0);
+                        mealTotalFat += logFatFromItems > 0 ? logFatFromItems : (log.total_fat_g || 0);
                       });
                       
                       return (
