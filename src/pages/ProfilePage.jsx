@@ -1657,6 +1657,56 @@ const ProfilePage = () => {
   );
 };
 
+// Helper functions to normalize food items from different formats
+// Supports both old format (cals, p, c, f) and new format (macros object)
+const normalizeFoodItem = (item) => {
+  if (!item) return null;
+  
+  // Check if item has the new format with macros object
+  if (item.macros && typeof item.macros === 'object') {
+    return {
+      name: item.name || 'Unknown Item',
+      cals: item.macros.calories || 0,
+      p: item.macros.protein_g || 0,
+      c: item.macros.carbs_g || 0,
+      f: item.macros.fat_g || 0,
+      quantity: item.portion_estimate || item.quantity || null,
+      confidence: item.confidence || null,
+      visual_evidence: item.visual_evidence || null,
+      portion_estimate: item.portion_estimate || null
+    };
+  }
+  
+  // Old format - return as-is but ensure all fields exist
+  return {
+    name: item.name || 'Unknown Item',
+    cals: item.cals || 0,
+    p: item.p || 0,
+    c: item.c || 0,
+    f: item.f || 0,
+    quantity: item.quantity || null,
+    confidence: item.confidence || null,
+    visual_evidence: item.visual_evidence || null,
+    portion_estimate: item.portion_estimate || null
+  };
+};
+
+// Helper function to parse and normalize food items from a log
+const parseFoodItems = (log) => {
+  if (!log.food_items) return [];
+  
+  try {
+    const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
+    if (Array.isArray(foodItems)) {
+      return foodItems.map(normalizeFoodItem).filter(item => item !== null);
+    }
+  } catch (e) {
+    console.error('Error parsing food_items:', e);
+  }
+  
+  return [];
+};
+
 // Profile Tab Component
 // Weight Progress Component
 const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode }) => {
@@ -2696,15 +2746,14 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
         };
       }
       
-      // Sum up values from food_items array
-      if (log.food_items && Array.isArray(log.food_items)) {
-        log.food_items.forEach(item => {
-          dailyTotals[date].calories += item.cals || 0;
-          dailyTotals[date].protein += item.p || 0;
-          dailyTotals[date].carbs += item.c || 0;
-          dailyTotals[date].fat += item.f || 0;
-        });
-      }
+      // Sum up values from food_items array using normalized format
+      const foodItems = parseFoodItems(log);
+      foodItems.forEach(item => {
+        dailyTotals[date].calories += item.cals || 0;
+        dailyTotals[date].protein += item.p || 0;
+        dailyTotals[date].carbs += item.c || 0;
+        dailyTotals[date].fat += item.f || 0;
+      });
       
       // Also add totals from the log itself if available (as fallback)
       if (log.total_calories) dailyTotals[date].calories += log.total_calories;
@@ -7582,28 +7631,11 @@ const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDarkMode, 
     let totalFat = 0;
 
     logs.forEach((log) => {
-      if (log.food_items) {
-        try {
-          const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
-          if (Array.isArray(foodItems)) {
-            totalCalories += foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
-            totalProtein += foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
-            totalCarbs += foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
-            totalFat += foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
-          }
-        } catch (e) {
-          // Fallback to old columns
-          totalCalories += log.total_calories || 0;
-          totalProtein += log.total_protein_g || 0;
-          totalCarbs += log.total_carbs_g || 0;
-          totalFat += log.total_fat_g || 0;
-        }
-      } else {
-        totalCalories += log.total_calories || 0;
-        totalProtein += log.total_protein_g || 0;
-        totalCarbs += log.total_carbs_g || 0;
-        totalFat += log.total_fat_g || 0;
-      }
+      const foodItems = parseFoodItems(log);
+      totalCalories += foodItems.reduce((sum, item) => sum + (item.cals || 0), 0) + (log.total_calories || 0);
+      totalProtein += foodItems.reduce((sum, item) => sum + (item.p || 0), 0) + (log.total_protein_g || 0);
+      totalCarbs += foodItems.reduce((sum, item) => sum + (item.c || 0), 0) + (log.total_carbs_g || 0);
+      totalFat += foodItems.reduce((sum, item) => sum + (item.f || 0), 0) + (log.total_fat_g || 0);
     });
 
     return { totalCalories, totalProtein, totalCarbs, totalFat };
@@ -8240,7 +8272,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
       const log = foodLogs.find(l => l.id === logId);
       if (!log) return;
 
-      // Parse food_items
+      // Parse food_items - preserve original format for saving
       let foodItems = [];
       if (log.food_items) {
         try {
@@ -8251,7 +8283,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         }
       }
 
-      // Remove the ingredient
+      // Remove the ingredient - work with original array structure
       if (Array.isArray(foodItems) && itemIndex >= 0 && itemIndex < foodItems.length) {
         foodItems.splice(itemIndex, 1);
       }
@@ -8510,7 +8542,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
       const log = foodLogs.find(l => l.id === editingLogId);
       if (!log) return;
 
-      // Parse food_items
+      // Parse food_items - preserve original format for saving
       let foodItems = [];
       if (log.food_items) {
         try {
@@ -8521,9 +8553,10 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         }
       }
 
-      // Get the old ingredient
-      const oldItem = foodItems[editingItemIndex];
-      if (!oldItem) return;
+      // Get the old ingredient and normalize it for calculations
+      const oldItemRaw = foodItems[editingItemIndex];
+      if (!oldItemRaw) return;
+      const oldItem = normalizeFoodItem(oldItemRaw);
 
       // Calculate new nutrition values
       // Use original 100g values if available, otherwise calculate from current values
@@ -8536,8 +8569,21 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
       // Calculate new values with the new quantity
       // Daily log only uses grams, so always save as "Xg" format
       const newScale = quantityNum / 100;
-      const updatedItem = {
-        ...oldItem,
+      
+      // Preserve original format structure when updating
+      // If original had macros object, keep that structure; otherwise use flat structure
+      const updatedItem = oldItemRaw.macros ? {
+        ...oldItemRaw,
+        macros: {
+          ...oldItemRaw.macros,
+          calories: Math.round(original100gCalories * newScale),
+          protein_g: Math.round(original100gProtein * newScale * 10) / 10,
+          carbs_g: Math.round(original100gCarbs * newScale * 10) / 10,
+          fat_g: Math.round(original100gFat * newScale * 10) / 10
+        },
+        portion_estimate: `${quantityNum}g`
+      } : {
+        ...oldItemRaw,
         cals: Math.round(original100gCalories * newScale),
         p: Math.round(original100gProtein * newScale * 10) / 10,
         c: Math.round(original100gCarbs * newScale * 10) / 10,
@@ -8595,65 +8641,29 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
 
   // Calculate totals from food logs using food_items JSON column
   const totalCalories = foodLogs.reduce((sum, log) => {
-    let logCalories = 0;
-    if (log.food_items) {
-      try {
-        const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
-        if (Array.isArray(foodItems)) {
-          logCalories = foodItems.reduce((itemSum, item) => itemSum + (item.cals || 0), 0);
-        }
-      } catch (e) {
-        console.error('Error parsing food_items:', e);
-      }
-    }
+    const foodItems = parseFoodItems(log);
+    const logCalories = foodItems.reduce((itemSum, item) => itemSum + (item.cals || 0), 0);
     // Fallback to old column if food_items is not available
     return sum + logCalories + (log.total_calories || 0);
   }, 0);
   
   const totalProtein = foodLogs.reduce((sum, log) => {
-    let logProtein = 0;
-    if (log.food_items) {
-      try {
-        const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
-        if (Array.isArray(foodItems)) {
-          logProtein = foodItems.reduce((itemSum, item) => itemSum + (item.p || 0), 0);
-        }
-      } catch (e) {
-        console.error('Error parsing food_items:', e);
-      }
-    }
+    const foodItems = parseFoodItems(log);
+    const logProtein = foodItems.reduce((itemSum, item) => itemSum + (item.p || 0), 0);
     // Fallback to old column if food_items is not available
     return sum + logProtein + (log.total_protein_g || 0);
   }, 0);
   
   const totalCarbs = foodLogs.reduce((sum, log) => {
-    let logCarbs = 0;
-    if (log.food_items) {
-      try {
-        const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
-        if (Array.isArray(foodItems)) {
-          logCarbs = foodItems.reduce((itemSum, item) => itemSum + (item.c || 0), 0);
-        }
-      } catch (e) {
-        console.error('Error parsing food_items:', e);
-      }
-    }
+    const foodItems = parseFoodItems(log);
+    const logCarbs = foodItems.reduce((itemSum, item) => itemSum + (item.c || 0), 0);
     // Fallback to old column if food_items is not available
     return sum + logCarbs + (log.total_carbs_g || 0);
   }, 0);
   
   const totalFat = foodLogs.reduce((sum, log) => {
-    let logFat = 0;
-    if (log.food_items) {
-      try {
-        const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
-        if (Array.isArray(foodItems)) {
-          logFat = foodItems.reduce((itemSum, item) => itemSum + (item.f || 0), 0);
-        }
-      } catch (e) {
-        console.error('Error parsing food_items:', e);
-      }
-    }
+    const foodItems = parseFoodItems(log);
+    const logFat = foodItems.reduce((itemSum, item) => itemSum + (item.f || 0), 0);
     // Fallback to old column if food_items is not available
     return sum + logFat + (log.total_fat_g || 0);
   }, 0);
@@ -9130,37 +9140,12 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                 {mealLogs.length > 0 ? (
                   <div className="space-y-2">
                     {mealLogs.map((log, logIndex) => {
-                      // Parse food_items JSON
-                      let foodItems = [];
-                      let logCalories = 0;
-                      let logProtein = 0;
-                      let logCarbs = 0;
-                      let logFat = 0;
-                      
-                      if (log.food_items) {
-                        try {
-                          foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
-                          if (Array.isArray(foodItems)) {
-                            logCalories = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
-                            logProtein = foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
-                            logCarbs = foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
-                            logFat = foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
-                          }
-                        } catch (e) {
-                          console.error('Error parsing food_items:', e);
-                          // Fallback to old columns
-                          logCalories = log.total_calories || 0;
-                          logProtein = log.total_protein_g || 0;
-                          logCarbs = log.total_carbs_g || 0;
-                          logFat = log.total_fat_g || 0;
-                        }
-                      } else {
-                        // Fallback to old columns if food_items doesn't exist
-                        logCalories = log.total_calories || 0;
-                        logProtein = log.total_protein_g || 0;
-                        logCarbs = log.total_carbs_g || 0;
-                        logFat = log.total_fat_g || 0;
-                      }
+                      // Parse food_items JSON using helper function
+                      const foodItems = parseFoodItems(log);
+                      const logCalories = foodItems.reduce((sum, item) => sum + (item.cals || 0), 0) + (log.total_calories || 0);
+                      const logProtein = foodItems.reduce((sum, item) => sum + (item.p || 0), 0) + (log.total_protein_g || 0);
+                      const logCarbs = foodItems.reduce((sum, item) => sum + (item.c || 0), 0) + (log.total_carbs_g || 0);
+                      const logFat = foodItems.reduce((sum, item) => sum + (item.f || 0), 0) + (log.total_fat_g || 0);
                       
                       return (
                       <div 
@@ -9359,29 +9344,11 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                       let mealTotalFat = 0;
                       
                       mealLogs.forEach((log) => {
-                        if (log.food_items) {
-                          try {
-                            const foodItems = typeof log.food_items === 'string' ? JSON.parse(log.food_items) : log.food_items;
-                            if (Array.isArray(foodItems)) {
-                              mealTotalCalories += foodItems.reduce((sum, item) => sum + (item.cals || 0), 0);
-                              mealTotalProtein += foodItems.reduce((sum, item) => sum + (item.p || 0), 0);
-                              mealTotalCarbs += foodItems.reduce((sum, item) => sum + (item.c || 0), 0);
-                              mealTotalFat += foodItems.reduce((sum, item) => sum + (item.f || 0), 0);
-                            }
-                          } catch (e) {
-                            // Fallback to old columns
-                            mealTotalCalories += log.total_calories || 0;
-                            mealTotalProtein += log.total_protein_g || 0;
-                            mealTotalCarbs += log.total_carbs_g || 0;
-                            mealTotalFat += log.total_fat_g || 0;
-                          }
-                        } else {
-                          // Fallback to old columns
-                          mealTotalCalories += log.total_calories || 0;
-                          mealTotalProtein += log.total_protein_g || 0;
-                          mealTotalCarbs += log.total_carbs_g || 0;
-                          mealTotalFat += log.total_fat_g || 0;
-                        }
+                        const foodItems = parseFoodItems(log);
+                        mealTotalCalories += foodItems.reduce((sum, item) => sum + (item.cals || 0), 0) + (log.total_calories || 0);
+                        mealTotalProtein += foodItems.reduce((sum, item) => sum + (item.p || 0), 0) + (log.total_protein_g || 0);
+                        mealTotalCarbs += foodItems.reduce((sum, item) => sum + (item.c || 0), 0) + (log.total_carbs_g || 0);
+                        mealTotalFat += foodItems.reduce((sum, item) => sum + (item.f || 0), 0) + (log.total_fat_g || 0);
                       });
                       
                       return (
