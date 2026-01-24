@@ -8696,12 +8696,30 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
     return acc;
   }, {});
 
-  // Group all food logs
+  // Group all food logs by meal_label
+  // meal_label will have first letter capitalized, exactly as in meal plan
   foodLogs.forEach(log => {
-    const logMealLabel = (log.meal_label || '').toLowerCase();
-    const matchedMeal = meals.find(meal => meal.toLowerCase() === logMealLabel);
+    const logMealLabel = (log.meal_label || '').trim();
+    const logMealLabelLower = logMealLabel.toLowerCase();
     
-    if (matchedMeal) {
+    // First try exact match (case-sensitive) - meal_label matches meal plan format exactly
+    let matchedMeal = meals.find(meal => meal.trim() === logMealLabel);
+    
+    // If no exact match, try case-insensitive match
+    if (!matchedMeal) {
+      matchedMeal = meals.find(meal => meal.trim().toLowerCase() === logMealLabelLower);
+    }
+    
+    // If still no match, check for Hebrew variations
+    if (!matchedMeal) {
+      if (logMealLabelLower === 'בוקר' || logMealLabelLower === 'ארוחת בוקר') matchedMeal = 'breakfast';
+      else if (logMealLabelLower === 'צהריים' || logMealLabelLower === 'צהרים' || logMealLabelLower === 'ארוחת צהריים') matchedMeal = 'lunch';
+      else if (logMealLabelLower === 'ערב' || logMealLabelLower === 'ארוחת ערב') matchedMeal = 'dinner';
+      else if (logMealLabelLower === 'חטיפים' || logMealLabelLower === 'חטיף') matchedMeal = 'snacks';
+      else if (logMealLabelLower === 'אחר') matchedMeal = 'other';
+    }
+    
+    if (matchedMeal && groupedLogs[matchedMeal]) {
       // Add to the matched meal category
       groupedLogs[matchedMeal].push(log);
     } else {
@@ -9126,7 +9144,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                       {meal}
                     </p>
                     <h4 className={`${themeClasses.textPrimary} text-lg sm:text-xl md:text-2xl lg:text-base sm:text-lg md:text-xl font-bold tracking-tight`}>
-                      {mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal}
+                      {language === 'hebrew' ? 'על פי התוכנית שלך - ' : 'Your Plan - '}{mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal}
                     </h4>
                   </div>
                   {/* Add Ingredient Button */}
@@ -9144,6 +9162,11 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
 
                 {mealLogs.length > 0 ? (
                   <div className="space-y-2">
+                    {meal !== 'other' && (
+                      <p className={`text-emerald-400 font-bold text-base sm:text-lg md:text-xl mb-4 mt-2 ${language === 'hebrew' ? 'text-right' : 'text-left'} border-b-2 border-emerald-500/30 pb-2`}>
+                        {language === 'hebrew' ? 'מה שאכלת' : 'What You Ate'}
+                      </p>
+                    )}
                     {mealLogs.map((log, logIndex) => {
                       // Parse food_items JSON using helper function
                       const foodItems = parseFoodItems(log);
@@ -10288,6 +10311,22 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
     
     // Get content from message or content field
     let content = msg.message || msg.content || '';
+    
+    // For assistant role messages, extract only response_text from JSON
+    if (msg.role === 'assistant' && content.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed.response_text) {
+          content = parsed.response_text;
+        } else {
+          // If no response_text, use empty string to show nothing
+          content = '';
+        }
+      } catch (e) {
+        // Not valid JSON, use as is
+        console.error('Error parsing assistant message JSON:', e);
+      }
+    }
     
     // Handle system_reply topic: extract response_text from agent_response JSON
     if (topic === 'system_reply' && content.trim().startsWith('{')) {

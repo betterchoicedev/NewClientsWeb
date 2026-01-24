@@ -12,3 +12,14 @@
 - שווי הקופון: 90 דולר לדיגיטלי עם דיאטן
 - אם משתמשים בזה כל יום, החידוש יהיה אוטומטי ובחינם
 
+## Development Tasks
+
+### Sync DB meal label in ProfilePage.jsx
+- Sync the database meal label in ProfilePage.jsx
+
+### Align pricing divs
+- Align the pricing divs to be the same
+
+### Fix "I want to feel better" button navigation
+- After clicking on "I want to feel better", redirect to the registration page and not the login page
+
