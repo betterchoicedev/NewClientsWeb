@@ -1900,6 +1900,96 @@ app.post('/api/onboarding/update-chat-user', async (req, res) => {
 });
 
 // ====================================
+// WHATSAPP API ROUTES
+// ====================================
+
+// Send WhatsApp welcome message
+app.post('/api/whatsapp/send-welcome-message', async (req, res) => {
+  try {
+    const { phone, language } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    // Get WhatsApp token from environment variable
+    const waToken = process.env.WA_TOKEN || process.env.WHATSAPP_TOKEN;
+    
+    if (!waToken) {
+      console.error('❌ WhatsApp token not configured');
+      return res.status(500).json({ 
+        error: 'WhatsApp service not configured',
+        message: 'WA_TOKEN environment variable is missing' 
+      });
+    }
+
+    // Determine template name and language code based on user's language
+    let templateName = 'welcome_message_paid_clients';
+    let languageCode = 'en';
+    
+    if (language === 'he' || language === 'hebrew') {
+      templateName = 'welcome_message_paid_clients_hebrew';
+      languageCode = 'he';
+    }
+
+    // Facebook Graph API endpoint
+    const url = 'https://graph.facebook.com/v22.0/656545780873051/messages';
+
+    // Prepare request body
+    const body = {
+      messaging_product: 'whatsapp',
+      to: phone,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: languageCode }
+      }
+    };
+
+    console.log('📱 Sending WhatsApp welcome message:', {
+      to: phone,
+      template: templateName,
+      language: languageCode
+    });
+
+    // Send request to Facebook Graph API
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${waToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      console.error('❌ WhatsApp API error:', responseData);
+      return res.status(response.status).json({ 
+        error: 'Failed to send WhatsApp message',
+        message: responseData.error?.message || 'Unknown error',
+        details: responseData
+      });
+    }
+
+    console.log('✅ WhatsApp welcome message sent successfully:', responseData);
+    
+    res.json({ 
+      success: true, 
+      message: 'WhatsApp message sent successfully',
+      data: responseData
+    });
+  } catch (error) {
+    console.error('❌ Error in WhatsApp send-welcome-message endpoint:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// ====================================
 // PROFILE PAGE API ROUTES
 // ====================================
 

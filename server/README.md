@@ -18,6 +18,11 @@ Create a `.env` file in the server directory with the following variables:
 STRIPE_SECRET_KEY=sk_test_your_secret_key_here
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
 
+# WhatsApp Configuration (Facebook Graph API)
+WA_TOKEN=your_whatsapp_access_token_here
+# Alternative variable name (also supported)
+WHATSAPP_TOKEN=your_whatsapp_access_token_here
+
 # Server Configuration  
 PORT=3001
 NODE_ENV=development
@@ -99,6 +104,9 @@ The server will run on `http://localhost:3001` by default.
 
 ### Webhooks
 - `POST /api/webhooks/stripe` - Stripe webhook endpoint
+
+### WhatsApp
+- `POST /api/whatsapp/send-welcome-message` - Send WhatsApp welcome message template
 
 ### Health Check
 - `GET /health` - Server health check

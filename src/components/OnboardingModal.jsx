@@ -2098,6 +2098,50 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       console.log('✅ Onboarding data saved successfully, closing modal...');
       
+      // Send WhatsApp welcome message if phone number is available
+      if (allOnboardingFields.includes('phone') && clientData.phone) {
+        try {
+          // Use the already-formatted phone number from clientData (includes country code)
+          const phoneNumber = clientData.phone;
+          
+          // Get user's language preference
+          const userLanguage = formData.language || 'en';
+          
+          console.log('📱 Sending WhatsApp welcome message:', {
+            phone: phoneNumber,
+            language: userLanguage
+          });
+          
+          // Call WhatsApp API endpoint (don't await - send in background)
+          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+          fetch(`${apiUrl}/api/whatsapp/send-welcome-message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              phone: phoneNumber,
+              language: userLanguage
+            })
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              console.log('✅ WhatsApp welcome message sent successfully');
+            } else {
+              console.warn('⚠️ Failed to send WhatsApp message:', data);
+            }
+          })
+          .catch(error => {
+            console.error('❌ Error sending WhatsApp message:', error);
+            // Don't block onboarding completion if WhatsApp fails
+          });
+        } catch (whatsappError) {
+          console.error('❌ Error preparing WhatsApp message:', whatsappError);
+          // Don't block onboarding completion if WhatsApp fails
+        }
+      }
+      
       // Clear saved onboarding data from localStorage since onboarding is complete
       if (user?.id) {
         localStorage.removeItem(`onboarding_${user.id}`);
