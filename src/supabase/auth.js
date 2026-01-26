@@ -285,9 +285,25 @@ export const createClientRecord = async (userId, userData, providerId = null) =>
     // Normalize phone number before saving (remove spaces and dashes)
     const normalizedPhone = userData.phone ? normalizePhoneForDatabase(userData.phone) : null;
     
-    // Get default provider if not provided
+    // Check for manager link data in sessionStorage (for OAuth flows)
+    let managerLinkData = null;
+    try {
+      const managerLinkDataStr = sessionStorage.getItem('manager_link_data');
+      if (managerLinkDataStr) {
+        managerLinkData = JSON.parse(managerLinkDataStr);
+      }
+    } catch (e) {
+      console.error('Error parsing manager link data:', e);
+    }
+
+    // Determine final provider ID
+    // Priority: manager_id from manager link > provided providerId > default provider
     let finalProviderId = providerId;
-    if (!finalProviderId || (typeof finalProviderId === 'string' && finalProviderId.trim().length === 0)) {
+    
+    if (managerLinkData && managerLinkData.manager_id) {
+      finalProviderId = managerLinkData.manager_id;
+      console.log('✅ Using manager ID from link:', finalProviderId);
+    } else if (!finalProviderId || (typeof finalProviderId === 'string' && finalProviderId.trim().length === 0)) {
       try {
         const apiUrl = getApiUrl();
         const providerResponse = await fetch(`${apiUrl}/api/auth/default-provider`);

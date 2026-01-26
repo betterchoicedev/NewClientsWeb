@@ -25,6 +25,61 @@ function SignupPage() {
   const [invitationToken, setInvitationToken] = useState(null);
   const [hasInvitationToken, setHasInvitationToken] = useState(false);
 
+  // Function to decode registration rule or manager link
+  // Handles registration_rule IDs (integer SERIAL) or manager_id (VARCHAR) which are looked up in registration_rules table
+  // Also supports legacy formats for backward compatibility
+  const decodeManagerLink = (base64Token) => {
+    try {
+      if (!base64Token) return null;
+      
+      // Decode from Base64
+      const decoded = atob(base64Token);
+      
+      // Check if it's an integer (registration rule ID - SERIAL)
+      const integerId = parseInt(decoded, 10);
+      if (!isNaN(integerId) && integerId > 0) {
+        // This is a registration_rule ID (integer)
+        // Backend will look it up in registration_rules table by id
+        return {
+          registration_rule_id: integerId,
+          isRegistrationRule: true
+        };
+      }
+      
+      // Check if it's a UUID (legacy manager ID format)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(decoded)) {
+        // This could be a manager_id (VARCHAR) - backend will look it up in registration_rules table by manager_id
+        // Or it could be a legacy manager ID
+        return {
+          manager_id: decoded,
+          isManagerId: true
+        };
+      }
+      
+      // Try to parse as JSON (legacy complex link format with limits)
+      try {
+        const jsonData = JSON.parse(decoded);
+        if (jsonData.manager_id) {
+          return {
+            manager_id: jsonData.manager_id,
+            max_clients: jsonData.max_clients || null,
+            expiry_date: jsonData.expiry_date || null,
+            isComplex: true
+          };
+        }
+      } catch (jsonError) {
+        // Not JSON and not UUID
+        return null;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error decoding link:', error);
+      return null;
+    }
+  };
+
   // Function to check if invitation token exists in URL hash
   const checkInvitationToken = () => {
     try {
@@ -39,7 +94,19 @@ function SignupPage() {
       const match = hash.match(/[#&]d=([^&]*)/);
       
       if (match && match[1]) {
-        setInvitationToken(match[1]);
+        const base64Token = match[1];
+        setInvitationToken(base64Token);
+        
+        // Try to decode as registration rule or manager link
+        const linkData = decodeManagerLink(base64Token);
+        if (linkData) {
+          // Store link data in sessionStorage for backend
+          // Backend will look up registration_rules table by id (if integer) or manager_id (if UUID/VARCHAR)
+          sessionStorage.setItem('manager_link_data', JSON.stringify(linkData));
+          return true;
+        }
+        
+        // If not a recognized link format, treat as regular invitation token
         return true;
       }
       
@@ -50,7 +117,7 @@ function SignupPage() {
     }
   };
 
-  // Function to get dietitian ID from URL hash
+  // Function to get dietitian ID from URL hash (legacy support)
   const getDietitianIdFromHash = () => {
     try {
       // Get the hash fragment (e.g., "#d=YWJjZGVmZ2hpams=")
@@ -66,18 +133,22 @@ function SignupPage() {
       if (match && match[1]) {
         const base64Value = match[1];
         
+        // Try to decode as registration rule or manager link
+        const linkData = decodeManagerLink(base64Value);
+        if (linkData) {
+          // Return registration_rule_id or manager_id for legacy support
+          return linkData.registration_rule_id || linkData.manager_id || null;
+        }
+        
+        // Fallback to simple UUID decoding
         try {
-          // Decode from Base64 to get the original dietitian ID (UUID)
           const decodedId = atob(base64Value);
-          
-          // Validate it looks like a UUID (basic check)
-          if (decodedId && decodedId.length > 0) {
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (uuidRegex.test(decodedId)) {
             return decodedId;
           }
-          return null;
         } catch (decodeError) {
           console.error('Error decoding Base64:', decodeError);
-          return null;
         }
       }
       
@@ -91,7 +162,7 @@ function SignupPage() {
 
   // Check for invitation token and extract dietitian ID on component mount
   useEffect(() => {
-    const initializeSignup = () => {
+    const initializeSignup = async () => {
       // Check if invitation token exists in URL (just check for #d= parameter)
       const hasToken = checkInvitationToken();
       setHasInvitationToken(hasToken);
@@ -101,6 +172,25 @@ function SignupPage() {
         const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1];
         if (token) {
           sessionStorage.setItem('invitation_token', token);
+          
+          // Check registration rule availability (max_slots) when page loads
+          try {
+            const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+            const response = await fetch(`${apiUrl}/api/auth/check-registration-rule?token=${encodeURIComponent(token)}`);
+            const result = await response.json();
+            
+            if (!result.available) {
+              setError(
+                language === 'hebrew' 
+                  ? result.error || 'קישור ההרשמה הזה הגיע למגבלה המקסימלית של משתמשים'
+                  : result.error || 'This registration link has reached its maximum number of users'
+              );
+              setHasInvitationToken(false); // Disable signup form
+            }
+          } catch (checkError) {
+            console.error('Error checking registration rule:', checkError);
+            // Don't block signup if check fails, but log the error
+          }
         }
       }
 
@@ -130,7 +220,7 @@ function SignupPage() {
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
     };
-  }, [invitationToken]);
+  }, [invitationToken, language]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -233,16 +323,33 @@ function SignupPage() {
         newsletter: formData.newsletter
       };
 
-      // Get dietitian ID from state or sessionStorage
+      // Get manager link data from sessionStorage (if it's a manager link)
+      const managerLinkDataStr = sessionStorage.getItem('manager_link_data');
+      let managerLinkData = null;
+      if (managerLinkDataStr) {
+        try {
+          managerLinkData = JSON.parse(managerLinkDataStr);
+        } catch (e) {
+          console.error('Error parsing manager link data:', e);
+        }
+      }
+
+      // Get dietitian ID from state or sessionStorage (legacy support)
       const referralDietitianId = dietitianId || sessionStorage.getItem('referral_dietitian_id');
       
-      // Ensure we pass null (not empty string) if no referral ID exists
-      const providerId = referralDietitianId && referralDietitianId.trim && referralDietitianId.trim() !== '' ? referralDietitianId.trim() : null;
+      // If we have manager link data, use manager_id as providerId
+      // Otherwise, use referral dietitian ID (legacy)
+      let providerId = null;
+      if (managerLinkData && managerLinkData.manager_id) {
+        providerId = managerLinkData.manager_id;
+      } else if (referralDietitianId && referralDietitianId.trim && referralDietitianId.trim() !== '') {
+        providerId = referralDietitianId.trim();
+      }
       
       // Get invitation token from state or sessionStorage
       const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1] || sessionStorage.getItem('invitation_token');
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
       const response = await fetch(`${apiUrl}/api/auth/signup`, {
         method: 'POST',
         headers: {
@@ -253,7 +360,8 @@ function SignupPage() {
           password: formData.password,
           userData: userData,
           invitationToken: token,
-          providerId: providerId
+          providerId: providerId,
+          managerLinkData: managerLinkData // Pass manager link data for validation
         })
       });
 
@@ -282,8 +390,9 @@ function SignupPage() {
         }
       }
 
-      // Clear stored invitation token and dietitian ID after successful creation
+      // Clear stored invitation token, manager link data, and dietitian ID after successful creation
       sessionStorage.removeItem('invitation_token');
+      sessionStorage.removeItem('manager_link_data');
       if (referralDietitianId) {
         sessionStorage.removeItem('referral_dietitian_id');
         setDietitianId(null);
