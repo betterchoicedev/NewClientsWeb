@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { signUp, createClientRecord, generateUniqueUserCode, checkEmailExists, signInWithGoogle } from '../supabase/auth';
+import { checkEmailExists, signInWithGoogle } from '../supabase/auth';
 
 function SignupPage() {
   const { language, direction, t, isTransitioning, toggleLanguage } = useLanguage();
@@ -233,64 +233,81 @@ function SignupPage() {
         newsletter: formData.newsletter
       };
 
-      const { data, error } = await signUp(formData.email, formData.password, userData);
+      // Get dietitian ID from state or sessionStorage
+      const referralDietitianId = dietitianId || sessionStorage.getItem('referral_dietitian_id');
       
-      if (error) {
-        setError(error.message);
-      } else {
-        // Create client record in clients table
-        if (data?.user?.id) {
-          try {
-            // Get dietitian ID from state or sessionStorage
-            const referralDietitianId = dietitianId || sessionStorage.getItem('referral_dietitian_id');
-            
-            // Ensure we pass null (not empty string) if no referral ID exists
-            const providerId = referralDietitianId && referralDietitianId.trim && referralDietitianId.trim() !== '' ? referralDietitianId.trim() : null;
-            
-            const clientResult = await createClientRecord(data.user.id, userData, providerId);
-            if (clientResult.error) {
-              setError(
-                language === 'hebrew' 
-                  ? 'החשבון נוצר אבל לא ניתן ליצור רשומת לקוח. אנא פנה לתמיכה.' 
-                  : 'Account created but failed to create client record. Please contact support.'
-              );
-              return;
-            }
-            // Clear stored invitation token and dietitian ID after successful creation
-            sessionStorage.removeItem('invitation_token');
-            if (referralDietitianId) {
-              sessionStorage.removeItem('referral_dietitian_id');
-              setDietitianId(null);
-            }
-          } catch (clientError) {
-            setError(
-              language === 'hebrew' 
-                ? 'החשבון נוצר אבל לא ניתן ליצור רשומת לקוח. אנא פנה לתמיכה.' 
-                : 'Account created but failed to create client record. Please contact support.'
-            );
-            return;
-          }
-        }
+      // Ensure we pass null (not empty string) if no referral ID exists
+      const providerId = referralDietitianId && referralDietitianId.trim && referralDietitianId.trim() !== '' ? referralDietitianId.trim() : null;
+      
+      // Get invitation token from state or sessionStorage
+      const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1] || sessionStorage.getItem('invitation_token');
 
-        setSuccess(
-          language === 'hebrew' 
-            ? 'החשבון נוצר בהצלחה! בדוק את האימייל שלך לאישור.' 
-            : 'Account created successfully! Please check your email for confirmation.'
-        );
-        // Clear form
-        setFormData({
-          email: '',
-          password: '',
-          confirmPassword: '',
-          agreeToTerms: false,
-          newsletter: true
-        });
-        // Redirect to login after 3 seconds
-        setTimeout(() => {
-          navigate('/login');
-        }, 3000);
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const response = await fetch(`${apiUrl}/api/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          userData: userData,
+          invitationToken: token,
+          providerId: providerId
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error || (language === 'hebrew' ? 'שגיאה ביצירת החשבון' : 'Failed to create account'));
+        setLoading(false);
+        return;
       }
+
+      // Set session in Supabase client for compatibility (if available)
+      // Note: Session might be null if email confirmation is required
+      if (result.data?.session) {
+        try {
+          const { supabase } = await import('../supabase/supabaseClient');
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: result.data.session.access_token,
+            refresh_token: result.data.session.refresh_token
+          });
+          if (sessionError) {
+            console.error('Error setting session:', sessionError);
+          }
+        } catch (sessionErr) {
+          console.error('Error importing supabase client:', sessionErr);
+        }
+      }
+
+      // Clear stored invitation token and dietitian ID after successful creation
+      sessionStorage.removeItem('invitation_token');
+      if (referralDietitianId) {
+        sessionStorage.removeItem('referral_dietitian_id');
+        setDietitianId(null);
+      }
+
+      setSuccess(
+        language === 'hebrew' 
+          ? 'החשבון נוצר בהצלחה! בדוק את האימייל שלך לאישור.' 
+          : 'Account created successfully! Please check your email for confirmation.'
+      );
+      // Clear form
+      setFormData({
+        email: '',
+        password: '',
+        confirmPassword: '',
+        agreeToTerms: false,
+        newsletter: true
+      });
+      // Redirect to login after 3 seconds
+      setTimeout(() => {
+        navigate('/login');
+      }, 3000);
     } catch (err) {
+      console.error('Signup error:', err);
       setError(language === 'hebrew' ? 'אירעה שגיאה ביצירת החשבון' : 'An error occurred during signup');
     } finally {
       setLoading(false);

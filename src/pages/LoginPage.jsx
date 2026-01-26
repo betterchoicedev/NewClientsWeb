@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { signIn, signInWithGoogle, resetPassword } from '../supabase/auth';
+import { signInWithGoogle, resetPassword } from '../supabase/auth';
 
 function LoginPage() {
   const { language, direction, t, isTransitioning, toggleLanguage } = useLanguage();
@@ -109,50 +109,65 @@ function LoginPage() {
     setError('');
 
     try {
-      const { data, error } = await signIn(formData.email, formData.password);
-      
-      if (error) {
-        setError(error.message);
-      } else {
-        // Login successful - fetch user's language preference and sync
-        if (data?.user?.id) {
-          try {
-            const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
-            const response = await fetch(`${apiUrl}/api/user/language?user_id=${encodeURIComponent(data.user.id)}`);
-            
-            if (response.ok) {
-              const result = await response.json();
-              const clientData = result.data;
-              
-              if (clientData?.user_language) {
-                // Map language codes to web language
-                const languageMap = {
-                  'en': 'english',
-                  'he': 'hebrew',
-                  'english': 'english',
-                  'hebrew': 'hebrew'
-                };
-                
-                const webLanguage = languageMap[clientData.user_language.toLowerCase()] || 'english';
-                
-                // Only change if different from current language
-                if (language !== webLanguage) {
-                  toggleLanguage();
-                }
-              }
-            } else {
-              console.error('Error fetching language preference:', response.statusText);
-            }
-          } catch (langError) {
-            console.error('Error fetching language preference:', langError);
-            // Continue to navigate even if language fetch fails
-          }
-        }
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const response = await fetch(`${apiUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        })
+      });
 
-        // Navigate to profile page
-        navigate('/profile');
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error || (language === 'hebrew' ? 'שגיאה בהתחברות' : 'Login failed'));
+        setLoading(false);
+        return;
       }
+
+      // Login successful - sync language preference if available
+      if (result.language?.user_language) {
+        // Map language codes to web language
+        const languageMap = {
+          'en': 'english',
+          'he': 'hebrew',
+          'english': 'english',
+          'hebrew': 'hebrew'
+        };
+        
+        const webLanguage = languageMap[result.language.user_language.toLowerCase()] || 'english';
+        
+        // Only change if different from current language
+        if (language !== webLanguage) {
+          toggleLanguage();
+        }
+      }
+
+      // Set session in Supabase client for compatibility
+      // The session is already created by the API, but we need to set it in the client
+      if (result.data?.session) {
+        try {
+          const { supabase } = await import('../supabase/supabaseClient');
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: result.data.session.access_token,
+            refresh_token: result.data.session.refresh_token
+          });
+          if (sessionError) {
+            console.error('Error setting session:', sessionError);
+          }
+        } catch (sessionErr) {
+          console.error('Error importing supabase client:', sessionErr);
+        }
+      }
+
+      // Navigate to profile page
+      navigate('/profile');
     } catch (err) {
+      console.error('Login error:', err);
       setError(language === 'hebrew' ? 'אירעה שגיאה בהתחברות' : 'An error occurred during login');
     } finally {
       setLoading(false);
