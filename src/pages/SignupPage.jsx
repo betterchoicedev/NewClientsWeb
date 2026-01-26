@@ -175,7 +175,7 @@ function SignupPage() {
           
           // Check registration rule availability (max_slots) when page loads
           try {
-            const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+            const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
             const response = await fetch(`${apiUrl}/api/auth/check-registration-rule?token=${encodeURIComponent(token)}`);
             const result = await response.json();
             
@@ -349,7 +349,7 @@ function SignupPage() {
       // Get invitation token from state or sessionStorage
       const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1] || sessionStorage.getItem('invitation_token');
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
       const response = await fetch(`${apiUrl}/api/auth/signup`, {
         method: 'POST',
         headers: {
