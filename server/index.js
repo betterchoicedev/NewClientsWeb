@@ -11,6 +11,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY
 );
 
+// Initialize Supabase client for authentication (uses anon key for user sign-in)
+const supabaseAuth = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
+
 // Initialize Supabase client for chat project (chat_users table)
 // Make sure to configure CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY
 const chatSupabaseUrl = process.env.CHAT_SUPABASE_URL;
@@ -3372,6 +3378,332 @@ app.get('/api/debug/meal-plans', async (req, res) => {
 // ====================================
 // AUTH API ROUTES
 // ====================================
+
+// Sign up with email and password
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { email, password, userData = {}, invitationToken, providerId } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Validate password strength
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    console.log('📝 Attempting signup for email:', email);
+
+    // Check if email already exists
+    const normalizedEmail = email.toLowerCase().trim();
+    const { data: existingClient } = await supabase
+      .from('clients')
+      .select('email')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (existingClient) {
+      return res.status(400).json({ 
+        error: 'This email is already registered. Please use a different email or login.',
+        code: 400
+      });
+    }
+
+    // Validate invitation token if provided
+    if (invitationToken) {
+      try {
+        // Decode the token (it's base64 encoded UUID)
+        const decodedToken = Buffer.from(invitationToken, 'base64').toString('utf-8');
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        
+        if (uuidRegex.test(decodedToken)) {
+          const { data: invitationData } = await supabase
+            .from('waiting_list')
+            .select('id, email, invitation_used_at')
+            .eq('invitation_token', decodedToken)
+            .maybeSingle();
+
+          if (!invitationData) {
+            return res.status(400).json({ 
+              error: 'Invalid invitation token',
+              code: 400
+            });
+          }
+
+          if (invitationData.invitation_used_at) {
+            return res.status(400).json({ 
+              error: 'This invitation has already been used',
+              code: 400
+            });
+          }
+        }
+      } catch (tokenError) {
+        console.error('⚠️ Error validating invitation token:', tokenError);
+        // Continue without token validation if it fails (for backward compatibility)
+      }
+    }
+
+    // Sign up using Supabase Auth client (with anon key)
+    const { data: signupData, error: signupError } = await supabaseAuth.auth.signUp({
+      email: normalizedEmail,
+      password: password,
+      options: {
+        data: {
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+          phone: userData.phone,
+          newsletter: userData.newsletter,
+          full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim()
+        }
+      }
+    });
+
+    if (signupError) {
+      console.error('❌ Signup error:', signupError.message);
+      return res.status(400).json({ 
+        error: signupError.message || 'Failed to create account',
+        code: signupError.status || 400
+      });
+    }
+
+    if (!signupData || !signupData.user) {
+      return res.status(400).json({ 
+        error: 'Failed to create user account',
+        code: 400
+      });
+    }
+
+    console.log('✅ Signup successful for user:', signupData.user.id);
+
+    // Generate unique user code
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let userCode = null;
+    let attempts = 0;
+    const maxAttempts = 100;
+
+    while (attempts < maxAttempts && !userCode) {
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += letters.charAt(Math.floor(Math.random() * letters.length));
+      }
+
+      const { data: codeCheck } = await supabase
+        .from('clients')
+        .select('user_code')
+        .eq('user_code', code)
+        .maybeSingle();
+
+      if (!codeCheck) {
+        userCode = code;
+        break;
+      }
+      attempts++;
+    }
+
+    if (!userCode) {
+      console.error('❌ Failed to generate unique user code');
+      return res.status(500).json({ 
+        error: 'Failed to generate unique user code',
+        code: 500
+      });
+    }
+
+    // Get default provider if not provided
+    let finalProviderId = providerId;
+    if (!finalProviderId || (typeof finalProviderId === 'string' && finalProviderId.trim().length === 0)) {
+      if (chatSupabase) {
+        const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
+        const { data: managerData } = await chatSupabase
+          .from('profiles')
+          .select('id')
+          .eq('company_id', betterChoiceCompanyId)
+          .eq('role', 'company_manager')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (managerData) {
+          finalProviderId = managerData.id;
+        }
+      }
+    }
+
+    // Normalize phone number
+    const normalizePhoneForDatabase = (phone) => {
+      if (!phone) return '';
+      return phone.replace(/[\s\-\(\)\.]/g, '');
+    };
+    const normalizedPhone = userData.phone ? normalizePhoneForDatabase(userData.phone) : null;
+
+    // Create client record
+    const clientInsertData = {
+      user_id: signupData.user.id,
+      full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      user_code: userCode,
+      status: 'active'
+    };
+
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
+      .insert([clientInsertData])
+      .select();
+
+    if (clientError) {
+      console.error('❌ Error creating client record:', clientError);
+      return res.status(500).json({ 
+        error: 'Account created but failed to create client record. Please contact support.',
+        code: 500
+      });
+    }
+
+    // Create chat_users record if secondary DB is available
+    let chatUserCreated = false;
+    let chatUserDataResult = null;
+
+    if (chatSupabase && clientData && clientData[0]) {
+      try {
+        const chatUserData = {
+          user_code: userCode,
+          full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+          email: normalizedEmail,
+          phone_number: normalizedPhone,
+          whatsapp_number: normalizedPhone,
+          platform: userData.platform || 'whatsapp',
+          provider_id: finalProviderId || null,
+          activated: true,
+          is_verified: false,
+          language: 'en',
+          created_at: new Date().toISOString()
+        };
+
+        const { data: chatUserResult, error: chatUserError } = await chatSupabase
+          .from('chat_users')
+          .insert([chatUserData])
+          .select();
+
+        if (!chatUserError) {
+          chatUserCreated = true;
+          chatUserDataResult = chatUserResult;
+        }
+      } catch (chatError) {
+        console.error('⚠️ Error creating chat user (non-critical):', chatError);
+      }
+    }
+
+    // Mark invitation as used if token was provided
+    if (invitationToken) {
+      try {
+        const decodedToken = Buffer.from(invitationToken, 'base64').toString('utf-8');
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        
+        if (uuidRegex.test(decodedToken)) {
+          await supabase
+            .from('waiting_list')
+            .update({ 
+              invitation_used_at: new Date().toISOString()
+            })
+            .eq('invitation_token', decodedToken);
+        }
+      } catch (tokenError) {
+        console.error('⚠️ Error marking invitation as used (non-critical):', tokenError);
+      }
+    }
+
+    console.log('✅ Client record created successfully');
+
+    // Return signup data
+    res.json({
+      data: {
+        user: signupData.user,
+        session: signupData.session
+      },
+      client: clientData && clientData[0] ? clientData[0] : null,
+      chatUserCreated,
+      chatUserData: chatUserDataResult,
+      error: null
+    });
+
+  } catch (error) {
+    console.error('❌ Unexpected signup error:', error);
+    res.status(500).json({ 
+      error: error.message || 'An error occurred during signup',
+      code: 500
+    });
+  }
+});
+
+// Sign in with email and password
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    console.log('🔐 Attempting login for email:', email);
+
+    // Sign in using Supabase Auth client (with anon key)
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({
+      email: email.toLowerCase().trim(),
+      password: password
+    });
+
+    if (error) {
+      console.error('❌ Login error:', error.message);
+      return res.status(401).json({ 
+        error: error.message || 'Invalid email or password',
+        code: error.status || 401
+      });
+    }
+
+    if (!data || !data.user) {
+      return res.status(401).json({ 
+        error: 'Authentication failed',
+        code: 401
+      });
+    }
+
+    console.log('✅ Login successful for user:', data.user.id);
+
+    // Fetch user's language preference directly from database
+    let languageData = null;
+    try {
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('user_language')
+        .eq('user_id', data.user.id)
+        .maybeSingle();
+
+      if (!clientError && clientData) {
+        languageData = clientData;
+      }
+    } catch (langError) {
+      console.error('⚠️ Error fetching language preference (non-critical):', langError);
+      // Continue even if language fetch fails
+    }
+
+    // Return session data and user info
+    res.json({
+      data: {
+        user: data.user,
+        session: data.session
+      },
+      language: languageData,
+      error: null
+    });
+
+  } catch (error) {
+    console.error('❌ Unexpected login error:', error);
+    res.status(500).json({ 
+      error: error.message || 'An error occurred during login',
+      code: 500
+    });
+  }
+});
 
 // Check if email exists
 app.post('/api/auth/check-email', async (req, res) => {
