@@ -3503,6 +3503,35 @@ app.post('/api/db/registration-links/find', async (req, res) => {
   }
 });
 
+// GET /api/db/registration-links/find?link_id=... or ?manager_id=... (same logic as POST, for flexibility)
+app.get('/api/db/registration-links/find', async (req, res) => {
+  try {
+    const link_id = req.query.link_id || null;
+    const manager_id = req.query.manager_id || null;
+    if (!link_id && !manager_id) {
+      return res.status(400).json({ error: 'Either link_id or manager_id is required (query: ?link_id= or ?manager_id=)' });
+    }
+    const regDb = chatSupabase || supabase;
+    let row = null;
+    if (link_id) {
+      const { data, error } = await regDb.from('registration_rules')
+        .select('id, link_id, manager_id, max_slots, current_count, expires_at, is_active')
+        .eq('link_id', link_id).maybeSingle();
+      if (!error) row = data;
+    } else {
+      const { data, error } = await regDb.from('registration_rules')
+        .select('id, manager_id, max_slots, current_count, expires_at, is_active')
+        .eq('manager_id', manager_id).maybeSingle();
+      if (!error) row = data;
+    }
+    if (!row) return res.status(404).json({ error: 'Registration link not found' });
+    return res.json({ ...row, link_id: row.link_id ?? null });
+  } catch (e) {
+    console.error('Error in registration-links find (GET):', e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/db/registration-links/:idOrLinkId/increment', async (req, res) => {
   try {
     const { idOrLinkId } = req.params;
