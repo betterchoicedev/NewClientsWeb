@@ -564,7 +564,8 @@ function SignupPage() {
             </div>
           </form>
 
-          {/* Social Signup */}
+          {/* Social Signup – hidden when using invitation/registration links (#d=) */}
+          {!hasInvitationToken && (
           <div className="mt-4 sm:mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -604,6 +605,7 @@ function SignupPage() {
               </button>
             </div>
           </div>
+          )}
             </>
           )}
         </div>

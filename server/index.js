@@ -27,6 +27,7 @@ const chatSupabase = chatSupabaseUrl && chatSupabaseServiceRoleKey
   : null;
 
 console.log('Supabase connection:', process.env.REACT_APP_SUPABASE_URL ? 'Configured' : 'Missing URL');
+console.log('Chat/Secondary Supabase (registration_rules):', chatSupabase ? 'Configured' : 'Not configured – set CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY');
 
 const app = express();
 function normalizePort(value) {
@@ -3605,8 +3606,8 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     // Resolve registration link: #d=base64(JSON{link_id,manager_id,...}) or #d=base64(manager_id) or legacy integer id.
-    // Use regDb = chatSupabase || supabase so it works when registration_rules is in main DB.
-    const regDb = chatSupabase || supabase;
+    // registration_rules is in the secondary (chat) Supabase project only.
+    const regDb = chatSupabase;
     let managerId = null;
     let registrationRule = null;
     let linkIdFromToken = null;
@@ -3626,6 +3627,9 @@ app.post('/api/auth/signup', async (req, res) => {
     if (!managerIdFromToken && managerLinkData?.manager_id) managerIdFromToken = managerLinkData.manager_id;
 
     if (linkIdFromToken || managerIdFromToken) {
+      if (!regDb) {
+        return res.status(503).json({ error: 'Registration links require CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
+      }
       try {
         let row = null;
         if (linkIdFromToken) {
@@ -4316,8 +4320,9 @@ app.post('/api/auth/create-client', async (req, res) => {
 
     if (error) throw error;
 
-    // Resolve registration link from invitationToken/managerLinkData (OAuth e.g. Google signup) and increment current_count
-    const regDb = chatSupabase || supabase;
+    // Resolve registration link from invitationToken/managerLinkData (OAuth e.g. Google signup) and increment current_count.
+    // registration_rules is in the secondary (chat) Supabase project only.
+    const regDb = chatSupabase;
     let registrationRule = null;
     let linkIdFromToken = null;
     let managerIdFromToken = null;
@@ -4335,6 +4340,9 @@ app.post('/api/auth/create-client', async (req, res) => {
     if (!managerIdFromToken && managerLinkData?.manager_id) managerIdFromToken = managerLinkData.manager_id;
 
     if (linkIdFromToken || managerIdFromToken) {
+      if (!regDb) {
+        return res.status(503).json({ error: 'Registration links require CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
+      }
       try {
         let row = null;
         if (linkIdFromToken) {
