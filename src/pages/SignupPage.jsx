@@ -101,21 +101,8 @@ function SignupPage() {
             else if (row.max_slots != null && (row.current_count || 0) >= row.max_slots) { setError(language === 'hebrew' ? 'קישור ההרשמה הגיע למגבלת המשתמשים' : `This link has reached the maximum number of slots (${row.max_slots})`); setHasInvitationToken(false); }
             else if (!row.is_active) { setError(language === 'hebrew' ? 'קישור ההרשמה אינו פעיל' : 'This registration link is no longer active'); setHasInvitationToken(false); }
             else { sessionStorage.setItem('manager_link_data', JSON.stringify({ ...md, manager_id: row.manager_id })); }
-          } else if (md?.manager_id) {
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (uuidRegex.test(md.manager_id)) {
-              const resp = await fetch(`${apiUrl}/api/auth/check-registration-rule?token=${encodeURIComponent(token || '')}`);
-              const result = await resp.json().catch(() => ({}));
-              if (!result.available) { setError(language === 'hebrew' ? (result.error || 'קישור ההרשמה לא תקף') : (result.error || 'This registration link is not available')); setHasInvitationToken(false); }
-            } else {
-              const r = await fetch(`${apiUrl}/api/db/registration-links/find`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manager_id: md.manager_id }) });
-              const row = await r.json().catch(() => ({}));
-              if (!r.ok || !row.manager_id) { setError(language === 'hebrew' ? 'קישור ההרשמה לא נמצא או לא תקף' : (row?.error || 'Registration link not found or invalid')); setHasInvitationToken(false); }
-              else if (row.expires_at && new Date(row.expires_at) < new Date()) { setError(language === 'hebrew' ? 'קישור ההרשמה פג תוקף' : 'This registration link has expired'); setHasInvitationToken(false); }
-              else if (row.max_slots != null && (row.current_count || 0) >= row.max_slots) { setError(language === 'hebrew' ? 'קישור ההרשמה הגיע למגבלת המשתמשים' : `This link has reached the maximum number of slots (${row.max_slots})`); setHasInvitationToken(false); }
-              else if (!row.is_active) { setError(language === 'hebrew' ? 'קישור ההרשמה אינו פעיל' : 'This registration link is no longer active'); setHasInvitationToken(false); }
-            }
           }
+          // When only manager_id (no link_id): unlimited dietitian link — no DB check, always valid
         } catch (checkError) { console.error('Error checking registration link:', checkError); }
       }
 

@@ -13,6 +13,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const [filteredSteps, setFilteredSteps] = useState([]);
   const [invalidFields, setInvalidFields] = useState([]); // Track fields with validation errors
   const [fieldErrors, setFieldErrors] = useState({}); // Track which fields have errors
+  const [showUsageBasedOffer, setShowUsageBasedOffer] = useState(false);
+  const [completedOnboardingContext, setCompletedOnboardingContext] = useState(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -1644,6 +1647,26 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     }
   };
 
+  // Usage-based support: prod_TrcVkwBC0wmqKp, price_1SttGvHIeYfvCylDK1kBIROD — 26+ days in a row = free
+  const USAGE_BASED_PRICE_ID = 'price_1SttGvHIeYfvCylDK1kBIROD';
+
+  const sendWhatsAppAndClose = (ctx) => {
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    if (ctx?.allOnboardingFields?.includes('phone') && ctx?.clientData?.phone) {
+      const userLanguage = ctx.formData?.language || 'en';
+      fetch(`${apiUrl}/api/whatsapp/send-welcome-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: ctx.clientData.phone, language: userLanguage })
+      })
+        .then((r) => r.json())
+        .then((d) => { if (d.success) console.log('✅ WhatsApp welcome sent'); })
+        .catch((e) => console.error('❌ WhatsApp send error:', e));
+    }
+    if (user?.id) localStorage.removeItem(`onboarding_${user.id}`);
+    onClose(true);
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     setError('');
@@ -2096,60 +2119,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.warn('⚠️ No userCode available - chat_users table was not updated. This may happen for new Google signups.');
       }
 
-      console.log('✅ Onboarding data saved successfully, closing modal...');
+      console.log('✅ Onboarding data saved successfully — showing usage-based offer...');
       
-      // Send WhatsApp welcome message if phone number is available
-      if (allOnboardingFields.includes('phone') && clientData.phone) {
-        try {
-          // Use the already-formatted phone number from clientData (includes country code)
-          const phoneNumber = clientData.phone;
-          
-          // Get user's language preference
-          const userLanguage = formData.language || 'en';
-          
-          console.log('📱 Sending WhatsApp welcome message:', {
-            phone: phoneNumber,
-            language: userLanguage
-          });
-          
-          // Call WhatsApp API endpoint (don't await - send in background)
-          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
-          fetch(`${apiUrl}/api/whatsapp/send-welcome-message`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              phone: phoneNumber,
-              language: userLanguage
-            })
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              console.log('✅ WhatsApp welcome message sent successfully');
-            } else {
-              console.warn('⚠️ Failed to send WhatsApp message:', data);
-            }
-          })
-          .catch(error => {
-            console.error('❌ Error sending WhatsApp message:', error);
-            // Don't block onboarding completion if WhatsApp fails
-          });
-        } catch (whatsappError) {
-          console.error('❌ Error preparing WhatsApp message:', whatsappError);
-          // Don't block onboarding completion if WhatsApp fails
-        }
-      }
-      
-      // Clear saved onboarding data from localStorage since onboarding is complete
-      if (user?.id) {
-        localStorage.removeItem(`onboarding_${user.id}`);
-      }
-      
-      // Onboarding complete - close modal with completion status
-      // Only close if the main clients update was successful
-      onClose(true);
+      // Show optional usage-based support offer before WhatsApp. User can support or skip.
+      setCompletedOnboardingContext({ clientData, formData, allOnboardingFields });
+      setShowUsageBasedOffer(true);
+      setLoading(false);
+      return;
     } catch (err) {
       console.error('❌ Error saving onboarding data:', err);
       setError(
@@ -2164,6 +2140,93 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
 
   if (!isOpen) return null;
+
+  // Usage-based support offer (after onboarding save, before WhatsApp) — skippable
+  if (showUsageBasedOffer) {
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const handleSupport = async () => {
+      setCheckoutLoading(true);
+      setError('');
+      try {
+        const res = await fetch(`${apiUrl}/api/stripe/create-checkout-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            priceId: USAGE_BASED_PRICE_ID,
+            mode: 'subscription',
+            customerId: user?.id,
+            customerEmail: user?.email,
+            metadata: { from: 'onboarding_upsell', user_id: user?.id }
+          })
+        });
+        const data = await res.json();
+        if (data.url) {
+          if (user?.id) localStorage.removeItem(`onboarding_${user.id}`);
+          window.location.href = data.url;
+          return;
+        }
+        setError(data.error || (language === 'hebrew' ? 'שגיאה ביצירת הקישור לתשלום' : 'Error creating checkout'));
+      } catch (e) {
+        setError(e.message || (language === 'hebrew' ? 'שגיאה בחיבור לשרת' : 'Connection error'));
+      } finally {
+        setCheckoutLoading(false);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4" dir={direction}>
+        <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 p-6 sm:p-8 md:p-10 max-w-lg w-full max-h-[95vh] overflow-y-auto animate-scaleIn relative text-center`}>
+          <div className="absolute top-0 left-0 right-0 h-16 sm:h-24 bg-gradient-to-br from-emerald-500/20 via-established-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none" />
+          <button
+            onClick={toggleLanguage}
+            className={`absolute top-2 right-2 sm:top-4 sm:right-4 z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
+            title={language === 'hebrew' ? 'Switch to English' : 'עברית'}
+          >
+            <span className="hidden sm:inline">{language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}</span>
+            <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
+          </button>
+          <div className="relative mt-6 sm:mt-4 mb-6">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-emerald-400 to-established-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
+              <span className="text-2xl sm:text-3xl">💚</span>
+            </div>
+            <h2 className={`text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-established-400 bg-clip-text text-transparent mb-3 ${themeClasses.textPrimary}`}>
+              {language === 'hebrew' ? 'תמכו בעבודה שלנו' : 'Support our work'}
+            </h2>
+            <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-1`}>
+              {language === 'hebrew'
+                ? 'תשלום לפי שימוש: אם תשתמשו במערכת 26+ ימים ברציפות — לא תשלמו כלום.'
+                : 'Usage-based: if you use the system 26+ days in a row, you pay nothing.'}
+            </p>
+            <p className={`${themeClasses.textSecondary} text-sm opacity-90`}>
+              {language === 'hebrew'
+                ? 'כל תמיכה עוזרת לנו להמשיך לשפר — אבל זה לא חובה.'
+                : 'Any support helps us keep improving — but it\'s optional.'}
+            </p>
+          </div>
+          {error && (
+            <p className="text-red-500 dark:text-red-400 text-sm mb-4" role="alert">{error}</p>
+          )}
+          <div className="flex flex-col gap-3 mt-6">
+            <button
+              onClick={handleSupport}
+              disabled={checkoutLoading}
+              className="w-full py-3.5 px-6 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-established-600 hover:from-emerald-600 hover:to-established-700 focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-70 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/25"
+            >
+              {checkoutLoading
+                ? (language === 'hebrew' ? 'טוען...' : 'Loading...')
+                : (language === 'hebrew' ? 'תמכו בעבודה שלנו' : 'Support our work')}
+            </button>
+            <button
+              onClick={() => sendWhatsAppAndClose(completedOnboardingContext)}
+              className={`w-full py-3 px-6 rounded-xl font-medium ${themeClasses.textSecondary} ${themeClasses.bgCard} border-2 border-gray-500/40 hover:border-gray-400/60 transition-all`}
+            >
+              {language === 'hebrew' ? 'דלג לעת עתה' : 'Skip for now'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (checkingData) {
     return (
