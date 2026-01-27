@@ -3476,7 +3476,11 @@ app.post('/api/db/registration-links/find', async (req, res) => {
     if (!link_id && !manager_id) {
       return res.status(400).json({ error: 'Either link_id or manager_id is required' });
     }
-    const regDb = chatSupabase || supabase;
+    // registration_rules lives in the secondary (chat) Supabase project
+    if (!chatSupabase) {
+      return res.status(503).json({ error: 'Registration links require CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
+    }
+    const regDb = chatSupabase;
     let row = null;
     if (link_id) {
       const { data, error } = await regDb
@@ -3511,7 +3515,10 @@ app.get('/api/db/registration-links/find', async (req, res) => {
     if (!link_id && !manager_id) {
       return res.status(400).json({ error: 'Either link_id or manager_id is required (query: ?link_id= or ?manager_id=)' });
     }
-    const regDb = chatSupabase || supabase;
+    if (!chatSupabase) {
+      return res.status(503).json({ error: 'Registration links require CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
+    }
+    const regDb = chatSupabase;
     let row = null;
     if (link_id) {
       const { data, error } = await regDb.from('registration_rules')
@@ -3536,7 +3543,10 @@ app.post('/api/db/registration-links/:idOrLinkId/increment', async (req, res) =>
   try {
     const { idOrLinkId } = req.params;
     if (!idOrLinkId) return res.status(400).json({ error: 'idOrLinkId is required' });
-    const regDb = chatSupabase || supabase;
+    if (!chatSupabase) {
+      return res.status(503).json({ error: 'Registration links require CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
+    }
+    const regDb = chatSupabase;
     const isNumericId = /^\d+$/.test(String(idOrLinkId));
     let q = regDb.from('registration_rules').select('id, current_count');
     if (isNumericId) q = q.eq('id', parseInt(idOrLinkId, 10));
