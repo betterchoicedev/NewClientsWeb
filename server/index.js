@@ -1129,6 +1129,17 @@ async function handleSubscriptionCreated(subscription) {
       } catch (customerError) {
         console.error('❌ Error retrieving customer for subscription info update:', customerError);
       }
+
+      // Onboarding upsell (usage-based): prod_TrcVkwBC0wmqKp / price_1SttGvHIeYfvCylDK1kBIROD — send WhatsApp welcome
+      if (priceId === 'price_1SttGvHIeYfvCylDK1kBIROD' && userId) {
+        try {
+          const r = await sendWhatsAppWelcomeByUserId(userId);
+          if (r.success) console.log('📱 WhatsApp welcome sent (onboarding upsell) for user:', userId);
+          else console.warn('📱 WhatsApp welcome (onboarding upsell) skipped or failed:', r.message);
+        } catch (e) {
+          console.warn('📱 WhatsApp welcome (onboarding upsell) error:', e.message);
+        }
+      }
     }
     
   } catch (error) {
@@ -1990,71 +2001,68 @@ app.post('/api/whatsapp/send-welcome-message', async (req, res) => {
   }
 });
 
-// Send WhatsApp welcome message by user_id (used after onboarding upsell checkout)
-app.post('/api/whatsapp/send-welcome-by-user-id', async (req, res) => {
-  try {
-    const { user_id } = req.body;
+// Shared: send WhatsApp welcome by user_id. Returns { success } or { success: false, status?, message? }.
+async function sendWhatsAppWelcomeByUserId(userId) {
+  const { data: client, error } = await supabase
+    .from('clients')
+    .select('phone, user_language')
+    .eq('user_id', userId)
+    .maybeSingle();
 
-    if (!user_id) {
-      return res.status(400).json({ error: 'user_id is required' });
-    }
+  if (error) {
+    console.error('❌ Error fetching client for WhatsApp:', error);
+    return { success: false, status: 500, message: 'Failed to fetch client' };
+  }
+  if (!client || !client.phone) {
+    console.log('📱 sendWhatsAppWelcomeByUserId: no client or phone for user_id:', userId);
+    return { success: false, message: 'No client or phone found' };
+  }
 
-    console.log('📱 send-welcome-by-user-id called for user_id:', user_id);
+  const phone = client.phone;
+  const language = client.user_language || 'en';
+  const waToken = process.env.WA_TOKEN || process.env.WHATSAPP_TOKEN;
+  if (!waToken) {
+    console.error('❌ WhatsApp token not configured');
+    return { success: false, status: 500, message: 'WhatsApp service not configured' };
+  }
 
-    const { data: client, error } = await supabase
-      .from('clients')
-      .select('phone, user_language')
-      .eq('user_id', user_id)
-      .maybeSingle();
+  let templateName = 'welcome_message_paid_clients';
+  let languageCode = 'en';
+  if (language === 'he' || language === 'hebrew') {
+    templateName = 'welcome_message_paid_clients_hebrew';
+    languageCode = 'he';
+  }
 
-    if (error) {
-      console.error('❌ Error fetching client for WhatsApp:', error);
-      return res.status(500).json({ error: 'Failed to fetch client', success: false });
-    }
-    if (!client || !client.phone) {
-      console.log('📱 send-welcome-by-user-id: no client or phone for user_id:', user_id);
-      return res.json({ success: false, message: 'No client or phone found' });
-    }
-
-    const phone = client.phone;
-    const language = client.user_language || 'en';
-
-    // Get WhatsApp token from environment variable
-    const waToken = process.env.WA_TOKEN || process.env.WHATSAPP_TOKEN;
-    if (!waToken) {
-      console.error('❌ WhatsApp token not configured');
-      return res.status(500).json({ error: 'WhatsApp service not configured', success: false });
-    }
-
-    let templateName = 'welcome_message_paid_clients';
-    let languageCode = 'en';
-    if (language === 'he' || language === 'hebrew') {
-      templateName = 'welcome_message_paid_clients_hebrew';
-      languageCode = 'he';
-    }
-
-    const url = 'https://graph.facebook.com/v22.0/656545780873051/messages';
-    const body = {
+  const url = 'https://graph.facebook.com/v22.0/656545780873051/messages';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${waToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       messaging_product: 'whatsapp',
       to: phone,
       type: 'template',
       template: { name: templateName, language: { code: languageCode } }
-    };
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    console.error('❌ WhatsApp API error:', data);
+    return { success: false, status: res.status, message: data?.error?.message || 'Failed to send' };
+  }
+  console.log('✅ WhatsApp welcome sent by user_id:', userId);
+  return { success: true };
+}
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${waToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const responseData = await response.json();
-
-    if (!response.ok) {
-      console.error('❌ WhatsApp API error:', responseData);
-      return res.status(response.status).json({ error: 'Failed to send WhatsApp message', success: false });
-    }
-
-    console.log('✅ WhatsApp welcome sent by user_id:', user_id);
-    res.json({ success: true, message: 'WhatsApp message sent successfully' });
+// Send WhatsApp welcome message by user_id (used after onboarding upsell checkout)
+app.post('/api/whatsapp/send-welcome-by-user-id', async (req, res) => {
+  try {
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+    console.log('📱 send-welcome-by-user-id called for user_id:', user_id);
+    const r = await sendWhatsAppWelcomeByUserId(user_id);
+    if (r.success) return res.json({ success: true, message: 'WhatsApp message sent successfully' });
+    if (r.status === 500) return res.status(500).json({ error: r.message, success: false });
+    return res.json({ success: false, message: r.message });
   } catch (error) {
     console.error('❌ Error in send-welcome-by-user-id:', error);
     res.status(500).json({ error: error.message, success: false });

@@ -1650,20 +1650,19 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   // Usage-based support: prod_TrcVkwBC0wmqKp, price_1SttGvHIeYfvCylDK1kBIROD — 26+ days in a row = free
   const USAGE_BASED_PRICE_ID = 'price_1SttGvHIeYfvCylDK1kBIROD';
 
-  const sendWhatsAppAndClose = (ctx) => {
+  const sendWhatsAppAndClose = () => {
     const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
-    if (ctx?.allOnboardingFields?.includes('phone') && ctx?.clientData?.phone) {
-      const userLanguage = ctx.formData?.language || 'en';
-      fetch(`${apiUrl}/api/whatsapp/send-welcome-message`, {
+    if (user?.id) {
+      fetch(`${apiUrl}/api/whatsapp/send-welcome-by-user-id`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: ctx.clientData.phone, language: userLanguage })
+        body: JSON.stringify({ user_id: user.id })
       })
         .then((r) => r.json())
-        .then((d) => { if (d.success) console.log('✅ WhatsApp welcome sent'); })
-        .catch((e) => console.error('❌ WhatsApp send error:', e));
+        .then((d) => { if (d.success) console.log('✅ WhatsApp welcome sent (skip)'); })
+        .catch((e) => console.warn('WhatsApp send (skip) error:', e));
+      localStorage.removeItem(`onboarding_${user.id}`);
     }
-    if (user?.id) localStorage.removeItem(`onboarding_${user.id}`);
     onClose(true);
   };
 
@@ -2217,7 +2216,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 : (language === 'hebrew' ? 'תמכו בעבודה שלנו' : 'Support our work')}
             </button>
             <button
-              onClick={() => sendWhatsAppAndClose(completedOnboardingContext)}
+              onClick={sendWhatsAppAndClose}
               className={`w-full py-3 px-6 rounded-xl font-medium ${themeClasses.textSecondary} ${themeClasses.bgCard} border-2 border-gray-500/40 hover:border-gray-400/60 transition-all`}
             >
               {language === 'hebrew' ? 'דלג לעת עתה' : 'Skip for now'}
