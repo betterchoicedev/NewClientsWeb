@@ -2118,12 +2118,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.warn('⚠️ No userCode available - chat_users table was not updated. This may happen for new Google signups.');
       }
 
-      console.log('✅ Onboarding data saved successfully — showing usage-based offer...');
+      console.log('✅ Onboarding data saved successfully — closing and sending WhatsApp (payment popup disabled).');
       
-      // Show optional usage-based support offer before WhatsApp. User can support or skip.
-      setCompletedOnboardingContext({ clientData, formData, allOnboardingFields });
-      setShowUsageBasedOffer(true);
+      // Payment/usage-based offer popup disabled — go straight to WhatsApp and close.
+      // setCompletedOnboardingContext({ clientData, formData, allOnboardingFields });
+      // setShowUsageBasedOffer(true);
       setLoading(false);
+      sendWhatsAppAndClose();
       return;
     } catch (err) {
       console.error('❌ Error saving onboarding data:', err);
