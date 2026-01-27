@@ -200,6 +200,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
         else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
         else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
+        else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SttGvHIeYfvCylDK1kBIROD') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
         
         // Determine commitment period based on exact price ID mapping
         let commitmentMonths = null; // Default no commitment 
@@ -1011,6 +1012,7 @@ async function handleSubscriptionCreated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
+    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SttGvHIeYfvCylDK1kBIROD') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null; // Default no commitment
@@ -1209,6 +1211,7 @@ async function handleSubscriptionUpdated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
+    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SttGvHIeYfvCylDK1kBIROD') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Calculate commitment end date - use stored value if exists, otherwise calculate from start date
     let commitmentEndDate = null;
