@@ -285,13 +285,13 @@ export const createClientRecord = async (userId, userData, providerId = null) =>
     // Normalize phone number before saving (remove spaces and dashes)
     const normalizedPhone = userData.phone ? normalizePhoneForDatabase(userData.phone) : null;
     
-    // Check for manager link data in sessionStorage (for OAuth flows)
+    // Check for manager link data and invitation token in sessionStorage (for OAuth flows, e.g. Google signup)
     let managerLinkData = null;
+    let invitationToken = null;
     try {
       const managerLinkDataStr = sessionStorage.getItem('manager_link_data');
-      if (managerLinkDataStr) {
-        managerLinkData = JSON.parse(managerLinkDataStr);
-      }
+      if (managerLinkDataStr) managerLinkData = JSON.parse(managerLinkDataStr);
+      invitationToken = sessionStorage.getItem('invitation_token');
     } catch (e) {
       console.error('Error parsing manager link data:', e);
     }
@@ -329,7 +329,9 @@ export const createClientRecord = async (userId, userData, providerId = null) =>
           phone: normalizedPhone
         },
         userCode,
-        providerId: finalProviderId
+        providerId: finalProviderId,
+        invitationToken: invitationToken || undefined,
+        managerLinkData: managerLinkData || undefined
       })
     });
 

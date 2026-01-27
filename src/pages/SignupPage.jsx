@@ -25,136 +25,55 @@ function SignupPage() {
   const [invitationToken, setInvitationToken] = useState(null);
   const [hasInvitationToken, setHasInvitationToken] = useState(false);
 
-  // Function to decode registration rule or manager link
-  // Handles registration_rule IDs (integer SERIAL) or manager_id (VARCHAR) which are looked up in registration_rules table
-  // Also supports legacy formats for backward compatibility
-  const decodeManagerLink = (base64Token) => {
+  // Decode #d= value: new limited #d=base64(JSON{link_id,manager_id,max_clients?,expiry_date?}) or old simple #d=base64(manager_id).
+  // Returns { link_id?, manager_id, isLimited } or null.
+  const decodeRegistrationHash = (base64Token) => {
     try {
       if (!base64Token) return null;
-      
-      // Decode from Base64
       const decoded = atob(base64Token);
-      
-      // Check if it's an integer (registration rule ID - SERIAL)
-      const integerId = parseInt(decoded, 10);
-      if (!isNaN(integerId) && integerId > 0) {
-        // This is a registration_rule ID (integer)
-        // Backend will look it up in registration_rules table by id
-        return {
-          registration_rule_id: integerId,
-          isRegistrationRule: true
-        };
-      }
-      
-      // Check if it's a UUID (legacy manager ID format)
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (uuidRegex.test(decoded)) {
-        // This could be a manager_id (VARCHAR) - backend will look it up in registration_rules table by manager_id
-        // Or it could be a legacy manager ID
-        return {
-          manager_id: decoded,
-          isManagerId: true
-        };
-      }
-      
-      // Try to parse as JSON (legacy complex link format with limits)
       try {
-        const jsonData = JSON.parse(decoded);
-        if (jsonData.manager_id) {
-          return {
-            manager_id: jsonData.manager_id,
-            max_clients: jsonData.max_clients || null,
-            expiry_date: jsonData.expiry_date || null,
-            isComplex: true
-          };
+        const obj = JSON.parse(decoded);
+        if (obj && obj.link_id) {
+          return { link_id: obj.link_id, manager_id: obj.manager_id || null, isLimited: true };
         }
-      } catch (jsonError) {
-        // Not JSON and not UUID
-        return null;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error decoding link:', error);
+        if (obj && obj.manager_id) {
+          return { manager_id: obj.manager_id, isLimited: false };
+        }
+      } catch (_) {}
+      return { manager_id: decoded, isLimited: false };
+    } catch (e) {
+      console.error('Error decoding #d=:', e);
       return null;
     }
   };
 
-  // Function to check if invitation token exists in URL hash
+  // Check #d= in hash, decode (limited vs simple), store for find/check. Returns true if valid format.
   const checkInvitationToken = () => {
     try {
-      // Get the hash fragment (e.g., "#d=YTdhNzUxMzUtNzhiNi00ODQ4LWFkODQtYjUwZjAzZjMyNmZi")
       const hash = window.location.hash;
-      
-      if (!hash || hash.length === 0) {
-        return false;
-      }
-      
-      // Check if 'd' parameter exists
+      if (!hash) return false;
       const match = hash.match(/[#&]d=([^&]*)/);
-      
-      if (match && match[1]) {
-        const base64Token = match[1];
-        setInvitationToken(base64Token);
-        
-        // Try to decode as registration rule or manager link
-        const linkData = decodeManagerLink(base64Token);
-        if (linkData) {
-          // Store link data in sessionStorage for backend
-          // Backend will look up registration_rules table by id (if integer) or manager_id (if UUID/VARCHAR)
-          sessionStorage.setItem('manager_link_data', JSON.stringify(linkData));
-          return true;
-        }
-        
-        // If not a recognized link format, treat as regular invitation token
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Error checking invitation token:', error);
+      if (!match || !match[1]) return false;
+      const base64Token = match[1];
+      setInvitationToken(base64Token);
+      const linkData = decodeRegistrationHash(base64Token);
+      if (!linkData) return false;
+      sessionStorage.setItem('manager_link_data', JSON.stringify({ link_id: linkData.link_id || undefined, manager_id: linkData.manager_id }));
+      return true;
+    } catch (e) {
+      console.error('Error checking invitation token:', e);
       return false;
     }
   };
 
-  // Function to get dietitian ID from URL hash (legacy support)
+  // Get manager_id from #d= for referral/legacy (used when no invitation token path).
   const getDietitianIdFromHash = () => {
     try {
-      // Get the hash fragment (e.g., "#d=YWJjZGVmZ2hpams=")
-      const hash = window.location.hash;
-      
-      if (!hash || hash.length === 0) {
-        return null;
-      }
-      
-      // Extract the 'd' parameter value using regex
-      const match = hash.match(/[#&]d=([^&]*)/);
-      
-      if (match && match[1]) {
-        const base64Value = match[1];
-        
-        // Try to decode as registration rule or manager link
-        const linkData = decodeManagerLink(base64Value);
-        if (linkData) {
-          // Return registration_rule_id or manager_id for legacy support
-          return linkData.registration_rule_id || linkData.manager_id || null;
-        }
-        
-        // Fallback to simple UUID decoding
-        try {
-          const decodedId = atob(base64Value);
-          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-          if (uuidRegex.test(decodedId)) {
-            return decodedId;
-          }
-        } catch (decodeError) {
-          console.error('Error decoding Base64:', decodeError);
-        }
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error extracting dietitian ID from hash:', error);
+      const match = window.location.hash?.match(/[#&]d=([^&]*)/);
+      if (!match || !match[1]) return null;
+      const d = decodeRegistrationHash(match[1]);
+      return d?.manager_id || null;
+    } catch (e) {
       return null;
     }
   };
@@ -168,30 +87,36 @@ function SignupPage() {
       setHasInvitationToken(hasToken);
       
       if (hasToken) {
-        // Store token in sessionStorage for OAuth flows
         const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1];
-        if (token) {
-          sessionStorage.setItem('invitation_token', token);
-          
-          // Check registration rule availability (max_slots) when page loads
-          try {
-            const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
-            const response = await fetch(`${apiUrl}/api/auth/check-registration-rule?token=${encodeURIComponent(token)}`);
-            const result = await response.json();
-            
-            if (!result.available) {
-              setError(
-                language === 'hebrew' 
-                  ? result.error || 'קישור ההרשמה הזה הגיע למגבלה המקסימלית של משתמשים'
-                  : result.error || 'This registration link has reached its maximum number of users'
-              );
-              setHasInvitationToken(false); // Disable signup form
+        if (token) sessionStorage.setItem('invitation_token', token);
+        let md = null;
+        try { const raw = sessionStorage.getItem('manager_link_data'); if (raw) md = JSON.parse(raw); } catch (_) {}
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+        try {
+          if (md?.link_id) {
+            const r = await fetch(`${apiUrl}/api/db/registration-links/find`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link_id: md.link_id }) });
+            const row = await r.json().catch(() => ({}));
+            if (!r.ok || !row.manager_id) { setError(language === 'hebrew' ? 'קישור ההרשמה לא נמצא או לא תקף' : (row?.error || 'Registration link not found or invalid')); setHasInvitationToken(false); }
+            else if (row.expires_at && new Date(row.expires_at) < new Date()) { setError(language === 'hebrew' ? 'קישור ההרשמה פג תוקף' : 'This registration link has expired'); setHasInvitationToken(false); }
+            else if (row.max_slots != null && (row.current_count || 0) >= row.max_slots) { setError(language === 'hebrew' ? 'קישור ההרשמה הגיע למגבלת המשתמשים' : `This link has reached the maximum number of slots (${row.max_slots})`); setHasInvitationToken(false); }
+            else if (!row.is_active) { setError(language === 'hebrew' ? 'קישור ההרשמה אינו פעיל' : 'This registration link is no longer active'); setHasInvitationToken(false); }
+            else { sessionStorage.setItem('manager_link_data', JSON.stringify({ ...md, manager_id: row.manager_id })); }
+          } else if (md?.manager_id) {
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(md.manager_id)) {
+              const resp = await fetch(`${apiUrl}/api/auth/check-registration-rule?token=${encodeURIComponent(token || '')}`);
+              const result = await resp.json().catch(() => ({}));
+              if (!result.available) { setError(language === 'hebrew' ? (result.error || 'קישור ההרשמה לא תקף') : (result.error || 'This registration link is not available')); setHasInvitationToken(false); }
+            } else {
+              const r = await fetch(`${apiUrl}/api/db/registration-links/find`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manager_id: md.manager_id }) });
+              const row = await r.json().catch(() => ({}));
+              if (!r.ok || !row.manager_id) { setError(language === 'hebrew' ? 'קישור ההרשמה לא נמצא או לא תקף' : (row?.error || 'Registration link not found or invalid')); setHasInvitationToken(false); }
+              else if (row.expires_at && new Date(row.expires_at) < new Date()) { setError(language === 'hebrew' ? 'קישור ההרשמה פג תוקף' : 'This registration link has expired'); setHasInvitationToken(false); }
+              else if (row.max_slots != null && (row.current_count || 0) >= row.max_slots) { setError(language === 'hebrew' ? 'קישור ההרשמה הגיע למגבלת המשתמשים' : `This link has reached the maximum number of slots (${row.max_slots})`); setHasInvitationToken(false); }
+              else if (!row.is_active) { setError(language === 'hebrew' ? 'קישור ההרשמה אינו פעיל' : 'This registration link is no longer active'); setHasInvitationToken(false); }
             }
-          } catch (checkError) {
-            console.error('Error checking registration rule:', checkError);
-            // Don't block signup if check fails, but log the error
           }
-        }
+        } catch (checkError) { console.error('Error checking registration link:', checkError); }
       }
 
       // Also extract dietitian ID if present (for referral tracking)

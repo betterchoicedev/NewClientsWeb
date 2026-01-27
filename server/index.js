@@ -3466,6 +3466,71 @@ app.get('/api/debug/meal-plans', async (req, res) => {
 });
 
 // ====================================
+// REGISTRATION LINKS API (find + increment)
+// Used by SignupPage for #d=base64(JSON{link_id,manager_id,...}) and #d=base64(manager_id).
+// ====================================
+
+app.post('/api/db/registration-links/find', async (req, res) => {
+  try {
+    const { link_id, manager_id } = req.body || {};
+    if (!link_id && !manager_id) {
+      return res.status(400).json({ error: 'Either link_id or manager_id is required' });
+    }
+    const regDb = chatSupabase || supabase;
+    let row = null;
+    if (link_id) {
+      const { data, error } = await regDb
+        .from('registration_rules')
+        .select('id, link_id, manager_id, max_slots, current_count, expires_at, is_active')
+        .eq('link_id', link_id)
+        .maybeSingle();
+      if (!error) row = data;
+    } else {
+      const { data, error } = await regDb
+        .from('registration_rules')
+        .select('id, manager_id, max_slots, current_count, expires_at, is_active')
+        .eq('manager_id', manager_id)
+        .maybeSingle();
+      if (!error) row = data;
+    }
+    if (!row) {
+      return res.status(404).json({ error: 'Registration link not found' });
+    }
+    return res.json({ ...row, link_id: row.link_id ?? null });
+  } catch (e) {
+    console.error('Error in registration-links find:', e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/db/registration-links/:idOrLinkId/increment', async (req, res) => {
+  try {
+    const { idOrLinkId } = req.params;
+    if (!idOrLinkId) return res.status(400).json({ error: 'idOrLinkId is required' });
+    const regDb = chatSupabase || supabase;
+    const isNumericId = /^\d+$/.test(String(idOrLinkId));
+    let q = regDb.from('registration_rules').select('id, current_count');
+    if (isNumericId) q = q.eq('id', parseInt(idOrLinkId, 10));
+    else q = q.eq('link_id', idOrLinkId);
+    const { data: existing, error: fetchErr } = await q.maybeSingle();
+    if (fetchErr || !existing) return res.status(404).json({ error: 'Registration link not found' });
+    const newCount = (existing.current_count || 0) + 1;
+    let upd = regDb.from('registration_rules').update({ current_count: newCount });
+    if (isNumericId) upd = upd.eq('id', parseInt(idOrLinkId, 10));
+    else upd = upd.eq('link_id', idOrLinkId);
+    const { error: updateErr } = await upd;
+    if (updateErr) {
+      console.error('Error incrementing registration link:', updateErr);
+      return res.status(500).json({ error: 'Failed to increment' });
+    }
+    return res.json({ ok: true, current_count: newCount });
+  } catch (e) {
+    console.error('Error in registration-links increment:', e);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// ====================================
 // AUTH API ROUTES
 // ====================================
 
@@ -3500,169 +3565,63 @@ app.post('/api/auth/signup', async (req, res) => {
       });
     }
 
-    // Handle registration rule (look up in registration_rules table)
-    let registrationRuleId = null;
+    // Resolve registration link: #d=base64(JSON{link_id,manager_id,...}) or #d=base64(manager_id) or legacy integer id.
+    // Use regDb = chatSupabase || supabase so it works when registration_rules is in main DB.
+    const regDb = chatSupabase || supabase;
     let managerId = null;
     let registrationRule = null;
-    
-    // Try to decode registration rule ID or manager_id from invitationToken
+    let linkIdFromToken = null;
+    let managerIdFromToken = null;
+
     if (invitationToken) {
       try {
-        const decodedToken = Buffer.from(invitationToken, 'base64').toString('utf-8');
-        
-        // Check if it's an integer (registration rule ID - SERIAL)
-        const integerId = parseInt(decodedToken, 10);
-        if (!isNaN(integerId) && integerId > 0) {
-          registrationRuleId = integerId;
-        } else {
-          // Not an integer, might be manager_id (VARCHAR) - try looking up by manager_id
-          // This supports encoding manager_id directly
-          registrationRuleId = decodedToken; // Will be used for manager_id lookup
-        }
-      } catch (tokenError) {
-        console.error('⚠️ Error decoding invitation token:', tokenError);
-      }
+        const decoded = Buffer.from(invitationToken, 'base64').toString('utf-8');
+        try {
+          const obj = JSON.parse(decoded);
+          if (obj && obj.link_id) { linkIdFromToken = obj.link_id; managerIdFromToken = obj.manager_id || null; }
+          else if (obj && obj.manager_id) managerIdFromToken = obj.manager_id;
+        } catch (_) { managerIdFromToken = decoded; }
+      } catch (_) {}
     }
+    if (!linkIdFromToken && managerLinkData?.link_id) linkIdFromToken = managerLinkData.link_id;
+    if (!managerIdFromToken && managerLinkData?.manager_id) managerIdFromToken = managerLinkData.manager_id;
 
-    // If we have a registration rule identifier, look it up in the database
-    if (registrationRuleId && chatSupabase) {
+    if (linkIdFromToken || managerIdFromToken) {
       try {
-        let linkData = null;
-        let linkError = null;
-        
-        // Try to look up by ID first (if it's an integer)
-        if (typeof registrationRuleId === 'number') {
-          const { data, error } = await chatSupabase
-            .from('registration_rules')
-            .select('id, manager_id, max_slots, current_count, expires_at, is_active')
-            .eq('id', registrationRuleId)
-            .maybeSingle();
-          linkData = data;
-          linkError = error;
+        let row = null;
+        if (linkIdFromToken) {
+          const { data, error } = await regDb.from('registration_rules')
+            .select('id, link_id, manager_id, max_slots, current_count, expires_at, is_active')
+            .eq('link_id', linkIdFromToken).maybeSingle();
+          if (!error) row = data;
         } else {
-          // Look up by manager_id (VARCHAR)
-          const { data, error } = await chatSupabase
-            .from('registration_rules')
-            .select('id, manager_id, max_slots, current_count, expires_at, is_active')
-            .eq('manager_id', registrationRuleId)
-            .maybeSingle();
-          linkData = data;
-          linkError = error;
-        }
-
-        if (linkError) {
-          console.error('⚠️ Error looking up registration rule:', linkError);
-        } else if (linkData) {
-          // Check if rule is active
-          if (!linkData.is_active) {
-            return res.status(400).json({ 
-              error: 'This registration link is no longer active',
-              code: 400
-            });
-          }
-
-          registrationRule = linkData;
-          managerId = linkData.manager_id;
-          
-          // Validate expiry date if present
-          if (linkData.expires_at) {
-            const expiryDate = new Date(linkData.expires_at);
-            const now = new Date();
-            if (expiryDate < now) {
-              return res.status(400).json({ 
-                error: 'This registration link has expired',
-                code: 400
-              });
-            }
-          }
-
-          // Check max_slots limit
-          if (linkData.max_slots !== null) {
-            if (linkData.current_count >= linkData.max_slots) {
-              return res.status(400).json({ 
-                error: `This registration link has reached the maximum number of slots (${linkData.max_slots})`,
-                code: 400
-              });
-            }
-          }
-
-          // Verify manager exists
-          const { data: managerExists, error: managerError } = await chatSupabase
-            .from('profiles')
-            .select('id, role')
-            .eq('id', managerId)
-            .maybeSingle();
-
-          if (managerError || !managerExists) {
-            return res.status(400).json({ 
-              error: 'Invalid manager ID in registration rule',
-              code: 400
-            });
-          }
-
-          console.log('✅ Registration rule validated:', {
-            id: linkData.id,
-            manager_id: managerId,
-            current_count: linkData.current_count,
-            max_slots: linkData.max_slots,
-            is_active: linkData.is_active
-          });
-        } else {
-          // Registration rule not found - might be a legacy manager ID or waiting list token
-          console.log('⚠️ Registration rule not found, treating as legacy token');
-        }
-      } catch (lookupError) {
-        console.error('⚠️ Error looking up registration rule:', lookupError);
-        // Continue - might be a legacy token format
-      }
-    }
-
-    // Fallback: Handle legacy manager link data (from decoded token or provided directly)
-    // This supports old links that encode manager_id directly
-    if (!registrationRule && managerLinkData) {
-      const legacyManagerData = managerLinkData;
-      if (legacyManagerData.manager_id) {
-        managerId = legacyManagerData.manager_id;
-        console.log('✅ Using legacy manager link format');
-        
-        // Try to find registration rule by manager_id
-        if (chatSupabase && managerId) {
-          try {
-            const { data: ruleByManagerId, error: ruleError } = await chatSupabase
-              .from('registration_rules')
+          const numericId = /^\d+$/.test(String(managerIdFromToken)) ? parseInt(managerIdFromToken, 10) : null;
+          if (numericId != null) {
+            const { data } = await regDb.from('registration_rules')
               .select('id, manager_id, max_slots, current_count, expires_at, is_active')
-              .eq('manager_id', managerId)
-              .eq('is_active', true)
-              .maybeSingle();
-            
-            if (!ruleError && ruleByManagerId) {
-              registrationRule = ruleByManagerId;
-              console.log('✅ Found registration rule by manager_id:', ruleByManagerId.id);
-            }
-          } catch (lookupError) {
-            console.error('⚠️ Error looking up registration rule by manager_id:', lookupError);
+              .eq('id', numericId).maybeSingle();
+            row = data;
+          }
+          if (!row) {
+            const { data } = await regDb.from('registration_rules')
+              .select('id, manager_id, max_slots, current_count, expires_at, is_active')
+              .eq('manager_id', managerIdFromToken).maybeSingle();
+            row = data;
           }
         }
-      }
-    }
-    
-    // Also try to find registration rule by manager_id if we have managerId but no rule
-    if (!registrationRule && managerId && chatSupabase) {
-      try {
-        const { data: ruleByManagerId, error: ruleError } = await chatSupabase
-          .from('registration_rules')
-          .select('id, manager_id, max_slots, current_count, expires_at, is_active')
-          .eq('manager_id', managerId)
-          .eq('is_active', true)
-          .maybeSingle();
-        
-        if (!ruleError && ruleByManagerId) {
-          registrationRule = ruleByManagerId;
-          console.log('✅ Found registration rule by manager_id:', ruleByManagerId.id);
+        if (row) {
+          if (!row.is_active) return res.status(400).json({ error: 'This registration link is no longer active', code: 400 });
+          if (row.expires_at && new Date(row.expires_at) < new Date()) return res.status(400).json({ error: 'This registration link has expired', code: 400 });
+          if (row.max_slots != null && (row.current_count || 0) >= row.max_slots) return res.status(400).json({ error: `This registration link has reached the maximum number of slots (${row.max_slots})`, code: 400 });
+          if (chatSupabase) {
+            const { data: managerExists, error: me } = await chatSupabase.from('profiles').select('id').eq('id', row.manager_id).maybeSingle();
+            if (me || !managerExists) return res.status(400).json({ error: 'Invalid manager ID in registration link', code: 400 });
+          }
+          registrationRule = row;
+          managerId = row.manager_id;
+          console.log('✅ Registration link validated:', { id: row.id, link_id: row.link_id, manager_id: managerId });
         }
-      } catch (lookupError) {
-        console.error('⚠️ Error looking up registration rule by manager_id:', lookupError);
-      }
+      } catch (e) { console.error('⚠️ Error resolving registration link:', e); }
     }
 
     // Validate invitation token if provided (for regular waiting list invitations)
@@ -3731,74 +3690,36 @@ app.post('/api/auth/signup', async (req, res) => {
 
     console.log('✅ Signup successful for user:', signupData.user.id);
 
-    // Increment current_count in registration_rules table immediately after user creation
-    // This tracks signups even if subsequent operations fail
-    if (chatSupabase) {
-      let ruleToIncrement = registrationRule;
-      
-      // If we don't have a registration rule but have managerId, try to find it one more time
-      if (!ruleToIncrement && managerId) {
-        try {
-          const { data: foundRule, error: findError } = await chatSupabase
-            .from('registration_rules')
-            .select('id, manager_id, max_slots, current_count, expires_at, is_active')
-            .eq('manager_id', managerId)
-            .eq('is_active', true)
-            .maybeSingle();
-          
-          if (!findError && foundRule) {
-            ruleToIncrement = foundRule;
-            console.log('✅ Found registration rule by manager_id for increment:', foundRule.id);
-          }
-        } catch (lookupError) {
-          console.error('⚠️ Error looking up registration rule for increment:', lookupError);
-        }
-      }
-      
-      if (ruleToIncrement && ruleToIncrement.id) {
-        try {
-          console.log('🔄 Incrementing registration rule count for ID:', ruleToIncrement.id);
-          
-          // Fetch current count fresh to avoid race conditions
-          const { data: currentRule, error: fetchError } = await chatSupabase
-            .from('registration_rules')
-            .select('current_count')
-            .eq('id', ruleToIncrement.id)
-            .single();
-
-          if (fetchError) {
-            console.error('❌ Error fetching registration rule for count update:', fetchError);
-          } else if (currentRule) {
-            const newCount = (currentRule.current_count || 0) + 1;
-            
-            const { error: updateError, data: updateData } = await chatSupabase
-              .from('registration_rules')
-              .update({ 
-                current_count: newCount
-              })
-              .eq('id', ruleToIncrement.id)
-              .select();
-
-            if (updateError) {
-              console.error('❌ Error incrementing registration rule count:', updateError);
-              console.error('Update error details:', JSON.stringify(updateError, null, 2));
-            } else {
-              console.log('✅ Registration rule count incremented:', {
-                id: ruleToIncrement.id,
-                manager_id: ruleToIncrement.manager_id,
-                old_count: currentRule.current_count || 0,
-                new_count: newCount
-              });
-            }
+    // Increment: find row by link_id (when limited) or id, then update both current_count and is_active.
+    if (registrationRule && regDb) {
+      try {
+        const linkIdToUse = linkIdFromToken || registrationRule.link_id;
+        const useLinkId = !!linkIdToUse;
+        // 1) Find row by link_id or id to read current_count
+        let q = regDb.from('registration_rules').select('current_count, max_slots, is_active');
+        if (useLinkId) q = q.eq('link_id', linkIdToUse); else q = q.eq('id', registrationRule.id);
+        const { data: cur, error: fe } = await q.maybeSingle();
+        if (fe) {
+          console.error('❌ Error fetching registration_rules for increment:', fe.message, fe.code);
+        } else if (cur != null) {
+          const newCount = (cur.current_count || 0) + 1;
+          const setInactive = (cur.max_slots != null) && (newCount >= cur.max_slots);
+          const updatePayload = { current_count: newCount };
+          if (setInactive) updatePayload.is_active = false;
+          // 2) Update: current_count always, is_active when link is full (same WHERE: link_id or id)
+          let upd = regDb.from('registration_rules').update(updatePayload);
+          if (useLinkId) upd = upd.eq('link_id', linkIdToUse); else upd = upd.eq('id', registrationRule.id);
+          const { error: ue } = await upd;
+          if (ue) {
+            console.error('❌ Error incrementing registration link:', ue.message, ue.code, ue.details);
           } else {
-            console.error('⚠️ Registration rule not found when trying to increment. ID:', ruleToIncrement.id);
+            console.log('✅ Registration link incremented (signup):', useLinkId ? { link_id: linkIdToUse } : { id: registrationRule.id }, 'new_count:', newCount, updatePayload.is_active === false ? ', is_active=false' : '');
           }
-        } catch (incrementError) {
-          console.error('❌ Exception while incrementing registration rule count:', incrementError);
-          console.error('Exception stack:', incrementError.stack);
+        } else {
+          console.warn('⚠️ registration_rules row not found for increment:', useLinkId ? { link_id: linkIdToUse } : { id: registrationRule.id });
         }
-      } else if (managerId) {
-        console.warn('⚠️ Cannot increment count - no registration rule found for manager_id:', managerId);
+      } catch (e) {
+        console.error('❌ Exception incrementing registration link:', e);
       }
     }
 
@@ -4332,10 +4253,10 @@ app.get('/api/auth/default-provider', async (req, res) => {
   }
 });
 
-// Create client record
+// Create client record (used after OAuth signup, e.g. Google; also by WhatsAppRegisterPage, OnboardingModal)
 app.post('/api/auth/create-client', async (req, res) => {
   try {
-    const { userId, userData, userCode, providerId } = req.body;
+    const { userId, userData, userCode, providerId, invitationToken, managerLinkData } = req.body;
     if (!userId || !userData || !userCode) {
       return res.status(400).json({ error: 'User ID, user data, and user code are required' });
     }
@@ -4355,6 +4276,66 @@ app.post('/api/auth/create-client', async (req, res) => {
       .select();
 
     if (error) throw error;
+
+    // Resolve registration link from invitationToken/managerLinkData (OAuth e.g. Google signup) and increment current_count
+    const regDb = chatSupabase || supabase;
+    let registrationRule = null;
+    let linkIdFromToken = null;
+    let managerIdFromToken = null;
+    if (invitationToken) {
+      try {
+        const decoded = Buffer.from(invitationToken, 'base64').toString('utf-8');
+        try {
+          const obj = JSON.parse(decoded);
+          if (obj && obj.link_id) { linkIdFromToken = obj.link_id; managerIdFromToken = obj.manager_id || null; }
+          else if (obj && obj.manager_id) managerIdFromToken = obj.manager_id;
+        } catch (_) { managerIdFromToken = decoded; }
+      } catch (_) {}
+    }
+    if (!linkIdFromToken && managerLinkData?.link_id) linkIdFromToken = managerLinkData.link_id;
+    if (!managerIdFromToken && managerLinkData?.manager_id) managerIdFromToken = managerLinkData.manager_id;
+
+    if (linkIdFromToken || managerIdFromToken) {
+      try {
+        let row = null;
+        if (linkIdFromToken) {
+          const { data: r, error: re } = await regDb.from('registration_rules').select('id, link_id, manager_id, max_slots, current_count, expires_at, is_active').eq('link_id', linkIdFromToken).maybeSingle();
+          if (!re) row = r;
+        } else {
+          const numericId = /^\d+$/.test(String(managerIdFromToken)) ? parseInt(managerIdFromToken, 10) : null;
+          if (numericId != null) {
+            const { data: r } = await regDb.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active').eq('id', numericId).maybeSingle();
+            row = r;
+          }
+          if (!row) {
+            const { data: r } = await regDb.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active').eq('manager_id', managerIdFromToken).maybeSingle();
+            row = r;
+          }
+        }
+        if (row) registrationRule = row;
+      } catch (e) { console.error('⚠️ create-client: resolve registration link:', e); }
+    }
+
+    if (registrationRule && regDb) {
+      try {
+        const linkIdToUse = linkIdFromToken || registrationRule.link_id;
+        const useLinkId = !!linkIdToUse;
+        let q = regDb.from('registration_rules').select('current_count, max_slots, is_active');
+        if (useLinkId) q = q.eq('link_id', linkIdToUse); else q = q.eq('id', registrationRule.id);
+        const { data: cur, error: fe } = await q.maybeSingle();
+        if (!fe && cur != null) {
+          const newCount = (cur.current_count || 0) + 1;
+          const setInactive = (cur.max_slots != null) && (newCount >= cur.max_slots);
+          const updatePayload = { current_count: newCount };
+          if (setInactive) updatePayload.is_active = false;
+          let upd = regDb.from('registration_rules').update(updatePayload);
+          if (useLinkId) upd = upd.eq('link_id', linkIdToUse); else upd = upd.eq('id', registrationRule.id);
+          const { error: ue } = await upd;
+          if (ue) console.error('❌ create-client: increment registration link:', ue.message);
+          else console.log('✅ create-client: registration link incremented (Google/OAuth)', useLinkId ? { link_id: linkIdToUse } : { id: registrationRule.id }, 'new_count:', newCount, setInactive ? ', is_active=false' : '');
+        }
+      } catch (e) { console.error('❌ create-client: exception incrementing registration link:', e); }
+    }
 
     // Also create record in chat_users table (secondary database)
     let chatUserCreated = false;
