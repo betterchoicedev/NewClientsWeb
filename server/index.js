@@ -3037,99 +3037,198 @@ app.post('/api/weight-logs', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-// Search foods
 app.get('/api/foods/search', async (req, res) => {
   try {
     const { query, limit = 20 } = req.query;
-    if (!query) {
-      return res.status(400).json({ error: 'Search query is required' });
+
+    // 1. Input Validation
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ error: 'Valid search query is required' });
     }
 
     if (!chatSupabase) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const isHebrewQuery = /[\u0590-\u05FF]/.test(query);
-    const queryWords = query.trim().split(/\s+/).filter(word => word.length > 0);
-    let allData = [];
+    // 2. Prepare Search Parameters
+    // Clean the query: remove extra spaces, lower case for consistency
+    const cleanQuery = query.trim();
+    if (!cleanQuery) return res.json({ data: [] });
+
+    const isHebrewQuery = /[\u0590-\u05FF]/.test(cleanQuery);
+    const searchColumn = isHebrewQuery ? 'name' : 'english_name';
     
-    if (queryWords.length === 1) {
-      const word = queryWords[0];
-      const startsWithPattern = `${word}%`;
-      const containsPattern = `%${word}%`;
-      const searchColumn = isHebrewQuery ? 'name' : 'english_name';
-      
-      const { data: startsWithData } = await chatSupabase
-        .from('ingridientsroee')
-        .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
-        .ilike(searchColumn, startsWithPattern)
-        .limit(50);
-      
-      if (startsWithData) {
-        allData = startsWithData;
-      }
-      
-      if (allData.length < 20) {
-        const { data: containsData } = await chatSupabase
-          .from('ingridientsroee')
-          .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
-          .ilike(searchColumn, containsPattern)
-          .limit(50);
-        
-        if (containsData) {
-          const existingIds = new Set(allData.map(item => item.id));
-          const newItems = containsData.filter(item => !existingIds.has(item.id));
-          allData = [...allData, ...newItems];
-        }
-      }
-    } else {
-      const searchColumn = isHebrewQuery ? 'name' : 'english_name';
-      const wordsConditions = queryWords.map(word => 
-        `${searchColumn}.ilike.%${word}%`
-      );
-      
-      const { data: wordsData } = await chatSupabase
-        .from('ingridientsroee')
-        .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
-        .or(wordsConditions.join(','))
-        .limit(200);
-      
-      if (wordsData) {
-        allData = wordsData.filter(item => {
-          const searchText = isHebrewQuery 
-            ? ((item.name || '').toLowerCase())
-            : ((item.english_name || '').toLowerCase());
-          
-          return queryWords.every(word => 
-            searchText.includes(word.toLowerCase())
-          );
-        });
-      }
-    }
+    // Split into unique words to avoid redundant filters
+    const queryWords = [...new Set(cleanQuery.split(/\s+/).filter(w => w.length > 0))];
+    const maxLimit = Math.min(parseInt(limit) || 20, 50); // Hard cap at 50
+
+    // 3. Build the Database Query
+    // We select specific columns to reduce payload size
+    let dbQuery = chatSupabase
+      .from('ingridientsroee')
+      .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g');
+
+    // 4. Dynamic Filtering (The "AND" Logic)
+    // Instead of fetching everything and filtering in JS, we chain .ilike()
+    // This tells SQL: WHERE column LIKE %word1% AND column LIKE %word2%
+    queryWords.forEach(word => {
+      dbQuery = dbQuery.ilike(searchColumn, `%${word}%`);
+    });
+
+    // Fetch a bit more than the limit to allow for re-sorting relevance in JS
+    const { data: rawData, error } = await dbQuery.limit(maxLimit + 10);
+
+    if (error) throw error;
+    if (!rawData || rawData.length === 0) return res.json({ data: [] });
+
+    // 5. Intelligent Sorting (Relevance)
+    // We prioritize:
+    // A. Exact matches
+    // B. Starts with the query
+    // C. Contains the query
+    const lowerQuery = cleanQuery.toLowerCase();
     
-    // Transform and limit data
-    const transformedData = allData.slice(0, parseInt(limit)).map(ingredient => ({
-      id: ingredient.id,
-      name: isHebrewQuery ? (ingredient.name || ingredient.english_name || '') : (ingredient.english_name || ingredient.name || ''),
-      item: isHebrewQuery ? (ingredient.name || ingredient.english_name || '') : (ingredient.english_name || ingredient.name || ''),
-      english_name: ingredient.english_name || '',
-      calories: ingredient.calories_energy || 0,
-      protein: ingredient.protein_g || 0,
-      fat: ingredient.fat_g || 0,
-      carbs: ingredient.carbohydrates_g || 0,
-      brand: '',
-      household_measure: '',
-      'portionSI(gram)': 100,
-      UPC: null
-    }));
-    
+    const sortedData = rawData.sort((a, b) => {
+      const valA = (isHebrewQuery ? a.name : a.english_name)?.toLowerCase() || '';
+      const valB = (isHebrewQuery ? b.name : b.english_name)?.toLowerCase() || '';
+
+      // Check for Exact Match
+      if (valA === lowerQuery) return -1;
+      if (valB === lowerQuery) return 1;
+
+      // Check for "Starts With"
+      const aStarts = valA.startsWith(lowerQuery);
+      const bStarts = valB.startsWith(lowerQuery);
+
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      // Default to length (shorter names often more relevant)
+      return valA.length - valB.length;
+    });
+
+    // 6. Transform Data
+    const transformedData = sortedData.slice(0, maxLimit).map(ingredient => {
+        // Fallback logic for name display
+        const primaryName = isHebrewQuery ? ingredient.name : ingredient.english_name;
+        const secondaryName = isHebrewQuery ? ingredient.english_name : ingredient.name;
+        const displayName = primaryName || secondaryName || '';
+
+        return {
+            id: ingredient.id,
+            name: displayName,
+            item: displayName, // Preserving your existing structure
+            english_name: ingredient.english_name || '',
+            calories: Number(ingredient.calories_energy) || 0,
+            protein: Number(ingredient.protein_g) || 0,
+            fat: Number(ingredient.fat_g) || 0,
+            carbs: Number(ingredient.carbohydrates_g) || 0,
+            brand: '',
+            household_measure: '',
+            'portionSI(gram)': 100,
+            UPC: null
+        };
+    });
+
     res.json({ data: transformedData });
+
   } catch (error) {
     console.error('Error searching foods:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error processing search' });
   }
 });
+// OLD Search foods
+// app.get('/api/foods/search', async (req, res) => {
+//   try {
+//     const { query, limit = 20 } = req.query;
+//     if (!query) {
+//       return res.status(400).json({ error: 'Search query is required' });
+//     }
+
+//     if (!chatSupabase) {
+//       return res.status(500).json({ error: 'Chat database not configured' });
+//     }
+
+//     const isHebrewQuery = /[\u0590-\u05FF]/.test(query);
+//     const queryWords = query.trim().split(/\s+/).filter(word => word.length > 0);
+//     let allData = [];
+    
+//     if (queryWords.length === 1) {
+//       const word = queryWords[0];
+//       const startsWithPattern = `${word}%`;
+//       const containsPattern = `%${word}%`;
+//       const searchColumn = isHebrewQuery ? 'name' : 'english_name';
+      
+//       const { data: startsWithData } = await chatSupabase
+//         .from('ingridientsroee')
+//         .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
+//         .ilike(searchColumn, startsWithPattern)
+//         .limit(50);
+      
+//       if (startsWithData) {
+//         allData = startsWithData;
+//       }
+      
+//       if (allData.length < 20) {
+//         const { data: containsData } = await chatSupabase
+//           .from('ingridientsroee')
+//           .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
+//           .ilike(searchColumn, containsPattern)
+//           .limit(50);
+        
+//         if (containsData) {
+//           const existingIds = new Set(allData.map(item => item.id));
+//           const newItems = containsData.filter(item => !existingIds.has(item.id));
+//           allData = [...allData, ...newItems];
+//         }
+//       }
+//     } else {
+//       const searchColumn = isHebrewQuery ? 'name' : 'english_name';
+//       const wordsConditions = queryWords.map(word => 
+//         `${searchColumn}.ilike.%${word}%`
+//       );
+      
+//       const { data: wordsData } = await chatSupabase
+//         .from('ingridientsroee')
+//         .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
+//         .or(wordsConditions.join(','))
+//         .limit(200);
+      
+//       if (wordsData) {
+//         allData = wordsData.filter(item => {
+//           const searchText = isHebrewQuery 
+//             ? ((item.name || '').toLowerCase())
+//             : ((item.english_name || '').toLowerCase());
+          
+//           return queryWords.every(word => 
+//             searchText.includes(word.toLowerCase())
+//           );
+//         });
+//       }
+//     }
+    
+//     // Transform and limit data
+//     const transformedData = allData.slice(0, parseInt(limit)).map(ingredient => ({
+//       id: ingredient.id,
+//       name: isHebrewQuery ? (ingredient.name || ingredient.english_name || '') : (ingredient.english_name || ingredient.name || ''),
+//       item: isHebrewQuery ? (ingredient.name || ingredient.english_name || '') : (ingredient.english_name || ingredient.name || ''),
+//       english_name: ingredient.english_name || '',
+//       calories: ingredient.calories_energy || 0,
+//       protein: ingredient.protein_g || 0,
+//       fat: ingredient.fat_g || 0,
+//       carbs: ingredient.carbohydrates_g || 0,
+//       brand: '',
+//       household_measure: '',
+//       'portionSI(gram)': 100,
+//       UPC: null
+//     }));
+    
+//     res.json({ data: transformedData });
+//   } catch (error) {
+//     console.error('Error searching foods:', error);
+//     res.status(500).json({ error: error.message });
+//   }
+// });
 
 // Get companies with managers
 app.get('/api/companies', async (req, res) => {

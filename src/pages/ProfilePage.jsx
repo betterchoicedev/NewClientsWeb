@@ -10911,8 +10911,8 @@ const SettingsTab = ({ themeClasses, language, userCode }) => {
                 </label>
                 <p className={`${themeClasses.textSecondary} text-sm mb-3`}>
                   {language === 'hebrew'
-                    ? 'איך להציג כמויות מזון'
-                    : 'How to display food quantities'}
+                    ? 'איך להציג כמויות מזון בארוחות באתר'
+                    : 'How to display food quantities in meals on the website'}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   {['grams', 'household', 'both'].map((option) => (
@@ -10927,9 +10927,9 @@ const SettingsTab = ({ themeClasses, language, userCode }) => {
                       }`}
                     >
                       {option === 'grams' 
-                        ? (language === 'hebrew' ? 'גרמים' : 'Grams')
+                        ? (language === 'hebrew' ? 'יחידות מידה נפוצות' : 'Common Units')
                         : option === 'household'
-                        ? (language === 'hebrew' ? 'ביתי' : 'Household')
+                        ? (language === 'hebrew' ? 'מידות מטבח' : 'Kitchen Measurements')
                         : (language === 'hebrew' ? 'שניהם' : 'Both')}
                     </button>
                   ))}
