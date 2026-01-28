@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import { searchFoods } from '../supabase/secondaryClient';
+import { searchFoods, reportIngredient } from '../supabase/secondaryClient';
 import { getWeightValidation } from '../utils/weightValidation';
+
+const REPORT_TYPES = [
+  { value: 'misinformation', labelEn: 'Misinformation', labelHe: 'מידע שגוי' },
+  { value: 'incorrect_values', labelEn: 'Incorrect nutritional values', labelHe: 'ערכים תזונתיים לא נכונים' },
+  { value: 'wrong_name', labelEn: 'Wrong name or description', labelHe: 'שם או תיאור שגוי' },
+  { value: 'wrong_portion', labelEn: 'Wrong portion or measure', labelHe: 'מידה או כמות שגויה' },
+  { value: 'other', labelEn: 'Other', labelHe: 'אחר' },
+];
 
 // Convert measurement using AI API
 const convertMeasurementWithAI = async (ingredient, fromMeasurement, toType, targetLang = 'en', client = { region: 'israel' }) => {
@@ -39,7 +47,7 @@ const convertMeasurementWithAI = async (ingredient, fromMeasurement, toType, tar
   }
 };
 
-const AddIngredientModal = ({ visible, onClose, onAddIngredient, mealName, clientRegion }) => {
+const AddIngredientModal = ({ visible, onClose, onAddIngredient, mealName, clientRegion, userCode }) => {
   const { language, t } = useLanguage();
   const { themeClasses } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +57,10 @@ const AddIngredientModal = ({ visible, onClose, onAddIngredient, mealName, clien
   const [selectedFood, setSelectedFood] = useState(null);
   const [quantity, setQuantity] = useState(100);
   const [householdMeasure, setHouseholdMeasure] = useState('');
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportType, setReportType] = useState('incorrect_values');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   // Real-time weight validation when quantity (grams) changes - shown in modal before Add
   const weightValidation = selectedFood ? getWeightValidation(quantity, language) : null;
@@ -61,6 +73,10 @@ const AddIngredientModal = ({ visible, onClose, onAddIngredient, mealName, clien
       setQuantity(100);
       setHouseholdMeasure('');
       setConvertingMeasure(false);
+      setShowReportForm(false);
+      setReportType('incorrect_values');
+      setReportDescription('');
+      setReportSubmitting(false);
     }
   }, [visible]);
 
@@ -216,6 +232,41 @@ const AddIngredientModal = ({ visible, onClose, onAddIngredient, mealName, clien
 
     onAddIngredient(ingredient);
     onClose();
+  };
+
+  const handleSubmitReport = async () => {
+    if (!selectedFood) return;
+    setReportSubmitting(true);
+    try {
+      const foodSnapshot = {
+        name: selectedFood.name || selectedFood.item,
+        brand: selectedFood.brand || '',
+        calories: selectedFood.calories ?? 0,
+        protein: selectedFood.protein ?? 0,
+        carbs: selectedFood.carbs ?? 0,
+        fat: selectedFood.fat ?? 0,
+      };
+      const { data, error } = await reportIngredient({
+        foodId: selectedFood.id,
+        foodSnapshot,
+        reportType,
+        description: reportDescription.trim() || undefined,
+        userCode: userCode || undefined,
+      });
+      if (error) {
+        alert(language === 'hebrew' ? 'שליחת הדיווח נכשלה. נסה שוב.' : 'Failed to submit report. Please try again.');
+        return;
+      }
+      setShowReportForm(false);
+      setReportDescription('');
+      setReportType('incorrect_values');
+      alert(language === 'hebrew' ? 'תודה! הדיווח נשלח בהצלחה.' : 'Thank you! Your report has been submitted.');
+    } catch (e) {
+      console.error('Report submit error:', e);
+      alert(language === 'hebrew' ? 'שגיאה בשליחת הדיווח.' : 'Error submitting report.');
+    } finally {
+      setReportSubmitting(false);
+    }
   };
 
   if (!visible) return null;
@@ -453,6 +504,68 @@ const AddIngredientModal = ({ visible, onClose, onAddIngredient, mealName, clien
                       </span>
                     </div>
                   </div>
+                </div>
+
+                {/* Report button & form */}
+                <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                  {!showReportForm ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowReportForm(true)}
+                      className={`flex items-center gap-2 text-sm ${themeClasses.textSecondary} hover:${themeClasses.textPrimary} transition-colors`}
+                      title={language === 'hebrew' ? 'דווח על מידע שגוי או ערכים לא נכונים' : 'Report misinformation, incorrect values, or other issues'}
+                    >
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      {language === 'hebrew' ? 'דווח על שגיאה' : 'Report an error'}
+                    </button>
+                  ) : (
+                    <div className={`${themeClasses.bgCard} rounded-lg p-3 space-y-3`}>
+                      <p className={`${themeClasses.textPrimary} text-sm font-medium`}>
+                        {language === 'hebrew' ? 'מה לא נכון?' : 'What’s wrong?'}
+                      </p>
+                      <select
+                        value={reportType}
+                        onChange={(e) => setReportType(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-lg border-2 ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 text-sm`}
+                      >
+                        {REPORT_TYPES.map((r) => (
+                          <option key={r.value} value={r.value}>
+                            {language === 'hebrew' ? r.labelHe : r.labelEn}
+                          </option>
+                        ))}
+                      </select>
+                      <textarea
+                        value={reportDescription}
+                        onChange={(e) => setReportDescription(e.target.value)}
+                        placeholder={language === 'hebrew' ? 'פרטים (אופציונלי)' : 'Details (optional)'}
+                        rows={2}
+                        className={`w-full px-3 py-2 rounded-lg border-2 ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 text-sm resize-none`}
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => { setShowReportForm(false); setReportDescription(''); setReportType('incorrect_values'); }}
+                          disabled={reportSubmitting}
+                          className={`px-3 py-1.5 rounded-lg text-sm ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:opacity-80 disabled:opacity-50`}
+                        >
+                          {language === 'hebrew' ? 'ביטול' : 'Cancel'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSubmitReport}
+                          disabled={reportSubmitting}
+                          className="px-3 py-1.5 rounded-lg text-sm bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {reportSubmitting ? (
+                            <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                          ) : null}
+                          {language === 'hebrew' ? 'שלח דיווח' : 'Submit report'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

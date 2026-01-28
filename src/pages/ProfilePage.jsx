@@ -6516,6 +6516,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         onAddIngredient={handleAddIngredient}
         mealName={selectedMealIndex !== null && planData?.meals[selectedMealIndex]?.meal}
         clientRegion={clientRegion}
+        userCode={userCode}
       />
 
       {/* Edit Ingredient Portion Modal */}
@@ -6543,6 +6544,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         onAddIngredient={handleAddAlternativeIngredient}
         mealName={selectedAlternativeMealIndex !== null && planData?.meals[selectedAlternativeMealIndex]?.meal}
         clientRegion={clientRegion}
+        userCode={userCode}
       />
 
       {/* Edit Alternative Ingredient Portion Modal */}
@@ -9462,6 +9464,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         onAddIngredient={handleAddIngredient}
         mealName={selectedMealForIngredient ? (mealTitleMap[selectedMealForIngredient] || t.profile.dailyLogTab.meals[selectedMealForIngredient] || selectedMealForIngredient) : null}
         clientRegion={clientRegion}
+        userCode={userCode}
       />
 
       {/* Edit Ingredient Portion Modal */}

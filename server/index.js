@@ -4991,6 +4991,61 @@ app.post('/api/contact', async (req, res) => {
 });
 
 // ====================================
+// INGREDIENT REPORTS (misinformation, wrong values, etc.)
+// ====================================
+// Table: ingredient_reports (run server/sql/ingredient_reports.sql in chat Supabase)
+
+const INGREDIENT_REPORT_TYPES = ['misinformation', 'incorrect_values', 'wrong_name', 'wrong_portion', 'other'];
+
+app.post('/api/ingredient-reports', async (req, res) => {
+  try {
+    const { foodId, foodSnapshot, reportType, description, userCode } = req.body;
+
+    if (!foodId) {
+      return res.status(400).json({ error: 'foodId is required' });
+    }
+    if (!reportType || !INGREDIENT_REPORT_TYPES.includes(reportType)) {
+      return res.status(400).json({
+        error: 'reportType is required and must be one of: ' + INGREDIENT_REPORT_TYPES.join(', ')
+      });
+    }
+
+    if (!chatSupabase) {
+      return res.status(503).json({ error: 'Database not configured for ingredient reports' });
+    }
+
+    const ipAddress = req.ip || req.connection?.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    const row = {
+      food_id: String(foodId),
+      food_snapshot: foodSnapshot || null,
+      report_type: reportType,
+      description: description && String(description).trim() ? String(description).trim() : null,
+      reporter_user_code: userCode && String(userCode).trim() ? String(userCode).trim() : null,
+      ip_address: ipAddress,
+      user_agent: userAgent
+    };
+
+    const { data, error } = await chatSupabase
+      .from('ingredient_reports')
+      .insert([row])
+      .select('id, created_at');
+
+    if (error) {
+      console.error('ingredient_reports insert error:', error);
+      return res.status(500).json({ error: 'Failed to save report' });
+    }
+
+    console.log('Ingredient report saved:', { id: data?.[0]?.id, foodId, reportType, userCode: userCode || 'anonymous' });
+    res.status(200).json({ success: true, id: data?.[0]?.id });
+  } catch (err) {
+    console.error('ingredient-reports error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ====================================
 // MACRO SUMMARY SVG ENDPOINT
 // ====================================
 

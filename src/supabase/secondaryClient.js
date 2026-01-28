@@ -747,6 +747,34 @@ export const getFoodById = async (foodId) => {
   }
 };
 
+/**
+ * Report incorrect or misleading ingredient data.
+ * @param {Object} params
+ * @param {string|number} params.foodId - id from ingridientsroee
+ * @param {Object} [params.foodSnapshot] - { name, brand, calories, protein, carbs, fat } at report time
+ * @param {string} params.reportType - 'misinformation' | 'incorrect_values' | 'wrong_name' | 'wrong_portion' | 'other'
+ * @param {string} [params.description] - optional details
+ * @param {string} [params.userCode] - optional reporter user_code
+ */
+export const reportIngredient = async ({ foodId, foodSnapshot, reportType, description, userCode }) => {
+  try {
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/ingredient-reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ foodId, foodSnapshot, reportType, description, userCode })
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      return { data: null, error: { message: result.error || 'Failed to submit report' } };
+    }
+    return { data: result, error: null };
+  } catch (error) {
+    console.error('Error submitting ingredient report:', error);
+    return { data: null, error };
+  }
+};
+
 // Debug function to check meal plans
 export const debugMealPlans = async (userCode) => {
   try {
