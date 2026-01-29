@@ -35,24 +35,9 @@ const PaymentSuccessPage = () => {
       const data = await getCheckoutSession(sessionId);
       setSessionData(data);
 
-      // After onboarding upsell checkout: send WhatsApp welcome by user_id (once per session)
-      // Metadata can be on session or on subscription (subscription_data.metadata); check both.
-      const meta = data?.metadata || (typeof data?.subscription === 'object' ? data?.subscription?.metadata : null) || {};
-      const isUpsell = meta.from === 'onboarding_upsell' && meta.user_id;
-      if (isUpsell) {
-        const sentKey = `wa_upsell_${data.id}`;
-        if (!sessionStorage.getItem(sentKey)) {
-          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
-          fetch(`${apiUrl}/api/whatsapp/send-welcome-by-user-id`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: meta.user_id })
-          })
-            .then((r) => { if (r.ok) sessionStorage.setItem(sentKey, '1'); })
-            .catch((e) => console.warn('WhatsApp send-welcome-by-user-id failed:', e));
-        }
-      }
-      
+      // WhatsApp welcome for onboarding upsell is sent once by the server Stripe webhook
+      // (customer.subscription.created) — do not send again here to avoid duplicate template.
+
       // If user isn't authenticated, redirect to login after showing success
       if (!isAuthenticated) {
         setTimeout(() => {
