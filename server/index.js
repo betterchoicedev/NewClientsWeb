@@ -230,10 +230,6 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
           commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
         }
-        // digital_only (usage-based): 3-month guarantee
-        else if (productId === 'prod_TrcVkwBC0wmqKp') {
-          commitmentMonths = 3;
-        }
         
         // Calculate commitment end date (only if there's a commitment period)
         let commitmentEndDate = null;
@@ -601,6 +597,28 @@ app.get('/api/stripe/subscriptions', async (req, res) => {
   }
 });
 
+// Remove user from stripe_usage_log when they cancel (usage-based / digital_only tracking)
+async function removeUserFromStripeUsageLog(userId) {
+  if (!userId) return;
+  try {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('user_code')
+      .eq('user_id', userId)
+      .maybeSingle();
+    const userCode = client?.user_code;
+    if (!userCode) return;
+    const { error } = await supabase
+      .from('stripe_usage_log')
+      .delete()
+      .eq('user_code', userCode);
+    if (error) console.warn('⚠️ stripe_usage_log delete failed for user_code:', userCode, error.message);
+    else console.log('✅ Removed stripe_usage_log row for user_code:', userCode);
+  } catch (e) {
+    console.warn('⚠️ removeUserFromStripeUsageLog:', e.message);
+  }
+}
+
 // Cancel subscription
 app.post('/api/stripe/subscriptions/:subscriptionId/cancel', async (req, res) => {
   try {
@@ -622,6 +640,15 @@ app.post('/api/stripe/subscriptions/:subscriptionId/cancel', async (req, res) =>
     }
     
     console.log('Subscription cancelled:', subscription.id, 'status:', subscription.status);
+
+    // Remove from stripe_usage_log so usage-based tracking stops
+    const userId = subscription.metadata?.user_id;
+    if (!userId) {
+      const { data: row } = await supabase.from('stripe_subscriptions').select('user_id').eq('stripe_subscription_id', subscriptionId).maybeSingle();
+      if (row?.user_id) await removeUserFromStripeUsageLog(row.user_id);
+    } else {
+      await removeUserFromStripeUsageLog(userId);
+    }
     
     res.json(subscription);
   } catch (error) {
@@ -1047,10 +1074,6 @@ async function handleSubscriptionCreated(subscription) {
     } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
       commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
     }
-    // digital_only (usage-based): 3-month guarantee
-    else if (productId === 'prod_TrcVkwBC0wmqKp') {
-      commitmentMonths = 3;
-    }
     
     // Calculate commitment end date from subscription start date (only if there's a commitment period)
     let commitmentEndDate = null;
@@ -1212,10 +1235,6 @@ async function handleSubscriptionUpdated(subscription) {
     } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
       commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
     }
-    // digital_only (usage-based): 3-month guarantee
-    else if (productId === 'prod_TrcVkwBC0wmqKp') {
-      commitmentMonths = 3;
-    }
 
     // Determine subscription type based on product ID (same mapping as on create)
     let subscriptionType = 'unknown';
@@ -1308,7 +1327,6 @@ async function handleSubscriptionDeleted(subscription) {
     // Get product and price info to calculate commitment_end_date
     const price = subscription.items.data[0]?.price;
     const priceId = price?.id;
-    const productId = price?.product;
     const currentDate = new Date(subscription.current_period_start * 1000);
     
     // Determine commitment period based on exact price ID mapping
@@ -1337,10 +1355,6 @@ async function handleSubscriptionDeleted(subscription) {
     } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
       commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
     }
-    // digital_only (usage-based): 3-month guarantee
-    else if (productId === 'prod_TrcVkwBC0wmqKp') {
-      commitmentMonths = 3;
-    }
     
     // Calculate commitment end date (only if there's a commitment period)
     let commitmentEndDate = null;
@@ -1362,6 +1376,14 @@ async function handleSubscriptionDeleted(subscription) {
       console.error('❌ Error marking subscription as cancelled:', deleteError);
     } else {
       console.log('✅ Subscription marked as cancelled successfully');
+
+      // Remove from stripe_usage_log so usage-based tracking is cleared
+      let uid = subscription.metadata?.user_id;
+      if (!uid) {
+        const { data: subRow } = await supabase.from('stripe_subscriptions').select('user_id').eq('stripe_subscription_id', subscription.id).maybeSingle();
+        uid = subRow?.user_id;
+      }
+      if (uid) await removeUserFromStripeUsageLog(uid);
 
       // Also update clients and chat_users subscription info
       // Get customer email from Stripe

@@ -2232,8 +2232,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         </p>
         <p className={`${themeClasses.textSecondary} italic opacity-70 text-[10px] sm:text-xs`}>
           {language === 'hebrew'
-            ? '**ההתחייבות היא ל-3 חודשים, אך ניתן לבטל את החיוב בכל שלב'
-            : '**3-month commitment, but you can cancel the charge at any time'}
+            ? '**ניתן לבטל את החיוב בכל שלב'
+            : '**you can cancel the charge at any time'}
         </p>
       </div>
     </div>
