@@ -4,7 +4,6 @@ import time
 import traceback
 
 # הגדרות - שנה ל-Secret Key שלך (או השתמש ב-STRIPE_SECRET_KEY מהסביבה)
-stripe.api_key = "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"
 
 
 def report_usage_for_user(si_id):
