@@ -1647,8 +1647,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     }
   };
 
-  // Usage-based support: prod_TrcVkwBC0wmqKp, price_1SutYqHIeYfvCylDLDxujZa6 — 26+ days in a row = free
-  const USAGE_BASED_PRICE_ID = 'price_1SutYqHIeYfvCylDLDxujZa6';
+  // Usage-based support: prod_TrcVkwBC0wmqKp, price_1SttGvHIeYfvCylDK1kBIROD — 26+ days in a row = free
+  const USAGE_BASED_PRICE_ID = 'price_1SttGvHIeYfvCylDK1kBIROD';
 
   const sendWhatsAppAndClose = () => {
     const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
@@ -2200,32 +2200,42 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       {/* הסבר מרכזי */}
       <p className={`${themeClasses.textPrimary} text-lg font-medium mb-4 leading-tight`}>
         {language === 'hebrew'
-          ? 'המטרה שלנו היא שתהיו בריאים. לכן, אם תתמידו בשימוש בבוט - חינם לגמרי.'
-          : 'Our goal is your health. If you stay consistent with the bot -  completely free.'}
+          ? 'המטרה שלנו היא שתהיו בריאים. לכן, אם תתמידו בשימוש במערכת - חינם לגמרי.'
+          : 'Our goal is your health. If you stay consistent with the system - completely free.'}
       </p>
 
-      {/* פירוט המחיר עם הניסוח החדש */}
+      {/* פירוט המחיר */}
       <div className={`p-5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 mb-6 shadow-inner`}>
         <p className={`${themeClasses.textSecondary} text-sm sm:text-lg leading-relaxed`}>
           {language === 'hebrew' ? (
             <>
-              כל יום שימוש שווה <span className="text-emerald-400 font-bold">$2</span>, <br />
-              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">אבל מותר לכם לפספס עד 4 ימים בחודש</span> <br />
+              כל יום שימוש שווה <span className="text-emerald-400 font-bold">כסף</span>, <br />
+              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">אבל מותר לכם כמה ימים בחודש</span> <br />
               ועדיין לקבל את כל השירות בחינם!
             </>
           ) : (
             <>
-              Each day of use is <span className="text-emerald-400 font-bold">$2</span>, <br />
-              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">but you can miss up to 4 days a month</span> <br />
+              Each day of use is <span className="text-emerald-400 font-bold">money</span>, <br />
+              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">but you can miss a couple of days a month</span> <br />
               and still get everything for free!
             </>
           )}
         </p>
       </div>
 
-      <p className={`${themeClasses.textPrimary} font-medium italic opacity-90 text-sm`}>
-        {language === 'hebrew' ? '*החיוב יתבצע רק אם לא תעמדו ביעד ההתמדה' : '*Payment is only required if the consistency goal isn\'t met'}
-      </p>
+      {/* כוכביות הסבר */}
+      <div className="space-y-1">
+        <p className={`${themeClasses.textPrimary} font-medium italic opacity-90 text-xs sm:text-sm`}>
+          {language === 'hebrew' 
+            ? '*החיוב יתבצע רק אם לא תעמדו ביעד ההתמדה (מקסימום $48 לחודש)' 
+            : '*Payment is only required if the consistency goal isn\'t met (max $48/mo)'}
+        </p>
+        <p className={`${themeClasses.textSecondary} italic opacity-70 text-[10px] sm:text-xs`}>
+          {language === 'hebrew'
+            ? '**ההתחייבות היא ל-3 חודשים, אך ניתן לבטל את החיוב בכל שלב'
+            : '**3-month commitment, but you can cancel the charge at any time'}
+        </p>
+      </div>
     </div>
 
     {/* כפתורי פעולה */}

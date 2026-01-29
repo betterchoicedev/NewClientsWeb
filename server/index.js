@@ -200,7 +200,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
         else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
         else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-        else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SutYqHIeYfvCylDLDxujZa6') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+        else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SttGvHIeYfvCylDK1kBIROD') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
         
         // Determine commitment period based on exact price ID mapping
         let commitmentMonths = null; // Default no commitment 
@@ -229,6 +229,10 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
           commitmentMonths = 3; // Nutrition Only 2x/month 3-Month Plan
         } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
           commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
+        }
+        // digital_only (usage-based): 3-month guarantee
+        else if (productId === 'prod_TrcVkwBC0wmqKp') {
+          commitmentMonths = 3;
         }
         
         // Calculate commitment end date (only if there's a commitment period)
@@ -367,7 +371,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
     console.log('Creating checkout session for price:', priceId, 'mode:', mode);
 
     // Metered/usage-based price: omit quantity (Stripe requires it removed, not 0)
-    const USAGE_BASED_PRICE = 'price_1SutYqHIeYfvCylDLDxujZa6';
+    const USAGE_BASED_PRICE = 'price_1SttGvHIeYfvCylDK1kBIROD';
     const lineItem = { price: priceId };
     if (priceId !== USAGE_BASED_PRICE) lineItem.quantity = 1;
 
@@ -1012,7 +1016,7 @@ async function handleSubscriptionCreated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SutYqHIeYfvCylDLDxujZa6') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SttGvHIeYfvCylDK1kBIROD') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null; // Default no commitment
@@ -1042,6 +1046,10 @@ async function handleSubscriptionCreated(subscription) {
       commitmentMonths = 3; // Nutrition Only 2x/month 3-Month Plan
     } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
       commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
+    }
+    // digital_only (usage-based): 3-month guarantee
+    else if (productId === 'prod_TrcVkwBC0wmqKp') {
+      commitmentMonths = 3;
     }
     
     // Calculate commitment end date from subscription start date (only if there's a commitment period)
@@ -1132,8 +1140,8 @@ async function handleSubscriptionCreated(subscription) {
         console.error('❌ Error retrieving customer for subscription info update:', customerError);
       }
 
-      // Onboarding upsell (usage-based): prod_TrcVkwBC0wmqKp / price_1SutYqHIeYfvCylDLDxujZa6 — send WhatsApp welcome
-      if (priceId === 'price_1SutYqHIeYfvCylDLDxujZa6' && userId) {
+      // Onboarding upsell (usage-based): prod_TrcVkwBC0wmqKp / price_1SttGvHIeYfvCylDK1kBIROD — send WhatsApp welcome
+      if (priceId === 'price_1SttGvHIeYfvCylDK1kBIROD' && userId) {
         try {
           const r = await sendWhatsAppWelcomeByUserId(userId);
           if (r.success) console.log('📱 WhatsApp welcome sent (onboarding upsell) for user:', userId);
@@ -1204,6 +1212,10 @@ async function handleSubscriptionUpdated(subscription) {
     } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
       commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
     }
+    // digital_only (usage-based): 3-month guarantee
+    else if (productId === 'prod_TrcVkwBC0wmqKp') {
+      commitmentMonths = 3;
+    }
 
     // Determine subscription type based on product ID (same mapping as on create)
     let subscriptionType = 'unknown';
@@ -1211,7 +1223,7 @@ async function handleSubscriptionUpdated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SutYqHIeYfvCylDLDxujZa6') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SttGvHIeYfvCylDK1kBIROD') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Calculate commitment end date - use stored value if exists, otherwise calculate from start date
     let commitmentEndDate = null;
@@ -1296,6 +1308,7 @@ async function handleSubscriptionDeleted(subscription) {
     // Get product and price info to calculate commitment_end_date
     const price = subscription.items.data[0]?.price;
     const priceId = price?.id;
+    const productId = price?.product;
     const currentDate = new Date(subscription.current_period_start * 1000);
     
     // Determine commitment period based on exact price ID mapping
@@ -1323,6 +1336,10 @@ async function handleSubscriptionDeleted(subscription) {
       commitmentMonths = 3; // Nutrition Only 2x/month 3-Month Plan
     } else if (priceId === 'price_1Rg5QtHIeYfvCylDwr9v599a') {
       commitmentMonths = 6; // Nutrition Only 2x/month 6-Month Plan
+    }
+    // digital_only (usage-based): 3-month guarantee
+    else if (productId === 'prod_TrcVkwBC0wmqKp') {
+      commitmentMonths = 3;
     }
     
     // Calculate commitment end date (only if there's a commitment period)

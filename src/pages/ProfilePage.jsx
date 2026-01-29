@@ -9535,6 +9535,30 @@ const PricingTab = ({ themeClasses, user, language }) => {
     await fetchUserSubscriptions();
   };
 
+  const [cancellingSubscriptionId, setCancellingSubscriptionId] = useState(null);
+  const [cancelError, setCancelError] = useState(null);
+
+  const handleCancelPlan = async (subscriptionId) => {
+    if (!subscriptionId) return;
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    setCancelError(null);
+    setCancellingSubscriptionId(subscriptionId);
+    try {
+      const res = await fetch(`${apiUrl}/api/stripe/subscriptions/${subscriptionId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cancelAtPeriodEnd: false })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to cancel');
+      await refreshSubscriptions();
+    } catch (err) {
+      setCancelError(err.message || (language === 'hebrew' ? 'שגיאה בביטול המנוי' : 'Error cancelling subscription'));
+    } finally {
+      setCancellingSubscriptionId(null);
+    }
+  };
+
   const hasActiveSubscription = (productId) => {
     return userSubscriptions.some(sub => {
       if (sub.status !== 'active') return false;
@@ -9635,6 +9659,7 @@ const PricingTab = ({ themeClasses, user, language }) => {
                       <p className={`${themeClasses.textPrimary} font-medium`}>
                         {(() => {
                           const productId = subscription.items?.data?.[0]?.price?.product;
+                          if (productId === 'prod_TrcVkwBC0wmqKp') return 'digital_only';
                           const product = getProduct(productId);
                           if (!product) return productId || 'Subscription';
                           return language === 'hebrew' ? (product.nameHebrew || product.name) : product.name;
@@ -9660,6 +9685,23 @@ const PricingTab = ({ themeClasses, user, language }) => {
                       })()}
                     </div>
                   </div>
+                  {subscription.items?.data?.[0]?.price?.product === 'prod_TrcVkwBC0wmqKp' && (
+                    <div className="mt-3 pt-3 border-t border-gray-500/30">
+                      {cancelError && (
+                        <p className="text-red-500 dark:text-red-400 text-sm mb-2" role="alert">{cancelError}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleCancelPlan(subscription.id)}
+                        disabled={cancellingSubscriptionId === subscription.id}
+                        className="text-sm font-medium text-red-500 hover:text-red-400 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {cancellingSubscriptionId === subscription.id
+                          ? (language === 'hebrew' ? 'מבטל...' : 'Cancelling...')
+                          : (language === 'hebrew' ? 'ביטול מנוי' : 'Cancel plan')}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
