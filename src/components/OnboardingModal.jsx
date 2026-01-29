@@ -1647,8 +1647,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     }
   };
 
-  // Usage-based support: prod_TrcVkwBC0wmqKp, price_1SttGvHIeYfvCylDK1kBIROD — 26+ days in a row = free
-  const USAGE_BASED_PRICE_ID = 'price_1SttGvHIeYfvCylDK1kBIROD';
+  // Usage-based support: prod_TrcVkwBC0wmqKp, price_1SutYqHIeYfvCylDLDxujZa6 — 26+ days in a row = free
+  const USAGE_BASED_PRICE_ID = 'price_1SutYqHIeYfvCylDLDxujZa6';
 
   const sendWhatsAppAndClose = () => {
     const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
@@ -2118,13 +2118,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.warn('⚠️ No userCode available - chat_users table was not updated. This may happen for new Google signups.');
       }
 
-      console.log('✅ Onboarding data saved successfully — closing and sending WhatsApp (payment popup disabled).');
+      console.log('✅ Onboarding data saved successfully — showing support offer then WhatsApp.');
       
-      // Payment/usage-based offer popup disabled — go straight to WhatsApp and close.
-      // setCompletedOnboardingContext({ clientData, formData, allOnboardingFields });
-      // setShowUsageBasedOffer(true);
       setLoading(false);
-      sendWhatsAppAndClose();
+      setShowUsageBasedOffer(true);
       return;
     } catch (err) {
       console.error('❌ Error saving onboarding data:', err);
@@ -2175,56 +2172,83 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4" dir={direction}>
-        <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 p-6 sm:p-8 md:p-10 max-w-lg w-full max-h-[95vh] overflow-y-auto animate-scaleIn relative text-center`}>
-          <div className="absolute top-0 left-0 right-0 h-16 sm:h-24 bg-gradient-to-br from-emerald-500/20 via-established-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none" />
-          <button
-            onClick={toggleLanguage}
-            className={`absolute top-2 right-2 sm:top-4 sm:right-4 z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
-            title={language === 'hebrew' ? 'Switch to English' : 'עברית'}
-          >
-            <span className="hidden sm:inline">{language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}</span>
-            <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
-          </button>
-          <div className="relative mt-6 sm:mt-4 mb-6">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-emerald-400 to-established-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
-              <span className="text-2xl sm:text-3xl">💚</span>
-            </div>
-            <h2 className={`text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-established-400 bg-clip-text text-transparent mb-3 ${themeClasses.textPrimary}`}>
-              {language === 'hebrew' ? 'תמכו בעבודה שלנו' : 'Support our work'}
-            </h2>
-            <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-1`}>
-              {language === 'hebrew'
-                ? 'תשלום לפי שימוש: אם תשתמשו במערכת 26+ ימים ברציפות — לא תשלמו כלום.'
-                : 'Usage-based: if you use the system 26+ days in a row, you pay nothing.'}
-            </p>
-            <p className={`${themeClasses.textSecondary} text-sm opacity-90`}>
-              {language === 'hebrew'
-                ? 'כל תמיכה עוזרת לנו להמשיך לשפר — אבל זה לא חובה.'
-                : 'Any support helps us keep improving — but it\'s optional.'}
-            </p>
-          </div>
-          {error && (
-            <p className="text-red-500 dark:text-red-400 text-sm mb-4" role="alert">{error}</p>
-          )}
-          <div className="flex flex-col gap-3 mt-6">
-            <button
-              onClick={handleSupport}
-              disabled={checkoutLoading}
-              className="w-full py-3.5 px-6 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-established-600 hover:from-emerald-600 hover:to-established-700 focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-70 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/25"
-            >
-              {checkoutLoading
-                ? (language === 'hebrew' ? 'טוען...' : 'Loading...')
-                : (language === 'hebrew' ? 'תמכו בעבודה שלנו' : 'Support our work')}
-            </button>
-            <button
-              onClick={sendWhatsAppAndClose}
-              className={`w-full py-3 px-6 rounded-xl font-medium ${themeClasses.textSecondary} ${themeClasses.bgCard} border-2 border-gray-500/40 hover:border-gray-400/60 transition-all`}
-            >
-              {language === 'hebrew' ? 'דלג לעת עתה' : 'Skip for now'}
-            </button>
-          </div>
-        </div>
+  <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 p-6 sm:p-8 md:p-10 max-w-lg w-full max-h-[95vh] overflow-y-auto animate-scaleIn relative text-center`}>
+    
+    {/* עיצוב רקע עליון */}
+    <div className="absolute top-0 left-0 right-0 h-16 sm:h-24 bg-gradient-to-br from-emerald-500/20 via-blue-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none" />
+    
+    {/* כפתור שפה */}
+    <button
+      onClick={toggleLanguage}
+      className={`absolute top-2 right-2 sm:top-4 sm:right-4 z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
+    >
+      <span className="hidden sm:inline">{language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}</span>
+      <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
+    </button>
+
+    <div className="relative mt-6 sm:mt-4 mb-6">
+      {/* אייקון מוטיבציה */}
+      <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
+        <span className="text-3xl">🏁</span>
       </div>
+      
+      {/* כותרת */}
+      <h2 className={`text-2xl sm:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent mb-3 ${themeClasses.textPrimary}`}>
+        {language === 'hebrew' ? 'ההתמדה שלכם, המתנה שלנו!' : 'Your consistency, our gift!'}
+      </h2>
+      
+      {/* הסבר מרכזי */}
+      <p className={`${themeClasses.textPrimary} text-lg font-medium mb-4 leading-tight`}>
+        {language === 'hebrew'
+          ? 'המטרה שלנו היא שתהיו בריאים. לכן, אם תתמידו בשימוש בבוט - חינם לגמרי.'
+          : 'Our goal is your health. If you stay consistent with the bot -  completely free.'}
+      </p>
+
+      {/* פירוט המחיר עם הניסוח החדש */}
+      <div className={`p-5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 mb-6 shadow-inner`}>
+        <p className={`${themeClasses.textSecondary} text-sm sm:text-lg leading-relaxed`}>
+          {language === 'hebrew' ? (
+            <>
+              כל יום שימוש שווה <span className="text-emerald-400 font-bold">$2</span>, <br />
+              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">אבל מותר לכם לפספס עד 4 ימים בחודש</span> <br />
+              ועדיין לקבל את כל השירות בחינם!
+            </>
+          ) : (
+            <>
+              Each day of use is <span className="text-emerald-400 font-bold">$2</span>, <br />
+              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">but you can miss up to 4 days a month</span> <br />
+              and still get everything for free!
+            </>
+          )}
+        </p>
+      </div>
+
+      <p className={`${themeClasses.textPrimary} font-medium italic opacity-90 text-sm`}>
+        {language === 'hebrew' ? '*החיוב יתבצע רק אם לא תעמדו ביעד ההתמדה' : '*Payment is only required if the consistency goal isn\'t met'}
+      </p>
+    </div>
+
+    {/* כפתורי פעולה */}
+    <div className="flex flex-col gap-3 mt-6">
+      <button
+        onClick={handleSupport}
+        disabled={checkoutLoading}
+        className="w-full py-4 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25"
+      >
+        {checkoutLoading
+          ? (language === 'hebrew' ? 'מתחברים...' : 'Connecting...')
+          : (language === 'hebrew' ? 'אני בפנים, בואו נתחיל!' : 'I\'m in, let\'s start!')}
+      </button>
+      
+      <button
+        onClick={sendWhatsAppAndClose}
+        className={`w-full py-3 px-6 rounded-xl font-medium ${themeClasses.textSecondary} opacity-60 hover:opacity-100 transition-all text-sm`}
+      >
+        {language === 'hebrew' ? 'דלג לעת עתה' : 'Skip for now'}
+      </button>
+    </div>
+  </div>
+</div>
     );
   }
 

@@ -200,7 +200,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
         else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
         else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-        else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SttGvHIeYfvCylDK1kBIROD') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+        else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SutYqHIeYfvCylDLDxujZa6') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
         
         // Determine commitment period based on exact price ID mapping
         let commitmentMonths = null; // Default no commitment 
@@ -367,7 +367,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
     console.log('Creating checkout session for price:', priceId, 'mode:', mode);
 
     // Metered/usage-based price: omit quantity (Stripe requires it removed, not 0)
-    const USAGE_BASED_PRICE = 'price_1SttGvHIeYfvCylDK1kBIROD';
+    const USAGE_BASED_PRICE = 'price_1SutYqHIeYfvCylDLDxujZa6';
     const lineItem = { price: priceId };
     if (priceId !== USAGE_BASED_PRICE) lineItem.quantity = 1;
 
@@ -1012,7 +1012,7 @@ async function handleSubscriptionCreated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SttGvHIeYfvCylDK1kBIROD') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SutYqHIeYfvCylDLDxujZa6') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null; // Default no commitment
@@ -1132,8 +1132,8 @@ async function handleSubscriptionCreated(subscription) {
         console.error('❌ Error retrieving customer for subscription info update:', customerError);
       }
 
-      // Onboarding upsell (usage-based): prod_TrcVkwBC0wmqKp / price_1SttGvHIeYfvCylDK1kBIROD — send WhatsApp welcome
-      if (priceId === 'price_1SttGvHIeYfvCylDK1kBIROD' && userId) {
+      // Onboarding upsell (usage-based): prod_TrcVkwBC0wmqKp / price_1SutYqHIeYfvCylDLDxujZa6 — send WhatsApp welcome
+      if (priceId === 'price_1SutYqHIeYfvCylDLDxujZa6' && userId) {
         try {
           const r = await sendWhatsAppWelcomeByUserId(userId);
           if (r.success) console.log('📱 WhatsApp welcome sent (onboarding upsell) for user:', userId);
@@ -1211,7 +1211,7 @@ async function handleSubscriptionUpdated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SttGvHIeYfvCylDK1kBIROD') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SutYqHIeYfvCylDLDxujZa6') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Calculate commitment end date - use stored value if exists, otherwise calculate from start date
     let commitmentEndDate = null;

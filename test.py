@@ -4,7 +4,7 @@ import time
 import traceback
 
 # הגדרות - שנה ל-Secret Key שלך (או השתמש ב-STRIPE_SECRET_KEY מהסביבה)
-stripe.api_key = ""
+stripe.api_key = "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"
 
 
 def report_usage_for_user(si_id):
@@ -35,5 +35,5 @@ def report_usage_for_user(si_id):
 
 
 if __name__ == "__main__":
-    target_id = sys.argv[1] if len(sys.argv) > 1 else "si_Trwi55Y21c1AGn"
+    target_id = sys.argv[1] if len(sys.argv) > 1 else "si_TrxR1QopvHyspo"
     report_usage_for_user(target_id)
