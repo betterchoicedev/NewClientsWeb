@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -14,6 +14,7 @@ function HomePage() {
   const { user, isAuthenticated, userDisplayName, loading } = useAuth();
   const { isDarkMode, toggleTheme, themeClasses } = useTheme();
   const { createCheckoutSession, loading: stripeLoading } = useStripe();
+  const navigate = useNavigate();
   const [isProfileIncomplete, setIsProfileIncomplete] = useState(false);
   const [showPlanDetailsModal, setShowPlanDetailsModal] = useState(false);
   const [commitmentPeriod, setCommitmentPeriod] = useState(3);
@@ -40,6 +41,13 @@ function HomePage() {
     showBotMessage: false,
     showButtons: false
   });
+
+  // Redirect authenticated users to profile page
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      navigate('/profile');
+    }
+  }, [loading, isAuthenticated, navigate]);
 
   // Format price based on currency
   const formatPrice = (priceILS, priceUSD) => {

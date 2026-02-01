@@ -9145,9 +9145,6 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                     <p className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium mb-1 uppercase tracking-wide`}>
                       {meal}
                     </p>
-                    <h4 className={`${themeClasses.textPrimary} text-lg sm:text-xl md:text-2xl lg:text-base sm:text-lg md:text-xl font-bold tracking-tight`}>
-                      {language === 'hebrew' ? 'על פי התוכנית שלך - ' : 'Your Plan - '}{mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal}
-                    </h4>
                   </div>
                   {/* Add Ingredient Button */}
                   <button
@@ -9445,6 +9442,9 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                     <p className={`${themeClasses.textMuted} text-sm mt-2`}>{t.profile.dailyLogTab.addFirstEntry}</p>
                   </div>
               )}
+                <h4 className={`${themeClasses.textPrimary} text-lg sm:text-xl md:text-2xl lg:text-base sm:text-lg md:text-xl font-bold tracking-tight mt-4`}>
+                  {language === 'hebrew' ? 'על פי התוכנית שלך - ' : 'Your Plan - '}{mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal}
+                </h4>
                 </div>
               </div>
           );
