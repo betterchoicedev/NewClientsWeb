@@ -9335,31 +9335,30 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                                 </div>
                               </div>
                             ) : (
-                              <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <p className={`${themeClasses.textPrimary} font-medium text-sm`}>
-                                    {language === 'hebrew' ? 'רשומת מזון' : 'Food Entry'}
-                              </p>
-                              {log.image_url && (
-                                    <div className="w-6 h-6 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded flex items-center justify-center border border-emerald-500/30">
-                                      <svg className="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd"/>
-                                  </svg>
-                      </div>
-                              )}
-                            </div>
-                                <div className="flex items-center gap-3 text-xs">
-                              {settings.showCalories && (
-                                    <span className="text-emerald-400 font-medium">{logCalories} {language === 'hebrew' ? 'קל' : 'cal'}</span>
-                              )}
-                              {settings.showMacros && (
-                                <>
-                                      <span className="text-purple-400 font-medium">{formatWeight(logProtein)} {language === 'hebrew' ? 'חלבון' : 'protein'}</span>
-                                      <span className="text-amber-400 font-medium">{formatWeight(logFat)} {language === 'hebrew' ? 'שומן' : 'fat'}</span>
-                                      <span className="text-blue-400 font-medium">{formatWeight(logCarbs)} {language === 'hebrew' ? 'פחמימות' : 'carbs'}</span>
-                                </>
-                              )}
-                            </div>
+                              /* Empty meal entry fallback - no food items logged yet (matches health diary empty state) */
+                              <div className={`${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+                                <p className={`${themeClasses.textPrimary} font-medium text-sm mb-2`}>
+                                  {language === 'hebrew' ? 'רשומת מזון' : 'Food Log'}
+                                </p>
+                                {log.image_url && (
+                                  <div className="inline-flex w-6 h-6 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded flex items-center justify-center border border-emerald-500/30 mb-2">
+                                    <svg className="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd"/>
+                                    </svg>
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap items-center gap-3 text-xs">
+                                  {settings.showCalories && (
+                                    <span className="text-emerald-400 font-medium">0 {language === 'hebrew' ? 'קל' : 'cal'}</span>
+                                  )}
+                                  {settings.showMacros && (
+                                    <>
+                                      <span className="text-purple-400 font-medium">{formatWeight(0)} {language === 'hebrew' ? 'חלבון' : 'protein'}</span>
+                                      <span className="text-amber-400 font-medium">{formatWeight(0)} {language === 'hebrew' ? 'שומן' : 'fat'}</span>
+                                      <span className="text-blue-400 font-medium">{formatWeight(0)} {language === 'hebrew' ? 'פחמימות' : 'carbs'}</span>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
