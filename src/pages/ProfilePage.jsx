@@ -163,6 +163,7 @@ const ProfilePage = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isModalAnimating, setIsModalAnimating] = useState(false);
   const [showWhatsAppPopup, setShowWhatsAppPopup] = useState(false);
+  const [isProfileDataReady, setIsProfileDataReady] = useState(false);
 
   const loadCompanyOptions = useCallback(async () => {
     try {
@@ -285,6 +286,13 @@ const ProfilePage = () => {
       navigate('/');
     }
   }, [isAuthenticated, loading, navigate]);
+
+  // Reset profile data ready when user logs out (so next login shows loading until API returns)
+  useEffect(() => {
+    if (!user) {
+      setIsProfileDataReady(false);
+    }
+  }, [user]);
 
   // Load profile data on component mount
   useEffect(() => {
@@ -527,6 +535,8 @@ const ProfilePage = () => {
       }
     } catch (error) {
       console.error('Unexpected error loading profile:', error);
+    } finally {
+      setIsProfileDataReady(true);
     }
   };
 
@@ -1390,39 +1400,50 @@ const ProfilePage = () => {
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none z-0" />
         
         <div className={`rounded-xl ${activeTab === 'messages' ? 'p-0 h-full flex flex-col' : 'p-6'} language-transition language-text-transition relative z-10`}>
-          {activeTab === 'profile' && (
-            <ProfileTab
-              profileData={profileData}
-              onInputChange={handleInputChange}
-              onSave={handleSave}
-              isSaving={isSaving}
-              saveStatus={saveStatus}
-              errorMessage={errorMessage}
-              themeClasses={themeClasses}
-              t={t}
-              companyOptions={companyOptions}
-              isLoadingCompanies={isLoadingCompanies}
-              companyError={companyError}
-              language={language}
-              onboardingCompleted={onboardingCompleted}
-              user={user}
-              onSaveProfileImageUrl={saveProfileImageUrl}
-            />
-          )}
-          {activeTab === 'myPlan' && (
-            <MyPlanTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} clientRegion={profileData.region} />
-          )}
-          {activeTab === 'dailyLog' && (
-            <DailyLogTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} clientRegion={profileData.region} direction={direction} />
-          )}
-          {activeTab === 'messages' && (
-            <MessagesTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} activeTab={activeTab} language={language} />
-          )}
-          {activeTab === 'pricing' && (
-            <PricingTab themeClasses={themeClasses} user={user} language={language} />
-          )}
-          {activeTab === 'settings' && (
-            <SettingsTab themeClasses={themeClasses} language={language} userCode={profileData.userCode} />
+          {!isProfileDataReady ? (
+            <div className="flex flex-col items-center justify-center min-h-[320px] gap-4">
+              <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" aria-hidden="true" />
+              <p className={`${themeClasses.textSecondary} text-lg`}>
+                {language === 'hebrew' ? 'טוען נתונים...' : 'Loading your data...'}
+              </p>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'profile' && (
+                <ProfileTab
+                  profileData={profileData}
+                  onInputChange={handleInputChange}
+                  onSave={handleSave}
+                  isSaving={isSaving}
+                  saveStatus={saveStatus}
+                  errorMessage={errorMessage}
+                  themeClasses={themeClasses}
+                  t={t}
+                  companyOptions={companyOptions}
+                  isLoadingCompanies={isLoadingCompanies}
+                  companyError={companyError}
+                  language={language}
+                  onboardingCompleted={onboardingCompleted}
+                  user={user}
+                  onSaveProfileImageUrl={saveProfileImageUrl}
+                />
+              )}
+              {activeTab === 'myPlan' && (
+                <MyPlanTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} clientRegion={profileData.region} />
+              )}
+              {activeTab === 'dailyLog' && (
+                <DailyLogTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} language={language} clientRegion={profileData.region} direction={direction} />
+              )}
+              {activeTab === 'messages' && (
+                <MessagesTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} activeTab={activeTab} language={language} />
+              )}
+              {activeTab === 'pricing' && (
+                <PricingTab themeClasses={themeClasses} user={user} language={language} />
+              )}
+              {activeTab === 'settings' && (
+                <SettingsTab themeClasses={themeClasses} language={language} userCode={profileData.userCode} />
+              )}
+            </>
           )}
         </div>
 
@@ -9461,7 +9482,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
           setSelectedMealForIngredient(null);
         }}
         onAddIngredient={handleAddIngredient}
-        mealName={selectedMealForIngredient ? (mealTitleMap[selectedMealForIngredient] || t.profile.dailyLogTab.meals[selectedMealForIngredient] || selectedMealForIngredient) : null}
+        mealName={selectedMealForIngredient ? (t.profile.dailyLogTab.meals[selectedMealForIngredient] || selectedMealForIngredient) : null}
         clientRegion={clientRegion}
         userCode={userCode}
       />
