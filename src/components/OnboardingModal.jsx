@@ -1647,8 +1647,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     }
   };
 
-  // Usage-based support: prod_TrcVkwBC0wmqKp, price_1SutYqHIeYfvCylDLDxujZa6 — 26+ days in a row = free
-  const USAGE_BASED_PRICE_ID = 'price_1SutYqHIeYfvCylDLDxujZa6';
+  // Usage-based support: prod_TrcVkwBC0wmqKp, price_1Swl7ZHIeYfvCylD3OoxJobx — 26+ days in a row = free
+  const USAGE_BASED_PRICE_ID = 'price_1Swl7ZHIeYfvCylD3OoxJobx';
 
   const sendWhatsAppAndClose = () => {
     const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';

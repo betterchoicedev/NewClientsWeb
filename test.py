@@ -5,18 +5,19 @@ import traceback
 
 # הגדרות - שנה ל-Secret Key שלך (או השתמש ב-STRIPE_SECRET_KEY מהסביבה)
 
-
 def report_usage_for_user(si_id):
     try:
         # In newer stripe-python the usage_records endpoint is not on SubscriptionItem.
         # Call the REST API directly: POST /v1/subscription_items/{id}/usage_records
         usage_record = stripe.SubscriptionItem._static_request(
             "post",
-            "/v1/subscription_items/%s/usage_records" % si_id,
+            "/v1/billing/meter_events",
             params={
-                "quantity": 1,
+                "event_name": "api_requests",
+                "payload[stripe_customer_id]": "cus_TJX24edvtH1A0O",
+                "payload[stripe_subscription_item_id]": "si_TsjMByC4dzvrNW",
+                "payload[value]": "22",
                 "timestamp": int(time.time()),
-                "action": "increment",
             },
             base_address="api",
         )
@@ -34,5 +35,5 @@ def report_usage_for_user(si_id):
 
 
 if __name__ == "__main__":
-    target_id = sys.argv[1] if len(sys.argv) > 1 else "si_TrxR1QopvHyspo"
+    target_id = sys.argv[1] if len(sys.argv) > 1 else "si_TsjMByC4dzvrNW"
     report_usage_for_user(target_id)
