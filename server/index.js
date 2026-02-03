@@ -76,6 +76,19 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Bank of Israel exchange rates proxy (avoids CORS – browser can't call boi.org.il directly)
+const BOI_EXCHANGE_RATES_URL = 'https://boi.org.il/PublicApi/GetExchangeRates?asXml=false';
+app.get('/api/exchange-rates', async (req, res) => {
+  try {
+    const response = await fetch(BOI_EXCHANGE_RATES_URL);
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.warn('BOI exchange rates fetch failed:', err.message);
+    res.status(502).json({ error: 'Failed to fetch exchange rates' });
+  }
+});
+
 // Check and auto-cancel subscriptions past their commitment period
 app.post('/api/stripe/check-commitment-periods', async (req, res) => {
   try {
