@@ -9556,7 +9556,7 @@ const PricingTab = ({ themeClasses, user, language }) => {
   // Via backend proxy to avoid CORS (boi.org.il does not allow browser cross-origin requests)
   useEffect(() => {
     let cancelled = false;
-    const apiUrl = process.env.REACT_APP_API_URL || ' http://localhost:3001';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
     const fetchUsdRate = async () => {
       try {
         const url = apiUrl ? `${apiUrl}/api/exchange-rates` : '/api/exchange-rates';
