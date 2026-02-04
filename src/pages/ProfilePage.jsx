@@ -9505,12 +9505,15 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
   );
 };
 
+// Use our backend proxy to avoid CORS (boi.org.il does not send Access-Control-Allow-Origin)
+
 // Pricing Tab Component
 const PricingTab = ({ themeClasses, user, language }) => {
   const { getCustomerSubscriptions, error } = useStripe();
   const [activeCategory, setActiveCategory] = useState('all');
   const [userSubscriptions, setUserSubscriptions] = useState([]);
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
+  const [usdExchangeRate, setUsdExchangeRate] = useState(null); // ILS per 1 USD (Bank of Israel)
 
   const allProducts = getAllProducts();
   
@@ -9548,6 +9551,29 @@ const PricingTab = ({ themeClasses, user, language }) => {
       fetchUserSubscriptions();
     }
   }, [user, userSubscriptions.length, loadingSubscriptions, subscriptionsLastFetched]);
+
+  // Fetch Bank of Israel USD exchange rate when Pricing tab is shown (ILS per 1 USD)
+  // Via backend proxy to avoid CORS (boi.org.il does not allow browser cross-origin requests)
+  useEffect(() => {
+    let cancelled = false;
+    const apiUrl = process.env.REACT_APP_API_URL || ' http://localhost:3001';
+    const fetchUsdRate = async () => {
+      try {
+        const url = apiUrl ? `${apiUrl}/api/exchange-rates` : '/api/exchange-rates';
+        const res = await fetch(url);
+        const data = await res.json();
+        if (cancelled || !data?.exchangeRates) return;
+        const usd = data.exchangeRates.find((r) => r.key === 'USD');
+        if (usd?.currentExchangeRate) {
+          setUsdExchangeRate(usd.currentExchangeRate);
+        }
+      } catch (err) {
+        console.warn('BOI exchange rate fetch failed:', err);
+      }
+    };
+    fetchUsdRate();
+    return () => { cancelled = true; };
+  }, []);
 
   // Manual refresh function for subscriptions (call after successful purchase)
   const refreshSubscriptions = async () => {
@@ -9679,7 +9705,6 @@ const PricingTab = ({ themeClasses, user, language }) => {
                       <p className={`${themeClasses.textPrimary} font-medium`}>
                         {(() => {
                           const productId = subscription.items?.data?.[0]?.price?.product;
-                          if (productId === 'prod_TrcVkwBC0wmqKp') return 'digital_only';
                           const product = getProduct(productId);
                           if (!product) return productId || 'Subscription';
                           return language === 'hebrew' ? (product.nameHebrew || product.name) : product.name;
@@ -9853,6 +9878,19 @@ const PricingTab = ({ themeClasses, user, language }) => {
         </div>
       </div>
 
+      {/* USD conversion note (Bank of Israel rate) */}
+      {usdExchangeRate != null && (
+        <div className={`mb-6 animate-slideInUp ${themeClasses.bgCard} border ${themeClasses.borderPrimary} rounded-xl px-4 py-3 shadow-sm`} style={{ animationDelay: '0.35s' }}>
+          <p className={`${themeClasses.textSecondary} text-xs sm:text-sm ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+            {language === 'hebrew' ? (
+              <>מתעדכן רק פעם ביום (בימי חול סביב 15:30–16:00, ובימי שישי סביב 12:30). אין עדכונים בשבת ובראשון. שער המרה לדולר: בנק ישראל.</>
+            ) : (
+              <>Exchange rate to USD from Bank of Israel. Updated once a day (weekdays around 15:30–16:00, Fridays around 12:30). No updates on Saturday and Sunday.</>
+            )}
+          </p>
+        </div>
+      )}
+
       {/* Products Grid */}
       <div className="animate-slideInUp" style={{ animationDelay: '0.4s' }}>
         {filteredProducts.length === 0 ? (
@@ -9867,23 +9905,26 @@ const PricingTab = ({ themeClasses, user, language }) => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 items-stretch">
             {filteredProducts.map((product, index) => (
               <div
                 key={product.id}
-                className="animate-slideInUp"
+                className="flex flex-col animate-slideInUp"
                 style={{ animationDelay: `${0.5 + index * 0.1}s` }}
               >
-                <PricingCard
-                  product={product}
-                  hasActiveSubscription={hasActiveSubscription(product.id)}
-                  hasAnyActiveSubscription={hasAnyActiveSubscription()}
-                  className={`transform hover:scale-105 transition-all duration-300 ${
-                    hasActiveSubscription(product.id) ? 'ring-2 ring-emerald-500' : ''
-                  }`}
-                />
+                <div className="flex-1 flex flex-col min-h-0">
+                  <PricingCard
+                    product={product}
+                    hasActiveSubscription={hasActiveSubscription(product.id)}
+                    hasAnyActiveSubscription={hasAnyActiveSubscription()}
+                    usdExchangeRate={usdExchangeRate}
+                    className={`h-full flex flex-col transform hover:scale-[1.02] transition-all duration-300 ${
+                      hasActiveSubscription(product.id) ? 'ring-2 ring-emerald-500' : ''
+                    }`}
+                  />
+                </div>
                 {hasActiveSubscription(product.id) && (
-                  <div className="mt-3 text-center">
+                  <div className="mt-3 text-center flex-shrink-0">
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
                       <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>

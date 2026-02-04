@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 
-const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', hasActiveSubscription = false, hasAnyActiveSubscription = false }) => {
+const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', hasActiveSubscription = false, hasAnyActiveSubscription = false, usdExchangeRate = null }) => {
   const { createCheckoutSession, loading, error } = useStripe();
   const { user, isAuthenticated } = useAuth();
   const { language } = useLanguage();
@@ -67,25 +67,33 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
   const formatPrice = (priceObj) => {
     if (!priceObj) return 'Contact for pricing';
     
-    const currentAmount = showUSD ? priceObj.amountUSD : priceObj.amount;
-    const currentCurrency = showUSD ? 'USD' : 'ILS';
-    
-    if (!currentAmount) return 'Contact for pricing';
-    
-    // Amount is in cents/agorot, convert to main currency
-    const price = currentAmount / 100;
-    
-    if (currentCurrency === 'ILS') {
-      // Format Israeli Shekel with ₪ symbol
+    if (!showUSD) {
+      // ILS: amount is in agorot
+      const amount = priceObj.amount;
+      if (!amount) return 'Contact for pricing';
+      const price = amount / 100;
       return `₪${price.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-    } else {
-      // Format USD with $ symbol
+    }
+    
+    // USD: use Bank of Israel rate if available (ILS per 1 USD → USD = ILS / rate)
+    if (usdExchangeRate != null && usdExchangeRate > 0 && priceObj.amount != null) {
+      const ilsValue = priceObj.amount / 100;
+      const usdValue = ilsValue / usdExchangeRate;
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
-        minimumFractionDigits: price % 1 === 0 ? 0 : 2
-      }).format(price);
+        minimumFractionDigits: usdValue % 1 === 0 ? 0 : 2
+      }).format(usdValue);
     }
+    // Fallback: use stored amountUSD (cents)
+    const amountUSD = priceObj.amountUSD;
+    if (!amountUSD) return 'Contact for pricing';
+    const price = amountUSD / 100;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: price % 1 === 0 ? 0 : 2
+    }).format(price);
   };
 
   const getPopularBadge = () => (
@@ -101,7 +109,7 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
   const hasPopularPrice = product.prices?.some(price => price.popular);
   const selectedPriceObj = product.prices?.find(price => price.id === selectedPrice);
 
-  // Calculate savings for 6-month plan
+  // Calculate savings for 6-month plan (supports BOI USD conversion)
   const calculateSavings = () => {
     if (!product.prices || product.prices.length < 2) return null;
     
@@ -110,13 +118,22 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
     
     if (!threeMonthPrice || !sixMonthPrice) return null;
     
-    const threeMonthAmount = showUSD ? threeMonthPrice.amountUSD : threeMonthPrice.amount;
-    const sixMonthAmount = showUSD ? sixMonthPrice.amountUSD : sixMonthPrice.amount;
-    const currency = showUSD ? 'USD' : 'ILS';
-    
-    // Total cost: 3-month plan for 6 months (2 cycles) vs 6-month plan
-    const totalThreeMonth = (threeMonthAmount / 100) * 6; // 3 months * 2 = 6 months
-    const totalSixMonth = (sixMonthAmount / 100) * 6;
+    let totalThreeMonth, totalSixMonth, currency;
+    if (showUSD && usdExchangeRate != null && usdExchangeRate > 0) {
+      const threeIls = (threeMonthPrice.amount || 0) / 100;
+      const sixIls = (sixMonthPrice.amount || 0) / 100;
+      totalThreeMonth = (threeIls / usdExchangeRate) * 6;
+      totalSixMonth = (sixIls / usdExchangeRate) * 6;
+      currency = 'USD';
+    } else if (showUSD) {
+      totalThreeMonth = ((threeMonthPrice.amountUSD || 0) / 100) * 6;
+      totalSixMonth = ((sixMonthPrice.amountUSD || 0) / 100) * 6;
+      currency = 'USD';
+    } else {
+      totalThreeMonth = ((threeMonthPrice.amount || 0) / 100) * 6;
+      totalSixMonth = ((sixMonthPrice.amount || 0) / 100) * 6;
+      currency = 'ILS';
+    }
     const savings = totalThreeMonth - totalSixMonth;
     
     if (savings <= 0) return null;
@@ -127,10 +144,10 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
   const savings = calculateSavings();
 
   return (
-    <div className={`relative ${themeClasses.bgCard} rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border ${themeClasses.borderPrimary} ${className}`}>
+    <div className={`relative flex flex-col ${themeClasses.bgCard} rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border ${themeClasses.borderPrimary} ${className}`}>
       {hasPopularPrice && selectedPriceObj?.popular && getPopularBadge()}
 
-      <div className="p-6">
+      <div className="p-6 flex flex-col flex-1 min-h-0">
         {/* Header */}
         <div className="text-center mb-6">
           <div className="flex justify-between items-start mb-4">
@@ -283,7 +300,8 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
           </ul>
         )}
 
-        {/* CTA Button */}
+        {/* CTA Button - mt-auto keeps it at bottom when card stretches */}
+        <div className="mt-auto pt-4">
         <button
           onClick={handlePurchase}
           disabled={loading || !selectedPrice || isBlocked}
@@ -318,6 +336,7 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
             </>
           )}
         </button>
+        </div>
 
         {/* Error Display */}
         {error && (

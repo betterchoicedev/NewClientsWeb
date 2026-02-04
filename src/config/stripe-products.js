@@ -7,7 +7,8 @@ export const STRIPE_PRODUCTS = {
   NUTRITION_TRAINING: 'prod_SbI1AIv2A46oJ9',
   NUTRITION_TRAINING_ONCE_MONTH: 'prod_SbI1Lu7FWbybUO',
   NUTRITION_ONLY_2X_MONTH: 'prod_SbI0A23T20wul3',
-  CONSULTATION: 'prod_SSzustraPd40C1'
+  CONSULTATION: 'prod_SSzustraPd40C1',
+  DIGITAL_ONLY: 'prod_TrcVkwBC0wmqKp', // Usage-based: 26+ days in a row = free, max $48/mo
 };
 
 export const STRIPE_PRICES = {
@@ -32,7 +33,10 @@ export const STRIPE_PRICES = {
   NUTRITION_ONLY_2X_6_MONTHS: 'price_1Rg5QtHIeYfvCylDwr9v599a',
   
   // Consultation - $650 (One-time payment)
-  CONSULTATION: 'price_1RY3uZHIeYfvCylD4mylbEP4'
+  CONSULTATION: 'price_1RY3uZHIeYfvCylD4mylbEP4',
+
+  // Digital Only - Usage-based (26+ days in a row = free, max $48/mo)
+  DIGITAL_ONLY: 'price_1Swl7ZHIeYfvCylD3OoxJobx'
 };
 
 // Product configuration with metadata
@@ -271,7 +275,42 @@ export const PRODUCT_CONFIG = {
         popular: true
       }
     ]
-  }
+  },
+
+  [STRIPE_PRODUCTS.DIGITAL_ONLY]: {
+    name: 'Digital Only',
+    nameHebrew: 'דיגיטלי בלבד',
+    description: 'Our goal is your health. If you stay consistent with the system - completely free. Each day of use is money, but you can miss a couple of days a month and still get everything for free!',
+    descriptionHebrew: 'המטרה שלנו היא שתהיו בריאים. לכן, אם תתמידו בשימוש במערכת - חינם לגמרי. כל יום שימוש שווה כסף, אבל מותר לכם כמה ימים בחודש ועדיין לקבל את כל השירות בחינם!',
+    features: [
+      'Our goal is your health - completely free if you stay consistent',
+      'Each day of use is money, but you can miss a couple of days',
+      'Payment only required if goal is not met (max $48/mo)',
+      'Cancel the charge at any time'
+    ],
+    featuresHebrew: [
+      'המטרה שלנו היא שתהיו בריאים – חינם לגמרי למתמידים',
+      'כל יום שימוש שווה כסף, אך ניתן לפספס מספר ימים בחודש',
+      'חיוב רק אם לא עומדים ביעד ההתמדה (מקסימום $48 לחודש)',
+      'ניתן לבטל את החיוב בכל שלב'
+    ],
+    category: 'content',
+    prices: [
+      {
+        id: STRIPE_PRICES.DIGITAL_ONLY,
+        name: 'Usage-based',
+        nameHebrew: 'לפי שימוש',
+        description: 'Max $48/mo if consistency goal not met',
+        descriptionHebrew: 'מקסימום $48 לחודש אם לא עומדים ביעד ההתמדה',
+        interval: 'month',
+        interval_count: 1,
+        amount: 4800,
+        amountUSD: 4800,
+        currency: 'USD',
+        popular: true
+      }
+    ]
+}
 };
 
 // Helper functions
