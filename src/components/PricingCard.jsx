@@ -18,7 +18,9 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
   };
   
   const [selectedPrice, setSelectedPrice] = useState(getDefaultPriceId());
-  const [showUSD, setShowUSD] = useState(false);
+  // USD-priced products (e.g. Digital Only) show dollars first; ILS-priced show shekels first
+  const isUsdPrimary = product.prices?.[0]?.currency === 'USD';
+  const [showUSD, setShowUSD] = useState(isUsdPrimary);
   
   // Check if this is a consultation product (can always be purchased)
   const isConsultation = product.name.toLowerCase().includes('consultation') || 
@@ -66,7 +68,33 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
 
   const formatPrice = (priceObj) => {
     if (!priceObj) return 'Contact for pricing';
-    
+
+    const isPriceUsd = priceObj.currency === 'USD';
+
+    if (isPriceUsd) {
+      // Price is stored in USD (cents)
+      const usdCents = priceObj.amount ?? priceObj.amountUSD;
+      if (usdCents == null) return 'Contact for pricing';
+      const usdValue = usdCents / 100;
+      if (showUSD) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: usdValue % 1 === 0 ? 0 : 2
+        }).format(usdValue);
+      }
+      // Show shekels using /api/exchange-rates (ILS per 1 USD)
+      if (usdExchangeRate != null && usdExchangeRate > 0) {
+        const ilsValue = usdValue * usdExchangeRate;
+        return `₪${ilsValue.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+      }
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: usdValue % 1 === 0 ? 0 : 2
+      }).format(usdValue);
+    }
+
     if (!showUSD) {
       // ILS: amount is in agorot
       const amount = priceObj.amount;
@@ -74,8 +102,8 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
       const price = amount / 100;
       return `₪${price.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     }
-    
-    // USD: use Bank of Israel rate if available (ILS per 1 USD → USD = ILS / rate)
+
+    // ILS price, show USD: use Bank of Israel rate if available (ILS per 1 USD → USD = ILS / rate)
     if (usdExchangeRate != null && usdExchangeRate > 0 && priceObj.amount != null) {
       const ilsValue = priceObj.amount / 100;
       const usdValue = ilsValue / usdExchangeRate;
@@ -85,7 +113,6 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
         minimumFractionDigits: usdValue % 1 === 0 ? 0 : 2
       }).format(usdValue);
     }
-    // Fallback: use stored amountUSD (cents)
     const amountUSD = priceObj.amountUSD;
     if (!amountUSD) return 'Contact for pricing';
     const price = amountUSD / 100;
@@ -150,28 +177,12 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
       <div className="p-6 flex flex-col flex-1 min-h-0">
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex-1">
-              <h3 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
-                {language === 'hebrew' ? (product.nameHebrew || product.name) : product.name}
-              </h3>
-              <p className={`${themeClasses.textSecondary} text-sm`}>
-                {language === 'hebrew' ? (product.descriptionHebrew || product.description) : product.description}
-              </p>
-            </div>
-            
-            {/* Currency Switcher */}
-            <button
-              onClick={() => setShowUSD(!showUSD)}
-              className={`ml-4 px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
-                showUSD 
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
-                  : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
-              } hover:scale-105`}
-            >
-              {showUSD ? '₪' : '$'}
-            </button>
-          </div>
+          <h3 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
+            {language === 'hebrew' ? (product.nameHebrew || product.name) : product.name}
+          </h3>
+          <p className={`${themeClasses.textSecondary} text-sm`}>
+            {language === 'hebrew' ? (product.descriptionHebrew || product.description) : product.description}
+          </p>
         </div>
 
         {/* Price Options */}
@@ -212,7 +223,7 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
                 const aCommitment = a.commitment || 0;
                 const bCommitment = b.commitment || 0;
                 return bCommitment - aCommitment; // 6-month (6) comes before 3-month (3)
-              }).map((price) => (
+              }).map((price, priceIndex) => (
                 <label
                   key={price.id}
                   className={`
@@ -240,13 +251,28 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`font-bold ${themeClasses.textPrimary}`}>
-                      {formatPrice(price)}
-                      {price.interval && (
-                        <span className={`text-sm ${themeClasses.textMuted}`}>
-                          /{language === 'hebrew' ? (price.interval === 'month' ? 'חודש' : price.interval) : price.interval}
-                        </span>
+                  <div className="text-right flex flex-col items-end">
+                    <div className="flex items-center justify-end gap-2">
+                      <div className={`font-bold ${themeClasses.textPrimary}`}>
+                        {formatPrice(price)}
+                        {price.interval && (
+                          <span className={`text-sm ${themeClasses.textMuted}`}>
+                            /{language === 'hebrew' ? (price.interval === 'month' ? 'חודש' : price.interval) : price.interval}
+                          </span>
+                        )}
+                      </div>
+                      {priceIndex === 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setShowUSD(!showUSD); }}
+                          className={`flex-shrink-0 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                            showUSD 
+                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
+                              : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
+                          } hover:scale-105`}
+                        >
+                          {showUSD ? '₪' : '$'}
+                        </button>
                       )}
                     </div>
                     {price.commitment === 6 && savings && (
@@ -267,17 +293,28 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
           // Single price display
           <div className="text-center mb-6">
             {product.prices?.[0] && (
-              <div>
+              <div className="inline-flex flex-wrap items-center justify-center gap-2">
                 <span className={`text-3xl font-bold ${themeClasses.textPrimary}`}>
                   {formatPrice(product.prices[0])}
                 </span>
                 {product.prices[0].interval && (
-                  <span className={`${themeClasses.textSecondary} ml-1`}>
+                  <span className={`${themeClasses.textSecondary}`}>
                     /{language === 'hebrew' ? (product.prices[0].interval === 'month' ? 'חודש' : product.prices[0].interval) : product.prices[0].interval}
                   </span>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setShowUSD(!showUSD)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                    showUSD 
+                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
+                      : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
+                  } hover:scale-105`}
+                >
+                  {showUSD ? '₪' : '$'}
+                </button>
                 {product.prices[0].commitment && (
-                  <div className={`text-sm ${themeClasses.textMuted} mt-2`}>
+                  <div className={`text-sm ${themeClasses.textMuted} mt-2 w-full basis-full`}>
                     {product.prices[0].commitment} {language === 'hebrew' ? 'חודשי מחויבות' : 'month commitment'}
                   </div>
                 )}
