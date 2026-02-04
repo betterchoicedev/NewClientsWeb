@@ -136,6 +136,14 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
   const hasPopularPrice = product.prices?.some(price => price.popular);
   const selectedPriceObj = product.prices?.find(price => price.id === selectedPrice);
 
+  // Show "Approx." when displaying converted currency (ILS→USD for most products, USD→ILS for Digital Only)
+  const isApproximate = (priceObj) => {
+    if (!priceObj) return false;
+    if (priceObj.currency === 'USD') return !showUSD && (usdExchangeRate != null && usdExchangeRate > 0); // Digital Only: showing ILS
+    return showUSD; // ILS-priced: showing USD
+  };
+  const approxLabel = language === 'hebrew' ? 'בערך ' : 'Approx. ';
+
   // Calculate savings for 6-month plan (supports BOI USD conversion)
   const calculateSavings = () => {
     if (!product.prices || product.prices.length < 2) return null;
@@ -254,6 +262,7 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
                   <div className="text-right flex flex-col items-end">
                     <div className="flex items-center justify-end gap-2">
                       <div className={`font-bold ${themeClasses.textPrimary}`}>
+                        {isApproximate(price) && <span className={`text-xs font-normal ${themeClasses.textMuted}`}>{approxLabel}</span>}
                         {formatPrice(price)}
                         {price.interval && (
                           <span className={`text-sm ${themeClasses.textMuted}`}>
@@ -294,6 +303,7 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
           <div className="text-center mb-6">
             {product.prices?.[0] && (
               <div className="inline-flex flex-wrap items-center justify-center gap-2">
+                {isApproximate(product.prices[0]) && <span className={`text-sm font-normal ${themeClasses.textMuted}`}>{approxLabel}</span>}
                 <span className={`text-3xl font-bold ${themeClasses.textPrimary}`}>
                   {formatPrice(product.prices[0])}
                 </span>
