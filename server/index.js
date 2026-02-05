@@ -2792,7 +2792,7 @@ app.post('/api/food-logs', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Create food log
+    // Create food log (include total_* when provided so DB has nutrition totals)
     const insertData = {
       user_id: userData.id,
       meal_label: foodLogData.meal_label,
@@ -2800,6 +2800,10 @@ app.post('/api/food-logs', async (req, res) => {
       log_date: foodLogData.log_date || new Date().toISOString().split('T')[0],
       created_at: new Date().toISOString()
     };
+    if (foodLogData.total_calories !== undefined) insertData.total_calories = foodLogData.total_calories;
+    if (foodLogData.total_protein_g !== undefined) insertData.total_protein_g = foodLogData.total_protein_g;
+    if (foodLogData.total_carbs_g !== undefined) insertData.total_carbs_g = foodLogData.total_carbs_g;
+    if (foodLogData.total_fat_g !== undefined) insertData.total_fat_g = foodLogData.total_fat_g;
 
     const { data, error } = await chatSupabase
       .from('food_logs')
@@ -2874,6 +2878,71 @@ app.delete('/api/food-logs/:id', async (req, res) => {
     res.json({ data });
   } catch (error) {
     console.error('Error deleting food log:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Daily XP (view_user_daily_xp) – today's status
+app.get('/api/daily-xp/today', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+    const { data: userData, error: userError } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('user_code', userCode)
+      .maybeSingle();
+    if (userError || !userData) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const today = new Date().toISOString().split('T')[0];
+    const { data, error } = await chatSupabase
+      .from('view_user_daily_xp')
+      .select('total_xp, rank_title, actual_cals, target_cals')
+      .eq('user_id', userData.id)
+      .eq('log_date', today)
+      .maybeSingle();
+    if (error) throw error;
+    res.json({ data });
+  } catch (error) {
+    console.error('Error fetching daily XP (today):', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Daily XP – weekly progress (last 7 days)
+app.get('/api/daily-xp/weekly', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+    const { data: userData, error: userError } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('user_code', userCode)
+      .maybeSingle();
+    if (userError || !userData) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const { data, error } = await chatSupabase
+      .from('view_user_daily_xp')
+      .select('log_date, total_xp, rank_title')
+      .eq('user_id', userData.id)
+      .order('log_date', { ascending: false })
+      .limit(7);
+    if (error) throw error;
+    res.json({ data: data || [] });
+  } catch (error) {
+    console.error('Error fetching daily XP (weekly):', error);
     res.status(500).json({ error: error.message });
   }
 });

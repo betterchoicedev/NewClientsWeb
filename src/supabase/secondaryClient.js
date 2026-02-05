@@ -10,7 +10,7 @@ const isSecondaryAvailable = () => {
 };
 
 // API URL helper
-const getApiUrl = () => process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+const getApiUrl = () => process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 // MEAL PLANS
 export const getMealPlan = async (userCode) => {
@@ -192,6 +192,39 @@ export const deleteFoodLog = async (foodLogId) => {
     return { data: result.data, error: null };
   } catch (error) {
     console.error('Unexpected error deleting food log:', error);
+    return { data: null, error };
+  }
+};
+
+// Daily XP (view_user_daily_xp) – via server API
+export const getTodayDailyXP = async (userCode) => {
+  try {
+    if (!userCode) return { data: null, error: { message: 'User code is required' } };
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/daily-xp/today?userCode=${encodeURIComponent(userCode)}`);
+    const result = await response.json();
+    if (!response.ok) {
+      return { data: null, error: { message: result.error || 'Failed to fetch today XP' } };
+    }
+    return { data: result.data, error: null };
+  } catch (error) {
+    console.error('Error fetching today daily XP:', error);
+    return { data: null, error };
+  }
+};
+
+export const getWeeklyDailyXP = async (userCode) => {
+  try {
+    if (!userCode) return { data: null, error: { message: 'User code is required' } };
+    const apiUrl = getApiUrl();
+    const response = await fetch(`${apiUrl}/api/daily-xp/weekly?userCode=${encodeURIComponent(userCode)}`);
+    const result = await response.json();
+    if (!response.ok) {
+      return { data: null, error: { message: result.error || 'Failed to fetch weekly XP' } };
+    }
+    return { data: result.data || [], error: null };
+  } catch (error) {
+    console.error('Error fetching weekly daily XP:', error);
     return { data: null, error };
   }
 };

@@ -8326,13 +8326,18 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
       // Supabase JSONB will handle the conversion automatically
       // Don't stringify it - pass the array directly
       const foodItemsToSave = foodItems;
+      const totals = computeTotalsFromFoodItems(foodItemsToSave);
 
-      // Update the food log
+      // Update the food log with recalculated totals
       const { error } = await updateFoodLog(logId, {
         food_items: foodItemsToSave,
         meal_label: log.meal_label || 'snacks',
         image_url: log.image_url || null,
-        log_date: log.log_date || selectedDate
+        log_date: log.log_date || selectedDate,
+        total_calories: Math.round(totals.totalCalories),
+        total_protein_g: Math.round(totals.totalProtein),
+        total_carbs_g: Math.round(totals.totalCarbs),
+        total_fat_g: Math.round(totals.totalFat)
       });
 
       if (error) {
@@ -8407,6 +8412,27 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
     setIsAddIngredientModalVisible(true);
   };
 
+  // Compute totals from food_items array (supports both macros and legacy c/p/f/cals format)
+  const computeTotalsFromFoodItems = (items) => {
+    if (!Array.isArray(items) || items.length === 0) {
+      return { totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0 };
+    }
+    return items.reduce((acc, item) => {
+      if (item.macros && typeof item.macros === 'object') {
+        acc.totalCalories += Number(item.macros.calories || 0);
+        acc.totalProtein += Number(item.macros.protein_g || 0);
+        acc.totalCarbs += Number(item.macros.carbs_g || 0);
+        acc.totalFat += Number(item.macros.fat_g || 0);
+      } else {
+        acc.totalCalories += Number(item.cals || 0);
+        acc.totalProtein += Number(item.p || 0);
+        acc.totalCarbs += Number(item.c || 0);
+        acc.totalFat += Number(item.f || 0);
+      }
+      return acc;
+    }, { totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0 });
+  };
+
   // Add ingredient to food log
   const handleAddIngredient = async (ingredient) => {
     if (!selectedMealForIngredient || !userCode) return;
@@ -8414,15 +8440,22 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
     try {
       setProcessing(true);
 
-      // Convert ingredient format from AddIngredientModal to food_items format
-      // Structure must match: { c, f, p, cals, name, quantity }
+      // Convert ingredient from AddIngredientModal to food_items schema: name, macros, confidence, visual_evidence, portion_estimate
+      const grams = Number(ingredient['portionSI(gram)'] || 0);
+      const portionEstimate = ingredient.household_measure?.trim()
+        ? ingredient.household_measure.trim()
+        : (language === 'hebrew' ? `כ-${grams} גרם` : `~${grams}g`);
       const foodItem = {
-        c: Number(ingredient.carbs || 0),
-        f: Number(ingredient.fat || 0),
-        p: Number(ingredient.protein || 0),
-        cals: Number(ingredient.calories || 0),
         name: ingredient.item || ingredient.name || 'Unknown Item',
-        quantity: ingredient.household_measure || `${ingredient['portionSI(gram)'] || 0}g`
+        macros: {
+          fat_g: Math.round(Number(ingredient.fat || 0) * 10) / 10,
+          carbs_g: Math.round(Number(ingredient.carbs || 0) * 10) / 10,
+          calories: Math.round(Number(ingredient.calories || 0)),
+          protein_g: Math.round(Number(ingredient.protein || 0) * 10) / 10
+        },
+        confidence: 0.8,
+        visual_evidence: language === 'hebrew' ? 'הזנה ידנית' : 'Manual entry',
+        portion_estimate: portionEstimate
       };
 
       console.log('Converted food item:', JSON.stringify(foodItem, null, 2));
@@ -8447,11 +8480,16 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
 
         // Add new food item
         foodItems.push(foodItem);
+        const totals = computeTotalsFromFoodItems(foodItems);
 
-        // Update the food log
+        // Update the food log with food_items and total columns
         const { error } = await updateFoodLog(mostRecentLog.id, {
-          food_items: foodItems
-        });
+          food_items: foodItems,
+        total_calories: Math.round(totals.totalCalories),
+        total_protein_g: Math.round(totals.totalProtein),
+        total_carbs_g: Math.round(totals.totalCarbs),
+        total_fat_g: Math.round(totals.totalFat)
+      });
 
         if (error) {
           console.error('Error updating food log:', error);
@@ -8473,11 +8511,17 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
           );
         }
       } else {
-        // Create new food log entry
+        // Create new food log entry with food_items and totals
+        const foodItemsForNew = [foodItem];
+        const totals = computeTotalsFromFoodItems(foodItemsForNew);
         const newFoodLog = {
           meal_label: selectedMealForIngredient,
-          food_items: [foodItem],
-          log_date: selectedDate
+          food_items: foodItemsForNew,
+          log_date: selectedDate,
+          total_calories: Math.round(totals.totalCalories),
+          total_protein_g: Math.round(totals.totalProtein),
+          total_carbs_g: Math.round(totals.totalCarbs),
+          total_fat_g: Math.round(totals.totalFat)
         };
 
         console.log('Creating new food log with data:', JSON.stringify(newFoodLog, null, 2));
@@ -8621,13 +8665,18 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
 
       // Update the item in the array
       foodItems[editingItemIndex] = updatedItem;
+      const totals = computeTotalsFromFoodItems(foodItems);
 
-      // Update the food log
+      // Update the food log with recalculated totals
       const { error } = await updateFoodLog(editingLogId, {
         food_items: foodItems,
         meal_label: log.meal_label || 'snacks',
         image_url: log.image_url || null,
-        log_date: log.log_date || selectedDate
+        log_date: log.log_date || selectedDate,
+        total_calories: Math.round(totals.totalCalories),
+        total_protein_g: Math.round(totals.totalProtein),
+        total_carbs_g: Math.round(totals.totalCarbs),
+        total_fat_g: Math.round(totals.totalFat)
       });
 
       if (error) {
