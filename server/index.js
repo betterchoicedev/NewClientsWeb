@@ -213,7 +213,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
         else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
         else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-        else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1Swl7ZHIeYfvCylD3OoxJobx') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+        else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SyHX0HIeYfvCylDZyb1Lb3L') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
         
         // Determine commitment period based on exact price ID mapping
         let commitmentMonths = null; // Default no commitment 
@@ -1054,7 +1054,7 @@ async function handleSubscriptionCreated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1Swl7ZHIeYfvCylD3OoxJobx') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SyHX0HIeYfvCylDZyb1Lb3L') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null; // Default no commitment
@@ -1174,8 +1174,8 @@ async function handleSubscriptionCreated(subscription) {
         console.error('❌ Error retrieving customer for subscription info update:', customerError);
       }
 
-      // Onboarding upsell (usage-based): prod_TrcVkwBC0wmqKp / price_1Swl7ZHIeYfvCylD3OoxJobx — send WhatsApp welcome
-      if (priceId === 'price_1Swl7ZHIeYfvCylD3OoxJobx' && userId) {
+      // Onboarding upsell (usage-based): prod_TrcVkwBC0wmqKp / price_1SyHX0HIeYfvCylDZyb1Lb3L — send WhatsApp welcome
+      if (priceId === 'price_1SyHX0HIeYfvCylDZyb1Lb3L' && userId) {
         try {
           const r = await sendWhatsAppWelcomeByUserId(userId);
           if (r.success) console.log('📱 WhatsApp welcome sent (onboarding upsell) for user:', userId);
@@ -1253,7 +1253,7 @@ async function handleSubscriptionUpdated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1Swl7ZHIeYfvCylD3OoxJobx') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SyHX0HIeYfvCylDZyb1Lb3L') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Calculate commitment end date - use stored value if exists, otherwise calculate from start date
     let commitmentEndDate = null;

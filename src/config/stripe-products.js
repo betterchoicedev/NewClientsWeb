@@ -36,7 +36,7 @@ export const STRIPE_PRICES = {
   CONSULTATION: 'price_1RY3uZHIeYfvCylD4mylbEP4',
 
   // Digital Only - Usage-based (26+ days in a row = free, max $48/mo)
-  DIGITAL_ONLY: 'price_1Swl7ZHIeYfvCylD3OoxJobx'
+  DIGITAL_ONLY: 'price_1SyHX0HIeYfvCylDZyb1Lb3L'
 };
 
 // Product configuration with metadata
