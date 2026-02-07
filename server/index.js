@@ -379,8 +379,11 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
 
     console.log('Creating checkout session for price:', priceId, 'mode:', mode);
 
-    // Stripe Checkout requires quantity on line_items; use 1 for all prices
-    const lineItem = { price: priceId, quantity: 1 };
+    // Metered/usage-based prices must not have quantity; other prices need quantity (use 1)
+    const METERED_PRICE_ID = 'price_1SyHX0HIeYfvCylDZyb1Lb3L'; // digital_only
+    const lineItem = priceId === METERED_PRICE_ID
+      ? { price: priceId }
+      : { price: priceId, quantity: 1 };
 
     const sessionConfig = {
       payment_method_types: ['card'],
