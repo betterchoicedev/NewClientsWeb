@@ -640,7 +640,7 @@ const translations = {
     footer: {
       privacy: "מדיניות פרטיות",
       terms: "תנאי שימוש",
-      copyright: "© 2025 BetterChoice. כל הזכויות שמורות."
+      copyright: "© 2026 BetterChoice. כל הזכויות שמורות."
     },
     profile: {
       title: "הפרופיל שלי",
@@ -1386,7 +1386,7 @@ const translations = {
     footer: {
       privacy: "Privacy Policy",
       terms: "Terms of Service",
-      copyright: "© 2025 BetterChoice. All rights reserved."
+      copyright: "© 2026 BetterChoice. All rights reserved."
     },
     profile: {
       title: "My Profile",

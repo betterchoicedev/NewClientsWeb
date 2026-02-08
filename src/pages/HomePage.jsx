@@ -19,7 +19,30 @@ function HomePage() {
   const [showPlanDetailsModal, setShowPlanDetailsModal] = useState(false);
   const [commitmentPeriod, setCommitmentPeriod] = useState(3);
   const [showUSD, setShowUSD] = useState(false);
-  
+  const [usdExchangeRate, setUsdExchangeRate] = useState(null); // ILS per 1 USD (Bank of Israel)
+
+  // Fetch Bank of Israel USD exchange rate (ILS per 1 USD) for approx. USD display
+  useEffect(() => {
+    let cancelled = false;
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const fetchUsdRate = async () => {
+      try {
+        const url = apiUrl ? `${apiUrl}/api/exchange-rates` : '/api/exchange-rates';
+        const res = await fetch(url);
+        const data = await res.json();
+        if (cancelled || !data?.exchangeRates) return;
+        const usd = data.exchangeRates.find((r) => r.key === 'USD');
+        if (usd?.currentExchangeRate) {
+          setUsdExchangeRate(usd.currentExchangeRate);
+        }
+      } catch (err) {
+        console.warn('BOI exchange rate fetch failed:', err);
+      }
+    };
+    fetchUsdRate();
+    return () => { cancelled = true; };
+  }, []);
+
   // Contact form state
   const [contactForm, setContactForm] = useState({
     fullName: '',
@@ -49,14 +72,29 @@ function HomePage() {
     }
   }, [loading, isAuthenticated, navigate]);
 
-  // Format price based on currency
+  // Format price based on currency (USD shown as approx. when converted via Bank of Israel rate)
   const formatPrice = (priceILS, priceUSD) => {
-    if (showUSD) {
-      return `$${Math.round(priceUSD / 100)}`;
-    } else {
+    if (!showUSD) {
       return `₪${Math.round(priceILS / 100)}`;
     }
+    if (usdExchangeRate != null && usdExchangeRate > 0 && priceILS != null) {
+      const ilsValue = priceILS / 100;
+      const usdValue = ilsValue / usdExchangeRate;
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: usdValue % 1 === 0 ? 0 : 2
+      }).format(usdValue);
+    }
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: (priceUSD / 100) % 1 === 0 ? 0 : 2
+    }).format((priceUSD || 0) / 100);
   };
+
+  const isApproximateUsd = showUSD;
+  const approxLabel = language === 'hebrew' ? 'בערך ' : 'Approx. ';
 
   // Get products
   const nutritionOnlyProduct = PRODUCT_CONFIG[STRIPE_PRODUCTS.NUTRITION_ONLY];
@@ -1318,9 +1356,9 @@ function HomePage() {
             </div>
             
             {/* Flow Layout */}
-            <div className="flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-8 mb-8">
+            <div className="flex flex-col md:flex-row items-stretch justify-center gap-4 sm:gap-6 md:gap-8 mb-8">
               {/* Step 1 */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center`}>
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center min-h-[280px] md:min-h-0 flex flex-col`}>
                 <div className="text-sm font-bold text-green-600 mb-2">{language === 'hebrew' ? 'שלב 1:' : 'Step 1:'}</div>
                 <div className="text-4xl mb-4">💬</div>
                 <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
@@ -1334,12 +1372,12 @@ function HomePage() {
               </div>
               
               {/* Arrow */}
-              <div className={`text-3xl ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} hidden md:block`}>
+              <div className={`text-3xl ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} hidden md:block self-center`}>
                 {language === 'hebrew' ? '←' : '→'}
               </div>
               
               {/* Step 2 */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center`}>
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center min-h-[280px] md:min-h-0 flex flex-col`}>
                 <div className="text-sm font-bold text-green-600 mb-2">{language === 'hebrew' ? 'שלב 2:' : 'Step 2:'}</div>
                 <div className="text-4xl mb-4">🎯</div>
                 <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
@@ -1353,12 +1391,12 @@ function HomePage() {
               </div>
               
               {/* Arrow */}
-              <div className={`text-3xl ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} hidden md:block`}>
+              <div className={`text-3xl ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} hidden md:block self-center`}>
                 {language === 'hebrew' ? '←' : '→'}
               </div>
               
               {/* Step 3 */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center`}>
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center min-h-[280px] md:min-h-0 flex flex-col`}>
                 <div className="text-sm font-bold text-green-600 mb-2">{language === 'hebrew' ? 'שלב 3:' : 'Step 3:'}</div>
                 <div className="text-4xl mb-4">🧠</div>
                 <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
@@ -1372,12 +1410,12 @@ function HomePage() {
               </div>
               
               {/* Arrow */}
-              <div className={`text-3xl ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} hidden md:block`}>
+              <div className={`text-3xl ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} hidden md:block self-center`}>
                 {language === 'hebrew' ? '←' : '→'}
               </div>
               
               {/* Step 4 */}
-              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center`}>
+              <div className={`${themeClasses.bgCard} rounded-xl ${themeClasses.shadowCard} p-6 border-t-4 border-green-500 ${themeClasses.shadowHover} transition-shadow duration-300 flex-1 max-w-xs text-center min-h-[280px] md:min-h-0 flex flex-col`}>
                 <div className="text-sm font-bold text-green-600 mb-2">{language === 'hebrew' ? 'שלב 4:' : 'Step 4:'}</div>
                 <div className="text-4xl mb-4">🔄</div>
                 <h4 className={`text-xl font-bold ${themeClasses.textPrimary} mb-3`}>
@@ -1566,6 +1604,7 @@ function HomePage() {
                         {language === 'hebrew' ? nutritionOnlyProduct.nameHebrew : nutritionOnlyProduct.name}
                       </h4>
                       <div className={`text-4xl font-bold ${themeClasses.textPrimary} mb-6`}>
+                        {isApproximateUsd && <span className={`text-xs font-normal ${themeClasses.textMuted}`}>{approxLabel}</span>}
                         {formatPrice(price.ILS, price.USD)}
                         <span className={`text-lg ${themeClasses.textSecondary}`}>
                           {language === 'hebrew' ? ' לחודש' : '/month'}
@@ -1603,6 +1642,7 @@ function HomePage() {
                         {language === 'hebrew' ? nutritionOnly2xProduct.nameHebrew : nutritionOnly2xProduct.name}
                       </h4>
                       <div className={`text-4xl font-bold ${themeClasses.textPrimary} mb-6`}>
+                        {isApproximateUsd && <span className={`text-xs font-normal ${themeClasses.textMuted}`}>{approxLabel}</span>}
                         {formatPrice(price.ILS, price.USD)}
                         <span className={`text-lg ${themeClasses.textSecondary}`}>
                           {language === 'hebrew' ? ' לחודש' : '/month'}
@@ -1644,6 +1684,7 @@ function HomePage() {
                         {language === 'hebrew' ? nutritionTrainingProduct.nameHebrew : nutritionTrainingProduct.name}
                       </h4>
                       <div className="text-4xl font-bold mb-6">
+                        {isApproximateUsd && <span className="text-xs font-normal opacity-80">{approxLabel}</span>}
                         {formatPrice(price.ILS, price.USD)}
                         <span className="text-lg opacity-90">
                           {language === 'hebrew' ? ' לחודש' : '/month'}
@@ -1691,6 +1732,7 @@ function HomePage() {
                       </h4>
                       <div className={`mb-6`}>
                         <div className={`text-4xl font-bold ${themeClasses.textPrimary}`}>
+                          {isApproximateUsd && <span className={`text-xs font-normal ${themeClasses.textMuted}`}>{approxLabel}</span>}
                           {formatPrice(price.ILS, price.USD)}
                         </div>
                         <div className="flex flex-col items-center">
@@ -1705,9 +1747,17 @@ function HomePage() {
                           </span>
                           {commitmentPeriod === 6 && savings && (
                             <div className="text-sm text-emerald-500 font-semibold mt-1">
-                              {language === 'hebrew' 
-                                ? (showUSD ? `חיסכון של $${Math.round(savings.USD / 100)} בכל חודש` : `חיסכון של ₪${Math.round(savings.ILS / 100)} בכל חודש`)
-                                : (showUSD ? `Save up to $${Math.round(savings.USD / 100)}/month` : `Save up to ₪${Math.round(savings.ILS / 100)}/month`)
+                              {language === 'hebrew'
+                                ? (showUSD
+                                    ? (usdExchangeRate != null && usdExchangeRate > 0
+                                        ? `חיסכון של $${(savings.ILS / 100 / usdExchangeRate).toLocaleString('en-US', { maximumFractionDigits: 0 })} בכל חודש`
+                                        : `חיסכון של $${Math.round(savings.USD / 100)} בכל חודש`)
+                                    : `חיסכון של ₪${Math.round(savings.ILS / 100)} בכל חודש`)
+                                : (showUSD
+                                    ? (usdExchangeRate != null && usdExchangeRate > 0
+                                        ? `Save up to $${(savings.ILS / 100 / usdExchangeRate).toLocaleString('en-US', { maximumFractionDigits: 0 })}/month`
+                                        : `Save up to $${Math.round(savings.USD / 100)}/month`)
+                                    : `Save up to ₪${Math.round(savings.ILS / 100)}/month`)
                               }
                             </div>
                           )}
