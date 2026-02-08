@@ -1957,6 +1957,14 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
 
   const chartData = getChartData();
 
+  // Hebrew: mirror chart (Y-axis on right, data right-to-left)
+  const isRtl = language === 'hebrew';
+  const getChartX = (index, total) => {
+    if (!total || total <= 1) return 50;
+    const ratio = index / (total - 1);
+    return isRtl ? 750 - ratio * 700 : 50 + ratio * 700;
+  };
+
   // Helper function to get value for selected metric
   const getMetricValue = (d) => {
     switch(selectedMetric) {
@@ -2069,33 +2077,33 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
       return;
     }
     
-    // Find closest data point based on X position
+    // Find closest data point based on X position (use getChartX for RTL)
     let closestIndex = 0;
     let minDistance = Infinity;
-    
+    const n = chartData.length;
+
     chartData.forEach((d, index) => {
       const value = getMetricValue(d);
       if (value == null) return;
-      
-      const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
+
+      const x = getChartX(index, n);
       const distance = Math.abs(mouseX - x);
-      
+
       if (distance < minDistance) {
         minDistance = distance;
         closestIndex = index;
       }
     });
-    
-    // Get the closest point's data
+
     const closestData = chartData[closestIndex];
     const closestValue = getMetricValue(closestData);
     if (closestValue == null) return;
-    
+
     const normalizedValue = closestValue - min;
     const ratio = normalizedValue / range;
-    const x = chartStartX + (closestIndex / (chartData.length - 1 || 1)) * chartWidth;
+    const x = getChartX(closestIndex, n);
     const y = 180 - (ratio * 160);
-    
+
     setHoveredPoint({ index: closestIndex, data: closestData, value: closestValue, x, y });
   };
 
@@ -2272,15 +2280,16 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
             onMouseMove={handleChartMouseMove}
             onMouseLeave={handleChartMouseLeave}
           >
-          {/* Y-axis labels */}
+          {/* Y-axis labels (right side in Hebrew/RTL) */}
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
             const value = min + (range * ratio);
             const y = 200 - (ratio * 180);
             return (
               <text
                 key={ratio}
-                x="5"
+                x={isRtl ? '755' : '5'}
                 y={y + 4}
+                textAnchor={isRtl ? 'end' : 'start'}
                 className={`text-xs ${themeClasses.textSecondary}`}
                 fill="currentColor"
               >
@@ -2328,8 +2337,9 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
                   }}
                 />
                 <text
-                  x="755"
+                  x={isRtl ? '45' : '755'}
                   y={y + 4}
+                  textAnchor={isRtl ? 'end' : 'start'}
                   className={`text-xs font-semibold`}
                   fill="#10b981"
                   opacity="0.8"
@@ -2342,14 +2352,14 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
 
           {/* Data line + soft area */}
           {hasData && chartData.length > 1 && (() => {
-            const chartWidth = 700;
+            const n = chartData.length;
             const linePoints = chartData
               .map((d, index) => {
                 const value = getMetricValue(d);
                 if (value == null) return null;
                 const normalizedValue = value - min;
                 const ratio = normalizedValue / range;
-                const x = 50 + (index / (chartData.length - 1 || 1)) * chartWidth;
+                const x = getChartX(index, n);
                 const y = 180 - (ratio * 160);
                 return { x, y };
               })
@@ -2358,12 +2368,9 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
             if (linePoints.length < 2) return null;
 
             const points = linePoints.map(p => `${p.x},${p.y}`).join(' ');
-            const areaPath = [
-              `M 50 180`,
-              ...linePoints.map(p => `L ${p.x} ${p.y}`),
-              `L 750 180`,
-              'Z'
-            ].join(' ');
+            const areaPath = isRtl
+              ? [`M 750 180`, ...linePoints.map(p => `L ${p.x} ${p.y}`), `L 50 180`, 'Z'].join(' ')
+              : [`M 50 180`, ...linePoints.map(p => `L ${p.x} ${p.y}`), `L 750 180`, 'Z'].join(' ');
 
             return (
               <>
@@ -2398,8 +2405,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
             if (value == null) return null;
             const normalizedValue = value - min;
             const ratio = normalizedValue / range;
-            const chartWidth = 700;
-            const x = 50 + (index / (chartData.length - 1 || 1)) * chartWidth;
+            const x = getChartX(index, chartData.length);
             const y = 180 - (ratio * 160);
             const isHovered = hoveredPoint && hoveredPoint.index === index;
             const step = Math.max(1, Math.floor(chartData.length / 80));
@@ -2520,8 +2526,7 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
           {/* X-axis labels */}
           {hasData && chartData.length > 0 && chartData.map((d, index) => {
             if (index % Math.ceil(chartData.length / 6) !== 0 && index !== chartData.length - 1) return null;
-            const chartWidth = 700; // Match the chart width used for data points
-            const x = 50 + (index / (chartData.length - 1 || 1)) * chartWidth;
+            const x = getChartX(index, chartData.length);
             return (
               <text
                 key={index}
@@ -2830,6 +2835,14 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
 
   const chartData = getChartData();
 
+  // Hebrew: mirror chart (Y-axis on right, data right-to-left)
+  const isRtl = language === 'hebrew';
+  const getChartX = (index, total) => {
+    if (!total || total <= 1) return 50;
+    const ratio = index / (total - 1);
+    return isRtl ? 760 - ratio * 710 : 50 + ratio * 710;
+  };
+
   // Helper function to get value for selected metric
   const getMetricValue = (d) => {
     switch(selectedMetric) {
@@ -2938,8 +2951,8 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
     }
     
     const mouseX = svgPoint.x;
-    const chartStartX = 80;
-    const chartWidth = 680;
+    const chartStartX = 50;
+    const chartWidth = 710;
     const chartEndX = chartStartX + chartWidth;
     
     if (mouseX < chartStartX || mouseX > chartEndX) {
@@ -2949,29 +2962,30 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
     
     let closestIndex = 0;
     let minDistance = Infinity;
-    
+    const n = chartData.length;
+
     chartData.forEach((d, index) => {
       const value = getMetricValue(d);
       if (value == null || value <= 0) return;
-      
-      const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
+
+      const x = getChartX(index, n);
       const distance = Math.abs(mouseX - x);
-      
+
       if (distance < minDistance) {
         minDistance = distance;
         closestIndex = index;
       }
     });
-    
+
     const closestData = chartData[closestIndex];
     const closestValue = getMetricValue(closestData);
     if (closestValue == null || closestValue <= 0) return;
-    
+
     const normalizedValue = closestValue - min;
     const ratio = normalizedValue / range;
-    const x = chartStartX + (closestIndex / (chartData.length - 1 || 1)) * chartWidth;
+    const x = getChartX(closestIndex, n);
     const y = 180 - (ratio * 160);
-    
+
     setHoveredPoint({ index: closestIndex, data: closestData, value: closestValue, x, y });
   };
 
@@ -3138,15 +3152,16 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
             onMouseMove={handleChartMouseMove}
             onMouseLeave={handleChartMouseLeave}
           >
-            {/* Y-axis labels */}
+            {/* Y-axis labels (right side in Hebrew/RTL) */}
             {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
               const value = min + (range * ratio);
               const y = 200 - (ratio * 180);
               return (
                 <text
                   key={ratio}
-                  x="5"
+                  x={isRtl ? '755' : '5'}
                   y={y + 4}
+                  textAnchor={isRtl ? 'end' : 'start'}
                   className={`text-xs ${themeClasses.textSecondary}`}
                   fill="currentColor"
                 >
@@ -3161,7 +3176,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
               return (
                 <line
                   key={ratio}
-                  x1="80"
+                  x1="50"
                   y1={y}
                   x2="760"
                   y2={y}
@@ -3180,7 +3195,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
               return (
                 <g>
                   <line
-                    x1="80"
+                    x1="50"
                     y1={y}
                     x2="760"
                     y2={y}
@@ -3194,8 +3209,9 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
                     }}
                   />
                   <text
-                    x="765"
+                    x={isRtl ? '45' : '765'}
                     y={y + 4}
+                    textAnchor={isRtl ? 'end' : 'start'}
                     className={`text-xs font-semibold`}
                     fill={metricColor}
                     opacity="0.8"
@@ -3208,15 +3224,14 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
 
             {/* Chart line + soft area */}
             {hasData && chartData.length > 1 && (() => {
-              const chartStartX = 80;
-              const chartWidth = 680;
+              const n = chartData.length;
               const linePoints = chartData
                 .map((d, index) => {
                   const value = getMetricValue(d);
                   if (value == null || value <= 0) return null;
                   const normalizedValue = value - min;
                   const ratio = normalizedValue / range;
-                  const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
+                  const x = getChartX(index, n);
                   const y = 180 - (ratio * 160);
                   return { x, y };
                 })
@@ -3225,14 +3240,9 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
               if (linePoints.length < 2) return null;
 
               const points = linePoints.map(p => `${p.x},${p.y}`).join(' ');
-
-              const firstX = linePoints.length > 0 ? linePoints[0].x : chartStartX;
-              const areaPath = [
-                `M ${firstX} 180`,
-                ...linePoints.map(p => `L ${p.x} ${p.y}`),
-                `L ${chartStartX + chartWidth} 180`,
-                'Z'
-              ].join(' ');
+              const areaPath = isRtl
+                ? [`M 760 180`, ...linePoints.map(p => `L ${p.x} ${p.y}`), `L 50 180`, 'Z'].join(' ')
+                : [`M 50 180`, ...linePoints.map(p => `L ${p.x} ${p.y}`), `L 760 180`, 'Z'].join(' ');
 
               return (
                 <>
@@ -3265,12 +3275,10 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
             {hasData && chartData.map((d, index) => {
               const value = getMetricValue(d);
               if (value == null || value <= 0) return null;
-              
+
               const normalizedValue = value - min;
               const ratio = normalizedValue / range;
-              const chartStartX = 80;
-              const chartWidth = 680;
-              const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
+              const x = getChartX(index, chartData.length);
               const y = 180 - (ratio * 160);
               
               const isHovered = hoveredPoint?.index === index;
@@ -3373,9 +3381,7 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
           {/* X-axis labels */}
           {hasData && chartData.length > 0 && chartData.map((d, index) => {
             if (index % Math.ceil(chartData.length / 6) !== 0 && index !== chartData.length - 1) return null;
-            const chartStartX = 80;
-            const chartWidth = 680;
-            const x = chartStartX + (index / (chartData.length - 1 || 1)) * chartWidth;
+            const x = getChartX(index, chartData.length);
             return (
               <text
                 key={index}
