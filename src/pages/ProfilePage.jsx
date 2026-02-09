@@ -8062,6 +8062,194 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
   const [editingIngredient, setEditingIngredient] = useState(null);
   const [editingLogId, setEditingLogId] = useState(null);
   const [editingItemIndex, setEditingItemIndex] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [mealWindow, setMealWindow] = useState({ first_meal_time: 7.0, last_meal_time: 23.0 });
+  const [showComparison, setShowComparison] = useState({}); // Track which meals have comparison visible
+  
+  // Update current time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    
+    return () => clearInterval(timer);
+  }, []);
+
+  // Load meal window from API
+  useEffect(() => {
+    const loadMealWindow = async () => {
+      if (!userCode) return;
+      
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+        const response = await fetch(`${apiUrl}/api/profile/meal-window?userCode=${encodeURIComponent(userCode)}`);
+        const result = await response.json();
+        
+        if (!response.ok) {
+          console.error('Error loading meal window:', result.error);
+          // Use defaults
+          return;
+        }
+        
+        if (result.data) {
+          setMealWindow({
+            first_meal_time: result.data.first_meal_time || 7.0,
+            last_meal_time: result.data.last_meal_time || 23.0
+          });
+        }
+      } catch (err) {
+        console.error('Error loading meal window:', err);
+        // Use defaults
+      }
+    };
+    
+    loadMealWindow();
+  }, [userCode]);
+
+  // Helper function to parse time string to float (hour + minute/60)
+  const parseTimeToFloat = (timeValue) => {
+    if (typeof timeValue === 'number') {
+      return timeValue;
+    }
+    
+    if (typeof timeValue === 'string') {
+      // Try parsing as HH:MM format
+      const parts = timeValue.split(':');
+      if (parts.length === 2) {
+        const hours = parseInt(parts[0], 10);
+        const minutes = parseInt(parts[1], 10);
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          return hours + (minutes / 60);
+        }
+      }
+      // Try parsing as float string
+      const floatValue = parseFloat(timeValue);
+      if (!isNaN(floatValue)) {
+        return floatValue;
+      }
+    }
+    
+    return 7.0; // Default fallback
+  };
+
+  // Helper function to get current time as float
+  const getCurrentTimeFloat = () => {
+    const now = currentTime;
+    return now.getHours() + (now.getMinutes() / 60);
+  };
+
+  // Helper function to extract meal names from meal plan (for slot calculation)
+  const getMealNamesFromPlan = () => {
+    if (!mealPlanMeals || mealPlanMeals.length === 0) {
+      return [];
+    }
+    
+    // Extract meal names - try different possible field names
+    const mealNames = mealPlanMeals.map(meal => {
+      if (typeof meal === 'string') {
+        return meal;
+      }
+      if (typeof meal === 'object' && meal !== null) {
+        return (
+          meal.meal_name ||
+          meal.mealName ||
+          meal.name ||
+          meal.meal ||
+          meal.main?.meal_name ||
+          meal.main?.mealName ||
+          meal.alternative?.meal_name ||
+          'Unknown'
+        );
+      }
+      return 'Unknown';
+    }).filter(name => name && name !== 'Unknown');
+    
+    return mealNames;
+  };
+
+  // Function to get current meal info (returns both category and display name)
+  const getCurrentMealInfo = () => {
+    try {
+      const mealNames = getMealNamesFromPlan();
+      const numMeals = mealNames.length;
+      
+      // If no meals in plan, use fallback
+      if (numMeals === 0) {
+        const fallback = getMealLabelFallback();
+        return { category: fallback, displayName: fallback, mealIndex: -1 };
+      }
+      
+      const now = getCurrentTimeFloat();
+      const wakeTime = mealWindow.first_meal_time || 7.0;
+      const sleepTime = mealWindow.last_meal_time || 23.0;
+      
+      // Check if before wake time
+      if (now < wakeTime) {
+        return { category: 'Early Morning', displayName: 'Early Morning', mealIndex: -1 };
+      }
+      
+      // Check if after sleep time
+      if (now > sleepTime) {
+        return { category: 'Late Night', displayName: 'Late Night', mealIndex: -1 };
+      }
+      
+      // Calculate meal slot
+      const windowSize = sleepTime - wakeTime;
+      const slotDuration = windowSize / numMeals;
+      let index = Math.floor((now - wakeTime) / slotDuration);
+      index = Math.min(index, numMeals - 1);
+      
+      // Get the meal at this index
+      const mealAtIndex = mealPlanMeals[index];
+      if (!mealAtIndex) {
+        return { category: getMealLabelFallback(), displayName: getMealLabelFallback(), mealIndex: -1 };
+      }
+      
+      // Extract meal category and display name
+      let mealCategory = 'other';
+      let displayName = 'Unknown';
+      
+      if (typeof mealAtIndex === 'object' && mealAtIndex !== null) {
+        mealCategory = mealAtIndex.meal || 'other';
+        displayName = mealAtIndex.main?.meal_title || 
+                     mealAtIndex.main?.meal_name || 
+                     mealAtIndex.meal_name || 
+                     mealAtIndex.mealName || 
+                     mealAtIndex.meal || 
+                     'Unknown';
+      } else if (typeof mealAtIndex === 'string') {
+        mealCategory = mealAtIndex;
+        displayName = mealAtIndex;
+      }
+      
+      return { category: mealCategory, displayName: displayName, mealIndex: index };
+    } catch (err) {
+      console.error('Error getting current meal:', err);
+      const fallback = getMealLabelFallback();
+      return { category: fallback, displayName: fallback, mealIndex: -1 };
+    }
+  };
+
+  // Function to determine current meal based on time using meal plan and time window
+  const getCurrentMeal = () => {
+    const mealInfo = getCurrentMealInfo();
+    return mealInfo.category;
+  };
+
+  // Fallback meal label logic
+  const getMealLabelFallback = () => {
+    const hour = currentTime.getHours();
+    if (hour >= 5 && hour < 11) {
+      return 'Breakfast';
+    }
+    if (hour >= 11 && hour < 16) {
+      return 'Lunch';
+    }
+    if (hour >= 16 && hour < 22) {
+      return 'Dinner';
+    }
+    return 'Late Snack';
+  };
   
   // Helper function to format numbers with decimal places
   const formatNumber = (num) => {
@@ -8406,6 +8594,64 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         language === 'hebrew'
           ? 'שגיאה בהעברת הארוחה'
           : 'Error moving meal'
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Update meal time
+  const handleUpdateMealTime = async (logId, newTimeString) => {
+    try {
+      setProcessing(true);
+      
+      // Find the log entry
+      const log = foodLogs.find(l => l.id === logId);
+      if (!log) return;
+
+      // Parse the new time string (format: "HH:MM")
+      const [hours, minutes] = newTimeString.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        alert(
+          language === 'hebrew'
+            ? 'פורמט זמן לא תקין'
+            : 'Invalid time format'
+        );
+        setProcessing(false);
+        return;
+      }
+
+      // Create a new date with the log_date (the day the food was eaten) and new time
+      // Use the original created_at date as base to preserve the date, or use log_date if created_at is not available
+      const baseDate = log.created_at ? new Date(log.created_at) : new Date(log.log_date || selectedDate);
+      const newDateTime = new Date(baseDate);
+      newDateTime.setHours(hours, minutes, 0, 0);
+
+      // Update the food log with the new created_at time
+      const { error } = await updateFoodLog(logId, {
+        created_at: newDateTime.toISOString()
+      });
+
+      if (error) {
+        console.error('Error updating meal time:', error);
+        alert(
+          language === 'hebrew'
+            ? 'שגיאה בעדכון זמן הארוחה'
+            : 'Error updating meal time'
+        );
+      } else {
+        // Reload food logs
+        const { data: foodLogsData, error: foodLogsError } = await getFoodLogs(userCode, selectedDate);
+        if (!foodLogsError) {
+          setFoodLogs(foodLogsData || []);
+        }
+      }
+    } catch (err) {
+      console.error('Unexpected error updating meal time:', err);
+      alert(
+        language === 'hebrew'
+          ? 'שגיאה בעדכון זמן הארוחה'
+          : 'Error updating meal time'
       );
     } finally {
       setProcessing(false);
@@ -9146,6 +9392,72 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         </div>
       </div>
 
+      {/* Current Meal Indicator - Only show if client has a meal plan */}
+      {selectedDate === new Date().toISOString().split('T')[0] && 
+       mealPlanMeals && mealPlanMeals.length > 0 && (() => {
+        const mealInfo = getCurrentMealInfo();
+        const currentMealLower = mealInfo.category.toLowerCase();
+        
+        // Get meal icon
+        const getMealIcon = () => {
+          if (currentMealLower.includes('breakfast') || currentMealLower.includes('בוקר') || currentMealLower === 'early morning') {
+            return '🌅';
+          } else if (currentMealLower.includes('lunch') || currentMealLower.includes('צהריים')) {
+            return '☀️';
+          } else if (currentMealLower.includes('dinner') || currentMealLower.includes('ערב')) {
+            return '🌙';
+          } else if (currentMealLower.includes('snack') || currentMealLower.includes('חטיף') || currentMealLower === 'late snack' || currentMealLower === 'late night') {
+            return '🍎';
+          }
+          return '🍽️';
+        };
+        
+        // Get meal display name - use the displayName from mealInfo, or fallback to mealTitleMap
+        const getMealDisplayName = () => {
+          // If we have a display name from mealInfo, use it
+          if (mealInfo.displayName && mealInfo.displayName !== 'Unknown') {
+            return mealInfo.displayName;
+          }
+          
+          // Try to find in mealTitleMap
+          if (mealTitleMap[mealInfo.category]) {
+            return mealTitleMap[mealInfo.category];
+          }
+          
+          // Try translation
+          if (t.profile.dailyLogTab.meals[mealInfo.category]) {
+            return t.profile.dailyLogTab.meals[mealInfo.category];
+          }
+          
+          // Return category as fallback
+          return mealInfo.category;
+        };
+        
+        return (
+          <div className="mt-12 animate-slideInUp" style={{ animationDelay: '0.75s' }}>
+            <div className={`${themeClasses.bgCard} border-2 border-emerald-500/40 rounded-2xl p-6 shadow-xl relative overflow-hidden`}>
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-teal-500/10 pointer-events-none" />
+              <div className="relative z-10 flex items-center gap-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg animate-pulse">
+                  <span className="text-3xl">{getMealIcon()}</span>
+                </div>
+                <div className="flex-1">
+                  <p className={`${themeClasses.textSecondary} text-sm mb-1`}>
+                    {language === 'hebrew' ? 'עכשיו זמן ל' : 'Time for'}
+                  </p>
+                  <p className={`${themeClasses.textPrimary} text-xl font-bold`}>
+                    {getMealDisplayName()}
+                  </p>
+                  <p className={`${themeClasses.textMuted} text-xs mt-1`}>
+                    {currentTime.toLocaleTimeString(language === 'hebrew' ? 'he-IL' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Meals Section */}
       <div className="mt-12 animate-slideInUp" style={{ animationDelay: '0.8s' }}>
         <div className="flex items-center mb-8">
@@ -9238,9 +9550,28 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                 {mealLogs.length > 0 ? (
                   <div className="space-y-2">
                     {meal !== 'other' && (
-                      <p className={`text-emerald-400 font-bold text-base sm:text-lg md:text-xl mb-4 mt-2 ${language === 'hebrew' ? 'text-right' : 'text-left'} border-b-2 border-emerald-500/30 pb-2`}>
-                        {language === 'hebrew' ? 'מה שאכלת' : 'What You Ate'}
-                      </p>
+                      <div className="flex items-center justify-between mb-4 mt-2">
+                        <p className={`text-emerald-400 font-bold text-base sm:text-lg md:text-xl ${language === 'hebrew' ? 'text-right' : 'text-left'} border-b-2 border-emerald-500/30 pb-2 flex-1`}>
+                          {language === 'hebrew' ? 'מה שאכלת' : 'What You Ate'}
+                        </p>
+                        {/* Comparison Button */}
+                        {mealPlanMeals.find(m => m.meal === meal) && (
+                          <button
+                            onClick={() => setShowComparison(prev => ({ ...prev, [meal]: !prev[meal] }))}
+                            className={`ml-4 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${
+                              showComparison[meal]
+                                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                : 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30'
+                            }`}
+                            title={language === 'hebrew' ? 'השווה עם התוכנית' : 'Compare with plan'}
+                          >
+                            {showComparison[meal] 
+                              ? (language === 'hebrew' ? 'הסתר השוואה' : 'Hide Comparison')
+                              : (language === 'hebrew' ? 'השווה עם התוכנית' : 'Compare with Plan')
+                            }
+                          </button>
+                        )}
+                      </div>
                     )}
                     {mealLogs.map((log, logIndex) => {
                       // Parse food_items JSON using helper function
@@ -9288,6 +9619,30 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                               )}
                             </div>
                             <div className="flex items-center gap-1">
+                              {/* Time input */}
+                              <input
+                                type="time"
+                                defaultValue={(() => {
+                                  const date = new Date(log.created_at);
+                                  const hours = String(date.getHours()).padStart(2, '0');
+                                  const minutes = String(date.getMinutes()).padStart(2, '0');
+                                  return `${hours}:${minutes}`;
+                                })()}
+                                onBlur={(e) => {
+                                  const newTime = e.target.value;
+                                  if (newTime) {
+                                    handleUpdateMealTime(log.id, newTime);
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.target.blur();
+                                  }
+                                }}
+                                disabled={processing}
+                                className={`text-xs px-2 py-1 rounded ${themeClasses.bgSecondary} ${themeClasses.textPrimary} border border-gray-600/30 hover:border-emerald-500/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-20`}
+                                title={language === 'hebrew' ? 'שנה זמן ארוחה' : 'Change meal time'}
+                              />
                               {/* Move meal dropdown */}
                               <select
                                 value={log.meal_label}
@@ -9443,6 +9798,133 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                       );
                     })}
                     
+                    {/* Comparison Section - Show meal plan */}
+                    {showComparison[meal] && meal !== 'other' && (() => {
+                      const planMeal = mealPlanMeals.find(m => m.meal === meal);
+                      if (!planMeal) return null;
+                      
+                      // Get plan meal data
+                      const planMealName = planMeal.main?.meal_title || planMeal.main?.meal_name || planMeal.main?.title || mealTitleMap[meal] || meal;
+                      const planIngredients = planMeal.main?.ingredients || [];
+                      const planCalories = planMeal.main?.nutrition?.calories || planMeal.main?.calories || 0;
+                      const planProtein = planMeal.main?.nutrition?.protein || planMeal.main?.protein || 0;
+                      const planCarbs = planMeal.main?.nutrition?.carbs || planMeal.main?.carbs || 0;
+                      const planFat = planMeal.main?.nutrition?.fat || planMeal.main?.fat || 0;
+                      
+                      // Get alternative meal data
+                      const hasAlternative = planMeal.alternative && (planMeal.alternative.ingredients || planMeal.alternative.nutrition);
+                      const altMealName = hasAlternative ? (planMeal.alternative.meal_title || planMeal.alternative.meal_name || planMeal.alternative.title || (language === 'hebrew' ? 'ארוחה חלופית' : 'Alternative Meal')) : null;
+                      const altIngredients = hasAlternative ? (planMeal.alternative.ingredients || []) : [];
+                      const altCalories = hasAlternative ? (planMeal.alternative.nutrition?.calories || planMeal.alternative.calories || 0) : 0;
+                      const altProtein = hasAlternative ? (planMeal.alternative.nutrition?.protein || planMeal.alternative.protein || 0) : 0;
+                      const altCarbs = hasAlternative ? (planMeal.alternative.nutrition?.carbs || planMeal.alternative.carbs || 0) : 0;
+                      const altFat = hasAlternative ? (planMeal.alternative.nutrition?.fat || planMeal.alternative.fat || 0) : 0;
+                      
+                      // Helper function to format portion (similar to formatPortion in MealPlanTab)
+                      const formatIngredientPortion = (ing) => {
+                        const portion = ing['portionSI(gram)'] || 0;
+                        const household = ing.household_measure || '';
+                        const convertedPortion = convertWeight(portion);
+                        const unit = getWeightUnit();
+                        
+                        if (settings.portionDisplay === 'grams') {
+                          return `${formatNumber(convertedPortion)}${unit}`;
+                        } else if (settings.portionDisplay === 'household') {
+                          return household || `${formatNumber(convertedPortion)}${unit}`;
+                        } else { // both
+                          if (household) {
+                            return `${household} (${formatNumber(convertedPortion)}${unit})`;
+                          }
+                          return `${formatNumber(convertedPortion)}${unit}`;
+                        }
+                      };
+                      
+                      // Helper function to render meal content
+                      const renderMealContent = (mealName, ingredients, calories, protein, carbs, fat) => (
+                        <>
+                          <p className={`${themeClasses.textPrimary} font-medium text-base mb-4 ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+                            {mealName}
+                          </p>
+                          
+                          {/* Ingredients */}
+                          {ingredients.length > 0 && (
+                            <div className="mb-4">
+                              <p className={`${themeClasses.textSecondary} text-xs font-medium mb-2 ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+                                {language === 'hebrew' ? 'מרכיבים:' : 'Ingredients:'}
+                              </p>
+                              <div className="space-y-1.5">
+                                {ingredients.map((ing, idx) => {
+                                  const ingredientName = ing.item || ing.name || 'Unknown item';
+                                  const portion = formatIngredientPortion(ing);
+                                  return (
+                                    <div key={idx} className={`${themeClasses.bgSecondary} rounded p-2.5 text-xs ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+                                      <div className="flex items-center justify-between">
+                                        <span className={themeClasses.textPrimary}>
+                                          {ingredientName}
+                                        </span>
+                                        <span className={`${themeClasses.textSecondary} font-semibold ml-2 ${language === 'hebrew' ? 'mr-2 ml-0' : ''}`}>
+                                          {portion}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Macros */}
+                          <div className={`${themeClasses.bgSecondary} rounded-lg p-3 mt-3`}>
+                            <p className={`${themeClasses.textSecondary} text-xs font-medium mb-2 ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+                              {language === 'hebrew' ? 'מאקרו-נוטריינטים:' : 'Macros:'}
+                            </p>
+                            <div className="flex flex-wrap gap-3 text-xs">
+                              {settings.showCalories && (
+                                <span className="text-emerald-400 font-medium">{Math.round(calories)} {language === 'hebrew' ? 'קל' : 'cal'}</span>
+                              )}
+                              {settings.showMacros && (
+                                <>
+                                  <span className="text-purple-400 font-medium">{formatWeight(protein)} {language === 'hebrew' ? 'חלבון' : 'protein'}</span>
+                                  <span className="text-amber-400 font-medium">{formatWeight(fat)} {language === 'hebrew' ? 'שומן' : 'fat'}</span>
+                                  <span className="text-blue-400 font-medium">{formatWeight(carbs)} {language === 'hebrew' ? 'פחמימות' : 'carbs'}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      );
+                      
+                      return (
+                        <div className={`${themeClasses.bgSecondary} rounded-2xl lg:rounded-xl p-4 sm:p-5 lg:p-4 border-2 border-blue-500/30 mt-4 mb-4 relative overflow-hidden`}>
+                          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-indigo-500/5 pointer-events-none rounded-2xl" />
+                          <div className="relative z-10">
+                            <h3 className={`${themeClasses.textPrimary} font-bold text-lg sm:text-xl mb-4 ${language === 'hebrew' ? 'text-right' : 'text-left'} border-b-2 border-blue-500/30 pb-2`}>
+                              {language === 'hebrew' ? '📋 לפי התוכנית' : '📋 Plan Meal'}
+                            </h3>
+                            
+                            <div className={`${themeClasses.bgCard} rounded-xl p-4 border border-blue-500/20`}>
+                              {/* Main Meal */}
+                              {renderMealContent(planMealName, planIngredients, planCalories, planProtein, planCarbs, planFat)}
+                              
+                              {/* Alternative Meal */}
+                              {hasAlternative && (
+                                <>
+                                  <div className="flex items-center my-4">
+                                    <div className="flex-1 border-t border-blue-500/30"></div>
+                                    <span className={`${themeClasses.textPrimary} font-bold px-3 text-sm ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+                                      {language === 'hebrew' ? 'או' : 'OR'}
+                                    </span>
+                                    <div className="flex-1 border-t border-blue-500/30"></div>
+                                  </div>
+                                  {renderMealContent(altMealName, altIngredients, altCalories, altProtein, altCarbs, altFat)}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    
                     {/* Total summary for this meal category - only show if more than 1 meal */}
                     {mealLogs.length > 1 && (() => {
                       let mealTotalCalories = 0;
@@ -9517,9 +9999,11 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                     <p className={`${themeClasses.textMuted} text-sm mt-2`}>{t.profile.dailyLogTab.addFirstEntry}</p>
                   </div>
               )}
-                <h4 className={`${themeClasses.textPrimary} text-lg sm:text-xl md:text-2xl lg:text-base sm:text-lg md:text-xl font-bold tracking-tight mt-4`}>
-                  {language === 'hebrew' ? 'על פי התוכנית שלך - ' : 'Your Plan - '}{mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal}
-                </h4>
+                {mealLogs.length === 0 && (
+                  <h4 className={`${themeClasses.textPrimary} text-lg sm:text-xl md:text-2xl lg:text-base sm:text-lg md:text-xl font-bold tracking-tight mt-4`}>
+                    {language === 'hebrew' ? 'על פי התוכנית שלך - ' : 'Your Plan - '}{mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal}
+                  </h4>
+                )}
                 </div>
               </div>
           );

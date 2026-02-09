@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "BetterChoice AI",
+  "name": "BetterChoice AI | תזונה שעובדת בשבילך",
+  "description": "AI-powered nutrition app that works for you",
   "icons": [
     {
       "src": "favicon.ico",
@@ -8,18 +9,40 @@
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "image.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "background_color": "#ffffff",
+  "categories": ["health", "lifestyle", "nutrition"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Profile",
+      "short_name": "Profile",
+      "description": "View your profile",
+      "url": "/profile",
+      "icons": [{ "src": "image.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Recipes",
+      "short_name": "Recipes",
+      "description": "Browse recipes",
+      "url": "/recipes",
+      "icons": [{ "src": "image.png", "sizes": "192x192" }]
+    }
+  ]
 }

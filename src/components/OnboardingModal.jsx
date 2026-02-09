@@ -16,6 +16,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const [showUsageBasedOffer, setShowUsageBasedOffer] = useState(false);
   const [completedOnboardingContext, setCompletedOnboardingContext] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [showPWAInstallPrompt, setShowPWAInstallPrompt] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -634,6 +637,36 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       loadExistingData();
     }
   }, [isOpen, user]);
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobileDevice = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+      const isSmallScreen = window.innerWidth < 768 || window.screen.width < 768;
+      setIsMobileDevice(isMobile || isSmallScreen);
+    };
+    
+    checkMobileDevice();
+    window.addEventListener('resize', checkMobileDevice);
+    return () => window.removeEventListener('resize', checkMobileDevice);
+  }, []);
+
+  // Listen for PWA install prompt
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      // Prevent the default browser install prompt
+      e.preventDefault();
+      // Store the event for later use
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
   const loadExistingData = async () => {
     setCheckingData(true);
@@ -1663,6 +1696,40 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         .catch((e) => console.warn('WhatsApp send (skip) error:', e));
       localStorage.removeItem(`onboarding_${user.id}`);
     }
+    
+    // Check if mobile device and show PWA install prompt
+    if (isMobileDevice && (deferredPrompt || !window.matchMedia('(display-mode: standalone)').matches)) {
+      setShowPWAInstallPrompt(true);
+    } else {
+      onClose(true);
+    }
+  };
+
+  const handlePWAInstall = async () => {
+    if (deferredPrompt) {
+      // Show the install prompt
+      deferredPrompt.prompt();
+      
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredPrompt.userChoice;
+      
+      if (outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      } else {
+        console.log('User dismissed the install prompt');
+      }
+      
+      // Clear the deferredPrompt
+      setDeferredPrompt(null);
+    }
+    
+    // Close the prompt and onboarding
+    setShowPWAInstallPrompt(false);
+    onClose(true);
+  };
+
+  const handlePWASkip = () => {
+    setShowPWAInstallPrompt(false);
     onClose(true);
   };
 
@@ -2137,6 +2204,87 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
 
   if (!isOpen) return null;
+
+  // PWA Install Prompt (after onboarding completion on mobile)
+  if (showPWAInstallPrompt) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4" dir={direction}>
+        <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 p-6 sm:p-8 md:p-10 max-w-lg w-full max-h-[95vh] overflow-y-auto animate-scaleIn relative text-center`}>
+          {/* Decorative gradient overlay */}
+          <div className="absolute top-0 left-0 right-0 h-16 sm:h-24 bg-gradient-to-br from-emerald-500/20 via-blue-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none" />
+          
+          {/* Language Toggle Button */}
+          <button
+            onClick={toggleLanguage}
+            className={`absolute top-2 right-2 sm:top-4 sm:right-4 z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
+          >
+            <span className="hidden sm:inline">{language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}</span>
+            <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
+          </button>
+
+          <div className="relative mt-6 sm:mt-4 mb-6">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
+              <span className="text-3xl">📱</span>
+            </div>
+            
+            {/* Title */}
+            <h2 className={`text-2xl sm:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent mb-3 ${themeClasses.textPrimary}`}>
+              {language === 'hebrew' ? 'הוסף לאפליקציות' : 'Add to Home Screen'}
+            </h2>
+            
+            {/* Description */}
+            <p className={`${themeClasses.textPrimary} text-lg font-medium mb-4 leading-tight`}>
+              {language === 'hebrew'
+                ? 'הוסף את BetterChoice AI למסך הבית שלך לגישה מהירה ונוחה יותר!'
+                : 'Add BetterChoice AI to your home screen for quick and easy access!'}
+            </p>
+
+            {/* Instructions */}
+            <div className={`p-5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 mb-6 shadow-inner text-left`}>
+              <p className={`${themeClasses.textSecondary} text-sm sm:text-base leading-relaxed mb-3`}>
+                <strong className={themeClasses.textPrimary}>
+                  {language === 'hebrew' ? 'איך להוסיף:' : 'How to add:'}
+                </strong>
+              </p>
+              <div className={`${themeClasses.textSecondary} text-xs sm:text-sm space-y-2`}>
+                {language === 'hebrew' ? (
+                  <>
+                    <p><strong>iOS (Safari):</strong> לחץ על כפתור השיתוף <span className="text-emerald-400">□↑</span> ולאחר מכן "הוסף למסך הבית"</p>
+                    <p><strong>Android (Chrome):</strong> לחץ על התפריט <span className="text-emerald-400">⋮</span> ולאחר מכן "הוסף למסך הבית" או "התקן אפליקציה"</p>
+                  </>
+                ) : (
+                  <>
+                    <p><strong>iOS (Safari):</strong> Tap the share button <span className="text-emerald-400">□↑</span> then "Add to Home Screen"</p>
+                    <p><strong>Android (Chrome):</strong> Tap the menu <span className="text-emerald-400">⋮</span> then "Add to Home Screen" or "Install App"</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-3 mt-6">
+            {deferredPrompt && (
+              <button
+                onClick={handlePWAInstall}
+                className="w-full py-4 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25"
+              >
+                {language === 'hebrew' ? 'הוסף עכשיו' : 'Install Now'}
+              </button>
+            )}
+            
+            <button
+              onClick={handlePWASkip}
+              className={`w-full py-3 px-6 rounded-xl font-medium ${themeClasses.textSecondary} opacity-60 hover:opacity-100 transition-all text-sm`}
+            >
+              {language === 'hebrew' ? 'דלג' : 'Skip'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Usage-based support offer (after onboarding save, before WhatsApp) — skippable
   if (showUsageBasedOffer) {

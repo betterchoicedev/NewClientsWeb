@@ -2285,6 +2285,74 @@ app.get('/api/profile/chat-user', async (req, res) => {
   }
 });
 
+// Helper function to parse time string to float (hour + minute/60)
+function parseTimeToFloat(timeValue) {
+  if (typeof timeValue === 'number') {
+    return timeValue;
+  }
+  
+  if (typeof timeValue === 'string') {
+    // Try parsing as HH:MM format
+    const parts = timeValue.split(':');
+    if (parts.length === 2) {
+      const hours = parseInt(parts[0], 10);
+      const minutes = parseInt(parts[1], 10);
+      if (!isNaN(hours) && !isNaN(minutes)) {
+        return hours + (minutes / 60);
+      }
+    }
+    // Try parsing as float string
+    const floatValue = parseFloat(timeValue);
+    if (!isNaN(floatValue)) {
+      return floatValue;
+    }
+  }
+  
+  return 7.0; // Default fallback
+}
+
+// Get user meal window
+app.get('/api/profile/meal-window', async (req, res) => {
+  try {
+    const { userCode } = req.query;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('chat_users')
+      .select('first_meal_time, last_meal_time')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    // Parse times - they might be stored as strings (HH:MM) or already as floats
+    let wakeTime = 7.0; // Default 7am
+    let sleepTime = 23.0; // Default 11pm
+
+    if (data) {
+      if (data.first_meal_time) {
+        wakeTime = parseTimeToFloat(data.first_meal_time);
+      }
+      if (data.last_meal_time) {
+        sleepTime = parseTimeToFloat(data.last_meal_time);
+      }
+    }
+
+    res.json({ data: { first_meal_time: wakeTime, last_meal_time: sleepTime } });
+  } catch (error) {
+    console.error('Error loading meal window:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Save profile data
 app.post('/api/profile/save', async (req, res) => {
   try {
@@ -2847,6 +2915,7 @@ app.put('/api/food-logs/:id', async (req, res) => {
     if (foodLogData.total_carbs_g !== undefined) updateData.total_carbs_g = foodLogData.total_carbs_g;
     if (foodLogData.total_fat_g !== undefined) updateData.total_fat_g = foodLogData.total_fat_g;
     if (foodLogData.log_date !== undefined) updateData.log_date = foodLogData.log_date;
+    if (foodLogData.created_at !== undefined) updateData.created_at = foodLogData.created_at;
 
     const { data, error } = await chatSupabase
       .from('food_logs')
