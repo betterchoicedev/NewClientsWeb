@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { normalizePhoneForDatabase, createClientRecord } from '../supabase/auth';
+import { translateMenu } from '../services/translateService';
 
 const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const { language, t, direction, toggleLanguage } = useLanguage();
@@ -19,6 +20,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const [showPWAInstallPrompt, setShowPWAInstallPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [editedDailyCalories, setEditedDailyCalories] = useState(null);
+  const [editedMacros, setEditedMacros] = useState({ protein: null, carbs: null, fat: null });
+  const [macroEditMode, setMacroEditMode] = useState('percentage'); // 'percentage' or 'grams'
+  const [lockedMacros, setLockedMacros] = useState({ protein: false, carbs: false, fat: false });
+  const [isGeneratingMealPlan, setIsGeneratingMealPlan] = useState(false);
+  const [mealPlanGenerationProgress, setMealPlanGenerationProgress] = useState(0);
+  const [mealPlanGenerationStep, setMealPlanGenerationStep] = useState('');
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -434,6 +442,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       fields: ['first_meal_time', 'last_meal_time']
     },
     {
+      title: language === 'hebrew' ? 'קלוריות ומאקרו יומיים' : 'Daily Calories & Macros',
+      fields: ['daily_calories', 'macros']
+    },
+    {
       title: language === 'hebrew' ? 'תכנון ארוחות' : 'Meal Planning',
       fields: ['number_of_meals', 'meal_descriptions']
     }
@@ -559,6 +571,163 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     };
   };
 
+  // Get current daily calories (edited or calculated)
+  const getCurrentDailyCalories = () => {
+    if (editedDailyCalories !== null) return editedDailyCalories;
+    
+    const age = calculateAge(formData.date_of_birth);
+    if (!age || !formData.gender || !formData.weight_kg || !formData.height_cm || !formData.activity_level || !formData.goal) {
+      return null;
+    }
+    
+    return calculateDailyCalories(
+      age,
+      formData.gender,
+      parseFloat(formData.weight_kg),
+      parseFloat(formData.height_cm),
+      formData.activity_level,
+      formData.goal
+    );
+  };
+
+  // Get current macros (edited or calculated)
+  const getCurrentMacros = () => {
+    const calories = getCurrentDailyCalories();
+    if (!calories) return null;
+    
+    // If macros were edited, return them
+    if (editedMacros.protein !== null || editedMacros.carbs !== null || editedMacros.fat !== null) {
+      const proteinGrams = editedMacros.protein !== null ? editedMacros.protein : Math.round((0.30 * calories) / 4);
+      const carbsGrams = editedMacros.carbs !== null ? editedMacros.carbs : Math.round((0.40 * calories) / 4);
+      const fatGrams = editedMacros.fat !== null ? editedMacros.fat : Math.round((0.30 * calories) / 9);
+      
+      return {
+        protein: proteinGrams,
+        carbs: carbsGrams,
+        fat: fatGrams
+      };
+    }
+    
+    // Otherwise calculate from calories
+    const calculated = calculateMacros(calories);
+    if (!calculated) return null;
+    
+    return {
+      protein: parseInt(calculated.protein.replace('g', '')),
+      carbs: parseInt(calculated.carbs.replace('g', '')),
+      fat: parseInt(calculated.fat.replace('g', ''))
+    };
+  };
+
+  // Get macro percentages from grams
+  const getMacroPercentages = (macros, calories) => {
+    if (!macros || !calories) return { protein: 30, carbs: 40, fat: 30 };
+    
+    const proteinPct = Math.round((macros.protein * 4 / calories) * 100);
+    const carbsPct = Math.round((macros.carbs * 4 / calories) * 100);
+    const fatPct = Math.round((macros.fat * 9 / calories) * 100);
+    
+    return { protein: proteinPct, carbs: carbsPct, fat: fatPct };
+  };
+
+  // Update macros from percentages
+  const updateMacrosFromPercentages = (proteinPct, carbsPct, fatPct, calories) => {
+    if (!calories) return;
+    
+    const proteinGrams = Math.round((proteinPct / 100 * calories) / 4);
+    const carbsGrams = Math.round((carbsPct / 100 * calories) / 4);
+    const fatGrams = Math.round((fatPct / 100 * calories) / 9);
+    
+    setEditedMacros({
+      protein: proteinGrams,
+      carbs: carbsGrams,
+      fat: fatGrams
+    });
+  };
+
+  // Update macro with lock support
+  const updateMacroWithLocks = (macroType, newValue, isPercentage = false) => {
+    const calories = getCurrentDailyCalories();
+    if (!calories) return;
+
+    const currentMacros = getCurrentMacros();
+    const currentPcts = getMacroPercentages(currentMacros, calories);
+    
+    // If the macro being edited is locked, don't change it
+    if (lockedMacros[macroType]) {
+      return;
+    }
+
+    // Convert new value to percentage if needed
+    let newPct;
+    if (isPercentage) {
+      newPct = Math.max(0, Math.min(100, newValue));
+    } else {
+      // Convert grams to percentage
+      if (macroType === 'protein') {
+        newPct = Math.round((newValue * 4 / calories) * 100);
+      } else if (macroType === 'carbs') {
+        newPct = Math.round((newValue * 4 / calories) * 100);
+      } else if (macroType === 'fat') {
+        newPct = Math.round((newValue * 9 / calories) * 100);
+      }
+      newPct = Math.max(0, Math.min(100, newPct));
+    }
+
+    // Start with current percentages, but update the macro being edited
+    let newProteinPct = lockedMacros.protein ? currentPcts.protein : (macroType === 'protein' ? newPct : currentPcts.protein);
+    let newCarbsPct = lockedMacros.carbs ? currentPcts.carbs : (macroType === 'carbs' ? newPct : currentPcts.carbs);
+    let newFatPct = lockedMacros.fat ? currentPcts.fat : (macroType === 'fat' ? newPct : currentPcts.fat);
+
+    // Calculate remaining percentage
+    const used = newProteinPct + newCarbsPct + newFatPct;
+    const remaining = 100 - used;
+
+    // Get unlocked macros (excluding the one being edited)
+    const unlockedMacros = [];
+    if (!lockedMacros.protein && macroType !== 'protein') {
+      unlockedMacros.push({ type: 'protein', current: currentPcts.protein });
+    }
+    if (!lockedMacros.carbs && macroType !== 'carbs') {
+      unlockedMacros.push({ type: 'carbs', current: currentPcts.carbs });
+    }
+    if (!lockedMacros.fat && macroType !== 'fat') {
+      unlockedMacros.push({ type: 'fat', current: currentPcts.fat });
+    }
+
+    // Distribute remaining percentage proportionally among unlocked macros
+    if (unlockedMacros.length > 0 && remaining !== 0) {
+      const totalUnlocked = unlockedMacros.reduce((sum, m) => sum + m.current, 0);
+      
+      if (totalUnlocked > 0) {
+        unlockedMacros.forEach(m => {
+          const adjustment = Math.round((m.current / totalUnlocked) * remaining);
+          if (m.type === 'protein') {
+            newProteinPct = m.current + adjustment;
+          } else if (m.type === 'carbs') {
+            newCarbsPct = m.current + adjustment;
+          } else if (m.type === 'fat') {
+            newFatPct = m.current + adjustment;
+          }
+        });
+      } else {
+        // If all unlocked macros are 0, split remaining equally
+        const split = Math.round(remaining / unlockedMacros.length);
+        unlockedMacros.forEach(m => {
+          if (m.type === 'protein') {
+            newProteinPct = split;
+          } else if (m.type === 'carbs') {
+            newCarbsPct = split;
+          } else if (m.type === 'fat') {
+            newFatPct = split;
+          }
+        });
+      }
+    }
+
+    updateMacrosFromPercentages(newProteinPct, newCarbsPct, newFatPct, calories);
+  };
+
   // Save form data to localStorage whenever it changes (only if modal is open and we have progress)
   useEffect(() => {
     if (isOpen && user && currentStep >= 0) {
@@ -573,11 +742,15 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         selectedAllergies,
         allergiesOtherText,
         selectedLimitations,
-        limitationsOtherText
+        limitationsOtherText,
+        editedDailyCalories,
+        editedMacros,
+        macroEditMode,
+        lockedMacros
       };
       localStorage.setItem(`onboarding_${user.id}`, JSON.stringify(saveData));
     }
-  }, [formData, currentStep, dobDay, dobMonth, dobYear, weightUnit, heightUnit, selectedAllergies, allergiesOtherText, selectedLimitations, limitationsOtherText, isOpen, user]);
+  }, [formData, currentStep, dobDay, dobMonth, dobYear, weightUnit, heightUnit, selectedAllergies, allergiesOtherText, selectedLimitations, limitationsOtherText, editedDailyCalories, editedMacros, macroEditMode, lockedMacros, isOpen, user]);
 
   // Restore current step from localStorage when modal opens (before loadExistingData runs)
   useEffect(() => {
@@ -599,6 +772,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
             setAllergiesOtherText(parsed.allergiesOtherText || '');
             setSelectedLimitations(parsed.selectedLimitations || []);
             setLimitationsOtherText(parsed.limitationsOtherText || '');
+            setEditedDailyCalories(parsed.editedDailyCalories !== undefined ? parsed.editedDailyCalories : null);
+            setEditedMacros(parsed.editedMacros || { protein: null, carbs: null, fat: null });
+            setMacroEditMode(parsed.macroEditMode || 'percentage');
+            setLockedMacros(parsed.lockedMacros || { protein: false, carbs: false, fat: false });
             // Restore form data (will be merged with database data by loadExistingData)
             setFormData(prev => ({ ...prev, ...parsed.formData }));
             return; // Don't reset to welcome if we have saved progress
@@ -1015,12 +1192,40 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       // No need to store availableFields, we only need to set filteredSteps
 
+      // Check if we can calculate calories/macros (all required fields are filled)
+      // Check both database data and current formData (for fields filled during onboarding)
+      const canCalculateMacros = (!isEmpty(data?.birth_date) || !isEmpty(formData.date_of_birth)) && 
+                                  (!isEmpty(data?.gender) || !isEmpty(formData.gender)) && 
+                                  (!isEmpty(data?.current_weight) || !isEmpty(formData.weight_kg)) && 
+                                  (!isEmpty(data?.height) || !isEmpty(formData.height_cm)) && 
+                                  (!isEmpty(data?.activity_level) || !isEmpty(formData.activity_level)) && 
+                                  (!isEmpty(data?.goal) || !isEmpty(formData.goal));
+
       // Filter steps to only show steps with missing fields
-      const filtered = allSteps
-        .map(step => ({
-          ...step,
-          fields: step.fields.filter(field => missingFields.includes(field))
-        }))
+      let filtered = allSteps
+        .map(step => {
+          // Special handling for macros/calories step - only show if we can calculate
+          if (step.fields.includes('daily_calories') && step.fields.includes('macros')) {
+            if (canCalculateMacros) {
+              // Always include this step if we can calculate, even if fields aren't "missing"
+              return {
+                ...step,
+                fields: ['daily_calories', 'macros']
+              };
+            } else {
+              // Don't show this step if we can't calculate
+              return {
+                ...step,
+                fields: []
+              };
+            }
+          }
+          // For other steps, filter by missing fields
+          return {
+            ...step,
+            fields: step.fields.filter(field => missingFields.includes(field))
+          };
+        })
         .filter(step => step.fields.length > 0);
 
       setFilteredSteps(filtered);
@@ -1570,7 +1775,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     const currentStepFields = filteredSteps[currentStep]?.fields || [];
     
     // Fields that can be empty (None is a valid selection or auto-filled)
-    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations'];
+    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations', 'daily_calories', 'macros'];
     
     // Track field errors for this step
     const newFieldErrors = {};
@@ -1733,6 +1938,180 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     onClose(true);
   };
 
+  // Helper function to calculate totals from meals
+  const calculateMainTotals = (menu) => {
+    if (!menu || !menu.meals) return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    
+    return menu.meals.reduce((acc, meal) => {
+      if (meal.main && meal.main.nutrition) {
+        acc.calories += meal.main.nutrition.calories || 0;
+        acc.protein += meal.main.nutrition.protein || 0;
+        acc.carbs += meal.main.nutrition.carbs || 0;
+        acc.fat += meal.main.nutrition.fat || 0;
+      }
+      return acc;
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  };
+
+  // Generate meal plan automatically after onboarding
+  const generateMealPlan = async (userCode, mealPlanStructure, dailyCalories, macros, clientName, userLanguage) => {
+    // Check if we have required data
+    if (!userCode || !mealPlanStructure || mealPlanStructure.length === 0 || !dailyCalories) {
+      console.log('⚠️ Missing required data for meal plan generation:', {
+        userCode: !!userCode,
+        mealPlanStructure: !!mealPlanStructure,
+        mealPlanStructureLength: mealPlanStructure?.length,
+        dailyCalories: !!dailyCalories
+      });
+      return { success: false, error: 'Missing required data for meal plan generation' };
+    }
+
+    try {
+      setIsGeneratingMealPlan(true);
+      setMealPlanGenerationProgress(0);
+      setMealPlanGenerationStep(userLanguage === 'hebrew' ? 'מתחיל...' : 'Initializing...');
+
+      console.log('🧠 Auto-generating meal plan for user:', userCode);
+      console.log('🔍 Meal plan structure:', mealPlanStructure);
+      console.log('🔍 Daily calories:', dailyCalories);
+
+      // Step 1: Get meal template from API
+      setMealPlanGenerationProgress(5);
+      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '🎯 מנתח העדפות...' : '🎯 Analyzing preferences...');
+
+      const templateRes = await fetch("https://dietitian-be.azurewebsites.net/api/template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          user_code: userCode,
+          meal_structure: mealPlanStructure 
+        })
+      });
+
+      if (!templateRes.ok) {
+        const errorText = await templateRes.text();
+        console.error('❌ Template API error response:', errorText);
+        throw new Error(`Template API error: ${templateRes.status}`);
+      }
+
+      const templateData = await templateRes.json();
+      
+      if (templateData.error) {
+        throw new Error(templateData.error);
+      }
+
+      if (!templateData.template) {
+        throw new Error('No meal template was generated');
+      }
+
+      const template = templateData.template;
+      console.log('✅ Template received:', template);
+      setMealPlanGenerationProgress(25);
+      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '✅ ניתוח הושלם!' : '✅ Analysis complete!');
+
+      // Step 2: Build menu
+      setMealPlanGenerationProgress(30);
+      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '🍽️ יוצר ארוחות מותאמות אישית...' : '🍽️ Creating personalized meals...');
+
+      // Gradual progress animation
+      const progressInterval = setInterval(() => {
+        setMealPlanGenerationProgress(prev => {
+          if (prev >= 99) {
+            clearInterval(progressInterval);
+            return 99;
+          }
+          return prev + 1;
+        });
+      }, 2000);
+
+      const buildRes = await fetch("https://dietitian-be.azurewebsites.net/api/build-menu", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template, user_code: userCode }),
+      });
+
+      clearInterval(progressInterval);
+
+      if (!buildRes.ok) {
+        const errText = await buildRes.text().catch(() => '');
+        throw new Error(`Build menu API error: ${buildRes.status} - ${errText}`);
+      }
+
+      const buildData = await buildRes.json();
+
+      if (buildData.error) {
+        throw new Error(buildData.error);
+      }
+
+      if (!buildData.menu) {
+        throw new Error('No meals were created');
+      }
+
+      setMealPlanGenerationProgress(60);
+      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '🔢 מחשב ערכים תזונתיים...' : '🔢 Calculating nutrition values...');
+
+      // Calculate totals
+      const menuData = {
+        meals: buildData.menu,
+        totals: calculateMainTotals({ meals: buildData.menu }),
+        note: buildData.note || ''
+      };
+
+      setMealPlanGenerationProgress(70);
+      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '💾 שומר תפריט...' : '💾 Saving menu...');
+
+      console.log('💾 Auto-saving meal plan data:', menuData);
+      
+      // Save to database
+      const newPlanId = crypto.randomUUID();
+      const mealPlanName = `${clientName || 'Client'}'s Meal Plan`;
+
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const saveResponse = await fetch(`${apiUrl}/api/profile/meal-plan/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planId: newPlanId,
+          userCode,
+          mealPlanName,
+          template,
+          menuData,
+          dailyCalories,
+          macros
+        })
+      });
+
+      const saveResult = await saveResponse.json();
+
+      if (!saveResponse.ok) {
+        console.error('❌ Error saving meal plan:', saveResult.error);
+        throw new Error('Error saving meal plan');
+      }
+
+      setMealPlanGenerationProgress(100);
+      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '🎉 התפריט מוכן ונשמר!' : '🎉 Menu saved successfully!');
+
+      console.log('✅ Meal plan generated and saved successfully!');
+      
+      // Wait a moment to show completion message
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setIsGeneratingMealPlan(false);
+      setMealPlanGenerationProgress(0);
+      setMealPlanGenerationStep('');
+      
+      return { success: true, data: menuData };
+
+    } catch (err) {
+      console.error("❌ Error generating meal plan:", err);
+      setIsGeneratingMealPlan(false);
+      setMealPlanGenerationProgress(0);
+      setMealPlanGenerationStep('');
+      // Don't throw - we don't want to block onboarding if meal plan generation fails
+      return { success: false, error: err.message };
+    }
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     setError('');
@@ -1758,18 +2137,52 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       // Calculate age from date_of_birth
       const age = calculateAge(formData.date_of_birth);
       
-      // Calculate daily calories and macros
+      // Calculate daily calories and macros (use edited values if available)
       let dailyCalories = null;
       let macros = null;
       let mealPlanStructure = null;
       
-      if (allOnboardingFields.includes('date_of_birth') && 
-          allOnboardingFields.includes('gender') && 
-          allOnboardingFields.includes('weight_kg') && 
-          allOnboardingFields.includes('height_cm') && 
-          allOnboardingFields.includes('activity_level') && 
-          allOnboardingFields.includes('goal')) {
+      // Check if macros/calories step was shown
+      if (allOnboardingFields.includes('daily_calories') && allOnboardingFields.includes('macros')) {
+        // Use edited values if available, otherwise calculate
+        dailyCalories = editedDailyCalories !== null 
+          ? editedDailyCalories 
+          : (allOnboardingFields.includes('date_of_birth') && 
+             allOnboardingFields.includes('gender') && 
+             allOnboardingFields.includes('weight_kg') && 
+             allOnboardingFields.includes('height_cm') && 
+             allOnboardingFields.includes('activity_level') && 
+             allOnboardingFields.includes('goal')
+            ? calculateDailyCalories(
+                age,
+                formData.gender,
+                parseFloat(formData.weight_kg),
+                parseFloat(formData.height_cm),
+                formData.activity_level,
+                formData.goal
+              )
+            : null);
         
+        if (dailyCalories) {
+          // Use edited macros if available, otherwise calculate
+          const currentMacros = getCurrentMacros();
+          if (currentMacros) {
+            macros = {
+              protein: `${currentMacros.protein}g`,
+              carbs: `${currentMacros.carbs}g`,
+              fat: `${currentMacros.fat}g`
+            };
+          } else {
+            macros = calculateMacros(dailyCalories);
+          }
+        }
+      } else if (allOnboardingFields.includes('date_of_birth') && 
+                 allOnboardingFields.includes('gender') && 
+                 allOnboardingFields.includes('weight_kg') && 
+                 allOnboardingFields.includes('height_cm') && 
+                 allOnboardingFields.includes('activity_level') && 
+                 allOnboardingFields.includes('goal')) {
+        // Calculate if macros step wasn't shown but we have the required fields
         dailyCalories = calculateDailyCalories(
           age,
           formData.gender,
@@ -2185,7 +2598,43 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.warn('⚠️ No userCode available - chat_users table was not updated. This may happen for new Google signups.');
       }
 
-      console.log('✅ Onboarding data saved successfully — showing support offer then WhatsApp.');
+      console.log('✅ Onboarding data saved successfully — generating meal plan...');
+      
+      // Generate meal plan automatically if we have the required data
+      if (finalUserCode && mealPlanStructure && mealPlanStructure.length > 0 && dailyCalories) {
+        const clientName = fullName || 
+                          (formData.first_name && formData.last_name ? `${formData.first_name} ${formData.last_name}`.trim() : '') ||
+                          formData.first_name || 
+                          formData.last_name || 
+                          'Client';
+        
+        const userLanguage = formData.language || language;
+        
+        // Generate meal plan (don't block if it fails)
+        const mealPlanResult = await generateMealPlan(
+          finalUserCode,
+          mealPlanStructure,
+          dailyCalories,
+          macros,
+          clientName,
+          userLanguage
+        );
+        
+        if (mealPlanResult.success) {
+          console.log('✅ Meal plan generated successfully!');
+        } else {
+          console.warn('⚠️ Meal plan generation failed (non-blocking):', mealPlanResult.error);
+        }
+      } else {
+        console.log('ℹ️ Skipping meal plan generation - missing required data:', {
+          hasUserCode: !!finalUserCode,
+          hasMealPlanStructure: !!mealPlanStructure,
+          mealPlanStructureLength: mealPlanStructure?.length,
+          hasDailyCalories: !!dailyCalories
+        });
+      }
+      
+      console.log('✅ Onboarding complete — showing support offer then WhatsApp.');
       
       setLoading(false);
       setShowUsageBasedOffer(true);
@@ -2204,6 +2653,67 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
 
   if (!isOpen) return null;
+
+  // Meal Plan Generation Loading Screen (after onboarding submission)
+  if (isGeneratingMealPlan) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4" dir={direction}>
+        <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 p-6 sm:p-8 md:p-10 max-w-lg w-full max-h-[95vh] overflow-y-auto animate-scaleIn relative text-center`}>
+          {/* Decorative gradient overlay */}
+          <div className="absolute top-0 left-0 right-0 h-16 sm:h-24 bg-gradient-to-br from-emerald-500/20 via-blue-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none" />
+          
+          <div className="relative mt-6 sm:mt-4 mb-6">
+            {/* Icon */}
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30 animate-pulse">
+              <span className="text-3xl sm:text-4xl">🍽️</span>
+            </div>
+            
+            {/* Title */}
+            <h2 className={`text-2xl sm:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent mb-3 ${themeClasses.textPrimary}`}>
+              {language === 'hebrew' ? 'יוצר תפריט מותאם אישית עבורך' : 'Generating Your Personalized Meal Plan'}
+            </h2>
+            
+            {/* Description */}
+            <p className={`${themeClasses.textSecondary} text-base sm:text-lg font-medium mb-6 leading-relaxed`}>
+              {language === 'hebrew'
+                ? 'אנחנו יוצרים עבורך תפריט תזונה מותאם אישית בהתבסס על המידע שסיפקת. זה עשוי לקחת כמה רגעים...'
+                : 'We\'re creating a personalized meal plan for you based on the information you provided. This may take a few moments...'}
+            </p>
+
+            {/* Progress Bar */}
+            <div className="mb-6">
+              <div className={`w-full h-3 sm:h-4 bg-gray-700/50 rounded-full overflow-hidden ${themeClasses.bgCard} border border-gray-600/30`}>
+                <div 
+                  className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-500 ease-out rounded-full shadow-lg shadow-emerald-500/50"
+                  style={{ width: `${mealPlanGenerationProgress}%` }}
+                />
+              </div>
+              <p className={`${themeClasses.textSecondary} text-sm sm:text-base mt-3 font-medium`}>
+                {mealPlanGenerationProgress}%
+              </p>
+            </div>
+
+            {/* Current Step */}
+            {mealPlanGenerationStep && (
+              <div className={`p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 mb-4 ${themeClasses.bgCard}`}>
+                <p className={`${themeClasses.textPrimary} text-sm sm:text-base font-medium flex items-center justify-center gap-2`}>
+                  <span className="animate-spin text-emerald-400">⏳</span>
+                  {mealPlanGenerationStep}
+                </p>
+              </div>
+            )}
+
+            {/* Loading Animation */}
+            <div className="flex justify-center items-center gap-2 mt-4">
+              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // PWA Install Prompt (after onboarding completion on mobile)
   if (showPWAInstallPrompt) {
@@ -3256,6 +3766,360 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {currentFields.includes('daily_calories') && currentFields.includes('macros') && (
+            <div className="space-y-4 sm:space-y-6">
+              {/* Daily Calories */}
+              <div className="group">
+                <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
+                  {language === 'hebrew' ? 'קלוריות יומיות' : 'Daily Calories'}
+                </label>
+                <input
+                  type="number"
+                  value={getCurrentDailyCalories() || ''}
+                  onChange={(e) => {
+                    const newCalories = parseInt(e.target.value) || null;
+                    const oldCalories = editedDailyCalories !== null ? editedDailyCalories : getCurrentDailyCalories();
+                    
+                    // Get current macros BEFORE updating calories state to preserve percentages
+                    let currentMacros = null;
+                    if (oldCalories) {
+                      // Get macros using current editedMacros state
+                      if (editedMacros.protein !== null || editedMacros.carbs !== null || editedMacros.fat !== null) {
+                        const proteinGrams = editedMacros.protein !== null ? editedMacros.protein : Math.round((0.30 * oldCalories) / 4);
+                        const carbsGrams = editedMacros.carbs !== null ? editedMacros.carbs : Math.round((0.40 * oldCalories) / 4);
+                        const fatGrams = editedMacros.fat !== null ? editedMacros.fat : Math.round((0.30 * oldCalories) / 9);
+                        currentMacros = { protein: proteinGrams, carbs: carbsGrams, fat: fatGrams };
+                      } else {
+                        const calculated = calculateMacros(oldCalories);
+                        if (calculated) {
+                          currentMacros = {
+                            protein: parseInt(calculated.protein.replace('g', '')),
+                            carbs: parseInt(calculated.carbs.replace('g', '')),
+                            fat: parseInt(calculated.fat.replace('g', ''))
+                          };
+                        }
+                      }
+                    }
+                    
+                    // Update calories state
+                    setEditedDailyCalories(newCalories);
+                    
+                    // Always recalculate macros when calories change
+                    if (newCalories) {
+                      // Check if we have valid existing macros (all > 0) to preserve percentages
+                      const hasValidMacros = currentMacros && 
+                        currentMacros.protein > 0 && 
+                        currentMacros.carbs > 0 && 
+                        currentMacros.fat > 0;
+                      
+                      if (oldCalories && hasValidMacros) {
+                        // Calculate percentages based on old calories, then apply to new calories
+                        const percentages = getMacroPercentages(currentMacros, oldCalories);
+                        updateMacrosFromPercentages(percentages.protein, percentages.carbs, percentages.fat, newCalories);
+                      } else {
+                        // If no macros yet, macros are 0, or no old calories, calculate default (30/40/30)
+                        updateMacrosFromPercentages(30, 40, 30, newCalories);
+                      }
+                    } else {
+                      // If calories are cleared, reset macros
+                      setEditedMacros({ protein: null, carbs: null, fat: null });
+                    }
+                  }}
+                  className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 placeholder:text-gray-400`}
+                  placeholder={language === 'hebrew' ? 'הזן קלוריות' : 'Enter calories'}
+                />
+                {getCurrentDailyCalories() && (
+                  <p className={`text-xs sm:text-sm mt-1 ${themeClasses.textSecondary}`}>
+                    {language === 'hebrew' 
+                      ? `מבוסס על: גיל, מין, משקל, גובה, רמת פעילות ומטרה`
+                      : `Based on: age, gender, weight, height, activity level, and goal`}
+                  </p>
+                )}
+              </div>
+
+              {/* Macros */}
+              {getCurrentDailyCalories() && getCurrentMacros() && (
+                <div className="group">
+                  <div className="flex items-center justify-between mb-3 sm:mb-4">
+                    <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
+                      {language === 'hebrew' ? 'מאקרו-נוטריינטים' : 'Macronutrients'}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMacroEditMode('percentage')}
+                        className={`px-2 py-1 text-xs rounded-lg transition-all duration-200 border-2 ${
+                          macroEditMode === 'percentage'
+                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold'
+                            : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                        }`}
+                      >
+                        {language === 'hebrew' ? '%' : '%'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMacroEditMode('grams')}
+                        className={`px-2 py-1 text-xs rounded-lg transition-all duration-200 border-2 ${
+                          macroEditMode === 'grams'
+                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold'
+                            : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                        }`}
+                      >
+                        {language === 'hebrew' ? 'גרם' : 'g'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 sm:space-y-4">
+                    {/* Protein */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className={`block text-xs sm:text-sm font-medium ${themeClasses.textSecondary}`}>
+                          {language === 'hebrew' ? 'חלבון' : 'Protein'}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const isCurrentlyLocked = lockedMacros.protein;
+                            // If unlocking, just unlock this one. If locking, unlock all others first
+                            setLockedMacros({
+                              protein: !isCurrentlyLocked,
+                              carbs: false,
+                              fat: false
+                            });
+                          }}
+                          className={`p-1.5 rounded transition-all duration-200 ${
+                            lockedMacros.protein
+                              ? 'text-emerald-400 bg-emerald-500/20'
+                              : 'text-gray-400 hover:text-gray-300 hover:bg-gray-700/50'
+                          }`}
+                          title={lockedMacros.protein ? (language === 'hebrew' ? 'פתח נעילה' : 'Unlock') : (language === 'hebrew' ? 'נעל' : 'Lock')}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {lockedMacros.protein ? (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            ) : (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                            )}
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {macroEditMode === 'percentage' ? (
+                          <>
+                            <input
+                              type="number"
+                              value={getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).protein}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                updateMacroWithLocks('protein', value, true);
+                              }}
+                              disabled={lockedMacros.protein}
+                              min="0"
+                              max="100"
+                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.protein ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.protein ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                            />
+                            <span className={`text-sm ${themeClasses.textSecondary}`}>%</span>
+                            <span className={`text-xs ${themeClasses.textSecondary}`}>
+                              ({getCurrentMacros().protein}g)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="number"
+                              value={getCurrentMacros().protein}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                updateMacroWithLocks('protein', value, false);
+                              }}
+                              disabled={lockedMacros.protein}
+                              min="0"
+                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.protein ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.protein ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                            />
+                            <span className={`text-sm ${themeClasses.textSecondary}`}>g</span>
+                            <span className={`text-xs ${themeClasses.textSecondary}`}>
+                              ({getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).protein}%)
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Carbs */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className={`block text-xs sm:text-sm font-medium ${themeClasses.textSecondary}`}>
+                          {language === 'hebrew' ? 'פחמימות' : 'Carbohydrates'}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const isCurrentlyLocked = lockedMacros.carbs;
+                            // If unlocking, just unlock this one. If locking, unlock all others first
+                            setLockedMacros({
+                              protein: false,
+                              carbs: !isCurrentlyLocked,
+                              fat: false
+                            });
+                          }}
+                          className={`p-1.5 rounded transition-all duration-200 ${
+                            lockedMacros.carbs
+                              ? 'text-emerald-400 bg-emerald-500/20'
+                              : 'text-gray-400 hover:text-gray-300 hover:bg-gray-700/50'
+                          }`}
+                          title={lockedMacros.carbs ? (language === 'hebrew' ? 'פתח נעילה' : 'Unlock') : (language === 'hebrew' ? 'נעל' : 'Lock')}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {lockedMacros.carbs ? (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            ) : (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                            )}
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {macroEditMode === 'percentage' ? (
+                          <>
+                            <input
+                              type="number"
+                              value={getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).carbs}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                updateMacroWithLocks('carbs', value, true);
+                              }}
+                              disabled={lockedMacros.carbs}
+                              min="0"
+                              max="100"
+                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.carbs ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.carbs ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                            />
+                            <span className={`text-sm ${themeClasses.textSecondary}`}>%</span>
+                            <span className={`text-xs ${themeClasses.textSecondary}`}>
+                              ({getCurrentMacros().carbs}g)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="number"
+                              value={getCurrentMacros().carbs}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                updateMacroWithLocks('carbs', value, false);
+                              }}
+                              disabled={lockedMacros.carbs}
+                              min="0"
+                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.carbs ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.carbs ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                            />
+                            <span className={`text-sm ${themeClasses.textSecondary}`}>g</span>
+                            <span className={`text-xs ${themeClasses.textSecondary}`}>
+                              ({getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).carbs}%)
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Fat */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className={`block text-xs sm:text-sm font-medium ${themeClasses.textSecondary}`}>
+                          {language === 'hebrew' ? 'שומן' : 'Fat'}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const isCurrentlyLocked = lockedMacros.fat;
+                            // If unlocking, just unlock this one. If locking, unlock all others first
+                            setLockedMacros({
+                              protein: false,
+                              carbs: false,
+                              fat: !isCurrentlyLocked
+                            });
+                          }}
+                          className={`p-1.5 rounded transition-all duration-200 ${
+                            lockedMacros.fat
+                              ? 'text-emerald-400 bg-emerald-500/20'
+                              : 'text-gray-400 hover:text-gray-300 hover:bg-gray-700/50'
+                          }`}
+                          title={lockedMacros.fat ? (language === 'hebrew' ? 'פתח נעילה' : 'Unlock') : (language === 'hebrew' ? 'נעל' : 'Lock')}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            {lockedMacros.fat ? (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            ) : (
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                            )}
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {macroEditMode === 'percentage' ? (
+                          <>
+                            <input
+                              type="number"
+                              value={getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).fat}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                updateMacroWithLocks('fat', value, true);
+                              }}
+                              disabled={lockedMacros.fat}
+                              min="0"
+                              max="100"
+                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.fat ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.fat ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                            />
+                            <span className={`text-sm ${themeClasses.textSecondary}`}>%</span>
+                            <span className={`text-xs ${themeClasses.textSecondary}`}>
+                              ({getCurrentMacros().fat}g)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="number"
+                              value={getCurrentMacros().fat}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                updateMacroWithLocks('fat', value, false);
+                              }}
+                              disabled={lockedMacros.fat}
+                              min="0"
+                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.fat ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.fat ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                            />
+                            <span className={`text-sm ${themeClasses.textSecondary}`}>g</span>
+                            <span className={`text-xs ${themeClasses.textSecondary}`}>
+                              ({getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).fat}%)
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Total percentage indicator */}
+                  <div className={`mt-3 p-2 rounded-lg ${themeClasses.bgCard} border border-gray-600/30`}>
+                    <p className={`text-xs sm:text-sm text-center ${themeClasses.textSecondary}`}>
+                      {language === 'hebrew' ? 'סה"כ: ' : 'Total: '}
+                      <span className={`font-semibold ${themeClasses.textPrimary}`}>
+                        {getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).protein + 
+                         getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).carbs + 
+                         getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).fat}%
+                      </span>
+                      {getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).protein + 
+                       getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).carbs + 
+                       getMacroPercentages(getCurrentMacros(), getCurrentDailyCalories()).fat !== 100 && (
+                        <span className="text-yellow-400 ml-1">
+                          {language === 'hebrew' ? '(לא 100%)' : '(not 100%)'}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
