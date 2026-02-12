@@ -56,8 +56,8 @@ const getClientMealPlan = async (userCode) => {
     const processedPlans = plansArray.map((data) => {
       // Check if today is in the active_days
       // active_days: array of numbers 0-6 where 0=Sunday, 1=Monday, etc.
-      // If active_days is null, it's an everyday plan
-      const isActiveToday = data.active_days === null || data.active_days.includes(today);
+      // If active_days is null or undefined, it's an everyday plan
+      const isActiveToday = data.active_days == null || (Array.isArray(data.active_days) && data.active_days.includes(today));
 
       // Check if edited plan is from today
       const editedPlanDate = data.edited_plan_date ? data.edited_plan_date.split('T')[0] : null;
