@@ -10,7 +10,7 @@ const isSecondaryAvailable = () => {
 };
 
 // API URL helper
-const getApiUrl = () => process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+const getApiUrl = () => process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 // MEAL PLANS
 export const getMealPlan = async (userCode) => {

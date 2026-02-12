@@ -2142,15 +2142,14 @@ app.get('/api/profile/meal-plan', async (req, res) => {
       .select('*')
       .eq('user_code', userCode)
       .eq('active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order('created_at', { ascending: false });
 
     if (error && error.code !== 'PGRST116') {
       throw error;
     }
 
-    res.json({ data });
+    // Return array of meal plans (can be empty array if none found)
+    res.json({ data: data || [] });
   } catch (error) {
     console.error('Error fetching client meal plan:', error);
     res.status(500).json({ error: error.message });
@@ -2184,13 +2183,23 @@ app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
 // Update client meal plan (save edited plan)
 app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
   try {
-    const { planId, mealPlan } = req.body;
+    const { planId, mealPlan, userCode } = req.body;
     if (!planId || !mealPlan) {
       return res.status(400).json({ error: 'Plan ID and meal plan data are required' });
     }
 
     const today = new Date().toISOString();
-    const { error } = await supabase
+    
+    // 1. Update client_meal_plans table
+    const { data: planData, error: planError } = await supabase
+      .from('client_meal_plans')
+      .select('user_code, dietitian_meal_plan, client_edited_meal_plan')
+      .eq('id', planId)
+      .single();
+
+    if (planError) throw planError;
+
+    const { error: clientMealPlanError } = await supabase
       .from('client_meal_plans')
       .update({
         client_edited_meal_plan: mealPlan,
@@ -2198,7 +2207,67 @@ app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
       })
       .eq('id', planId);
 
-    if (error) throw error;
+    if (clientMealPlanError) throw clientMealPlanError;
+
+    // 2. Update meal_plans_and_schemas table
+    if (chatSupabase && planData) {
+      const userCodeToUse = userCode || planData.user_code;
+      
+      // Find the meal plan in meal_plans_and_schemas
+      const { data: schemaPlan, error: schemaFindError } = await chatSupabase
+        .from('meal_plans_and_schemas')
+        .select('id, dietitian_meal_plan, client_edited_meal_plan')
+        .eq('user_code', userCodeToUse)
+        .eq('record_type', 'meal_plan')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!schemaFindError && schemaPlan) {
+        // Determine which field to update (dietitian_meal_plan or client_edited_meal_plan)
+        const updateField = schemaPlan.client_edited_meal_plan ? 'client_edited_meal_plan' : 'dietitian_meal_plan';
+        
+        const { error: schemaUpdateError } = await chatSupabase
+          .from('meal_plans_and_schemas')
+          .update({
+            [updateField]: mealPlan,
+            updated_at: today
+          })
+          .eq('id', schemaPlan.id);
+
+        if (schemaUpdateError) {
+          console.error('Error updating meal_plans_and_schemas:', schemaUpdateError);
+        }
+      }
+    }
+
+    // 3. Update chat_users table
+    if (chatSupabase && planData) {
+      const userCodeToUse = userCode || planData.user_code;
+      
+      const { data: chatUser, error: chatUserFindError } = await chatSupabase
+        .from('chat_users')
+        .select('id, meal_plan')
+        .eq('user_code', userCodeToUse)
+        .maybeSingle();
+
+      if (!chatUserFindError && chatUser) {
+        // Update meal_plan column in chat_users
+        const { error: chatUserUpdateError } = await chatSupabase
+          .from('chat_users')
+          .update({
+            meal_plan: mealPlan,
+            updated_at: today
+          })
+          .eq('id', chatUser.id);
+
+        if (chatUserUpdateError) {
+          console.error('Error updating chat_users meal_plan:', chatUserUpdateError);
+        }
+      }
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving edited meal plan:', error);
@@ -2916,6 +2985,7 @@ app.put('/api/food-logs/:id', async (req, res) => {
     if (foodLogData.total_fat_g !== undefined) updateData.total_fat_g = foodLogData.total_fat_g;
     if (foodLogData.log_date !== undefined) updateData.log_date = foodLogData.log_date;
     if (foodLogData.created_at !== undefined) updateData.created_at = foodLogData.created_at;
+    if (foodLogData.updated_at !== undefined) updateData.updated_at = foodLogData.updated_at;
 
     const { data, error } = await chatSupabase
       .from('food_logs')

@@ -44,60 +44,53 @@ const getClientMealPlan = async (userCode) => {
       throw new Error(result.error || 'Failed to fetch meal plan');
     }
 
-    const data = result.data;
-    if (!data) {
+    const plansArray = result.data;
+    if (!plansArray || !Array.isArray(plansArray) || plansArray.length === 0) {
       return { data: null, error: null };
     }
 
-    // Check if today is in the active_days
-    // active_days: array of numbers 0-6 where 0=Sunday, 1=Monday, etc.
-    // If active_days is null, it's an everyday plan
     const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-    const isActiveToday = data.active_days === null || data.active_days.includes(today);
-
-    if (!isActiveToday) {
-      // Meal plan exists but not active for today
-      console.log(`Meal plan found but not active for today (day ${today}). Active days:`, data.active_days);
-      return { data: null, error: null };
-    }
-
-    // Check if edited plan is from today
     const todayDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const editedPlanDate = data.edited_plan_date ? data.edited_plan_date.split('T')[0] : null;
-    const hasEditedPlanFromToday = data.client_edited_meal_plan && editedPlanDate === todayDate;
 
-    // If there's an edited plan from a previous day, clear it from the database
-    if (data.client_edited_meal_plan && editedPlanDate && editedPlanDate !== todayDate) {
-      console.log(`Clearing old edited meal plan from ${editedPlanDate} (today is ${todayDate})`);
-      
-      // Clear the old edited plan
-      try {
-        const clearResponse = await fetch(`${apiUrl}/api/profile/meal-plan/clear-edited`, {
+    // Process all meal plans
+    const processedPlans = plansArray.map((data) => {
+      // Check if today is in the active_days
+      // active_days: array of numbers 0-6 where 0=Sunday, 1=Monday, etc.
+      // If active_days is null, it's an everyday plan
+      const isActiveToday = data.active_days === null || data.active_days.includes(today);
+
+      // Check if edited plan is from today
+      const editedPlanDate = data.edited_plan_date ? data.edited_plan_date.split('T')[0] : null;
+      const hasEditedPlanFromToday = data.client_edited_meal_plan && editedPlanDate === todayDate;
+
+      // If there's an edited plan from a previous day, clear it from the database
+      if (data.client_edited_meal_plan && editedPlanDate && editedPlanDate !== todayDate) {
+        console.log(`Clearing old edited meal plan from ${editedPlanDate} (today is ${todayDate})`);
+        
+        // Clear the old edited plan
+        fetch(`${apiUrl}/api/profile/meal-plan/clear-edited`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ planId: data.id })
+        }).then(clearResponse => {
+          if (clearResponse.ok) {
+            console.log('✅ Cleared old edited meal plan from database');
+          } else {
+            console.error('Error clearing old edited meal plan');
+          }
+        }).catch(clearError => {
+          console.error('Error clearing old edited meal plan:', clearError);
         });
-
-        if (!clearResponse.ok) {
-          console.error('Error clearing old edited meal plan');
-        } else {
-          console.log('✅ Cleared old edited meal plan from database');
-        }
-      } catch (clearError) {
-        console.error('Error clearing old edited meal plan:', clearError);
-        // Continue anyway - we'll just use the original plan
       }
-    }
 
-    // Prioritize client_edited_meal_plan if it's from today, otherwise use dietitian_meal_plan
-    const mealPlan = hasEditedPlanFromToday ? data.client_edited_meal_plan : data.dietitian_meal_plan;
+      // Prioritize client_edited_meal_plan if it's from today, otherwise use dietitian_meal_plan
+      const mealPlan = hasEditedPlanFromToday ? data.client_edited_meal_plan : data.dietitian_meal_plan;
 
-    // If we cleared an old edited plan, set these to null in the return
-    const finalEditedPlan = hasEditedPlanFromToday ? data.client_edited_meal_plan : null;
-    const finalEditedDate = hasEditedPlanFromToday ? data.edited_plan_date : null;
+      // If we cleared an old edited plan, set these to null in the return
+      const finalEditedPlan = hasEditedPlanFromToday ? data.client_edited_meal_plan : null;
+      const finalEditedDate = hasEditedPlanFromToday ? data.edited_plan_date : null;
 
-    return {
-      data: {
+      return {
         id: data.id,
         meal_plan: mealPlan,
         dietitian_meal_plan: data.dietitian_meal_plan,
@@ -109,8 +102,34 @@ const getClientMealPlan = async (userCode) => {
         active_from: data.active_from,
         active_until: data.active_until,
         active_days: data.active_days,
+        isActiveToday: isActiveToday,
         isClientEdited: hasEditedPlanFromToday,
         dietitian_id: data.dietitian_id
+      };
+    });
+
+    // Find the meal plan active for today (for backward compatibility)
+    const todayPlan = processedPlans.find(plan => plan.isActiveToday) || processedPlans[0];
+
+    return {
+      data: {
+        allPlans: processedPlans, // All meal plans
+        currentPlan: todayPlan, // Plan for today (for backward compatibility)
+        // Legacy fields for backward compatibility
+        id: todayPlan.id,
+        meal_plan: todayPlan.meal_plan,
+        dietitian_meal_plan: todayPlan.dietitian_meal_plan,
+        client_edited_meal_plan: todayPlan.client_edited_meal_plan,
+        edited_plan_date: todayPlan.edited_plan_date,
+        daily_total_calories: todayPlan.daily_total_calories,
+        macros_target: todayPlan.macros_target,
+        meal_plan_name: todayPlan.meal_plan_name,
+        active_from: todayPlan.active_from,
+        active_until: todayPlan.active_until,
+        active_days: todayPlan.active_days,
+        isActiveToday: todayPlan.isActiveToday,
+        isClientEdited: todayPlan.isClientEdited,
+        dietitian_id: todayPlan.dietitian_id
       },
       error: null
     };
@@ -4251,6 +4270,78 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   );
 };
 
+// Weekly Meal Schedule Component
+const WeeklyMealSchedule = ({ allPlans, selectedDay, onDaySelect, language, themeClasses }) => {
+  const days = language === 'hebrew' 
+    ? ['א\'', 'ב\'', 'ג\'', 'ד\'', 'ה\'', 'ו\'', 'ש\''] 
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Helper function to check if a day has an active meal plan
+  const getDayPlan = (dayIndex) => {
+    if (!allPlans || !Array.isArray(allPlans)) return null;
+    
+    // Find the first plan that is active for this day
+    return allPlans.find(plan => {
+      // If active_days is null, it means it's active every day
+      if (plan.active_days === null) return true;
+      
+      // Handle both string and number arrays (database might return strings)
+      const activeDays = Array.isArray(plan.active_days) 
+        ? plan.active_days.map(day => typeof day === 'string' ? parseInt(day, 10) : day)
+        : [];
+      
+      return activeDays.includes(dayIndex);
+    });
+  };
+
+  return (
+    <div className={`mt-4 mb-6 p-4 rounded-xl border ${themeClasses.borderPrimary} ${themeClasses.bgCard}`}>
+      <h4 className={`${themeClasses.textPrimary} font-bold mb-4 text-sm`}>
+        {language === 'hebrew' ? 'בחר יום לצפייה בתפריט:' : 'Select Day to View Meal Plan:'}
+      </h4>
+      <div className="flex justify-between gap-3">
+        {days.map((day, index) => {
+          const dayPlan = getDayPlan(index);
+          const hasPlan = dayPlan !== null;
+          const isSelected = selectedDay === index;
+          
+          return (
+            <button
+              key={index}
+              onClick={() => hasPlan && onDaySelect(index)}
+              disabled={!hasPlan}
+              className={`flex-1 flex flex-col items-center p-3 rounded-lg transition-all ${
+                isSelected
+                  ? 'bg-emerald-500 dark:bg-emerald-600 border-emerald-600 dark:border-emerald-500 border-2 scale-105 shadow-lg'
+                  : hasPlan
+                  ? 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-500 border hover:bg-emerald-200 dark:hover:bg-emerald-900/50 cursor-pointer'
+                  : 'opacity-40 grayscale border-transparent border cursor-not-allowed'
+              }`}
+            >
+              <span className={`text-xs font-bold ${
+                isSelected 
+                  ? 'text-white' 
+                  : hasPlan 
+                  ? 'text-emerald-600 dark:text-emerald-400' 
+                  : themeClasses.textSecondary
+              }`}>
+                {day}
+              </span>
+              {hasPlan && (
+                <div className={`w-1.5 h-1.5 rounded-full mt-1 ${
+                  isSelected 
+                    ? 'bg-white shadow-[0_0_5px_rgba(255,255,255,0.8)]' 
+                    : 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]'
+                }`} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // My Plan Tab Component
 const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const { settings } = useSettings();
@@ -4261,6 +4352,8 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const [planData, setPlanData] = useState(null);
   const [originalPlanData, setOriginalPlanData] = useState(null);
   const [error, setError] = useState('');
+  const [allPlans, setAllPlans] = useState([]); // All meal plans
+  const [selectedDay, setSelectedDay] = useState(new Date().getDay()); // Default to today
   const [expandedMeals, setExpandedMeals] = useState({});
   const [expandedAlternatives, setExpandedAlternatives] = useState({});
   const [isTranslating, setIsTranslating] = useState(false);
@@ -4333,6 +4426,8 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const [selectedAlternativeIndex, setSelectedAlternativeIndex] = useState(null); // For alternatives array
   const [isAddAlternativeIngredientModalVisible, setIsAddAlternativeIngredientModalVisible] = useState(false);
   const [isEditAlternativePortionModalVisible, setIsEditAlternativePortionModalVisible] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState('');
 
   // Load training plan when trainingPlan sub-tab is active
   useEffect(() => {
@@ -4367,6 +4462,93 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     loadTrainingPlan();
   }, [userCode, activeSubTab, trainingPlanData]);
 
+  // Helper function to get meal plan for a specific day
+  const getMealPlanForDay = (dayIndex, plans) => {
+    if (!plans || !Array.isArray(plans)) return null;
+    
+    // Find the first plan that is active for this day
+    const dayPlan = plans.find(plan => {
+      // If active_days is null, it means it's active every day
+      if (plan.active_days === null) return true;
+      
+      // Handle both string and number arrays (database might return strings)
+      const activeDays = Array.isArray(plan.active_days) 
+        ? plan.active_days.map(day => typeof day === 'string' ? parseInt(day, 10) : day)
+        : [];
+      
+      return activeDays.includes(dayIndex);
+    });
+    
+    return dayPlan || null;
+  };
+
+  // Process and set meal plan data for a specific plan
+  const processAndSetMealPlan = async (planDataItem) => {
+    if (!planDataItem || !planDataItem.meal_plan) {
+      return null;
+    }
+
+    let mealPlan = planDataItem.meal_plan;
+    
+    if (mealPlan && mealPlan.meals) {
+      // Translate meal plan if language is Hebrew
+      if (language === 'hebrew') {
+        try {
+          setIsTranslating(true);
+          console.log('🌐 Starting translation for meal plan with', mealPlan.meals.length, 'meals');
+          
+          const translatedMealPlan = await translateMenu(mealPlan, 'he');
+          
+          if (translatedMealPlan && translatedMealPlan.meals) {
+            mealPlan = translatedMealPlan;
+            console.log('✅ Meal plan translated to Hebrew successfully');
+          }
+        } catch (translateError) {
+          console.error('❌ Translation error (using original):', translateError);
+        } finally {
+          setIsTranslating(false);
+        }
+      }
+
+      // Calculate totals from the meals array
+      const totals = mealPlan.meals.reduce((acc, meal) => {
+        if (meal.main && meal.main.nutrition) {
+          acc.calories += meal.main.nutrition.calories || 0;
+          acc.protein += meal.main.nutrition.protein || 0;
+          acc.carbs += meal.main.nutrition.carbs || 0;
+          acc.fat += meal.main.nutrition.fat || 0;
+        }
+        return acc;
+      }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+      return {
+        ...planDataItem,
+        totals,
+        meals: mealPlan.meals,
+        note: mealPlan.note || '' // Include notes from meal plan
+      };
+    } else if (mealPlan && mealPlan.template) {
+      // Fallback for template structure
+      const totals = mealPlan.template.reduce((acc, meal) => {
+        acc.calories += meal.main.calories;
+        acc.protein += meal.main.protein;
+        acc.carbs += meal.main.carbs;
+        acc.fat += meal.main.fat;
+        return acc;
+      }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+      return {
+        ...planDataItem,
+        totals,
+        meals: mealPlan.template,
+        note: mealPlan.note || '' // Include notes from meal plan
+      };
+    }
+    
+    return null;
+  };
+
+  // Effect to load all meal plans
   useEffect(() => {
     const loadMealPlan = async () => {
       if (!userCode) {
@@ -4383,103 +4565,44 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           console.error('Error loading meal plan:', error);
           setError(error.message);
         } else if (data) {
-          // Process the meal plan data
-          let mealPlan = data.meal_plan;
-          console.log('Processing meal plan data:', mealPlan);
+          // Store all plans
+          const plans = data.allPlans || [];
+          setAllPlans(plans);
           
-          if (mealPlan && mealPlan.meals) {
-            // Translate meal plan if language is Hebrew
-            if (language === 'hebrew') {
-              try {
-                setIsTranslating(true);
-                console.log('🌐 Starting translation for meal plan with', mealPlan.meals.length, 'meals');
-                
-                // Log sample data before translation
-                if (mealPlan.meals[0]?.main) {
-                  console.log('📝 Before translation - Sample meal:', {
-                    meal: mealPlan.meals[0].meal,
-                    title: mealPlan.meals[0].main.meal_title,
-                    firstIngredient: mealPlan.meals[0].main.ingredients?.[0]
-                  });
-                }
-                
-                const translatedMealPlan = await translateMenu(mealPlan, 'he');
-                
-                if (translatedMealPlan && translatedMealPlan.meals) {
-                  // Log sample data after translation
-                  if (translatedMealPlan.meals[0]?.main) {
-                    console.log('✅ After translation - Sample meal:', {
-                      meal: translatedMealPlan.meals[0].meal,
-                      title: translatedMealPlan.meals[0].main.meal_title,
-                      firstIngredient: translatedMealPlan.meals[0].main.ingredients?.[0]
-                    });
+          // Get meal plan for selected day (default to today)
+          const dayPlan = getMealPlanForDay(selectedDay, plans);
+          
+          if (dayPlan) {
+            const processedPlan = await processAndSetMealPlan(dayPlan);
+            if (processedPlan) {
+              setPlanData(processedPlan);
+              // Initialize notes value
+              setNotesValue(processedPlan.note || '');
+              
+              // Store original dietitian plan if user has edited plan
+              if (dayPlan.dietitian_meal_plan && dayPlan.dietitian_meal_plan.meals && dayPlan.isClientEdited) {
+                const originalTotals = dayPlan.dietitian_meal_plan.meals.reduce((acc, meal) => {
+                  if (meal.main && meal.main.nutrition) {
+                    acc.calories += meal.main.nutrition.calories || 0;
+                    acc.protein += meal.main.nutrition.protein || 0;
+                    acc.carbs += meal.main.nutrition.carbs || 0;
+                    acc.fat += meal.main.nutrition.fat || 0;
                   }
-                  
-                  mealPlan = translatedMealPlan;
-                  console.log('✅ Meal plan translated to Hebrew successfully');
-                }
-              } catch (translateError) {
-                console.error('❌ Translation error (using original):', translateError);
-                // Continue with original meal plan
-              } finally {
-                setIsTranslating(false);
+                  return acc;
+                }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+                setOriginalPlanData({
+                  ...dayPlan,
+                  totals: originalTotals,
+                  meals: dayPlan.dietitian_meal_plan.meals,
+                  isClientEdited: false
+                });
               }
+            } else {
+              setError('No meal plan template found');
             }
-
-            // Calculate totals from the meals array
-            const totals = mealPlan.meals.reduce((acc, meal) => {
-              if (meal.main && meal.main.nutrition) {
-                acc.calories += meal.main.nutrition.calories || 0;
-                acc.protein += meal.main.nutrition.protein || 0;
-                acc.carbs += meal.main.nutrition.carbs || 0;
-                acc.fat += meal.main.nutrition.fat || 0;
-              }
-              return acc;
-            }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
-            setPlanData({
-              ...data,
-              totals,
-              meals: mealPlan.meals
-            });
-
-            // Store original dietitian plan if user has edited plan from today
-            if (data.dietitian_meal_plan && data.dietitian_meal_plan.meals && data.isClientEdited) {
-              const originalTotals = data.dietitian_meal_plan.totals || data.dietitian_meal_plan.meals.reduce((acc, meal) => {
-                if (meal.main && meal.main.nutrition) {
-                  acc.calories += meal.main.nutrition.calories || 0;
-                  acc.protein += meal.main.nutrition.protein || 0;
-                  acc.carbs += meal.main.nutrition.carbs || 0;
-                  acc.fat += meal.main.nutrition.fat || 0;
-                }
-                return acc;
-              }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
-              setOriginalPlanData({
-                ...data,
-                totals: originalTotals,
-                meals: data.dietitian_meal_plan.meals,
-                isClientEdited: false
-              });
-            }
-          } else if (mealPlan && mealPlan.template) {
-            // Fallback for template structure
-            const totals = mealPlan.template.reduce((acc, meal) => {
-              acc.calories += meal.main.calories;
-              acc.protein += meal.main.protein;
-              acc.carbs += meal.main.carbs;
-              acc.fat += meal.main.fat;
-              return acc;
-            }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
-            setPlanData({
-              ...data,
-              totals,
-              meals: mealPlan.template
-            });
           } else {
-            console.error('No meals or template found in meal plan:', mealPlan);
-            setError('No meal plan template found');
+            setError('No active meal plan found for selected day');
           }
         } else {
           setError('No active meal plan found');
@@ -4494,6 +4617,51 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 
     loadMealPlan();
   }, [userCode, language]);
+
+  // Effect to update plan data when selected day changes
+  useEffect(() => {
+    const updatePlanForDay = async () => {
+      if (!allPlans || allPlans.length === 0) return;
+      
+      // Reset notes editing state when day changes
+      setIsEditingNotes(false);
+      
+      const dayPlan = getMealPlanForDay(selectedDay, allPlans);
+      
+      if (dayPlan) {
+        const processedPlan = await processAndSetMealPlan(dayPlan);
+        if (processedPlan) {
+          setPlanData(processedPlan);
+          // Update notes value when plan changes
+          setNotesValue(processedPlan.note || '');
+          
+          // Store original dietitian plan if user has edited plan
+          if (dayPlan.dietitian_meal_plan && dayPlan.dietitian_meal_plan.meals && dayPlan.isClientEdited) {
+            const originalTotals = dayPlan.dietitian_meal_plan.meals.reduce((acc, meal) => {
+              if (meal.main && meal.main.nutrition) {
+                acc.calories += meal.main.nutrition.calories || 0;
+                acc.protein += meal.main.nutrition.protein || 0;
+                acc.carbs += meal.main.nutrition.carbs || 0;
+                acc.fat += meal.main.nutrition.fat || 0;
+              }
+              return acc;
+            }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+            setOriginalPlanData({
+              ...dayPlan,
+              totals: originalTotals,
+              meals: dayPlan.dietitian_meal_plan.meals,
+              isClientEdited: false
+            });
+          }
+        }
+      } else {
+        setPlanData(null);
+      }
+    };
+
+    updatePlanForDay();
+  }, [selectedDay, allPlans, language]);
 
   // Load client data for menu generation
   useEffect(() => {
@@ -5260,7 +5428,8 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           planId: updatedPlanData.id,
-          mealPlan: mealPlanToSave
+          mealPlan: mealPlanToSave,
+          userCode: userCode
         })
       });
 
@@ -5745,6 +5914,28 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       {/* Meal Plan Sub-tab Content */}
       {activeSubTab === 'mealPlan' && (
         <>
+      {/* Weekly Meal Schedule Overlay */}
+      {allPlans && allPlans.length > 0 && !(allPlans.length === 1 && allPlans[0].active_days === null) && (
+        <WeeklyMealSchedule 
+          allPlans={allPlans}
+          selectedDay={selectedDay}
+          onDaySelect={setSelectedDay}
+          language={language}
+          themeClasses={themeClasses}
+        />
+      )}
+
+      {/* No meal plan message for selected day */}
+      {allPlans && allPlans.length > 0 && !planData && !loading && (
+        <div className={`mb-6 p-6 rounded-xl border ${themeClasses.borderPrimary} ${themeClasses.bgCard} text-center`}>
+          <p className={`${themeClasses.textSecondary} text-lg`}>
+            {language === 'hebrew' 
+              ? 'אין תפריט זמין ליום זה' 
+              : 'No meal plan available for this day'}
+          </p>
+        </div>
+      )}
+      
       {/* Daily Summary Section */}
       <div className="mb-6 sm:mb-8 md:mb-10 lg:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
         borderLeft: '3px solid',
@@ -6019,6 +6210,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           </div>
         )}
 
+      
       {/* Today Section */}
       <div className="animate-slideInUp" style={{ animationDelay: '0.5s' }}>
          <div className="flex items-center mb-6 sm:mb-8">
@@ -6532,6 +6724,103 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           })}
         </div>
       </div>
+      
+{/* Notes Section */}
+{planData && (
+        <div className="mb-6 sm:mb-8 md:mb-10 lg:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
+          borderLeft: '3px solid',
+          borderLeftColor: isDarkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)',
+          borderRight: '2px solid',
+          borderRightColor: isDarkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.15)',
+          borderTop: '2px solid',
+          borderTopColor: isDarkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.15)',
+          borderBottom: '2px solid',
+          borderBottomColor: isDarkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.15)',
+          boxShadow: isDarkMode 
+            ? 'inset 1px 0 0 rgba(59, 130, 246, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)' 
+            : 'inset 1px 0 0 rgba(59, 130, 246, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+        }}>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-indigo-500/5 pointer-events-none rounded-xl" />
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <div className="flex items-center">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mr-3 shadow-lg shadow-blue-500/25">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>
+                  {language === 'hebrew' ? 'הערות' : 'Notes'}
+                </h3>
+              </div>
+              {!isEditingNotes && (
+                <button
+                  onClick={() => {
+                    setIsEditingNotes(true);
+                    setNotesValue(planData.note || '');
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  {language === 'hebrew' ? 'ערוך' : 'Edit'}
+                </button>
+              )}
+            </div>
+
+            {isEditingNotes ? (
+              <div className="space-y-3">
+                <textarea
+                  value={notesValue}
+                  onChange={(e) => setNotesValue(e.target.value)}
+                  placeholder={language === 'hebrew' ? 'הוסף הערות לתפריט...' : 'Add notes to your meal plan...'}
+                  className={`w-full p-3 rounded-lg border ${themeClasses.borderPrimary} ${themeClasses.bgCard} ${themeClasses.textPrimary} resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]`}
+                  rows={4}
+                />
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => {
+                      setIsEditingNotes(false);
+                      setNotesValue(planData.note || '');
+                    }}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {language === 'hebrew' ? 'ביטול' : 'Cancel'}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const updatedPlanData = { ...planData, note: notesValue };
+                        const updatedMeals = [...planData.meals];
+                        await saveMealPlanToDatabase(updatedPlanData, updatedMeals);
+                        setPlanData(updatedPlanData);
+                        setIsEditingNotes(false);
+                      } catch (error) {
+                        console.error('Error saving notes:', error);
+                        alert(language === 'hebrew' ? 'שגיאה בשמירת ההערות' : 'Error saving notes');
+                      }
+                    }}
+                    className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                  >
+                    {language === 'hebrew' ? 'שמור' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className={`${themeClasses.bgCard} rounded-lg p-4 min-h-[60px]`}>
+                {planData.note ? (
+                  <p className={`${themeClasses.textPrimary} whitespace-pre-wrap`}>{planData.note}</p>
+                ) : (
+                  <p className={`${themeClasses.textSecondary} italic`}>
+                    {language === 'hebrew' ? 'אין הערות' : 'No notes'}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Add Ingredient Modal */}
       <AddIngredientModal
@@ -8607,7 +8896,11 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
       
       // Find the log entry
       const log = foodLogs.find(l => l.id === logId);
-      if (!log) return;
+      if (!log) {
+        console.error('Log not found:', logId);
+        setProcessing(false);
+        return;
+      }
 
       // Parse the new time string (format: "HH:MM")
       const [hours, minutes] = newTimeString.split(':').map(Number);
@@ -8622,14 +8915,21 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
       }
 
       // Create a new date with the log_date (the day the food was eaten) and new time
-      // Use the original created_at date as base to preserve the date, or use log_date if created_at is not available
-      const baseDate = log.created_at ? new Date(log.created_at) : new Date(log.log_date || selectedDate);
-      const newDateTime = new Date(baseDate);
+      // Use log_date for the date portion to ensure we use the correct day the food was eaten
+      const dateString = log.log_date || log.created_at?.split('T')[0] || selectedDate;
+      const newDateTime = new Date(dateString);
       newDateTime.setHours(hours, minutes, 0, 0);
 
-      // Update the food log with the new created_at time
+      console.log('Updating meal time:', {
+        logId,
+        newTimeString,
+        dateString,
+        newDateTime: newDateTime.toISOString()
+      });
+
+      // Update the food log with the new updated_at time
       const { error } = await updateFoodLog(logId, {
-        created_at: newDateTime.toISOString()
+        updated_at: newDateTime.toISOString()
       });
 
       if (error) {
@@ -9623,15 +9923,27 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                               <input
                                 type="time"
                                 defaultValue={(() => {
-                                  const date = new Date(log.created_at);
+                                  // Use updated_at if available, otherwise use created_at
+                                  const dateString = log.updated_at || log.created_at;
+                                  const date = new Date(dateString);
                                   const hours = String(date.getHours()).padStart(2, '0');
                                   const minutes = String(date.getMinutes()).padStart(2, '0');
                                   return `${hours}:${minutes}`;
                                 })()}
-                                onBlur={(e) => {
+                                onBlur={async (e) => {
                                   const newTime = e.target.value;
-                                  if (newTime) {
-                                    handleUpdateMealTime(log.id, newTime);
+                                  if (newTime && newTime.trim() !== '') {
+                                    // Get current time from log to compare
+                                    const dateString = log.updated_at || log.created_at;
+                                    const currentDate = new Date(dateString);
+                                    const currentHours = String(currentDate.getHours()).padStart(2, '0');
+                                    const currentMinutes = String(currentDate.getMinutes()).padStart(2, '0');
+                                    const currentTime = `${currentHours}:${currentMinutes}`;
+                                    
+                                    // Only update if time actually changed
+                                    if (newTime !== currentTime) {
+                                      await handleUpdateMealTime(log.id, newTime);
+                                    }
                                   }
                                 }}
                                 onKeyDown={(e) => {
