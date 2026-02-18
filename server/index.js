@@ -5827,7 +5827,8 @@ app.use((req, res) => {
 // SERVER STARTUP
 // ====================================
 
-const serverInstance = app.listen(PORT, () => {
+// Bind to 0.0.0.0 so Cloud Run (and any container orchestrator) can reach the server
+const serverInstance = app.listen(PORT, '0.0.0.0', () => {
   const addressInfo = serverInstance.address();
   const displayPort = typeof addressInfo === 'string' ? addressInfo : addressInfo?.port;
   console.log(`🚀 Stripe API server running on port ${displayPort}`);
