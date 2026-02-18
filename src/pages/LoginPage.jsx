@@ -130,15 +130,14 @@ function LoginPage() {
       }
 
       // Login successful - sync language preference if available
+      // Website UI is English/Hebrew only; default to English for any other preferred language (e.g. es, fr).
       if (result.language?.user_language) {
-        // Map language codes to web language
         const languageMap = {
           'en': 'english',
           'he': 'hebrew',
           'english': 'english',
           'hebrew': 'hebrew'
         };
-        
         const webLanguage = languageMap[result.language.user_language.toLowerCase()] || 'english';
         
         // Only change if different from current language

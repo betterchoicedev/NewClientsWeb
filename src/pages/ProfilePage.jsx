@@ -519,7 +519,7 @@ const ProfilePage = () => {
           profileImageUrl: data?.profile_image_url || ''
         }));
 
-        // Sync web language immediately after loading profile
+        // Sync web language: site is EN/HE only; default to English when preference is not en/he (e.g. es, fr).
         const userLang = chatUserData?.language || data?.user_language;
         if (userLang) {
           const languageMap = {
@@ -528,7 +528,6 @@ const ProfilePage = () => {
             'english': 'english',
             'hebrew': 'hebrew'
           };
-          
           const webLanguage = languageMap[userLang.toLowerCase()] || 'english';
           
           // Only change if different from current language

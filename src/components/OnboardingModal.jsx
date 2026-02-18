@@ -5,7 +5,7 @@ import { normalizePhoneForDatabase, createClientRecord } from '../supabase/auth'
 import { translateMenu } from '../services/translateService';
 
 const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
-  const { language, t, direction, toggleLanguage } = useLanguage();
+  const { language, t, direction, toggleLanguage, setLanguage, setDirection } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();
   const [currentStep, setCurrentStep] = useState(-1); // -1 for welcome screen, 0+ for form steps
   const [loading, setLoading] = useState(false);
@@ -42,6 +42,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     height_cm: '',
     food_allergies: '',
     food_limitations: '',
+    client_preference: '',
     activity_level: '',
     goal: '',
     region: '',
@@ -175,6 +176,20 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     { value: 'caribbean', labelHe: 'קריביים', labelEn: 'Caribbean' },
     { value: 'north_america', labelHe: 'צפון אמריקה', labelEn: 'North America' },
     { value: 'other', labelHe: 'אחר', labelEn: 'Other' }
+  ];
+
+  // Preferred language options (for chatbot; website UI is English/Hebrew only)
+  const PREFERRED_LANGUAGES = [
+    { value: 'en', label: 'English' },
+    { value: 'he', label: 'Hebrew (עברית)' },
+    { value: 'es', label: 'Spanish' },
+    { value: 'fr', label: 'French' },
+    { value: 'de', label: 'German' },
+    { value: 'ar', label: 'Arabic' },
+    { value: 'ru', label: 'Russian' },
+    { value: 'pt', label: 'Portuguese' },
+    { value: 'it', label: 'Italian' },
+    { value: 'ja', label: 'Japanese' }
   ];
 
   // Days 1-31 for date of birth
@@ -378,6 +393,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   // All possible fields organized by step
   const allSteps = [
     {
+      title: language === 'hebrew' ? 'שפה מועדפת' : 'Preferred Language',
+      fields: ['language']
+    },
+    {
       title: language === 'hebrew' ? 'שם פרטי ומשפחה' : 'First & Last Name',
       fields: ['first_name', 'last_name']
     },
@@ -386,16 +405,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       fields: ['phone']
     },
     {
-      title: language === 'hebrew' ? 'שפה מועדפת' : 'Preferred Language',
-      fields: ['language']
+      title: language === 'hebrew' ? 'אזור' : 'Region',
+      fields: ['region']
     },
     {
       title: language === 'hebrew' ? 'עיר' : 'City',
       fields: ['city']
-    },
-    {
-      title: language === 'hebrew' ? 'אזור' : 'Region',
-      fields: ['region']
     },
     {
       title: language === 'hebrew' ? 'אזור זמן' : 'Timezone',
@@ -436,6 +451,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     {
       title: language === 'hebrew' ? 'הגבלות תזונתיות' : 'Food Limitations',
       fields: ['food_limitations']
+    },
+    {
+      title: language === 'hebrew' ? 'מה אתה אוהב/לא אוהב לאכול?' : 'Food likes & dislikes',
+      fields: ['client_preference']
     },
     {
       title: language === 'hebrew' ? 'חלון האכילה היומי' : 'Daily Eating Window',
@@ -929,7 +948,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           last_meal_time: chatUserMealData?.last_meal_time || prev.last_meal_time || '',
           number_of_meals: chatUserMealData?.number_of_meals ? chatUserMealData.number_of_meals.toString() : (prev.number_of_meals || ''),
           meal_descriptions: mealDescriptions.length > 0 ? mealDescriptions : (prev.meal_descriptions || []),
-          meal_names: mealNames.length > 0 ? mealNames : (prev.meal_names || [])
+          meal_names: mealNames.length > 0 ? mealNames : (prev.meal_names || []),
+          client_preference: (() => {
+            const cp = chatUserMealData?.client_preference;
+            if (!cp) return prev.client_preference || '';
+            if (typeof cp === 'string') return cp;
+            if (typeof cp === 'object' && cp !== null && cp.dietary_preferences) return cp.dietary_preferences;
+            return prev.client_preference || '';
+          })()
         }));
 
         // Set separate date fields
@@ -1188,6 +1214,18 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.log('✓ Last meal time has value:', chatUserMealData?.last_meal_time);
       }
 
+      // client_preference from chat_users (JSONB - likes/dislikes food)
+      const cpVal = chatUserMealData?.client_preference;
+      const hasClientPreference = cpVal != null && (
+        (typeof cpVal === 'string' && cpVal.trim() !== '') ||
+        (typeof cpVal === 'object' && cpVal !== null && cpVal.dietary_preferences && String(cpVal.dietary_preferences).trim() !== '')
+      );
+      if (!hasClientPreference) {
+        missingFields.push('client_preference');
+      } else {
+        console.log('✓ Client preference has value');
+      }
+
       console.log('📋 Missing fields to fill:', missingFields);
 
       // No need to store availableFields, we only need to set filteredSteps
@@ -1204,6 +1242,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       // Filter steps to only show steps with missing fields
       let filtered = allSteps
         .map(step => {
+          // Always show Preferred Language step (so it appears right after welcome, before name)
+          if (step.fields.length === 1 && step.fields[0] === 'language') {
+            return { ...step, fields: ['language'] };
+          }
           // Special handling for macros/calories step - only show if we can calculate
           if (step.fields.includes('daily_calories') && step.fields.includes('macros')) {
             if (canCalculateMacros) {
@@ -1295,6 +1337,16 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         ...prev,
         [name]: value
       }));
+    }
+
+    // When preferred language changes, sync site UI (EN/HE only; others default to English)
+    if (name === 'language' && value) {
+      const siteLang = (value === 'he' || value === 'hebrew') ? 'hebrew' : 'english';
+      if (language !== siteLang) {
+        setLanguage(siteLang);
+        setDirection(siteLang === 'hebrew' ? 'rtl' : 'ltr');
+        localStorage.setItem('language', siteLang);
+      }
     }
     
     // Clear error for this field when user starts typing
@@ -1775,7 +1827,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     const currentStepFields = filteredSteps[currentStep]?.fields || [];
     
     // Fields that can be empty (None is a valid selection or auto-filled)
-    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations', 'daily_calories', 'macros'];
+    const optionalFields = ['medical_conditions', 'food_allergies', 'food_limitations', 'client_preference', 'daily_calories', 'macros'];
     
     // Track field errors for this step
     const newFieldErrors = {};
@@ -2366,6 +2418,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         meal_plan_structure: allOnboardingFields.includes('meal_descriptions') && mealPlanStructure ? mealPlanStructure : undefined,
         daily_target_total_calories: dailyCalories || undefined,
         macros: macros || undefined,
+        client_preference: allOnboardingFields.includes('client_preference') && formData.client_preference
+          ? { dietary_preferences: formData.client_preference.trim() }
+          : undefined,
         onboarding_done: true,
         updated_at: new Date().toISOString()
       };
@@ -3101,6 +3156,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('language') && (
             <div className="group">
+              <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mb-2`}>
+                {language === 'hebrew'
+                  ? 'האתר מוצג רק באנגלית ובעברית. צ\'אט הבוט שלנו עונה בשפה המועדפת שלך.'
+                  : 'The website is available in English and Hebrew only. Our AI chatbot replies in your preferred language.'}
+              </p>
               <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'שפה מועדפת' : 'Preferred Language'}
               </label>
@@ -3110,25 +3170,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 onChange={handleInputChange}
                 className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('language')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
               >
-                <option value="en">🇬🇧 English (en)</option>
-                <option value="he">🇮🇱 עברית (he)</option>
+                <option value="">{language === 'hebrew' ? 'בחר שפה' : 'Select language'}</option>
+                {PREFERRED_LANGUAGES.map((lang) => (
+                  <option key={lang.value} value={lang.value}>{lang.label}</option>
+                ))}
               </select>
-            </div>
-          )}
-
-          {currentFields.includes('city') && (
-            <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
-                {language === 'hebrew' ? 'עיר' : 'City'}
-              </label>
-              <input
-                type="text"
-                name="city"
-                value={formData.city}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('city')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
-                placeholder={language === 'hebrew' ? 'תל אביב' : 'Tel Aviv'}
-              />
             </div>
           )}
 
@@ -3166,6 +3212,22 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {currentFields.includes('city') && (
+            <div className="group">
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'עיר' : 'City'}
+              </label>
+              <input
+                type="text"
+                name="city"
+                value={formData.city}
+                onChange={handleInputChange}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('city')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                placeholder={language === 'hebrew' ? 'תל אביב' : 'Tel Aviv'}
+              />
             </div>
           )}
 
@@ -3327,7 +3389,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                         : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
                     }`}
                   >
-                    {language === 'hebrew' ? 'ליטרה' : 'lbs'}
+                    {language === 'hebrew' ? 'ליברה' : 'lbs'}
                   </button>
                 </div>
               </div>
@@ -3340,7 +3402,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 <option value="">{language === 'hebrew' ? 'בחר משקל' : 'Select Weight'}</option>
                 {(weightUnit === 'kg' ? weightOptionsKg : weightOptionsLbs).map((weight) => (
                   <option key={weight} value={weight.toString()}>
-                    {weight} {weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליטרה' : 'lbs')}
+                    {weight} {weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליברה' : 'lbs')}
                   </option>
                 ))}
               </select>
@@ -3374,7 +3436,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                         : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50`
                     }`}
                   >
-                    {language === 'hebrew' ? 'ליטרה' : 'lbs'}
+                    {language === 'hebrew' ? 'ליברה' : 'lbs'}
                   </button>
                 </div>
               </div>
@@ -3387,7 +3449,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 <option value="">{language === 'hebrew' ? 'בחר משקל מטרה' : 'Select Target Weight'}</option>
                 {(weightUnit === 'kg' ? weightOptionsKg : weightOptionsLbs).map((weight) => (
                   <option key={weight} value={weight.toString()}>
-                    {weight} {weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליטרה' : 'lbs')}
+                    {weight} {weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליברה' : 'lbs')}
                   </option>
                 ))}
               </select>
@@ -3619,6 +3681,27 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
             </div>
           )}
 
+          {currentFields.includes('client_preference') && (
+            <div className="group">
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'מה אתה אוהב/לא אוהב לאכול?' : 'Food likes & dislikes'}
+              </label>
+              <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mb-2`}>
+                {language === 'hebrew'
+                  ? 'ספר לנו אילו מאכלים אתה אוהב, מה פחות אוהב, או העדפות תזונה כלליות'
+                  : 'Tell us what foods you like, dislike, or any general food preferences'}
+              </p>
+              <textarea
+                name="client_preference"
+                value={formData.client_preference}
+                onChange={handleInputChange}
+                rows={4}
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('client_preference')} border-2 border-gray-600/50 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 placeholder:text-gray-400 resize-y min-h-[80px]`}
+                placeholder={language === 'hebrew' ? 'למשל: אוהב ירקות, לא אוהב חריף, מעדיף בשר לבן...' : 'e.g., I love vegetables, don\'t like spicy food, prefer white meat...'}
+              />
+            </div>
+          )}
+
           {currentFields.includes('first_meal_time') && currentFields.includes('last_meal_time') && (
             <div className="group">
               <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
@@ -3771,6 +3854,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('daily_calories') && currentFields.includes('macros') && (
             <div className="space-y-4 sm:space-y-6">
+              <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mb-1`}>
+                {language === 'hebrew'
+                  ? 'חישבנו עבורך את צריכת הקלוריות היומית המומלצת—הערך מוצג להלן וניתן לעריכה.'
+                  : 'We\'ve already calculated your target daily calories for your info—you can edit it below.'}
+              </p>
               {/* Daily Calories */}
               <div className="group">
                 <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
@@ -3843,6 +3931,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               {/* Macros */}
               {getCurrentDailyCalories() && getCurrentMacros() && (
                 <div className="group">
+                  <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mb-2`}>
+                    {language === 'hebrew'
+                      ? 'אנחנו מציעים מבנה כזה בחלוקת המאקרו, אבל אפשר לשנות לפי ההעדפות שלך.'
+                      : 'We suggest this structure for macro distribution, but you can change it to suit your preferences.'}
+                  </p>
                   <div className="flex items-center justify-between mb-3 sm:mb-4">
                     <label className={`block text-xs sm:text-sm font-semibold ${themeClasses.textPrimary}`}>
                       {language === 'hebrew' ? 'מאקרו-נוטריינטים' : 'Macronutrients'}
@@ -4126,7 +4219,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           {currentFields.includes('number_of_meals') && (
             <div className="group">
               <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
-                {language === 'hebrew' ? 'כמה ארוחות ביום?' : 'How many meals per day?'}
+                {language === 'hebrew' ? 'כמה ארוחות ביום? (ארוחות מלאות ו"נשנושים")' : 'How many meals per day? (full meals and "snacks")'}
               </label>
               <select
                 name="number_of_meals"

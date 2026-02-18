@@ -1780,7 +1780,7 @@ app.get('/api/onboarding/chat-user-meal-data', async (req, res) => {
 
     const { data: chatData, error: chatError } = await chatSupabase
       .from('chat_users')
-      .select('number_of_meals, meal_plan_structure')
+      .select('number_of_meals, meal_plan_structure, first_meal_time, last_meal_time, client_preference')
       .eq('user_code', user_code)
       .single();
 
