@@ -1,19 +1,20 @@
-FROM node:20-slim
+# 1. Use Node 18
+FROM node:18-slim
+
+# 2. Install dependencies for the 'sharp' library used in index.js
+RUN apt-get update && apt-get install -y libvips-dev
 
 WORKDIR /usr/src/app
 
-# מעתיק קבצי חבילות משורש הפרויקט (אם יש) או מהתיקייה
+# 3. Copy package files and install
 COPY package*.json ./
-
-# התקנת תלויות
 RUN npm install --only=production
 
-# העתקת כל הקבצים (כולל תיקיית server)
+# 4. Copy everything else (including the server folder)
 COPY . .
 
-# הגדרת משתנה סביבה לפורט (Cloud Run דורש זאת)
-ENV PORT=8080
-EXPOSE 8080
+# 5. Set environment to production
+ENV NODE_ENV=production
 
-# הרצה של הקובץ הספציפי שלך
+# 6. Start the server using the path to your file
 CMD [ "node", "server/index.js" ]
