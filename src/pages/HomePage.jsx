@@ -24,7 +24,7 @@ function HomePage() {
   // Fetch Bank of Israel USD exchange rate (ILS per 1 USD) for approx. USD display
   useEffect(() => {
     let cancelled = false;
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
     const fetchUsdRate = async () => {
       try {
         const url = apiUrl ? `${apiUrl}/api/exchange-rates` : '/api/exchange-rates';
@@ -148,10 +148,10 @@ function HomePage() {
 
     try {
       // Normalize phone number if provided (remove spaces and dashes)
-      const normalizedPhone = contactForm.phone ? contactForm.phone.replace(/[\s\-\(\)\.]/g, '') : null;
+      const normalizedPhone = contactForm.phone ? contactForm.phone.replace(/[\s\-().]/g, '') : null;
       
       // Send via API
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const response = await fetch(`${apiUrl}/api/contact`, {
         method: 'POST',
         headers: {

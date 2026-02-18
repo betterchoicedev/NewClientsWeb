@@ -1,7 +1,7 @@
 import { supabase, supabaseSecondary } from './supabaseClient'
 
 // API URL helper
-const getApiUrl = () => process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+const getApiUrl = () => process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
 
 // Check if email already exists in both databases
 export const checkEmailExists = async (email) => {
@@ -33,7 +33,7 @@ export const checkEmailExists = async (email) => {
 export const normalizePhoneForDatabase = (phone) => {
   if (!phone) return '';
   // Remove all spaces, dashes, and other common separators
-  return phone.replace(/[\s\-\(\)\.]/g, '');
+  return phone.replace(/[\s\-().]/g, '');
 };
 
 // Check if phone number already exists in both databases

@@ -63,7 +63,7 @@ function WaitingListPage() {
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const response = await fetch(`${apiUrl}/api/waiting-list/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

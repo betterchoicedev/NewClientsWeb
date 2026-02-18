@@ -848,7 +848,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const loadExistingData = async () => {
     setCheckingData(true);
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       
       // Fetch client data via API
       const clientResponse = await fetch(`${apiUrl}/api/onboarding/client-data?user_id=${encodeURIComponent(user.id)}`);
@@ -1725,7 +1725,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   // Check if phone number exists in both clients and chat_users tables
   const checkPhoneExistsInBothTables = async (phoneNumber) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       
       // Normalize phone number first (remove spaces, dashes, etc.)
       let formattedPhone = normalizePhoneForDatabase(phoneNumber.trim());
@@ -1889,7 +1889,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const USAGE_BASED_PRICE_ID = 'price_1SyHX0HIeYfvCylDZyb1Lb3L';
 
   const sendWhatsAppAndClose = () => {
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
     if (user?.id) {
       fetch(`${apiUrl}/api/whatsapp/send-welcome-by-user-id`, {
         method: 'POST',
@@ -2066,7 +2066,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       const newPlanId = crypto.randomUUID();
       const mealPlanName = `${clientName || 'Client'}'s Meal Plan`;
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const saveResponse = await fetch(`${apiUrl}/api/profile/meal-plan/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2393,7 +2393,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       console.log('💾 Saving to clients:', clientData);
       
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       
       let updateData = null;
       let finalUserCode = userCode;
@@ -2798,7 +2798,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
   // Usage-based support offer (after onboarding save, before WhatsApp) — skippable
   if (showUsageBasedOffer) {
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
     const handleSupport = async () => {
       setCheckoutLoading(true);
       setError('');

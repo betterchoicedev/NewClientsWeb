@@ -109,7 +109,7 @@ function LoginPage() {
     setError('');
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const response = await fetch(`${apiUrl}/api/auth/login`, {
         method: 'POST',
         headers: {

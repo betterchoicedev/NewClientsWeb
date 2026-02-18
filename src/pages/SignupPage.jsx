@@ -91,7 +91,7 @@ function SignupPage() {
         if (token) sessionStorage.setItem('invitation_token', token);
         let md = null;
         try { const raw = sessionStorage.getItem('manager_link_data'); if (raw) md = JSON.parse(raw); } catch (_) {}
-        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
         try {
           if (md?.link_id) {
             const r = await fetch(`${apiUrl}/api/db/registration-links/find`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link_id: md.link_id }) });
@@ -261,7 +261,7 @@ function SignupPage() {
       // Get invitation token from state or sessionStorage
       const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1] || sessionStorage.getItem('invitation_token');
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const response = await fetch(`${apiUrl}/api/auth/signup`, {
         method: 'POST',
         headers: {

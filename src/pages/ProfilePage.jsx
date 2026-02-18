@@ -18,7 +18,7 @@ import { translateMenu } from '../services/translateService';
 // Function to get training plan from training_plans table
 const getTrainingPlan = async (userCode) => {
   try {
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
     const response = await fetch(`${apiUrl}/api/training-plan?userCode=${encodeURIComponent(userCode)}`);
     const result = await response.json();
 
@@ -36,7 +36,7 @@ const getTrainingPlan = async (userCode) => {
 // Function to get active meal plan from client_meal_plans table
 const getClientMealPlan = async (userCode) => {
   try {
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
     const response = await fetch(`${apiUrl}/api/profile/meal-plan?userCode=${encodeURIComponent(userCode)}`);
     const result = await response.json();
 
@@ -240,7 +240,7 @@ const ProfilePage = () => {
 
       if (!user) return;
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const response = await fetch(`${apiUrl}/api/profile/client?userId=${encodeURIComponent(user.id)}`);
       const result = await response.json();
 
@@ -437,7 +437,7 @@ const ProfilePage = () => {
         console.log('Loading profile data for user:', user.id);
       }
       
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       
       // First, load from clients table (primary database) to get user_code
       const response = await fetch(`${apiUrl}/api/profile/load?userId=${encodeURIComponent(user.id)}`);
@@ -619,7 +619,7 @@ const ProfilePage = () => {
 
       console.log('Attempting to save profile data:', dataToSave);
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       
       // Save to clients table
       const response = await fetch(`${apiUrl}/api/profile/save`, {
@@ -777,7 +777,7 @@ const ProfilePage = () => {
   // Function to save only the profile image URL (called after image upload)
   const saveProfileImageUrl = async (imageUrl) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       
       const response = await fetch(`${apiUrl}/api/profile/save-image-url`, {
         method: 'POST',
@@ -3599,7 +3599,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
           }
 
           // Get user_code from clients table
-          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
           const userCodeResponse = await fetch(`${apiUrl}/api/profile/user-code?userId=${encodeURIComponent(user.id)}`);
           const userCodeResult = await userCodeResponse.json();
 
@@ -4669,7 +4669,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       if (!userCode) return;
       
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
         const response = await fetch(`${apiUrl}/api/profile/client-data-full?userCode=${encodeURIComponent(userCode)}`);
         const result = await response.json();
         
@@ -4855,7 +4855,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       const mealPlanName = `${clientName}'s Meal Plan`;
 
       // Save to both databases via API
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const saveResponse = await fetch(`${apiUrl}/api/profile/meal-plan/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5422,7 +5422,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       };
 
       // Save via API
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const response = await fetch(`${apiUrl}/api/profile/meal-plan/save-edited`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5737,7 +5737,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 
     try {
       // Clear the edited plan from database via API
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const response = await fetch(`${apiUrl}/api/profile/meal-plan/clear-edited`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5781,7 +5781,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     try {
       setIsContactingDietitian(true);
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
 
       // Get provider_id from chat_users table
       const providerResponse = await fetch(`${apiUrl}/api/profile/provider?userCode=${encodeURIComponent(userCode)}`);
@@ -8370,7 +8370,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
       if (!userCode) return;
       
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
         const response = await fetch(`${apiUrl}/api/profile/meal-window?userCode=${encodeURIComponent(userCode)}`);
         const result = await response.json();
         
@@ -10407,7 +10407,7 @@ const PricingTab = ({ themeClasses, user, language }) => {
   // Via backend proxy to avoid CORS (boi.org.il does not allow browser cross-origin requests)
   useEffect(() => {
     let cancelled = false;
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
     const fetchUsdRate = async () => {
       try {
         const url = apiUrl ? `${apiUrl}/api/exchange-rates` : '/api/exchange-rates';
@@ -10437,7 +10437,7 @@ const PricingTab = ({ themeClasses, user, language }) => {
 
   const handleCancelPlan = async (subscriptionId) => {
     if (!subscriptionId) return;
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
     setCancelError(null);
     setCancellingSubscriptionId(subscriptionId);
     try {
@@ -11765,7 +11765,7 @@ const SettingsTab = ({ themeClasses, language, userCode }) => {
         toggleLanguage(value);
         // Update in database via profile update
         if (userCode) {
-          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
           const response = await fetch(`${apiUrl}/api/profile/update-language`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -23,7 +23,7 @@ export const SettingsProvider = ({ children }) => {
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       
       // Get user_code from auth metadata or fetch via API
       let userCode = user.user_metadata?.user_code;
@@ -81,7 +81,7 @@ export const SettingsProvider = ({ children }) => {
     if (!user?.id) return;
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       
       // Update local state immediately for instant UI feedback
       setSettings(prev => ({
@@ -141,7 +141,7 @@ export const SettingsProvider = ({ children }) => {
     if (!user?.id) return;
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb.onrender.com';
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       
       // Update local state immediately
       setSettings(prev => ({
