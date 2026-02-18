@@ -1,20 +1,17 @@
-# 1. Use Node 18
+# Use Node 18
 FROM node:18-slim
 
-# 2. Install dependencies for the 'sharp' library used in index.js
+# Required for the 'sharp' library to process images on Linux
 RUN apt-get update && apt-get install -y libvips-dev
 
 WORKDIR /usr/src/app
 
-# 3. Copy package files and install
+# Copy package files and install production dependencies
 COPY package*.json ./
 RUN npm install --only=production
 
-# 4. Copy everything else (including the server folder)
+# Copy the rest of the code (including the server folder)
 COPY . .
 
-# 5. Set environment to production
-ENV NODE_ENV=production
-
-# 6. Start the server using the path to your file
+# Set the startup command to your specific server file
 CMD [ "node", "server/index.js" ]
