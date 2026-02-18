@@ -609,6 +609,16 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     );
   };
 
+  // Meal recommendation by daily calories (satiety principle: ~500–700 kcal per main meal)
+  const getMealRecommendationForCalories = (calories) => {
+    if (!calories || calories < 1200) return null;
+    if (calories >= 4000) return { min: 6, max: 10, rangeLabelHe: '6+', rangeLabelEn: '6+', rationaleHe: 'בטווח הזה מומלץ 6 ארוחות ומעלה (כולל שייקים). קל יותר לפזר את הקלוריות.', rationaleEn: 'At this range we recommend 6+ meals (including shakes). Easier to spread calories.' };
+    if (calories >= 2800) return { min: 5, max: 6, rangeLabelHe: '5–6', rangeLabelEn: '5–6', rationaleHe: 'כדי לא להעמיס על הקיבה – ארוחות בינוניות כל 3 שעות נוחות יותר מארוחות ענק.', rationaleEn: 'To avoid overloading your stomach – medium meals every ~3 hours are easier than huge meals.' };
+    if (calories >= 2000) return { min: 4, max: 5, rangeLabelHe: '4–5', rangeLabelEn: '4–5', rationaleHe: '3 ארוחות עיקריות + 1–2 נשנושים. האיזון הנוח לרוב האנשים.', rationaleEn: '3 main meals + 1–2 snacks. The most comfortable balance for most people.' };
+    if (calories >= 1500) return { min: 3, max: 3, rangeLabelHe: '3', rangeLabelEn: '3', rationaleHe: 'ארוחות גדולות ומשביעות (כ־500–600 קלוריות לארוחה) עדיפות על הרבה ארוחות קטנות.', rationaleEn: 'Larger, satiating meals (~500–600 kcal each) work better than many small meals.' };
+    return { min: 2, max: 3, rangeLabelHe: '2–3', rangeLabelEn: '2–3', rationaleHe: 'פחות קלוריות – פחות ארוחות, כדי שכל ארוחה תהיה משביעה.', rationaleEn: 'Fewer calories – fewer meals, so each meal stays satisfying.' };
+  };
+
   // Get current macros (edited or calculated)
   const getCurrentMacros = () => {
     const calories = getCurrentDailyCalories();
@@ -1230,15 +1240,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       // No need to store availableFields, we only need to set filteredSteps
 
-      // Check if we can calculate calories/macros (all required fields are filled)
-      // Check both database data and current formData (for fields filled during onboarding)
-      const canCalculateMacros = (!isEmpty(data?.birth_date) || !isEmpty(formData.date_of_birth)) && 
-                                  (!isEmpty(data?.gender) || !isEmpty(formData.gender)) && 
-                                  (!isEmpty(data?.current_weight) || !isEmpty(formData.weight_kg)) && 
-                                  (!isEmpty(data?.height) || !isEmpty(formData.height_cm)) && 
-                                  (!isEmpty(data?.activity_level) || !isEmpty(formData.activity_level)) && 
-                                  (!isEmpty(data?.goal) || !isEmpty(formData.goal));
-
       // Filter steps to only show steps with missing fields
       let filtered = allSteps
         .map(step => {
@@ -1246,21 +1247,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           if (step.fields.length === 1 && step.fields[0] === 'language') {
             return { ...step, fields: ['language'] };
           }
-          // Special handling for macros/calories step - only show if we can calculate
+          // Always show Daily Calories & Macros step (user can enter manually if we can't calculate yet)
           if (step.fields.includes('daily_calories') && step.fields.includes('macros')) {
-            if (canCalculateMacros) {
-              // Always include this step if we can calculate, even if fields aren't "missing"
-              return {
-                ...step,
-                fields: ['daily_calories', 'macros']
-              };
-            } else {
-              // Don't show this step if we can't calculate
-              return {
-                ...step,
-                fields: []
-              };
-            }
+            return {
+              ...step,
+              fields: ['daily_calories', 'macros']
+            };
           }
           // For other steps, filter by missing fields
           return {
@@ -4232,6 +4224,35 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                   <option key={num} value={num}>{num}</option>
                 ))}
               </select>
+              {(() => {
+                const dailyCal = getCurrentDailyCalories();
+                const rec = dailyCal != null ? getMealRecommendationForCalories(dailyCal) : null;
+                const numMeals = parseInt(formData.number_of_meals, 10);
+                const hasSelection = numMeals >= 1 && numMeals <= 10;
+                const isBelowRecommendation = rec && hasSelection && numMeals < rec.min;
+                const isAboveRecommendation = rec && hasSelection && numMeals > rec.max;
+                if (!rec) return null;
+                return (
+                  <div className={`mt-3 p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 border-emerald-500/30 ${themeClasses.bgCard}`}>
+                    <p className={`text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} mb-1`}>
+                      {language === 'hebrew' ? 'המלצה לפי תקציב הקלוריות שלך' : 'Recommendation for your calorie target'}
+                    </p>
+                    <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mb-1`}>
+                      {language === 'hebrew' ? `כ־${dailyCal} קלוריות → ${rec.rangeLabelHe} ארוחות` : `~${dailyCal} kcal → ${rec.rangeLabelEn} meals`}
+                    </p>
+                    <p className={`text-xs sm:text-sm ${themeClasses.textSecondary}`}>
+                      {language === 'hebrew' ? rec.rationaleHe : rec.rationaleEn}
+                    </p>
+                    {(isBelowRecommendation || isAboveRecommendation) && (
+                      <p className={`text-xs sm:text-sm mt-2 font-medium ${themeClasses.textPrimary}`}>
+                        {isBelowRecommendation
+                          ? (language === 'hebrew' ? `עם ${numMeals} ארוחות הארוחות עלולות להיות גדולות מדי. שקול ${rec.min}–${rec.max} ארוחות.` : `With ${numMeals} meals, portions may be too large. Consider ${rec.min}–${rec.max} meals.`)
+                          : (language === 'hebrew' ? `עם ${numMeals} ארוחות המנות עלולות להיות קטנות מדי. המלצתנו: ${rec.rangeLabelHe} ארוחות.` : `With ${numMeals} meals, portions may be too small. We recommend ${rec.rangeLabelEn} meals.`)}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
