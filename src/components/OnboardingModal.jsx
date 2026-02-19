@@ -27,6 +27,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const [isGeneratingMealPlan, setIsGeneratingMealPlan] = useState(false);
   const [mealPlanGenerationProgress, setMealPlanGenerationProgress] = useState(0);
   const [mealPlanGenerationStep, setMealPlanGenerationStep] = useState('');
+  const [welcomeMessageSent, setWelcomeMessageSent] = useState(false);
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -1934,17 +1935,37 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
   const sendWhatsAppAndClose = () => {
     const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-    if (user?.id) {
-      fetch(`${apiUrl}/api/whatsapp/send-welcome-by-user-id`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id })
-      })
-        .then((r) => r.json())
-        .then((d) => { if (d.success) console.log('✅ WhatsApp welcome sent (skip)'); })
-        .catch((e) => console.warn('WhatsApp send (skip) error:', e));
-      localStorage.removeItem(`onboarding_${user.id}`);
+    // Prefer /api/whatsapp/send-welcome-message when we have phone + language; otherwise fall back to send-welcome-by-user-id
+    let phoneForWelcome = null;
+    if (formData.phone?.trim()) {
+      let p = normalizePhoneForDatabase(formData.phone.trim());
+      if (p.startsWith('0') && formData.phoneCountryCode === '+972') p = formData.phoneCountryCode + p.substring(1);
+      else if (!p.startsWith('+')) p = (formData.phoneCountryCode || '+972') + p;
+      phoneForWelcome = p;
     }
+    const langForWelcome = language === 'hebrew' ? 'he' : 'en';
+    if (!welcomeMessageSent) {
+      if (phoneForWelcome) {
+        fetch(`${apiUrl}/api/whatsapp/send-welcome-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: phoneForWelcome, language: langForWelcome })
+        })
+          .then((r) => r.json())
+          .then((d) => { if (!d.error) { setWelcomeMessageSent(true); console.log('✅ WhatsApp welcome sent (send-welcome-message)'); } })
+          .catch((e) => console.warn('WhatsApp send-welcome-message error:', e));
+      } else if (user?.id) {
+        fetch(`${apiUrl}/api/whatsapp/send-welcome-by-user-id`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: user.id })
+        })
+          .then((r) => r.json())
+          .then((d) => { if (d.success) console.log('✅ WhatsApp welcome sent (send-welcome-by-user-id)'); })
+          .catch((e) => console.warn('WhatsApp send (skip) error:', e));
+      }
+    }
+    if (user?.id) localStorage.removeItem(`onboarding_${user.id}`);
     
     // Check if mobile device and show PWA install prompt
     if (isMobileDevice && (deferredPrompt || !window.matchMedia('(display-mode: standalone)').matches)) {
@@ -2682,6 +2703,22 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       }
       
       console.log('✅ Onboarding complete — showing support offer then WhatsApp.');
+      
+      // Send WhatsApp welcome message via /api/whatsapp/send-welcome-message when we have phone
+      const apiUrlForWelcome = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      if (formattedPhone && !welcomeMessageSent) {
+        fetch(`${apiUrlForWelcome}/api/whatsapp/send-welcome-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: formattedPhone,
+            language: language === 'hebrew' ? 'he' : 'en'
+          })
+        })
+          .then((r) => r.json())
+          .then((d) => { if (!d.error) { setWelcomeMessageSent(true); console.log('✅ WhatsApp welcome sent (onboarding complete)'); } })
+          .catch((e) => console.warn('WhatsApp send-welcome-message (onboarding complete) error:', e));
+      }
       
       setLoading(false);
       setShowUsageBasedOffer(true);
