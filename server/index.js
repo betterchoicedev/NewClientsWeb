@@ -5442,6 +5442,17 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     };
 
     if (mealPlanData) {
+      const mealPlan = mealPlanData.meal_plan;
+      const rawTotals = mealPlan && typeof mealPlan.totals === 'object' ? mealPlan.totals : null;
+      const totalsFromPlan = rawTotals != null && (typeof rawTotals.calories === 'number' || !isNaN(Number(rawTotals.calories)))
+        ? {
+            calories: Number(rawTotals.calories),
+            protein: Number(rawTotals.protein ?? 0),
+            carbs: Number(rawTotals.carbs ?? 0),
+            fat: Number(rawTotals.fat ?? 0)
+          }
+        : null;
+
       if (mealPlanData.macros_target) {
         dailyGoals = {
           calories: mealPlanData.daily_total_calories || 2000,
@@ -5449,8 +5460,15 @@ app.get('/api/macro-summary-svg', async (req, res) => {
           carbs: mealPlanData.macros_target.carbs || 250,
           fat: mealPlanData.macros_target.fat || 65
         };
-      } else if (mealPlanData.meal_plan && mealPlanData.meal_plan.meals) {
-        const totals = mealPlanData.meal_plan.meals.reduce((acc, meal) => {
+      } else if (totalsFromPlan) {
+        dailyGoals = {
+          calories: totalsFromPlan.calories || mealPlanData.daily_total_calories || 2000,
+          protein: totalsFromPlan.protein || 150,
+          carbs: totalsFromPlan.carbs || 250,
+          fat: totalsFromPlan.fat || 65
+        };
+      } else if (mealPlan && mealPlan.meals) {
+        const totals = mealPlan.meals.reduce((acc, meal) => {
           if (meal.main && meal.main.nutrition) {
             acc.calories += meal.main.nutrition.calories || 0;
             acc.protein += meal.main.nutrition.protein || 0;
