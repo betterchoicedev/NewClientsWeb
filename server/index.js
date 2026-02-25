@@ -2090,6 +2090,8 @@ async function sendWhatsAppWelcomeByUserId(userId) {
   }
 
   const url = 'https://graph.facebook.com/v22.0/656545780873051/messages';
+
+  // 1) Send welcome message
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${waToken}`, 'Content-Type': 'application/json' },
@@ -2105,6 +2107,27 @@ async function sendWhatsAppWelcomeByUserId(userId) {
     console.error('❌ WhatsApp API error:', data);
     return { success: false, status: res.status, message: data?.error?.message || 'Failed to send' };
   }
+
+  // 2) Send pin-the-chat message (same language)
+  const pinTemplateName = languageCode === 'he' ? 'pin_the_chat_hebrew' : 'pin_the_chat';
+  const resPin = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${waToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: phone,
+      type: 'template',
+      template: { name: pinTemplateName, language: { code: languageCode } }
+    })
+  });
+  const dataPin = await resPin.json();
+  if (!resPin.ok) {
+    console.error('❌ WhatsApp pin-the-chat API error:', dataPin);
+    // Welcome was sent; still return success but log the pin failure
+  } else {
+    console.log('✅ WhatsApp pin-the-chat sent by user_id:', userId);
+  }
+
   console.log('✅ WhatsApp welcome sent by user_id:', userId);
   return { success: true };
 }
