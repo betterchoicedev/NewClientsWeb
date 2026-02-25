@@ -4317,6 +4317,17 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     }
 
     let mealPlan = planDataItem.meal_plan;
+
+    // Use totals from meal_plan (meal_plans_and_schemas.meal_plan column) when present
+    const rawTotals = mealPlan.totals && typeof mealPlan.totals === 'object' ? mealPlan.totals : null;
+    const totalsFromPlan = rawTotals != null && (typeof rawTotals.calories === 'number' || !isNaN(Number(rawTotals.calories)))
+      ? {
+          calories: Number(rawTotals.calories),
+          protein: Number(rawTotals.protein ?? 0),
+          carbs: Number(rawTotals.carbs ?? 0),
+          fat: Number(rawTotals.fat ?? 0)
+        }
+      : null;
     
     if (mealPlan && mealPlan.meals) {
       // Translate meal plan if language is Hebrew
@@ -4338,8 +4349,8 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         }
       }
 
-      // Calculate totals from the meals array
-      const totals = mealPlan.meals.reduce((acc, meal) => {
+      // Prefer totals from meal_plan column (meal_plans_and_schemas), else calculate from meals
+      const totals = totalsFromPlan || mealPlan.meals.reduce((acc, meal) => {
         if (meal.main && meal.main.nutrition) {
           acc.calories += meal.main.nutrition.calories || 0;
           acc.protein += meal.main.nutrition.protein || 0;
@@ -4356,8 +4367,8 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         note: mealPlan.note || '' // Include notes from meal plan
       };
     } else if (mealPlan && mealPlan.template) {
-      // Fallback for template structure
-      const totals = mealPlan.template.reduce((acc, meal) => {
+      // Prefer totals from meal_plan column, else calculate from template
+      const totals = totalsFromPlan || mealPlan.template.reduce((acc, meal) => {
         acc.calories += meal.main.calories;
         acc.protein += meal.main.protein;
         acc.carbs += meal.main.carbs;
@@ -4370,6 +4381,16 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         totals,
         meals: mealPlan.template,
         note: mealPlan.note || '' // Include notes from meal plan
+      };
+    }
+
+    // Meal plan has totals but no meals/template (e.g. schema-only); still return plan with totals
+    if (totalsFromPlan) {
+      return {
+        ...planDataItem,
+        totals: totalsFromPlan,
+        meals: [],
+        note: mealPlan.note || ''
       };
     }
     
