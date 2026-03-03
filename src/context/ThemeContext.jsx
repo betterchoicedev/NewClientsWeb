@@ -31,6 +31,16 @@ export const ThemeProvider = ({ children }) => {
     } else {
       document.documentElement.classList.remove('dark');
     }
+
+    // Update theme-color meta so mobile browser chrome (status bar, address bar) matches app
+    const themeColor = isDarkMode ? '#111827' : '#e0e7ff';
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', themeColor);
   }, [isDarkMode]);
 
   const toggleTheme = () => {

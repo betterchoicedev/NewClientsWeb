@@ -43,6 +43,15 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>BetterChoice AI | תזונה שעובדת בשבילך</title>
+    <!-- Set theme-color immediately (before React) so mobile browser chrome is dark from first paint -->
+    <script>
+      (function() {
+        var dark = localStorage.getItem('theme') !== 'light';
+        var color = dark ? '#111827' : '#e0e7ff';
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', color);
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
