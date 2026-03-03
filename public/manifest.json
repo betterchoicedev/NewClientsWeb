@@ -25,8 +25,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#000000",
-  "background_color": "#ffffff",
+  "theme_color": "#111827",
+  "background_color": "#111827",
   "categories": ["health", "lifestyle", "nutrition"],
   "screenshots": [],
   "shortcuts": [
