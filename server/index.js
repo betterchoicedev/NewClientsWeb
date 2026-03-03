@@ -5476,19 +5476,24 @@ app.get('/api/macro-summary-svg', async (req, res) => {
           }
         : null;
 
+      const safeNum = (v, def) => {
+        const n = Number(v);
+        return (typeof n === 'number' && !isNaN(n) && n >= 0) ? n : def;
+      };
+
       if (mealPlanData.macros_target) {
         dailyGoals = {
-          calories: mealPlanData.daily_total_calories || 2000,
-          protein: mealPlanData.macros_target.protein || 150,
-          carbs: mealPlanData.macros_target.carbs || 250,
-          fat: mealPlanData.macros_target.fat || 65
+          calories: safeNum(mealPlanData.daily_total_calories, 2000),
+          protein: safeNum(mealPlanData.macros_target.protein, 150),
+          carbs: safeNum(mealPlanData.macros_target.carbs, 250),
+          fat: safeNum(mealPlanData.macros_target.fat, 65)
         };
       } else if (totalsFromPlan) {
         dailyGoals = {
-          calories: totalsFromPlan.calories || mealPlanData.daily_total_calories || 2000,
-          protein: totalsFromPlan.protein || 150,
-          carbs: totalsFromPlan.carbs || 250,
-          fat: totalsFromPlan.fat || 65
+          calories: safeNum(totalsFromPlan.calories || mealPlanData.daily_total_calories, 2000),
+          protein: safeNum(totalsFromPlan.protein, 150),
+          carbs: safeNum(totalsFromPlan.carbs, 250),
+          fat: safeNum(totalsFromPlan.fat, 65)
         };
       } else if (mealPlan && mealPlan.meals) {
         const totals = mealPlan.meals.reduce((acc, meal) => {
@@ -5502,19 +5507,28 @@ app.get('/api/macro-summary-svg', async (req, res) => {
         }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
         dailyGoals = {
-          calories: totals.calories || mealPlanData.daily_total_calories || 2000,
-          protein: totals.protein || 150,
-          carbs: totals.carbs || 250,
-          fat: totals.fat || 65
+          calories: safeNum(totals.calories || mealPlanData.daily_total_calories, 2000),
+          protein: safeNum(totals.protein, 150),
+          carbs: safeNum(totals.carbs, 250),
+          fat: safeNum(totals.fat, 65)
         };
       }
     }
 
-    // Calculate percentages
-    const caloriesPercent = Math.round((totalCalories / dailyGoals.calories) * 100);
-    const proteinPercent = Math.round((totalProtein / dailyGoals.protein) * 100);
-    const carbsPercent = Math.round((totalCarbs / dailyGoals.carbs) * 100);
-    const fatPercent = Math.round((totalFat / dailyGoals.fat) * 100);
+    // Ensure dailyGoals are valid numbers (fallback if no meal plan branch ran)
+    const defGoals = { calories: 2000, protein: 150, carbs: 250, fat: 65 };
+    dailyGoals = {
+      calories: (typeof dailyGoals.calories === 'number' && !isNaN(dailyGoals.calories) && dailyGoals.calories > 0) ? dailyGoals.calories : defGoals.calories,
+      protein: (typeof dailyGoals.protein === 'number' && !isNaN(dailyGoals.protein) && dailyGoals.protein >= 0) ? dailyGoals.protein : defGoals.protein,
+      carbs: (typeof dailyGoals.carbs === 'number' && !isNaN(dailyGoals.carbs) && dailyGoals.carbs >= 0) ? dailyGoals.carbs : defGoals.carbs,
+      fat: (typeof dailyGoals.fat === 'number' && !isNaN(dailyGoals.fat) && dailyGoals.fat >= 0) ? dailyGoals.fat : defGoals.fat
+    };
+
+    // Calculate percentages (avoid division by zero)
+    const caloriesPercent = dailyGoals.calories > 0 ? Math.round((totalCalories / dailyGoals.calories) * 100) : 0;
+    const proteinPercent = dailyGoals.protein > 0 ? Math.round((totalProtein / dailyGoals.protein) * 100) : 0;
+    const carbsPercent = dailyGoals.carbs > 0 ? Math.round((totalCarbs / dailyGoals.carbs) * 100) : 0;
+    const fatPercent = dailyGoals.fat > 0 ? Math.round((totalFat / dailyGoals.fat) * 100) : 0;
 
     // Generate SVG
     const outerRadius = 120;
@@ -5533,9 +5547,10 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     const fatNormalLength = Math.min(fatPercent, 100) / 100 * segmentLength;
     const fatOverflowLength = fatPercent > 100 ? (fatPercent - 100) / 100 * segmentLength : 0;
 
-    // Format weight helper
+    // Format weight helper (never show NaNg)
     const formatWeight = (grams) => {
-      return `${Math.round(grams)}g`;
+      const n = Number(grams);
+      return `${typeof n === 'number' && !isNaN(n) ? Math.round(n) : 0}g`;
     };
 
     // Generate SVG string
