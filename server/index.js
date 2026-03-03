@@ -5448,81 +5448,66 @@ app.get('/api/macro-summary-svg', async (req, res) => {
       return sum + logFat + (log.total_fat_g || 0);
     }, 0);
 
-    // Get meal plan targets
-    const { data: mealPlanData } = await chatSupabase
+    // Get meal plan targets: sum macros and calories from MAIN dishes only (not alternatives)
+    // When client has multiple active meal plans, pick the one whose active_days (0=Sun..6=Sat) includes the request date
+    const dayOfWeek = (() => {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return null;
+      return d.getDay(); // 0 Sunday .. 6 Saturday
+    })();
+
+    const { data: activeMealPlans, error: mealPlansError } = await chatSupabase
       .from('meal_plans_and_schemas')
       .select('*')
       .eq('user_code', userCode)
       .eq('record_type', 'meal_plan')
-      .eq('status', 'active')
-      .single();
+      .eq('status', 'active');
 
-    let dailyGoals = {
-      calories: 2000,
-      protein: 150,
-      carbs: 250,
-      fat: 65
-    };
+    if (mealPlansError) {
+      console.error('❌ Error fetching meal plans:', mealPlansError);
+    }
 
-    if (mealPlanData) {
-      const mealPlan = mealPlanData.meal_plan;
-      const rawTotals = mealPlan && typeof mealPlan.totals === 'object' ? mealPlan.totals : null;
-      const totalsFromPlan = rawTotals != null && (typeof rawTotals.calories === 'number' || !isNaN(Number(rawTotals.calories)))
-        ? {
-            calories: Number(rawTotals.calories),
-            protein: Number(rawTotals.protein ?? 0),
-            carbs: Number(rawTotals.carbs ?? 0),
-            fat: Number(rawTotals.fat ?? 0)
-          }
-        : null;
+    let mealPlanData = null;
+    if (Array.isArray(activeMealPlans) && activeMealPlans.length > 0) {
+      if (activeMealPlans.length === 1) {
+        mealPlanData = activeMealPlans[0];
+      } else {
+        // Multiple active plans: use active_days to match the request date
+        const matching = activeMealPlans.find((plan) => {
+          const days = plan.active_days;
+          if (days == null || !Array.isArray(days)) return true; // no filter = applies to any day
+          if (dayOfWeek == null) return true;
+          return days.includes(dayOfWeek);
+        });
+        mealPlanData = matching || activeMealPlans[0]; // fallback to first if no day match
+      }
+    }
+
+    const defGoals = { calories: 2000, protein: 150, carbs: 250, fat: 65 };
+    let dailyGoals = { ...defGoals };
+
+    if (mealPlanData && mealPlanData.meal_plan && Array.isArray(mealPlanData.meal_plan.meals)) {
+      const totalsFromMainOnly = mealPlanData.meal_plan.meals.reduce((acc, meal) => {
+        if (meal.main && meal.main.nutrition) {
+          acc.calories += Number(meal.main.nutrition.calories) || 0;
+          acc.protein += Number(meal.main.nutrition.protein) || 0;
+          acc.carbs += Number(meal.main.nutrition.carbs) || 0;
+          acc.fat += Number(meal.main.nutrition.fat) || 0;
+        }
+        return acc;
+      }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
       const safeNum = (v, def) => {
         const n = Number(v);
         return (typeof n === 'number' && !isNaN(n) && n >= 0) ? n : def;
       };
-
-      if (mealPlanData.macros_target) {
-        dailyGoals = {
-          calories: safeNum(mealPlanData.daily_total_calories, 2000),
-          protein: safeNum(mealPlanData.macros_target.protein, 150),
-          carbs: safeNum(mealPlanData.macros_target.carbs, 250),
-          fat: safeNum(mealPlanData.macros_target.fat, 65)
-        };
-      } else if (totalsFromPlan) {
-        dailyGoals = {
-          calories: safeNum(totalsFromPlan.calories || mealPlanData.daily_total_calories, 2000),
-          protein: safeNum(totalsFromPlan.protein, 150),
-          carbs: safeNum(totalsFromPlan.carbs, 250),
-          fat: safeNum(totalsFromPlan.fat, 65)
-        };
-      } else if (mealPlan && mealPlan.meals) {
-        const totals = mealPlan.meals.reduce((acc, meal) => {
-          if (meal.main && meal.main.nutrition) {
-            acc.calories += meal.main.nutrition.calories || 0;
-            acc.protein += meal.main.nutrition.protein || 0;
-            acc.carbs += meal.main.nutrition.carbs || 0;
-            acc.fat += meal.main.nutrition.fat || 0;
-          }
-          return acc;
-        }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
-        dailyGoals = {
-          calories: safeNum(totals.calories || mealPlanData.daily_total_calories, 2000),
-          protein: safeNum(totals.protein, 150),
-          carbs: safeNum(totals.carbs, 250),
-          fat: safeNum(totals.fat, 65)
-        };
-      }
+      dailyGoals = {
+        calories: safeNum(totalsFromMainOnly.calories, defGoals.calories),
+        protein: safeNum(totalsFromMainOnly.protein, defGoals.protein),
+        carbs: safeNum(totalsFromMainOnly.carbs, defGoals.carbs),
+        fat: safeNum(totalsFromMainOnly.fat, defGoals.fat)
+      };
     }
-
-    // Ensure dailyGoals are valid numbers (fallback if no meal plan branch ran)
-    const defGoals = { calories: 2000, protein: 150, carbs: 250, fat: 65 };
-    dailyGoals = {
-      calories: (typeof dailyGoals.calories === 'number' && !isNaN(dailyGoals.calories) && dailyGoals.calories > 0) ? dailyGoals.calories : defGoals.calories,
-      protein: (typeof dailyGoals.protein === 'number' && !isNaN(dailyGoals.protein) && dailyGoals.protein >= 0) ? dailyGoals.protein : defGoals.protein,
-      carbs: (typeof dailyGoals.carbs === 'number' && !isNaN(dailyGoals.carbs) && dailyGoals.carbs >= 0) ? dailyGoals.carbs : defGoals.carbs,
-      fat: (typeof dailyGoals.fat === 'number' && !isNaN(dailyGoals.fat) && dailyGoals.fat >= 0) ? dailyGoals.fat : defGoals.fat
-    };
 
     // Calculate percentages (avoid division by zero)
     const caloriesPercent = dailyGoals.calories > 0 ? Math.round((totalCalories / dailyGoals.calories) * 100) : 0;
