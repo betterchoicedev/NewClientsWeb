@@ -5538,9 +5538,10 @@ app.get('/api/macro-summary-svg', async (req, res) => {
       return `${typeof n === 'number' && !isNaN(n) ? Math.round(n) : 0}g`;
     };
 
-    // Generate SVG string
+    // Generate SVG string (white background so SVG fallback matches PNG when served without sharp)
     const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 450">
+  <rect width="280" height="450" fill="#ffffff"/>
   <g transform="rotate(-90 140 140)">
   <!-- Outer Circle Background (Calories) -->
   <circle
@@ -5822,20 +5823,26 @@ app.get('/api/macro-summary-svg', async (req, res) => {
   </g>
 </svg>`;
 
-    // Convert SVG to PNG using sharp
-    // Use a larger size for better quality, adjust height proportionally (450/280 * 1200)
-    const pngBuffer = await sharp(Buffer.from(svg))
-      .resize(1200, 1929, {
-        fit: 'contain',
-        background: { r: 255, g: 255, b: 255, alpha: 1 }
-      })
-      .png()
-      .toBuffer();
+    // Prefer PNG via sharp when available (looks consistent everywhere). In production sharp
+    // can fail (wrong native binary, missing libvips); fall back to SVG so the image still displays.
+    try {
+      const pngBuffer = await sharp(Buffer.from(svg))
+        .resize(1200, 1929, {
+          fit: 'contain',
+          background: { r: 255, g: 255, b: 255, alpha: 1 }
+        })
+        .png()
+        .toBuffer();
 
-    // Set content type to PNG image
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.send(pngBuffer);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.send(pngBuffer);
+    } catch (sharpError) {
+      console.warn('⚠️ Macro summary: sharp PNG conversion failed, serving SVG fallback:', sharpError.message);
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.send(svg);
+    }
 
   } catch (error) {
     console.error('❌ Error generating macro summary SVG:', error);
