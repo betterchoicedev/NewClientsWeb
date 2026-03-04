@@ -58,8 +58,11 @@ app.use(cors({
 // Raw body parser for webhooks (BEFORE express.json())
 app.use('/api/webhooks', express.raw({ type: 'application/json' }));
 
-// JSON parser for other routes
-app.use(express.json());
+// JSON parser for other routes (skip for webhooks so Stripe gets raw body for signature verification)
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/webhooks')) return next();
+  express.json()(req, res, next);
+});
 
 // Logging middleware
 app.use((req, res, next) => {
