@@ -55,14 +55,15 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Raw body parser for webhooks (BEFORE express.json())
-app.use('/api/webhooks', express.raw({ type: 'application/json' }));
-
-// JSON parser for other routes (skip for webhooks so Stripe gets raw body for signature verification)
-app.use((req, res, next) => {
-  if (req.originalUrl.startsWith('/api/webhooks')) return next();
-  express.json()(req, res, next);
+// Stripe webhook route MUST be registered before express.json() so the raw body is used for signature verification.
+// Using route-level express.raw() ensures only this endpoint gets the raw Buffer; nothing else parses the body first.
+let stripeWebhookHandler;
+app.post('/api/webhooks/stripe', express.raw({ type: '*/*' }), (req, res, next) => {
+  stripeWebhookHandler(req, res).catch(err => next(err));
 });
+
+// JSON parser for all other routes
+app.use(express.json());
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -740,13 +741,16 @@ app.post('/api/stripe/subscriptions/:subscriptionId/payment-method', async (req,
 // WEBHOOK HANDLING
 // ====================================
 
-// Stripe webhooks handler
-app.post('/api/webhooks/stripe', async (req, res) => {
+stripeWebhookHandler = async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
   console.log('🎯 Webhook received from IP:', req.ip || req.headers['x-forwarded-for']);
-  
+  const isBuffer = Buffer.isBuffer(req.body);
+  const bodyType = typeof req.body;
+  const bodyLength = req.body?.length ?? (typeof req.body === 'string' ? req.body.length : 'n/a');
+  console.log('📦 Webhook body:', bodyType, isBuffer ? 'Buffer' : 'not Buffer', 'length:', bodyLength);
+
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
     console.error('❌ STRIPE_WEBHOOK_SECRET is not configured!');
     return res.status(500).send('Webhook secret not configured');
@@ -754,11 +758,11 @@ app.post('/api/webhooks/stripe', async (req, res) => {
 
   try {
     event = stripe.webhooks.constructEvent(
-      req.body, 
-      sig, 
+      req.body,
+      sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
-    
+
     console.log('✅ Webhook verified:', event.type, event.id);
   } catch (err) {
     console.error('❌ Webhook signature verification failed:', err.message);
@@ -773,32 +777,32 @@ app.post('/api/webhooks/stripe', async (req, res) => {
         console.log('💳 Checkout session completed:', event.data.object.id);
         await handleCheckoutCompleted(event.data.object);
         break;
-      
+
       case 'customer.subscription.created':
         console.log('🔄 Subscription created:', event.data.object.id);
         await handleSubscriptionCreated(event.data.object);
         break;
-      
+
       case 'customer.subscription.updated':
         console.log('🔄 Subscription updated:', event.data.object.id);
         await handleSubscriptionUpdated(event.data.object);
         break;
-      
+
       case 'customer.subscription.deleted':
         console.log('❌ Subscription deleted:', event.data.object.id);
         await handleSubscriptionDeleted(event.data.object);
         break;
-      
+
       case 'invoice.payment_succeeded':
         console.log('✅ Payment succeeded:', event.data.object.id);
         await handlePaymentSucceeded(event.data.object);
         break;
-      
+
       case 'invoice.payment_failed':
         console.log('❌ Payment failed:', event.data.object.id);
         await handlePaymentFailed(event.data.object);
         break;
-      
+
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
@@ -808,7 +812,7 @@ app.post('/api/webhooks/stripe', async (req, res) => {
     console.error('Error processing webhook:', error);
     res.status(500).json({ error: 'Webhook processing failed' });
   }
-});
+};
 
 // Manual endpoint to process a checkout session (backup if webhook fails)
 app.post('/api/stripe/process-checkout-session', async (req, res) => {
