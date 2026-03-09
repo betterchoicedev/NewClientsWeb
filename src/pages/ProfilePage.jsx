@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -2102,293 +2111,71 @@ const WeightProgressComponent = ({ userCode, themeClasses, language, isDarkMode 
         </div>
       )}
 
-      {/* Simple Line & Area Chart */}
+      {/* Score Components style chart (Recharts AreaChart like ScoringTab) */}
       {!isLandscape && (
-      <div className="relative h-64 w-full overflow-hidden rounded-xl bg-gradient-to-b from-slate-900/40 via-slate-900/10 to-slate-900/40">
+      <div className={`rounded-xl border ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} ${themeClasses.bgCard} p-3 shadow-sm overflow-visible`}>
+        <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+          {language === 'hebrew' ? 'מעקב משקל והתקדמות' : 'Score Components'}
+        </h3>
         {!hasData && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+          <div className="flex flex-col items-center justify-center py-12">
             <div className="text-4xl mb-3">📊</div>
             <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-4 text-center px-4`}>
               {language === 'hebrew' ? 'אין לך רשומות מדידות גוף' : "You don't have any Body Measurements Log"}
             </p>
           </div>
         )}
-        <div
-          style={{
-            opacity: isTransitioning ? 0.5 : (hasData ? 1 : 0.3),
-            transform: isTransitioning ? 'scale(0.97)' : 'scale(1)',
-            transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-          }}
-        >
-          <svg 
-            className="w-full h-full" 
-            viewBox="0 0 800 200" 
-            preserveAspectRatio="none"
-            onMouseMove={handleChartMouseMove}
-            onMouseLeave={handleChartMouseLeave}
-          >
-          {/* Y-axis labels (right side in Hebrew/RTL) */}
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-            const value = min + (range * ratio);
-            const y = 200 - (ratio * 180);
-            return (
-              <text
-                key={ratio}
-                x={isRtl ? '755' : '5'}
-                y={y + 4}
-                textAnchor={isRtl ? 'end' : 'start'}
-                className={`text-xs ${themeClasses.textSecondary}`}
-                fill="currentColor"
-              >
-                {value.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
-              </text>
-            );
-          })}
-
-          {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-            const y = 200 - (ratio * 180);
-            return (
-              <line
-                key={ratio}
-                x1="50"
-                y1={y}
-                x2="750"
-                y2={y}
-                stroke={isDarkMode ? 'rgba(148, 163, 184, 0.15)' : 'rgba(148, 163, 184, 0.2)'}
-                strokeWidth="1"
-                strokeDasharray="4,6"
-              />
-            );
-          })}
-
-          {/* Average line */}
-          {showAverage && averageValue != null && (() => {
-            const normalizedValue = averageValue - min;
-            const ratio = normalizedValue / range;
-            const y = 180 - (ratio * 160);
-            return (
-              <g>
-                <line
-                  x1="50"
-                  y1={y}
-                  x2="750"
-                  y2={y}
+        {hasData && (() => {
+          const rechartsData = chartData
+            .map((d) => ({ date: d.date, dateFull: d.dateFull, value: getMetricValue(d) }))
+            .filter((d) => d.value != null);
+          const yRange = getYAxisRange();
+          const isRtl = language === 'hebrew';
+          const chartMargin = isRtl
+            ? { top: 4, right: 28, bottom: 2, left: 4 }
+            : { top: 4, left: 28, right: 4, bottom: 2 };
+          const axisEdgeStyle = isRtl ? { marginRight: -40 } : { marginLeft: -40 };
+          return rechartsData.length > 0 ? (
+            <div style={axisEdgeStyle} className="w-full">
+              <ResponsiveContainer width="100%" height={360}>
+              <AreaChart data={rechartsData} margin={chartMargin}>
+                <defs>
+                  <linearGradient id="gradWeight" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={isDarkMode ? 'rgba(148, 163, 184, 0.12)' : '#e5e7eb'}
+                  vertical={false}
+                />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} reversed={isRtl} />
+                <YAxis domain={[yRange.min, yRange.max]} tick={{ fontSize: 11 }} orientation={isRtl ? 'right' : 'left'} />
+                <Tooltip
+                  formatter={(value) => [
+                    (selectedMetric === 'weight' || selectedMetric === 'body_fat' ? Number(value).toFixed(1) : Math.round(value)) + ' ' + getMetricUnit(),
+                    getMetricLabel()
+                  ]}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.dateFull ? formatDateFull(payload[0].payload.dateFull) : _}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  name={getMetricLabel()}
                   stroke="#10b981"
-                  strokeWidth="2"
-                  strokeDasharray="6,4"
-                  opacity="0.6"
-                  style={{
-                    opacity: isTransitioning ? 0.3 : 0.6,
-                    transition: 'opacity 0.3s ease-in-out'
-                  }}
+                  fill="url(#gradWeight)"
+                  strokeWidth={2}
+                  animationDuration={1200}
+                  animationEasing="ease-out"
                 />
-                <text
-                  x={isRtl ? '45' : '755'}
-                  y={y + 4}
-                  textAnchor={isRtl ? 'end' : 'start'}
-                  className={`text-xs font-semibold`}
-                  fill="#10b981"
-                  opacity="0.8"
-                >
-                  Avg
-                </text>
-              </g>
-            );
-          })()}
-
-          {/* Data line + soft area */}
-          {hasData && chartData.length > 1 && (() => {
-            const n = chartData.length;
-            const linePoints = chartData
-              .map((d, index) => {
-                const value = getMetricValue(d);
-                if (value == null) return null;
-                const normalizedValue = value - min;
-                const ratio = normalizedValue / range;
-                const x = getChartX(index, n);
-                const y = 180 - (ratio * 160);
-                return { x, y };
-              })
-              .filter(p => p !== null);
-
-            if (linePoints.length < 2) return null;
-
-            const points = linePoints.map(p => `${p.x},${p.y}`).join(' ');
-            const areaPath = isRtl
-              ? [`M 750 180`, ...linePoints.map(p => `L ${p.x} ${p.y}`), `L 50 180`, 'Z'].join(' ')
-              : [`M 50 180`, ...linePoints.map(p => `L ${p.x} ${p.y}`), `L 750 180`, 'Z'].join(' ');
-
-            return (
-              <>
-                <path
-                  d={areaPath}
-                  fill="#10b981"
-                  opacity={isDarkMode ? 0.14 : 0.18}
-                  style={{
-                    transition: 'opacity 0.3s ease-in-out'
-                  }}
-                />
-                <polyline
-                  points={points}
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{
-                    opacity: isTransitioning ? 0.6 : 1,
-                    filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.5))',
-                    transition: 'opacity 0.3s ease-in-out'
-                  }}
-                />
-              </>
-            );
-          })()}
-
-          {/* Data points (sparser, with hover emphasis) */}
-          {hasData && chartData.map((d, index) => {
-            const value = getMetricValue(d);
-            if (value == null) return null;
-            const normalizedValue = value - min;
-            const ratio = normalizedValue / range;
-            const x = getChartX(index, chartData.length);
-            const y = 180 - (ratio * 160);
-            const isHovered = hoveredPoint && hoveredPoint.index === index;
-            const step = Math.max(1, Math.floor(chartData.length / 80));
-            const showPoint = isHovered || index % step === 0 || index === chartData.length - 1;
-            if (!showPoint) return null;
-
-            return (
-              <circle
-                key={`point-${index}`}
-                cx={x}
-                cy={y}
-                r={isHovered ? 6 : 3}
-                fill="#10b981"
-                stroke={isDarkMode ? '#020617' : '#ffffff'}
-                strokeWidth={isHovered ? 3 : 2}
-                className="transition-all cursor-pointer"
-                style={{ 
-                  transition: 'r 0.2s, opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-                  opacity: isTransitioning ? 0.6 : 1
-                }}
-                onMouseEnter={() => handlePointMouseEnter(d, index, value, x, y)}
-                onMouseLeave={handlePointMouseLeave}
-              />
-            );
-          }).filter(Boolean)}
-
-          {/* Tooltip */}
-          {hoveredPoint && (() => {
-            const tooltipWidth = 140;
-            const tooltipHeight = 50;
-            const padding = 10;
-            const chartRightBound = 750; // 50 (left padding) + 700 (chart width)
-            
-            // Calculate tooltip X position (keep within bounds)
-            let tooltipX = hoveredPoint.x - (tooltipWidth / 2);
-            if (tooltipX < padding) {
-              tooltipX = padding;
-            } else if (tooltipX + tooltipWidth > chartRightBound - padding) {
-              tooltipX = chartRightBound - tooltipWidth - padding;
-            }
-            
-            // Center of tooltip rectangle (for text alignment)
-            const tooltipCenterX = tooltipX + (tooltipWidth / 2);
-            
-            // Calculate tooltip Y position (above or below point)
-            let tooltipY = hoveredPoint.y - tooltipHeight - 10; // Try above first
-            let textY1 = tooltipY + 18; // Date text position
-            let textY2 = tooltipY + 35; // Value text position
-            
-            // If tooltip would go above the chart, position it below
-            if (tooltipY < padding) {
-              tooltipY = hoveredPoint.y + 15;
-              textY1 = tooltipY + 18;
-              textY2 = tooltipY + 35;
-            }
-            
-            // Ensure tooltip doesn't go below the chart
-            if (tooltipY + tooltipHeight > 200 - padding) {
-              tooltipY = 200 - tooltipHeight - padding;
-              textY1 = tooltipY + 18;
-              textY2 = tooltipY + 35;
-            }
-            
-            return (
-              <g
-                style={{
-                  opacity: isTransitioning ? 0 : 1,
-                  transition: 'opacity 0.2s ease-in-out'
-                }}
-              >
-                {/* Vertical line at hovered point */}
-                <line
-                  x1={hoveredPoint.x}
-                  y1="20"
-                  x2={hoveredPoint.x}
-                  y2="180"
-                  stroke="#10b981"
-                  strokeWidth="1"
-                  strokeDasharray="4,4"
-                  opacity="0.5"
-                />
-                {/* Tooltip background */}
-                <rect
-                  x={tooltipX}
-                  y={tooltipY}
-                  width={tooltipWidth}
-                  height={tooltipHeight}
-                  rx="6"
-                  fill={isDarkMode ? "rgba(30, 41, 59, 0.98)" : "rgba(255, 255, 255, 0.98)"}
-                  stroke="#10b981"
-                  strokeWidth="2"
-                  filter="drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))"
-                />
-                {/* Tooltip text - Date */}
-                <text
-                  x={tooltipCenterX}
-                  y={textY1}
-                  textAnchor="middle"
-                  className={`text-xs font-semibold ${themeClasses.textPrimary}`}
-                  fill="currentColor"
-                >
-                  {formatDateFull(hoveredPoint.data.dateFull)}
-                </text>
-                {/* Tooltip text - Value */}
-                <text
-                  x={tooltipCenterX}
-                  y={textY2}
-                  textAnchor="middle"
-                  className="text-base font-bold"
-                  fill="#10b981"
-                >
-                  {hoveredPoint.value?.toFixed(selectedMetric === 'weight' || selectedMetric === 'body_fat' ? 1 : 0)} {getMetricUnit()}
-                </text>
-              </g>
-            );
-          })()}
-
-          {/* X-axis labels */}
-          {hasData && chartData.length > 0 && chartData.map((d, index) => {
-            if (index % Math.ceil(chartData.length / 6) !== 0 && index !== chartData.length - 1) return null;
-            const x = getChartX(index, chartData.length);
-            return (
-              <text
-                key={index}
-                x={x}
-                y="195"
-                className={`text-xs ${themeClasses.textSecondary}`}
-                fill="currentColor"
-                textAnchor="middle"
-              >
-                {d.date}
-              </text>
-            );
-          })}
-        </svg>
-        </div>
+              </AreaChart>
+            </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="py-8 text-center text-gray-400">No data for selected metric</p>
+          );
+        })()}
       </div>
       )}
 
@@ -2964,11 +2751,14 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
         </div>
       )}
 
-      {/* Simple Line & Area Chart */}
+      {/* Score Components style chart (Recharts AreaChart like ScoringTab) */}
       {!isLandscape && (
-      <div className="relative h-64 w-full overflow-hidden rounded-xl bg-gradient-to-b from-slate-900/40 via-slate-900/10 to-slate-900/40">
+      <div className={`rounded-xl border ${isDarkMode ? 'border-slate-700' : 'border-gray-200'} ${themeClasses.bgCard} p-3 shadow-sm overflow-visible`}>
+        <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+          {language === 'hebrew' ? 'מעקב תזונה' : 'Score Components'}
+        </h3>
         {!hasData && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+          <div className="flex flex-col items-center justify-center py-12">
             <div className="text-4xl mb-3">📊</div>
             <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-4 text-center px-4`}>
               {language === 'hebrew' ? 'אין לך רשומות יומן תזונה' : "You don't have any Food Log entries"}
@@ -2985,265 +2775,54 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
             </button>
           </div>
         )}
-        <div
-          style={{
-            opacity: isTransitioning ? 0.5 : (hasData ? 1 : 0.3),
-            transform: isTransitioning ? 'scale(0.97)' : 'scale(1)',
-            transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-          }}
-        >
-          <svg 
-            className="w-full h-full" 
-            viewBox="0 0 800 200" 
-            preserveAspectRatio="none"
-            onMouseMove={handleChartMouseMove}
-            onMouseLeave={handleChartMouseLeave}
-          >
-            {/* Y-axis labels (right side in Hebrew/RTL) */}
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-              const value = min + (range * ratio);
-              const y = 200 - (ratio * 180);
-              return (
-                <text
-                  key={ratio}
-                  x={isRtl ? '755' : '5'}
-                  y={y + 4}
-                  textAnchor={isRtl ? 'end' : 'start'}
-                  className={`text-xs ${themeClasses.textSecondary}`}
-                  fill="currentColor"
-                >
-                  {Math.round(value).toLocaleString()} {getMetricUnit()}
-                </text>
-              );
-            })}
-
-            {/* Y-axis grid lines */}
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-              const y = 200 - (ratio * 180);
-              return (
-                <line
-                  key={ratio}
-                  x1="50"
-                  y1={y}
-                  x2="760"
-                  y2={y}
-                  stroke={isDarkMode ? 'rgba(148, 163, 184, 0.15)' : 'rgba(148, 163, 184, 0.2)'}
-                  strokeWidth="1"
-                  strokeDasharray="4,6"
+        {hasData && (() => {
+          const rechartsData = chartData
+            .map((d) => ({ date: d.date, dateFull: d.dateFull, value: getMetricValue(d) }))
+            .filter((d) => d.value != null && d.value > 0);
+          const yRange = getYAxisRange();
+          const isRtl = language === 'hebrew';
+          const chartMargin = isRtl
+            ? { top: 4, right: 28, bottom: 2, left: 4 }
+            : { top: 4, left: 28, right: 4, bottom: 2 };
+          const axisEdgeStyle = isRtl ? { marginRight: -40 } : { marginLeft: -40 };
+          return rechartsData.length > 0 ? (
+            <div style={axisEdgeStyle} className="w-full">
+              <ResponsiveContainer width="100%" height={360}>
+              <AreaChart data={rechartsData} margin={chartMargin}>
+                <defs>
+                  <linearGradient id="gradNutrition" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={metricColor} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={metricColor} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={isDarkMode ? 'rgba(148, 163, 184, 0.12)' : '#e5e7eb'}
+                  vertical={false}
                 />
-              );
-            })}
-
-            {/* Average line */}
-            {showAverage && averageValue != null && (() => {
-              const normalizedValue = averageValue - min;
-              const ratio = normalizedValue / range;
-              const y = 180 - (ratio * 160);
-              return (
-                <g>
-                  <line
-                    x1="50"
-                    y1={y}
-                    x2="760"
-                    y2={y}
-                    stroke={metricColor}
-                    strokeWidth="2"
-                    strokeDasharray="6,4"
-                    opacity="0.6"
-                    style={{
-                      opacity: isTransitioning ? 0.3 : 0.6,
-                      transition: 'opacity 0.3s ease-in-out'
-                    }}
-                  />
-                  <text
-                    x={isRtl ? '45' : '765'}
-                    y={y + 4}
-                    textAnchor={isRtl ? 'end' : 'start'}
-                    className={`text-xs font-semibold`}
-                    fill={metricColor}
-                    opacity="0.8"
-                  >
-                    Avg
-                  </text>
-                </g>
-              );
-            })()}
-
-            {/* Chart line + soft area */}
-            {hasData && chartData.length > 1 && (() => {
-              const n = chartData.length;
-              const linePoints = chartData
-                .map((d, index) => {
-                  const value = getMetricValue(d);
-                  if (value == null || value <= 0) return null;
-                  const normalizedValue = value - min;
-                  const ratio = normalizedValue / range;
-                  const x = getChartX(index, n);
-                  const y = 180 - (ratio * 160);
-                  return { x, y };
-                })
-                .filter(p => p !== null);
-
-              if (linePoints.length < 2) return null;
-
-              const points = linePoints.map(p => `${p.x},${p.y}`).join(' ');
-              const areaPath = isRtl
-                ? [`M 760 180`, ...linePoints.map(p => `L ${p.x} ${p.y}`), `L 50 180`, 'Z'].join(' ')
-                : [`M 50 180`, ...linePoints.map(p => `L ${p.x} ${p.y}`), `L 760 180`, 'Z'].join(' ');
-
-              return (
-                <>
-                  <path
-                    d={areaPath}
-                    fill={metricColor}
-                    opacity={isDarkMode ? 0.14 : 0.18}
-                    style={{
-                      transition: 'opacity 0.3s ease-in-out'
-                    }}
-                  />
-                  <polyline
-                    points={points}
-                    fill="none"
-                    stroke={metricColor}
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{
-                      opacity: isTransitioning ? 0.6 : 1,
-                      filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.5))',
-                      transition: 'opacity 0.3s ease-in-out'
-                    }}
-                  />
-                </>
-              );
-            })()}
-
-            {/* Data points (show fewer for cleaner look) */}
-            {hasData && chartData.map((d, index) => {
-              const value = getMetricValue(d);
-              if (value == null || value <= 0) return null;
-
-              const normalizedValue = value - min;
-              const ratio = normalizedValue / range;
-              const x = getChartX(index, chartData.length);
-              const y = 180 - (ratio * 160);
-              
-              const isHovered = hoveredPoint?.index === index;
-              const step = Math.max(1, Math.floor(chartData.length / 80)); // cap visible points
-              const showPoint = isHovered || index % step === 0 || index === chartData.length - 1;
-              if (!showPoint) return null;
-              
-              return (
-                <circle
-                  key={index}
-                  cx={x}
-                  cy={y}
-                  r={isHovered ? 6 : 3}
-                  fill={metricColor}
-                  stroke={isDarkMode ? '#020617' : '#ffffff'}
-                  strokeWidth={isHovered ? 3 : 2}
-                  className="cursor-pointer transition-all duration-200"
-                  onMouseEnter={() => handlePointMouseEnter(d, index, value, x, y)}
-                  onMouseLeave={handlePointMouseLeave}
-                  style={{
-                    opacity: isTransitioning ? 0.6 : 1,
-                    transition: 'opacity 0.3s ease-in-out, r 0.2s ease-in-out'
-                  }}
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} reversed={isRtl} />
+                <YAxis domain={[yRange.min, yRange.max]} tick={{ fontSize: 11 }} orientation={isRtl ? 'right' : 'left'} />
+                <Tooltip
+                  formatter={(value) => [Math.round(value) + ' ' + getMetricUnit(), getMetricLabel()]}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.dateFull ? formatDateFull(payload[0].payload.dateFull) : _}
                 />
-              );
-            })}
-
-            {/* Tooltip */}
-            {hoveredPoint && (() => {
-            const { data, value, x, y } = hoveredPoint;
-            const tooltipWidth = 140;
-            const tooltipHeight = 60;
-            const padding = 10;
-            
-            let tooltipX = x - tooltipWidth / 2;
-            if (tooltipX < padding) tooltipX = padding;
-            if (tooltipX + tooltipWidth > 800 - padding) tooltipX = 800 - tooltipWidth - padding;
-            
-            let tooltipY = y - tooltipHeight - 15;
-            if (tooltipY < padding) tooltipY = y + 25;
-            
-            const tooltipCenterX = tooltipX + tooltipWidth / 2;
-            const textY1 = tooltipY + 18;
-            const textY2 = tooltipY + 35;
-            
-            if (tooltipY + tooltipHeight > 200 - padding) {
-              tooltipY = 200 - tooltipHeight - padding;
-            }
-            
-            return (
-              <g
-                style={{
-                  opacity: isTransitioning ? 0 : 1,
-                  transition: 'opacity 0.2s ease-in-out'
-                }}
-              >
-                <line
-                  x1={hoveredPoint.x}
-                  y1="20"
-                  x2={hoveredPoint.x}
-                  y2="180"
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  name={getMetricLabel()}
                   stroke={metricColor}
-                  strokeWidth="1"
-                  strokeDasharray="4,4"
-                  opacity="0.5"
+                  fill="url(#gradNutrition)"
+                  strokeWidth={2}
+                  animationDuration={1200}
+                  animationEasing="ease-out"
                 />
-                <rect
-                  x={tooltipX}
-                  y={tooltipY}
-                  width={tooltipWidth}
-                  height={tooltipHeight}
-                  rx="6"
-                  fill={isDarkMode ? "rgba(30, 41, 59, 0.98)" : "rgba(255, 255, 255, 0.98)"}
-                  stroke={metricColor}
-                  strokeWidth="2"
-                  filter="drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))"
-                />
-                <text
-                  x={tooltipCenterX}
-                  y={textY1}
-                  textAnchor="middle"
-                  className={`text-xs font-semibold ${themeClasses.textPrimary}`}
-                  fill="currentColor"
-                >
-                  {formatDateFull(data.dateFull)}
-                </text>
-                <text
-                  x={tooltipCenterX}
-                  y={textY2}
-                  textAnchor="middle"
-                  className="text-base font-bold"
-                  fill={metricColor}
-                >
-                  {Math.round(value)} {getMetricUnit()}
-                </text>
-              </g>
-            );
-          })()}
-
-          {/* X-axis labels */}
-          {hasData && chartData.length > 0 && chartData.map((d, index) => {
-            if (index % Math.ceil(chartData.length / 6) !== 0 && index !== chartData.length - 1) return null;
-            const x = getChartX(index, chartData.length);
-            return (
-              <text
-                key={index}
-                x={x}
-                y="195"
-                className={`text-xs ${themeClasses.textSecondary}`}
-                fill="currentColor"
-                textAnchor="middle"
-              >
-                {d.date}
-              </text>
-            );
-          })}
-        </svg>
-        </div>
+              </AreaChart>
+            </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="py-8 text-center text-gray-400">No data for selected metric</p>
+          );
+        })()}
       </div>
       )}
     </div>

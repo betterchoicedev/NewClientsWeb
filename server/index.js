@@ -756,16 +756,20 @@ stripeWebhookHandler = async (req, res) => {
     return res.status(500).send('Webhook secret not configured');
   }
 
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET.trim();
+  const payload = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : req.body;
+
   try {
     event = stripe.webhooks.constructEvent(
-      req.body,
+      payload,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET
+      webhookSecret
     );
 
     console.log('✅ Webhook verified:', event.type, event.id);
   } catch (err) {
     console.error('❌ Webhook signature verification failed:', err.message);
+    console.error('💡 Ensure the signing secret is from the exact webhook endpoint URL in Stripe Dashboard (Developers → Webhooks) and from the same mode (Test vs Live) as the events.');
     console.error('Headers:', req.headers);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
