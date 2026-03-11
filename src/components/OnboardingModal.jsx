@@ -514,11 +514,43 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     return factors[goal] || 1.0;
   };
 
+  // Canonical meal order (chronological) - used to enforce order when selecting multiple meals
+  const MEAL_ORDER_EN = ['Meal', 'Breakfast', 'Morning Snack', 'Brunch', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack', 'Late Dinner', 'Post-Workout Meal', 'Midnight Snack'];
+
   // Get all available meal names
   const getAllMealNames = (isHebrew = false) => {
     const mealNamesEn = ['Meal', 'Breakfast', 'Morning Snack', 'Brunch', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack', 'Late Dinner', 'Post-Workout Meal', 'Midnight Snack'];
     const mealNamesHe = ['ארוחה', 'ארוחת בוקר', 'חטיף בוקר', 'בראנץ\'', 'ארוחת צהריים', 'חטיף צהריים', 'ארוחת ערב', 'חטיף ערב', 'ארוחת ערב מאוחרת', 'ארוחה לאחר אימון', 'חטיף לילה'];
     return isHebrew ? mealNamesHe : mealNamesEn;
+  };
+
+  // Get order index of a meal name (0 = first in day). Works with both EN and HE (converts via English).
+  const getMealOrderIndex = (mealName) => {
+    const en = convertMealNameToEnglish(mealName);
+    const idx = MEAL_ORDER_EN.indexOf(en);
+    return idx === -1 ? 0 : idx;
+  };
+
+  // Get meal names allowed for a given slot: chronological order (no Breakfast after Brunch) and no duplicate meal names across slots.
+  const getAllowedMealNamesForSlot = (slotIndex, currentMealNames, isHebrew = false) => {
+    const allNames = getAllMealNames(isHebrew);
+    let minOrder = 0;
+    for (let i = 0; i < slotIndex; i++) {
+      const name = currentMealNames[i];
+      if (name) {
+        const order = getMealOrderIndex(name);
+        minOrder = Math.max(minOrder, order);
+      }
+    }
+    const usedEn = new Set();
+    for (let i = 0; i < currentMealNames.length; i++) {
+      if (i !== slotIndex && currentMealNames[i]) {
+        usedEn.add(convertMealNameToEnglish(currentMealNames[i]));
+      }
+    }
+    return allNames.filter(
+      (name) => getMealOrderIndex(name) >= minOrder && !usedEn.has(convertMealNameToEnglish(name))
+    );
   };
 
   // Convert Hebrew meal name to English (always save in English)
@@ -844,6 +876,27 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       loadExistingData();
     }
   }, [isOpen, user]);
+
+  // Normalize meal_names so each slot is chronologically valid (e.g. no Breakfast after Brunch)
+  useEffect(() => {
+    const numMeals = parseInt(formData.number_of_meals) || 0;
+    if (numMeals === 0) return;
+    const names = formData.meal_names || [];
+    const isHebrew = language === 'hebrew';
+    let changed = false;
+    const fixed = [...names];
+    for (let i = 0; i < numMeals; i++) {
+      const allowed = getAllowedMealNamesForSlot(i, fixed, isHebrew);
+      const current = fixed[i];
+      if (current && !allowed.includes(current)) {
+        fixed[i] = allowed[0] ?? getAllMealNames(isHebrew)[0];
+        changed = true;
+      }
+    }
+    if (changed) {
+      setFormData(prev => ({ ...prev, meal_names: fixed }));
+    }
+  }, [formData.number_of_meals, formData.meal_names, language]);
 
   // Detect mobile device
   useEffect(() => {
@@ -1395,6 +1448,28 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     setFormData(prev => {
       const newMealNames = [...prev.meal_names];
       newMealNames[index] = value;
+      const isHebrew = language === 'hebrew';
+      const valueEn = convertMealNameToEnglish(value);
+      // No duplicate meal names: if another slot had this meal, reset it to first allowed for that slot
+      for (let i = 0; i < newMealNames.length; i++) {
+        if (i !== index && newMealNames[i] && convertMealNameToEnglish(newMealNames[i]) === valueEn) {
+          const allowed = getAllowedMealNamesForSlot(i, newMealNames, isHebrew);
+          newMealNames[i] = allowed[0] ?? getAllMealNames(isHebrew)[0];
+        }
+      }
+      // Cascade: ensure later slots are not earlier in meal order (e.g. no Breakfast after Brunch)
+      for (let i = index + 1; i < newMealNames.length; i++) {
+        const name = newMealNames[i];
+        if (!name) continue;
+        let minOrder = 0;
+        for (let j = 0; j < i; j++) {
+          if (newMealNames[j]) minOrder = Math.max(minOrder, getMealOrderIndex(newMealNames[j]));
+        }
+        if (getMealOrderIndex(name) < minOrder) {
+          const allowed = getAllowedMealNamesForSlot(i, newMealNames, isHebrew);
+          newMealNames[i] = allowed[0] ?? getAllMealNames(isHebrew)[minOrder];
+        }
+      }
       return {
         ...prev,
         meal_names: newMealNames
@@ -4301,8 +4376,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               {Array.from({ length: parseInt(formData.number_of_meals) }).map((_, index) => {
                 const numMeals = parseInt(formData.number_of_meals);
                 const defaultMealName = getMealName(numMeals, index, language === 'hebrew');
+                const isHebrew = language === 'hebrew';
+                const allowedMealNames = getAllowedMealNamesForSlot(index, formData.meal_names || [], isHebrew);
                 const currentMealName = formData.meal_names[index] || defaultMealName;
-                const allMealNames = getAllMealNames(language === 'hebrew');
+                const displayValue = allowedMealNames.includes(currentMealName) ? currentMealName : (allowedMealNames[0] ?? defaultMealName);
                 
                 return (
                   <div key={index} className="group">
@@ -4311,11 +4388,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                         {language === 'hebrew' ? 'שם ארוחה:' : 'Meal Name:'}
                       </label>
                       <select
-                        value={currentMealName}
+                        value={displayValue}
                         onChange={(e) => handleMealNameChange(index, e.target.value)}
                         className={`flex-1 px-2 py-1.5 text-xs sm:text-sm ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
                       >
-                        {allMealNames.map((name) => (
+                        {allowedMealNames.map((name) => (
                           <option key={name} value={name}>{name}</option>
                         ))}
                       </select>
