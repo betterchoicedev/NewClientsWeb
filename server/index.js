@@ -2922,11 +2922,12 @@ app.get('/api/food-logs', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get food logs
+    // Get food logs (ordered by log_date then created_at so display is by log date)
     let query = chatSupabase
       .from('food_logs')
       .select('*')
       .eq('user_id', userData.id)
+      .order('log_date', { ascending: false })
       .order('created_at', { ascending: false });
 
     if (date) {

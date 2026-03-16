@@ -2388,12 +2388,12 @@ const FoodLogProgressComponent = ({ userCode, themeClasses, language, isDarkMode
       : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   };
 
-  // Aggregate food logs by date
+  // Aggregate food logs by date (use log_date only so chart reflects the day the food was logged)
   const aggregateByDate = (logs) => {
     const dailyTotals = {};
     
     logs.forEach(log => {
-      const date = log.log_date || log.created_at?.split('T')[0];
+      const date = log.log_date;
       if (!date) return;
       
       if (!dailyTotals[date]) {
@@ -8442,7 +8442,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
 
       // Find the most recent food log entry for this meal category and date
       const existingLogs = groupedLogs[selectedMealForIngredient] || [];
-      const mostRecentLog = existingLogs.length > 0 ? existingLogs[0] : null; // Most recent is first (ordered by created_at desc)
+      const mostRecentLog = existingLogs.length > 0 ? existingLogs[0] : null; // First by log_date then created_at desc
 
       if (mostRecentLog) {
         // Add ingredient to existing log
@@ -8748,9 +8748,11 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
     return acc;
   }, {});
 
-  // Group all food logs by meal_label
-  // meal_label will have first letter capitalized, exactly as in meal plan
-  foodLogs.forEach(log => {
+  // Group food logs by meal_label; only include logs for the selected date by log_date
+  const logsForSelectedDate = (foodLogs || []).filter(
+    (log) => (log.log_date || '').split('T')[0] === selectedDate
+  );
+  logsForSelectedDate.forEach(log => {
     const logMealLabel = (log.meal_label || '').trim();
     const logMealLabelLower = logMealLabel.toLowerCase();
     
