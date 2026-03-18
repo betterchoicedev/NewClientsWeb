@@ -2484,6 +2484,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         formattedPhone = clientData.phone; // Already normalized and formatted with country code
       }
       
+      // BMR (Basal Metabolic Rate) for base_daily_total_calories in chat_users
+      const weightKg = formData.weight_kg ? parseFloat(formData.weight_kg) : null;
+      const heightCm = formData.height_cm ? parseFloat(formData.height_cm) : null;
+      const bmr = (age != null && formData.gender && weightKg && heightCm)
+        ? calculateBMR(age, formData.gender, weightKg, heightCm)
+        : null;
+      const baseDailyTotalCalories = bmr != null ? Math.round(bmr) : undefined;
+
       const chatUserData = {
         language: formData.language,
         user_language: formData.language,
@@ -2493,8 +2501,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         date_of_birth: allOnboardingFields.includes('date_of_birth') && formData.date_of_birth ? convertDDMMYYYYToYYYYMMDD(formData.date_of_birth) : undefined,
         age: (allOnboardingFields.includes('date_of_birth') && age !== null && age !== undefined) ? age : undefined,
         gender: formData.gender,
-        weight_kg: formData.weight_kg ? parseFloat(formData.weight_kg) : null,
-        height_cm: formData.height_cm ? parseFloat(formData.height_cm) : null,
+        weight_kg: weightKg,
+        height_cm: heightCm,
         food_allergies: formData.food_allergies || null,
         food_limitations: formData.food_limitations || null,
         medical_conditions: allOnboardingFields.includes('medical_conditions') ? (formData.medical_conditions || null) : undefined,
@@ -2504,6 +2512,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         last_meal_time: allOnboardingFields.includes('last_meal_time') && formData.last_meal_time ? formData.last_meal_time : undefined,
         number_of_meals: allOnboardingFields.includes('number_of_meals') && formData.number_of_meals ? parseInt(formData.number_of_meals) : undefined,
         meal_plan_structure: allOnboardingFields.includes('meal_descriptions') && mealPlanStructure ? mealPlanStructure : undefined,
+        base_daily_total_calories: baseDailyTotalCalories,
         daily_target_total_calories: dailyCalories || undefined,
         macros: macros || undefined,
         client_preference: allOnboardingFields.includes('client_preference') && formData.client_preference
