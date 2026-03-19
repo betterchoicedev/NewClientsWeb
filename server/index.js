@@ -2087,6 +2087,7 @@ async function sendWhatsAppWelcomeByUserId(userId) {
 
   const phone = client.phone;
   const language = client.user_language || 'en';
+  console.log('📱 sendWhatsAppWelcomeByUserId: attempting to send to number:', phone, 'user_id:', userId);
   const waToken = process.env.WA_TOKEN || process.env.WHATSAPP_TOKEN;
   if (!waToken) {
     console.error('❌ WhatsApp token not configured');
@@ -2115,9 +2116,11 @@ async function sendWhatsAppWelcomeByUserId(userId) {
   });
   const data = await res.json();
   if (!res.ok) {
-    console.error('❌ WhatsApp API error:', data);
+    console.error('❌ WhatsApp welcome failed — to:', phone, 'user_id:', userId, 'API error:', data);
     return { success: false, status: res.status, message: data?.error?.message || 'Failed to send' };
   }
+  const welcomeMessageId = data?.messages?.[0]?.id;
+  console.log('✅ WhatsApp welcome actually sent — to:', phone, 'user_id:', userId, 'message_id:', welcomeMessageId || '(none)');
 
   // 2) Send pin-the-chat message (same language)
   const pinTemplateName = languageCode === 'he' ? 'pin_the_chat_hebrew' : 'pin_the_chat';
@@ -2133,13 +2136,13 @@ async function sendWhatsAppWelcomeByUserId(userId) {
   });
   const dataPin = await resPin.json();
   if (!resPin.ok) {
-    console.error('❌ WhatsApp pin-the-chat API error:', dataPin);
+    console.error('❌ WhatsApp pin-the-chat failed — to:', phone, 'user_id:', userId, 'API error:', dataPin);
     // Welcome was sent; still return success but log the pin failure
   } else {
-    console.log('✅ WhatsApp pin-the-chat sent by user_id:', userId);
+    console.log('✅ WhatsApp pin-the-chat sent — to:', phone, 'user_id:', userId);
   }
 
-  console.log('✅ WhatsApp welcome sent by user_id:', userId);
+  console.log('✅ WhatsApp welcome flow complete — message sent to number:', phone, 'user_id:', userId);
   return { success: true };
 }
 
