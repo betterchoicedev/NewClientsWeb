@@ -3075,13 +3075,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           ? (language === 'hebrew' ? 'מתחברים...' : 'Connecting...')
           : (language === 'hebrew' ? 'אני בפנים, בואו נתחיל!' : 'I\'m in, let\'s start!')}
       </button>
-      
-      <button
-        onClick={sendWhatsAppAndClose}
-        className={`w-full py-3 px-6 rounded-xl font-medium ${themeClasses.textSecondary} opacity-60 hover:opacity-100 transition-all text-sm`}
-      >
-        {language === 'hebrew' ? 'דלג לעת עתה' : 'Skip for now'}
-      </button>
     </div>
   </div>
 </div>
@@ -3146,6 +3139,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                   : 'We have a few quick questions. It won\'t take long!'}
               </p>
             </div>
+
+            {/* Red note: do not leave until onboarding is complete */}
+            <p className="font-semibold text-sm sm:text-base text-red-500 dark:text-red-400 text-center mb-4 flex items-center justify-center gap-2 flex-wrap">
+              <span aria-hidden>⚠️</span>
+              {language === 'hebrew'
+                ? 'אנא אל תעזבו/תסגרו את האתר עד שתסיימו את כל תהליך ההרשמה'
+                : 'Please do not leave or exit the site until you finish the entire onboarding'}
+            </p>
             
             {/* Get Started Button */}
             <button

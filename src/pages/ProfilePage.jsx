@@ -10164,9 +10164,9 @@ const PricingTab = ({ themeClasses, user, language }) => {
         <div className={`mb-6 animate-slideInUp ${themeClasses.bgCard} border ${themeClasses.borderPrimary} rounded-xl px-4 py-3 shadow-sm`} style={{ animationDelay: '0.35s' }}>
           <p className={`${themeClasses.textSecondary} text-xs sm:text-sm ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
             {language === 'hebrew' ? (
-              <>מתעדכן רק פעם ביום (בימי חול סביב 15:30–16:00, ובימי שישי סביב 12:30). אין עדכונים בשבת ובראשון. שער המרה לדולר: בנק ישראל.</>
+              <>השער המרה לדולר מתעדכן רק פעם ביום (בימי חול סביב 15:30–16:00, ובימי שישי סביב 12:30). אין עדכונים בשבת ובראשון. שער המרה לדולר: בנק ישראל.</>
             ) : (
-              <>Exchange rate to USD from Bank of Israel. Updated once a day (weekdays around 15:30–16:00, Fridays around 12:30). No updates on Saturday and Sunday.</>
+              <>The exchange rate to USD is updated once a day (weekdays around 15:30–16:00, Fridays around 12:30). No updates on Saturday and Sunday. Exchange rate to USD from Bank of Israel.</>
             )}
           </p>
         </div>
