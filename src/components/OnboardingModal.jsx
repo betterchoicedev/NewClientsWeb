@@ -2786,23 +2786,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         });
       }
       
-      console.log('✅ Onboarding complete — showing support offer then WhatsApp.');
+      console.log('✅ Onboarding complete — showing support offer. WhatsApp welcome will be sent after payment.');
       
-      // Send WhatsApp welcome message via /api/whatsapp/send-welcome-message when we have phone
-      const apiUrlForWelcome = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-      if (formattedPhone && !welcomeMessageSent) {
-        fetch(`${apiUrlForWelcome}/api/whatsapp/send-welcome-message`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: formattedPhone,
-            language: language === 'hebrew' ? 'he' : 'en'
-          })
-        })
-          .then((r) => r.json())
-          .then((d) => { if (!d.error) { setWelcomeMessageSent(true); console.log('✅ WhatsApp welcome sent (onboarding complete)'); } })
-          .catch((e) => console.warn('WhatsApp send-welcome-message (onboarding complete) error:', e));
-      }
+      // WhatsApp welcome message is sent only after payment (via backend Stripe webhook for onboarding upsell)
       
       setLoading(false);
       setShowUsageBasedOffer(true);
