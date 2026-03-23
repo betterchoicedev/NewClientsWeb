@@ -24,6 +24,89 @@ import AddIngredientModal from '../components/AddIngredientModal';
 import IngredientPortionModal from '../components/IngredientPortionModal';
 import { translateMenu } from '../services/translateService';
 
+const allergiesOptions = [
+  { value: 'peanuts', labelHe: 'בוטנים', labelEn: 'Peanuts' },
+  { value: 'tree_nuts', labelHe: 'אגוזי עץ', labelEn: 'Tree Nuts' },
+  { value: 'milk', labelHe: 'חלב', labelEn: 'Milk/Dairy' },
+  { value: 'eggs', labelHe: 'ביצים', labelEn: 'Eggs' },
+  { value: 'wheat', labelHe: 'חיטה', labelEn: 'Wheat' },
+  { value: 'soy', labelHe: 'סויה', labelEn: 'Soy' },
+  { value: 'fish', labelHe: 'דגים', labelEn: 'Fish' },
+  { value: 'seafood', labelHe: 'פירות ים', labelEn: 'Seafood' }
+];
+
+const limitationsOptions = [
+  { value: 'vegetarian', labelHe: 'צמחוני', labelEn: 'Vegetarian' },
+  { value: 'vegan', labelHe: 'טבעוני', labelEn: 'Vegan' },
+  { value: 'pescatarian', labelHe: 'פסקטריאני', labelEn: 'Pescatarian' },
+  { value: 'kosher', labelHe: 'כשר', labelEn: 'Kosher' },
+  { value: 'halal', labelHe: 'חלאל', labelEn: 'Halal' },
+  { value: 'gluten_free', labelHe: 'ללא גלוטן', labelEn: 'Gluten-free' },
+  { value: 'dairy_free', labelHe: 'ללא חלב', labelEn: 'Dairy-free' }
+];
+
+const otherOption = { value: 'other', labelHe: 'אחר', labelEn: 'Other' };
+
+const allergiesOptionsWithOther = [...allergiesOptions, otherOption];
+const limitationsOptionsWithOther = [...limitationsOptions, otherOption];
+
+const ALLERGY_VALUE_SET = new Set(allergiesOptions.map((o) => o.value));
+const LIMITATION_VALUE_SET = new Set(limitationsOptions.map((o) => o.value));
+
+/** Parse comma-separated food_allergies / food_limitations (values + optional Other: free text) */
+const parseMultiSelectField = (stored, knownValueSet, optionsList) => {
+  if (!stored || typeof stored !== 'string' || !stored.trim()) {
+    return { selected: [], otherText: '' };
+  }
+  let text = stored.trim();
+  let otherText = '';
+  const otherPrefix = text.match(/\b(?:Other|אחר)\s*:\s*(.+)$/is);
+  if (otherPrefix) {
+    otherText = otherPrefix[1].trim();
+    text = text.slice(0, otherPrefix.index).replace(/,\s*$/, '').trim();
+  }
+  const parts = text.split(',').map((p) => p.trim()).filter(Boolean);
+  const selected = [];
+  for (const part of parts) {
+    if (knownValueSet.has(part)) {
+      selected.push(part);
+      continue;
+    }
+    if (part === 'other') {
+      if (!selected.includes('other')) selected.push('other');
+      continue;
+    }
+    const opt = optionsList.find(
+      (o) =>
+        o.value === part ||
+        o.labelEn.toLowerCase() === part.toLowerCase() ||
+        o.labelHe === part
+    );
+    if (opt) {
+      if (!selected.includes(opt.value)) selected.push(opt.value);
+      continue;
+    }
+    if (!otherText) otherText = part;
+    else otherText = `${otherText}, ${part}`;
+    if (!selected.includes('other')) selected.push('other');
+  }
+  if (otherText && !selected.includes('other')) selected.push('other');
+  return { selected, otherText };
+};
+
+/** Serialize selected values + optional other text (matches onboarding + supports commas in "Other" via prefix) */
+const serializeMultiSelectField = (selected, otherText, knownValueSet) => {
+  const parts = selected.filter((v) => v !== 'other' && knownValueSet.has(v));
+  if (selected.includes('other')) {
+    if (otherText.trim()) {
+      parts.push(`Other: ${otherText.trim()}`);
+    } else {
+      parts.push('other');
+    }
+  }
+  return parts.join(', ');
+};
+
 // Function to get training plan from training_plans table
 const getTrainingPlan = async (userCode) => {
   try {
@@ -166,6 +249,7 @@ const ProfilePage = () => {
     gender: '',
     dietaryPreferences: '',
     foodAllergies: '',
+    foodLimitations: '',
     medicalConditions: '',
     userCode: '',
     region: '',
@@ -470,10 +554,12 @@ const ProfilePage = () => {
             ? (chatUserData.client_preference.dietary_preferences || chatUserData.client_preference || '')
             : (chatUserData.client_preference || ''),
           foodAllergies: chatUserData.food_allergies || '',
+          foodLimitations: chatUserData.food_limitations || '',
           medicalConditions: chatUserData.medical_conditions || ''
         } : {
           dietaryPreferences: data?.dietary_preferences || '',
           foodAllergies: data?.food_allergies || '',
+          foodLimitations: data?.food_limitations || '',
           medicalConditions: data?.medical_conditions || ''
         };
         
@@ -498,6 +584,7 @@ const ProfilePage = () => {
           gender: (chatUserData?.gender || data?.gender) || '',
           dietaryPreferences: healthData.dietaryPreferences,
           foodAllergies: healthData.foodAllergies,
+          foodLimitations: healthData.foodLimitations,
           medicalConditions: healthData.medicalConditions,
           userCode: data?.user_code || prev.userCode || '',
           region: (chatUserData?.region || data?.region) || '',
@@ -595,6 +682,7 @@ const ProfilePage = () => {
         gender: profileData.gender || null,
         dietary_preferences: profileData.dietaryPreferences?.trim() || null,
         food_allergies: profileData.foodAllergies?.trim() || null,
+        food_limitations: profileData.foodLimitations?.trim() || null,
         medical_conditions: profileData.medicalConditions?.trim() || null,
         user_code: profileData.userCode?.trim() || null,
         region: profileData.region?.trim() || null,
@@ -658,6 +746,7 @@ const ProfilePage = () => {
               gender: dataToSave.gender,
               date_of_birth: dataToSave.birth_date,
               food_allergies: dataToSave.food_allergies, // text field
+              food_limitations: dataToSave.food_limitations, // text field
               client_preference: dataToSave.dietary_preferences || null, // jsonb field - save value directly
               medical_conditions: dataToSave.medical_conditions, // text field
               language: dataToSave.user_language, // Map user_language to language
@@ -2840,6 +2929,30 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   const fileInputRef = useRef(null);
   const imageRef = useRef(null);
   const containerRef = useRef(null);
+  const isHebrew = language === 'hebrew';
+
+  const { selected: selectedAllergies, otherText: allergiesOtherText } = parseMultiSelectField(
+    profileData.foodAllergies,
+    ALLERGY_VALUE_SET,
+    allergiesOptions
+  );
+  const { selected: selectedLimitations, otherText: limitationsOtherText } = parseMultiSelectField(
+    profileData.foodLimitations,
+    LIMITATION_VALUE_SET,
+    limitationsOptions
+  );
+
+  const toggleMultiValueField = (field, currentSelected, otherText, value, knownSet) => {
+    const next = currentSelected.includes(value)
+      ? currentSelected.filter((item) => item !== value)
+      : [...currentSelected, value];
+    const nextOther = next.includes('other') ? otherText : '';
+    onInputChange(field, serializeMultiSelectField(next, nextOther, knownSet));
+  };
+
+  const handleMultiSelectOtherTextChange = (field, currentSelected, text, knownSet) => {
+    onInputChange(field, serializeMultiSelectField(currentSelected, text, knownSet));
+  };
 
   // Helper function to check if a field should be shown (if onboarding not completed, only show non-null fields)
   const shouldShowField = (fieldValue) => {
@@ -3600,16 +3713,179 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
             </div>
 
             <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-3`}>
+              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-1`}>
                 {language === 'hebrew' ? 'אלרגיות למזון' : 'Food Allergies'}
               </label>
-              <textarea
-                value={profileData.foodAllergies}
-                onChange={(e) => onInputChange('foodAllergies', e.target.value)}
-                rows={3}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
-                placeholder={language === 'hebrew' ? 'לדוגמה: אגוזים, פירות ים, חלב, סויה...' : 'e.g., Nuts, Shellfish, Dairy, Soy...'}
-              />
+              <p className={`${themeClasses.textMuted} text-xs mb-3`}>
+                {isHebrew ? 'ניתן לבחור מספר אפשרויות' : 'Select all that apply'}
+              </p>
+              <div
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-200 dark:focus-within:ring-emerald-800`}
+              >
+                <div className="flex flex-wrap gap-2">
+                  {allergiesOptionsWithOther.map((option) => {
+                    const isSelected = selectedAllergies.includes(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        onClick={() =>
+                          toggleMultiValueField(
+                            'foodAllergies',
+                            selectedAllergies,
+                            allergiesOtherText,
+                            option.value,
+                            ALLERGY_VALUE_SET
+                          )
+                        }
+                        className={`
+                          group inline-flex items-center gap-2 min-h-[38px] px-3 py-1.5 rounded-full text-sm font-medium
+                          border-2 transition-all
+                          focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent dark:focus-visible:ring-offset-slate-900
+                          ${isHebrew ? 'flex-row-reverse' : ''}
+                          ${
+                            isSelected
+                              ? `border-emerald-500 bg-emerald-500/10 ${themeClasses.textPrimary}`
+                              : `border-slate-300/60 dark:border-slate-600/80 bg-transparent ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                          }
+                        `}
+                      >
+                        <span
+                          className={`
+                            flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors
+                            ${
+                              isSelected
+                                ? 'border-emerald-600 bg-emerald-500 text-white dark:border-emerald-400'
+                                : 'border-slate-400/70 dark:border-slate-500 bg-transparent'
+                            }
+                          `}
+                          aria-hidden
+                        >
+                          {isSelected ? (
+                            <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : null}
+                        </span>
+                        <span className="whitespace-nowrap">{isHebrew ? option.labelHe : option.labelEn}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedAllergies.includes('other') && (
+                  <div className="mt-3">
+                    <label className={`${themeClasses.textMuted} block text-xs font-medium mb-2`}>
+                      {isHebrew ? 'פרטו (אחר)' : 'Please specify (other)'}
+                    </label>
+                    <textarea
+                      value={allergiesOtherText}
+                      onChange={(e) =>
+                        handleMultiSelectOtherTextChange(
+                          'foodAllergies',
+                          selectedAllergies,
+                          e.target.value,
+                          ALLERGY_VALUE_SET
+                        )
+                      }
+                      rows={2}
+                      className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
+                      placeholder={
+                        isHebrew ? 'תארו אלרגיות נוספות...' : 'Describe any additional allergies...'
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-1`}>
+                {language === 'hebrew' ? 'מגבלות תזונתיות' : 'Food Limitations'}
+              </label>
+              <p className={`${themeClasses.textMuted} text-xs mb-3`}>
+                {isHebrew ? 'ניתן לבחור מספר אפשרויות' : 'Select all that apply'}
+              </p>
+              <div
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-200 dark:focus-within:ring-emerald-800`}
+              >
+                <div className="flex flex-wrap gap-2">
+                  {limitationsOptionsWithOther.map((option) => {
+                    const isSelected = selectedLimitations.includes(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        onClick={() =>
+                          toggleMultiValueField(
+                            'foodLimitations',
+                            selectedLimitations,
+                            limitationsOtherText,
+                            option.value,
+                            LIMITATION_VALUE_SET
+                          )
+                        }
+                        className={`
+                          group inline-flex items-center gap-2 min-h-[38px] px-3 py-1.5 rounded-full text-sm font-medium
+                          border-2 transition-all
+                          focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent dark:focus-visible:ring-offset-slate-900
+                          ${isHebrew ? 'flex-row-reverse' : ''}
+                          ${
+                            isSelected
+                              ? `border-emerald-500 bg-emerald-500/10 ${themeClasses.textPrimary}`
+                              : `border-slate-300/60 dark:border-slate-600/80 bg-transparent ${themeClasses.textPrimary} hover:border-emerald-500/50`
+                          }
+                        `}
+                      >
+                        <span
+                          className={`
+                            flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors
+                            ${
+                              isSelected
+                                ? 'border-emerald-600 bg-emerald-500 text-white dark:border-emerald-400'
+                                : 'border-slate-400/70 dark:border-slate-500 bg-transparent'
+                            }
+                          `}
+                          aria-hidden
+                        >
+                          {isSelected ? (
+                            <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : null}
+                        </span>
+                        <span className="whitespace-nowrap">{isHebrew ? option.labelHe : option.labelEn}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedLimitations.includes('other') && (
+                  <div className="mt-3">
+                    <label className={`${themeClasses.textMuted} block text-xs font-medium mb-2`}>
+                      {isHebrew ? 'פרטו (אחר)' : 'Please specify (other)'}
+                    </label>
+                    <textarea
+                      value={limitationsOtherText}
+                      onChange={(e) =>
+                        handleMultiSelectOtherTextChange(
+                          'foodLimitations',
+                          selectedLimitations,
+                          e.target.value,
+                          LIMITATION_VALUE_SET
+                        )
+                      }
+                      rows={2}
+                      className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
+                      placeholder={
+                        isHebrew ? 'תארו מגבלות נוספות...' : 'Describe any additional limitations...'
+                      }
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
