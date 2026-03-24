@@ -47,6 +47,28 @@ const PORT = normalizePort(
   '8080'
 );
 
+const DIGITAL_ONLY_PRODUCT_ID = 'prod_TrcVkwBC0wmqKp';
+const DIGITAL_ONLY_PRICE_ID = 'price_1SyHX0HIeYfvCylDZyb1Lb3L';
+const DIGITAL_ONLY_BASE_AMOUNT_USD = 48;
+
+function isDigitalOnlyPlan(productId, priceId) {
+  return productId === DIGITAL_ONLY_PRODUCT_ID || priceId === DIGITAL_ONLY_PRICE_ID;
+}
+
+function getDigitalOnlyAmount(subscription) {
+  const coupon = subscription?.discount?.coupon;
+  let amount = DIGITAL_ONLY_BASE_AMOUNT_USD;
+
+  if (coupon?.percent_off != null) {
+    amount = amount * (1 - (coupon.percent_off / 100));
+  } else if (coupon?.amount_off != null) {
+    // Stripe amount_off is in minor currency units (USD cents for Digital Only).
+    amount = amount - (coupon.amount_off / 100);
+  }
+
+  return Number(Math.max(0, amount).toFixed(2));
+}
+
 // Middleware - Temporary permissive CORS for debugging
 app.use(cors({
   origin: true, // Allow all origins temporarily for debugging
@@ -217,7 +239,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
         else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
         else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-        else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SyHX0HIeYfvCylDZyb1Lb3L') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+        else if (isDigitalOnlyPlan(productId, priceId)) subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
         
         // Determine commitment period based on exact price ID mapping
         let commitmentMonths = null; // Default no commitment 
@@ -258,6 +280,10 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
           canCancel = new Date() >= commitmentEndDate; // Can only cancel after commitment period
         }
         
+        const finalAmount = isDigitalOnlyPlan(productId, priceId)
+          ? getDigitalOnlyAmount(subscription)
+          : amount;
+
         const subscriptionData = {
           user_id: customerId,
           stripe_customer_id: subscription.customer,
@@ -269,7 +295,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
           current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
           current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
           cancel_at_period_end: subscription.cancel_at_period_end || false,
-          amount_total: amount,
+          amount_total: finalAmount,
           currency: currency,
           commitment_months: commitmentMonths,
           commitment_end_date: commitmentEndDate ? commitmentEndDate.toISOString() : null,
@@ -384,8 +410,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
     console.log('Creating checkout session for price:', priceId, 'mode:', mode);
 
     // Metered/usage-based prices must not have quantity; other prices need quantity (use 1)
-    const METERED_PRICE_ID = 'price_1SyHX0HIeYfvCylDZyb1Lb3L'; // digital_only
-    const lineItem = priceId === METERED_PRICE_ID
+    const lineItem = priceId === DIGITAL_ONLY_PRICE_ID
       ? { price: priceId }
       : { price: priceId, quantity: 1 };
 
@@ -1068,7 +1093,7 @@ async function handleSubscriptionCreated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SyHX0HIeYfvCylDZyb1Lb3L') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+    else if (isDigitalOnlyPlan(productId, priceId)) subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Determine commitment period based on exact price ID mapping
     let commitmentMonths = null; // Default no commitment
@@ -1123,6 +1148,10 @@ async function handleSubscriptionCreated(subscription) {
       }
     }
     
+    const finalAmount = isDigitalOnlyPlan(productId, priceId)
+      ? getDigitalOnlyAmount(subscription)
+      : amount;
+
     const subscriptionData = {
       user_id: userId,
       stripe_customer_id: subscription.customer,
@@ -1134,7 +1163,7 @@ async function handleSubscriptionCreated(subscription) {
       current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
       current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
       cancel_at_period_end: subscription.cancel_at_period_end || false,
-      amount_total: amount,
+      amount_total: finalAmount,
       currency: currency,
       commitment_months: commitmentMonths,
       commitment_end_date: commitmentEndDate ? commitmentEndDate.toISOString() : null,
@@ -1189,7 +1218,7 @@ async function handleSubscriptionCreated(subscription) {
       }
 
       // Onboarding upsell (usage-based): prod_TrcVkwBC0wmqKp / price_1SyHX0HIeYfvCylDZyb1Lb3L — send WhatsApp welcome
-      if (priceId === 'price_1SyHX0HIeYfvCylDZyb1Lb3L' && userId) {
+      if (priceId === DIGITAL_ONLY_PRICE_ID && userId) {
         try {
           const r = await sendWhatsAppWelcomeByUserId(userId);
           if (r.success) console.log('📱 WhatsApp welcome sent (onboarding upsell) for user:', userId);
@@ -1267,7 +1296,7 @@ async function handleSubscriptionUpdated(subscription) {
     else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
     else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
     else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-    else if (productId === 'prod_TrcVkwBC0wmqKp' || priceId === 'price_1SyHX0HIeYfvCylDZyb1Lb3L') subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
+    else if (isDigitalOnlyPlan(productId, priceId)) subscriptionType = 'digital_only'; // Onboarding upsell (usage-based)
     
     // Calculate commitment end date - use stored value if exists, otherwise calculate from start date
     let commitmentEndDate = null;
@@ -1286,6 +1315,11 @@ async function handleSubscriptionUpdated(subscription) {
       canCancel = now >= commitmentEndDate; // Can only cancel after commitment period
     }
     
+    const amount = price?.unit_amount / 100;
+    const finalAmount = isDigitalOnlyPlan(productId, priceId)
+      ? getDigitalOnlyAmount(subscription)
+      : amount;
+
     // Update subscription record
     const finalCancelAtPeriodEnd = subscription.cancel_at_period_end || false;
     
@@ -1295,6 +1329,7 @@ async function handleSubscriptionUpdated(subscription) {
       current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
       current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
       cancel_at_period_end: finalCancelAtPeriodEnd,
+      amount_total: finalAmount,
       commitment_months: commitmentMonths,
       commitment_end_date: commitmentEndDate ? commitmentEndDate.toISOString() : null,
       can_cancel: canCancel,
