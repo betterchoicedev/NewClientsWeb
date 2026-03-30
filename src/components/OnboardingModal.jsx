@@ -4,6 +4,9 @@ import { useTheme } from '../context/ThemeContext';
 import { normalizePhoneForDatabase, createClientRecord } from '../supabase/auth';
 import { translateMenu } from '../services/translateService';
 
+const CREATE_MEAL_PLAN_API_URL =
+  'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
+
 const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const { language, t, direction, toggleLanguage, setLanguage, setDirection } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();
@@ -2093,14 +2096,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
   };
 
-  // Generate meal plan automatically after onboarding
-  const generateMealPlan = async (userCode, mealPlanStructure, dailyCalories, macros, clientName, userLanguage) => {
-    // Check if we have required data
-    if (!userCode || !mealPlanStructure || mealPlanStructure.length === 0 || !dailyCalories) {
+  // Generate meal plan automatically after onboarding (backend creates plan from user_code only)
+  const generateMealPlan = async (userCode, dailyCalories, macros, clientName, userLanguage) => {
+    if (!userCode || !dailyCalories) {
       console.log('⚠️ Missing required data for meal plan generation:', {
         userCode: !!userCode,
-        mealPlanStructure: !!mealPlanStructure,
-        mealPlanStructureLength: mealPlanStructure?.length,
         dailyCalories: !!dailyCalories
       });
       return { success: false, error: 'Missing required data for meal plan generation' };
@@ -2112,50 +2112,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       setMealPlanGenerationStep(userLanguage === 'hebrew' ? 'מתחיל...' : 'Initializing...');
 
       console.log('🧠 Auto-generating meal plan for user:', userCode);
-      console.log('🔍 Meal plan structure:', mealPlanStructure);
       console.log('🔍 Daily calories:', dailyCalories);
 
-      // Step 1: Get meal template from API
-      setMealPlanGenerationProgress(5);
-      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '🎯 מנתח העדפות...' : '🎯 Analyzing preferences...');
+      setMealPlanGenerationProgress(10);
+      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '🍽️ יוצר תפריט מותאם אישית...' : '🍽️ Creating your personalized meal plan...');
 
-      const templateRes = await fetch("https://dietitian-be.azurewebsites.net/api/template", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          user_code: userCode,
-          meal_structure: mealPlanStructure 
-        })
-      });
-
-      if (!templateRes.ok) {
-        const errorText = await templateRes.text();
-        console.error('❌ Template API error response:', errorText);
-        throw new Error(`Template API error: ${templateRes.status}`);
-      }
-
-      const templateData = await templateRes.json();
-      
-      if (templateData.error) {
-        throw new Error(templateData.error);
-      }
-
-      if (!templateData.template) {
-        throw new Error('No meal template was generated');
-      }
-
-      const template = templateData.template;
-      console.log('✅ Template received:', template);
-      setMealPlanGenerationProgress(25);
-      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '✅ ניתוח הושלם!' : '✅ Analysis complete!');
-
-      // Step 2: Build menu
-      setMealPlanGenerationProgress(30);
-      setMealPlanGenerationStep(userLanguage === 'hebrew' ? '🍽️ יוצר ארוחות מותאמות אישית...' : '🍽️ Creating personalized meals...');
-
-      // Gradual progress animation
       const progressInterval = setInterval(() => {
-        setMealPlanGenerationProgress(prev => {
+        setMealPlanGenerationProgress((prev) => {
           if (prev >= 99) {
             clearInterval(progressInterval);
             return 99;
@@ -2164,37 +2127,51 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         });
       }, 2000);
 
-      const buildRes = await fetch("https://dietitian-be.azurewebsites.net/api/build-menu", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template, user_code: userCode }),
+      const createRes = await fetch(CREATE_MEAL_PLAN_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_code: userCode })
       });
 
       clearInterval(progressInterval);
 
-      if (!buildRes.ok) {
-        const errText = await buildRes.text().catch(() => '');
-        throw new Error(`Build menu API error: ${buildRes.status} - ${errText}`);
+      if (!createRes.ok) {
+        const errText = await createRes.text().catch(() => '');
+        console.error('❌ Create meal plan API error response:', errText);
+        throw new Error(`Create meal plan API error: ${createRes.status}`);
       }
 
-      const buildData = await buildRes.json();
+      const raw = await createRes.json();
 
-      if (buildData.error) {
-        throw new Error(buildData.error);
+      if (raw.error) {
+        throw new Error(typeof raw.error === 'string' ? raw.error : JSON.stringify(raw.error));
       }
 
-      if (!buildData.menu) {
+      const payload = raw.data ?? raw.result ?? raw;
+
+      const menu =
+        payload.menu ??
+        payload.meals ??
+        payload.meal_plan?.meals ??
+        (Array.isArray(payload.meal_plan) ? payload.meal_plan : null);
+
+      if (!menu || !Array.isArray(menu)) {
         throw new Error('No meals were created');
       }
+
+      const template =
+        payload.template ?? payload.schema ?? payload.meal_plan?.template ?? null;
 
       setMealPlanGenerationProgress(60);
       setMealPlanGenerationStep(userLanguage === 'hebrew' ? '🔢 מחשב ערכים תזונתיים...' : '🔢 Calculating nutrition values...');
 
-      // Calculate totals
       const menuData = {
-        meals: buildData.menu,
-        totals: calculateMainTotals({ meals: buildData.menu }),
-        note: buildData.note || ''
+        meals: menu,
+        totals:
+          payload.totals ??
+          payload.meal_plan?.totals ??
+          calculateMainTotals({ meals: menu }),
+        note: payload.note ?? payload.meal_plan?.note ?? ''
       };
 
       setMealPlanGenerationProgress(70);
@@ -2752,8 +2729,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
       console.log('✅ Onboarding data saved successfully — generating meal plan...');
       
-      // Generate meal plan automatically if we have the required data
-      if (finalUserCode && mealPlanStructure && mealPlanStructure.length > 0 && dailyCalories) {
+      // Generate meal plan automatically if we have user_code and targets to persist
+      if (finalUserCode && dailyCalories) {
         const clientName = fullName || 
                           (formData.first_name && formData.last_name ? `${formData.first_name} ${formData.last_name}`.trim() : '') ||
                           formData.first_name || 
@@ -2765,7 +2742,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         // Generate meal plan (don't block if it fails)
         const mealPlanResult = await generateMealPlan(
           finalUserCode,
-          mealPlanStructure,
           dailyCalories,
           macros,
           clientName,
@@ -2780,8 +2756,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       } else {
         console.log('ℹ️ Skipping meal plan generation - missing required data:', {
           hasUserCode: !!finalUserCode,
-          hasMealPlanStructure: !!mealPlanStructure,
-          mealPlanStructureLength: mealPlanStructure?.length,
           hasDailyCalories: !!dailyCalories
         });
       }
