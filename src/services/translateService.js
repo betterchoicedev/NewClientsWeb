@@ -130,7 +130,7 @@ export const translateMenu = async (menu, targetLang = 'he') => {
     };
 
     // Call translation API
-    const translateApiUrl = process.env.REACT_APP_TRANSLATE_API_URL || 'https://dietitian-be.azurewebsites.net/api/translate';
+    const translateApiUrl = process.env.REACT_APP_TRANSLATE_API_URL || 'https://newdietitianweb-615263253386.europe-west3.run.app/api/translate';
     
     if (!process.env.REACT_APP_TRANSLATE_API_URL) {
       console.warn('⚠️ REACT_APP_TRANSLATE_API_URL is not set in environment variables. Using fallback URL.');

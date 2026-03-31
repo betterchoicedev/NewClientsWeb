@@ -24,6 +24,9 @@ import AddIngredientModal from '../components/AddIngredientModal';
 import IngredientPortionModal from '../components/IngredientPortionModal';
 import { translateMenu } from '../services/translateService';
 
+const CREATE_MEAL_PLAN_API_URL =
+  'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
+
 const allergiesOptions = [
   { value: 'peanuts', labelHe: 'בוטנים', labelEn: 'Peanuts' },
   { value: 'tree_nuts', labelHe: 'אגוזי עץ', labelEn: 'Tree Nuts' },
@@ -4421,15 +4424,6 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       return;
     }
 
-    // Check meal plan structure
-    const mealPlanStructure = clientData.meal_plan_structure || [];
-    if (mealPlanStructure.length === 0) {
-      setError(language === 'hebrew'
-        ? 'אנא הגדר את מבנה הארוחות שלך בתהליך ההזנה הראשוני'
-        : 'Please set up your meal structure in the onboarding process');
-      return;
-    }
-
     try {
       setIsGenerating(true);
       setError(null);
@@ -4439,59 +4433,8 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       console.log('🧠 Generating menu for user:', userCode);
       console.log('🔍 Client data:', clientData);
 
-      // Step 1: Get meal template from API (25% progress)
-      setGenerationProgress(5);
-      setGenerationStep(language === 'hebrew' ? '🎯 מנתח העדפות...' : '🎯 Analyzing preferences...');
-
-      const templateRes = await fetch("https://dietitian-be.azurewebsites.net/api/template", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          user_code: userCode,
-          meal_structure: mealPlanStructure 
-        })
-      });
-
-      console.log('📡 Template API response status:', templateRes.status);
-
-      if (!templateRes.ok) {
-        const errorText = await templateRes.text();
-        console.error('❌ Template API error response:', errorText);
-        if (templateRes.status === 404) {
-          throw new Error(language === 'hebrew' 
-            ? 'לא נמצא משתמש במערכת'
-            : 'Client not found in the database');
-        } else if (templateRes.status === 500) {
-          throw new Error(language === 'hebrew' 
-            ? 'שגיאת שרת בניתוח העדפות'
-            : 'Server error while analyzing preferences');
-        } else {
-          throw new Error(language === 'hebrew'
-            ? 'אנא השלם את כל פרטי הלקוח בעמוד הלקוח ונסה שוב'
-            : 'Please complete all client data and try again');
-        }
-      }
-
-      const templateData = await templateRes.json();
-      console.log('📋 Template API response data:', templateData);
-
-      if (templateData.error) {
-        throw new Error(templateData.error);
-      }
-
-      if (!templateData.template) {
-        throw new Error(language === 'hebrew' 
-          ? 'לא נוצרה תבנית ארוחות'
-          : 'No meal template was generated');
-      }
-
-      const template = templateData.template;
-      console.log('✅ Template received:', template);
-      setGenerationProgress(25);
-      setGenerationStep(language === 'hebrew' ? '✅ ניתוח הושלם!' : '✅ Analysis complete!');
-
-      // Step 2: Build menu (progress 30-99%)
-      setGenerationProgress(30);
+      // Single-step meal plan generation (same flow as onboarding modal)
+      setGenerationProgress(10);
       setGenerationStep(language === 'hebrew' ? '🍽️ יוצר ארוחות מותאמות אישית...' : '🍽️ Creating personalized meals...');
 
       // Gradual progress animation
@@ -4505,38 +4448,53 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         });
       }, 2000);
 
-      const buildRes = await fetch("https://dietitian-be.azurewebsites.net/api/build-menu", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template, user_code: userCode }),
+      const createRes = await fetch(CREATE_MEAL_PLAN_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_code: userCode })
       });
 
       clearInterval(progressInterval);
 
-      if (!buildRes.ok) {
-        const errText = await buildRes.text().catch(() => '');
+      if (!createRes.ok) {
+        const errText = await createRes.text().catch(() => '');
+        console.error('❌ Create meal plan API error response:', errText);
         throw new Error(language === 'hebrew'
-          ? `שגיאה ביצירת תפריט (${buildRes.status})`
-          : `Unable to create menu (Error ${buildRes.status})`);
+          ? `שגיאה ביצירת תפריט (${createRes.status})`
+          : `Unable to create menu (Error ${createRes.status})`);
       }
 
-      const buildData = await buildRes.json();
+      const raw = await createRes.json();
 
-      if (buildData.error) {
-        throw new Error(buildData.error);
+      if (raw.error) {
+        throw new Error(typeof raw.error === 'string' ? raw.error : JSON.stringify(raw.error));
       }
 
-      if (!buildData.menu) {
+      const payload = raw.data ?? raw.result ?? raw;
+
+      const menu =
+        payload.menu ??
+        payload.meals ??
+        payload.meal_plan?.meals ??
+        (Array.isArray(payload.meal_plan) ? payload.meal_plan : null);
+
+      if (!menu || !Array.isArray(menu)) {
         throw new Error(language === 'hebrew' ? 'לא נוצרו ארוחות' : 'No meals were created');
       }
+
+      const template =
+        payload.template ?? payload.schema ?? payload.meal_plan?.template ?? null;
 
       setGenerationProgress(60);
       setGenerationStep(language === 'hebrew' ? '🔢 מחשב ערכים תזונתיים...' : '🔢 Calculating nutrition values...');
 
       const menuData = {
-        meals: buildData.menu,
-        totals: calculateMainTotals({ meals: buildData.menu }),
-        note: buildData.note || ''
+        meals: menu,
+        totals:
+          payload.totals ??
+          payload.meal_plan?.totals ??
+          calculateMainTotals({ meals: menu }),
+        note: payload.note ?? payload.meal_plan?.note ?? ''
       };
 
       setGenerationProgress(70);

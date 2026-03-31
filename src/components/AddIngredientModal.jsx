@@ -17,7 +17,7 @@ const convertMeasurementWithAI = async (ingredient, fromMeasurement, toType, tar
   try {
     console.log('🤖 Converting measurement with AI:', { ingredient: ingredient.item || ingredient.name, fromMeasurement, toType, targetLang });
 
-    const response = await fetch('https://dietitian-be.azurewebsites.net/api/convert-measurement', {
+    const response = await fetch('https://newdietitianweb-615263253386.europe-west3.run.app/api/convert-measurement', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
