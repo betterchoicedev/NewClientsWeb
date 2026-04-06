@@ -5616,6 +5616,83 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     const legendPadX = 28;
     const legendValueX = 118;
 
+    // % labels at arc midpoints; tangential to ring (screen space)
+    const cxRing = 140;
+    const cyRing = 140;
+    const minArcPxForPctLabel = 18; // Prevents labels from drawing on tiny slivers
+
+    /** Local coords: point at path distance s (clockwise from 3 o'clock on circle path). */
+    const polarAtPathS = (radius, sAlongPath) => {
+      const th = sAlongPath / radius; // FIXED: Removed the negative sign so it moves clockwise like the lines do
+      return {
+        x: cxRing + radius * Math.cos(th),
+        y: cyRing + radius * Math.sin(th)
+      };
+    };
+
+    /** Map local (pre-parent-rotate) point to screen/viewBox coords: parent is rotate(-90, 140, 140). */
+    const toScreenXY = (lx, ly) => {
+      const dx = lx - cxRing;
+      const dy = ly - cyRing;
+      return { x: cxRing + dy, y: cyRing - dx };
+    };
+
+    /** Degrees: tangent to circle clockwise at this point, in screen space, WITH readability flip. */
+    const tangentDegScreen = (lx, ly) => {
+      const { x: sx, y: sy } = toScreenXY(lx, ly);
+      const psi = Math.atan2(sy - cyRing, sx - cxRing);
+      let deg = (psi + Math.PI / 2) * (180 / Math.PI);
+      
+      // Normalize strictly to 0-360 degrees
+      deg = ((deg % 360) + 360) % 360;
+      
+      // UI Polish: Prevent upside-down text by flipping it 180 degrees if it's in the lower hemisphere
+      if (deg > 90 && deg < 270) {
+        deg -= 180;
+      }
+      return deg;
+    };
+
+    const calArcTotal = caloriesNormalLength + caloriesOverflowLength;
+    const protArcTotal = proteinNormalLength + proteinOverflowLength;
+    const carbArcTotal = carbsNormalLength + carbsOverflowLength;
+    const fatArcTotal = fatNormalLength + fatOverflowLength;
+    
+    const calArcForLabel = Math.min(calArcTotal, outerCircumference);
+
+    const sCalMid = calArcForLabel / 2;
+    const sProtMid = protArcTotal / 2;
+    const sCarbMid = segmentLength + carbArcTotal / 2;
+    const sFatMid = 2 * segmentLength + fatArcTotal / 2;
+
+    const locCal = calArcForLabel >= minArcPxForPctLabel ? polarAtPathS(outerRadius, sCalMid) : null;
+    const locProt = protArcTotal >= minArcPxForPctLabel ? polarAtPathS(innerRadius, sProtMid) : null;
+    const locCarb = carbArcTotal >= minArcPxForPctLabel ? polarAtPathS(innerRadius, sCarbMid) : null;
+    const locFat = fatArcTotal >= minArcPxForPctLabel ? polarAtPathS(innerRadius, sFatMid) : null;
+
+    // Upgraded Typography: Smaller, normal weight, strictly inside the line
+    const ringPctFs = 10;
+    const ringPctWeight = '500'; 
+    const ringPctStroke = '1';
+    const ringPctStrokeHex = '#ffffff';
+
+    const pctTextEl = (loc, pctStr) => {
+      if (!loc) return '';
+      const { x: sx, y: sy } = toScreenXY(loc.x, loc.y);
+      const deg = tangentDegScreen(loc.x, loc.y);
+      
+      // FIXED: Used dy="0.35em" instead of dominant-baseline. This forces the text to perfectly 
+      // straddle the center line across all rendering engines (like sharp/png generators).
+      return `  <text transform="rotate(${deg} ${sx} ${sy})" x="${sx}" y="${sy}" dy="0.35em" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', Arial, sans-serif" font-size="${ringPctFs}" font-weight="${ringPctWeight}" fill="#111827" stroke="${ringPctStrokeHex}" stroke-width="${ringPctStroke}" stroke-linejoin="round" paint-order="stroke fill">${pctStr}</text>`;
+    };
+
+    const ringPctSvg = [
+      pctTextEl(locCal, `${caloriesPercent}%`),
+      pctTextEl(locProt, `${proteinPercent}%`),
+      pctTextEl(locCarb, `${carbsPercent}%`),
+      pctTextEl(locFat, `${fatPercent}%`)
+    ].filter(Boolean).join('\n');
+
     // Format weight helper (never show NaNg)
     const formatWeight = (grams) => {
       const n = Number(grams);
@@ -5819,6 +5896,8 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     stroke-dashoffset="${-segmentLength * 2}"
   />` : ''}
   </g>
+
+${ringPctSvg}
   
   <g transform="translate(140, 140)">
     <text
