@@ -5572,15 +5572,49 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     const circumference = 2 * Math.PI * innerRadius;
     const segmentLength = circumference / 3;
 
-    // Calculate lengths
+    // Calculate lengths (capped so overflow cannot exceed its own sector boundaries)
     const caloriesNormalLength = Math.min(caloriesPercent, 100) / 100 * outerCircumference;
-    const caloriesOverflowLength = caloriesPercent > 100 ? ((caloriesPercent - 100) / 100) * outerCircumference : 0;
+    const caloriesOverflowLength = caloriesPercent > 100
+      ? Math.min(((caloriesPercent - 100) / 100) * outerCircumference, outerCircumference)
+      : 0;
+
     const proteinNormalLength = Math.min(proteinPercent, 100) / 100 * segmentLength;
-    const proteinOverflowLength = proteinPercent > 100 ? (proteinPercent - 100) / 100 * segmentLength : 0;
+    const proteinOverflowLength = proteinPercent > 100
+      ? Math.min(((proteinPercent - 100) / 100) * segmentLength, segmentLength)
+      : 0;
+
     const carbsNormalLength = Math.min(carbsPercent, 100) / 100 * segmentLength;
-    const carbsOverflowLength = carbsPercent > 100 ? (carbsPercent - 100) / 100 * segmentLength : 0;
+    const carbsOverflowLength = carbsPercent > 100
+      ? Math.min(((carbsPercent - 100) / 100) * segmentLength, segmentLength)
+      : 0;
+
     const fatNormalLength = Math.min(fatPercent, 100) / 100 * segmentLength;
-    const fatOverflowLength = fatPercent > 100 ? (fatPercent - 100) / 100 * segmentLength : 0;
+    const fatOverflowLength = fatPercent > 100
+      ? Math.min(((fatPercent - 100) / 100) * segmentLength, segmentLength)
+      : 0;
+
+    // Center label: fit inside inner ring hole (path r=innerRadius, stroke 16 → inner clear radius innerRadius - 8)
+    const innerClearR = innerRadius - 8;
+    const calCenterStr = totalCalories.toLocaleString();
+    const calCharFactor = 0.58;
+    let centerCaloriesFontSize = 56;
+    const estCalTextW = calCenterStr.length * calCharFactor * centerCaloriesFontSize;
+    const maxCalW = innerClearR * 2 * 0.88;
+    if (estCalTextW > maxCalW) {
+      centerCaloriesFontSize = Math.max(28, Math.floor(maxCalW / (calCenterStr.length * calCharFactor)));
+    }
+
+    // Stack calories + KCAL around geometric center (140,140) so the pair is vertically balanced
+    const kcalSubFont = 14;
+    const hubGap = 8;
+    const hubLineSpacing =
+      centerCaloriesFontSize * 0.42 + hubGap + kcalSubFont * 0.42;
+    const hubCalLineY = -hubLineSpacing / 2;
+    const hubKcalLineY = hubLineSpacing / 2;
+
+    // Legend: inset from card edges; values start after label column so rows never collide
+    const legendPadX = 28;
+    const legendValueX = 118;
 
     // Format weight helper (never show NaNg)
     const formatWeight = (grams) => {
@@ -5590,42 +5624,64 @@ app.get('/api/macro-summary-svg', async (req, res) => {
 
     // Generate SVG string (white background so SVG fallback matches PNG when served without sharp)
     const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 450">
-  <rect width="280" height="450" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 460">
+  <defs>
+    <linearGradient id="calGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="proteinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc" />
+      <stop offset="100%" stop-color="#7e22ce" />
+    </linearGradient>
+    <linearGradient id="carbsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+    <linearGradient id="fatGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fcd34d" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#000000" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <rect width="280" height="460" fill="#ffffff" rx="24" />
+  
   <g transform="rotate(-90 140 140)">
-  <!-- Outer Circle Background (Calories) -->
+  
   <circle
     cx="140"
     cy="140"
     r="${outerRadius}"
     fill="none"
-    stroke="rgba(200, 200, 200, 0.2)"
+    stroke="#f3f4f6"
     stroke-width="16"
   />
   
-  <!-- Inner Circle Background (Macros) -->
   <circle
     cx="140"
     cy="140"
     r="${innerRadius}"
     fill="none"
-    stroke="rgba(200, 200, 200, 0.2)"
+    stroke="#f3f4f6"
     stroke-width="16"
   />
   
-  <!-- Outer Circle - Calories Progress -->
   ${caloriesNormalLength > 0 ? `
   <circle
     cx="140"
     cy="140"
     r="${outerRadius}"
     fill="none"
-    stroke="#10b981"
+    stroke="url(#calGrad)"
     stroke-width="16"
     stroke-linecap="round"
     stroke-dasharray="${caloriesNormalLength} ${outerCircumference}"
     stroke-dashoffset="0"
-    opacity="1"
+    filter="url(#softShadow)"
   />` : ''}
   ${caloriesOverflowLength > 0 ? `
   <circle
@@ -5633,27 +5689,36 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     cy="140"
     r="${outerRadius}"
     fill="none"
-    stroke="#059669"
+    stroke="#ffffff"
+    stroke-width="20"
+    stroke-linecap="round"
+    stroke-dasharray="${caloriesOverflowLength} ${outerCircumference}"
+    stroke-dashoffset="0"
+  />
+  <circle
+    cx="140"
+    cy="140"
+    r="${outerRadius}"
+    fill="none"
+    stroke="#047857"
     stroke-width="16"
     stroke-linecap="round"
     stroke-dasharray="${caloriesOverflowLength} ${outerCircumference}"
     stroke-dashoffset="0"
-    opacity="1"
   />` : ''}
   
-  <!-- Inner Circle - Macros -->
   ${proteinNormalLength > 0 ? `
   <circle
     cx="140"
     cy="140"
     r="${innerRadius}"
     fill="none"
-    stroke="#a855f7"
+    stroke="url(#proteinGrad)"
     stroke-width="16"
     stroke-linecap="round"
     stroke-dasharray="${proteinNormalLength} ${circumference}"
     stroke-dashoffset="0"
-    opacity="1"
+    filter="url(#softShadow)"
   />` : ''}
   ${carbsNormalLength > 0 ? `
   <circle
@@ -5661,12 +5726,12 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     cy="140"
     r="${innerRadius}"
     fill="none"
-    stroke="#3b82f6"
+    stroke="url(#carbsGrad)"
     stroke-width="16"
     stroke-linecap="round"
     stroke-dasharray="${carbsNormalLength} ${circumference}"
     stroke-dashoffset="${-segmentLength}"
-    opacity="1"
+    filter="url(#softShadow)"
   />` : ''}
   ${fatNormalLength > 0 ? `
   <circle
@@ -5674,199 +5739,191 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     cy="140"
     r="${innerRadius}"
     fill="none"
-    stroke="#f59e0b"
+    stroke="url(#fatGrad)"
     stroke-width="16"
     stroke-linecap="round"
     stroke-dasharray="${fatNormalLength} ${circumference}"
     stroke-dashoffset="${-segmentLength * 2}"
-    opacity="1"
+    filter="url(#softShadow)"
   />` : ''}
   
-  <!-- Overflow borders -->
   ${proteinOverflowLength > 0 ? `
   <circle
     cx="140"
     cy="140"
     r="${innerRadius}"
     fill="none"
-    stroke="#3b82f6"
+    stroke="#ffffff"
     stroke-width="20"
     stroke-linecap="round"
     stroke-dasharray="${proteinOverflowLength} ${circumference}"
-    stroke-dashoffset="${0 - proteinNormalLength}"
-    opacity="1"
+    stroke-dashoffset="0"
+  />
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#7e22ce"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${proteinOverflowLength} ${circumference}"
+    stroke-dashoffset="0"
   />` : ''}
+
   ${carbsOverflowLength > 0 ? `
   <circle
     cx="140"
     cy="140"
     r="${innerRadius}"
     fill="none"
-    stroke="#f59e0b"
+    stroke="#ffffff"
     stroke-width="20"
     stroke-linecap="round"
     stroke-dasharray="${carbsOverflowLength} ${circumference}"
-    stroke-dashoffset="${-segmentLength - carbsNormalLength}"
-    opacity="1"
+    stroke-dashoffset="${-segmentLength}"
+  />
+  <circle
+    cx="140"
+    cy="140"
+    r="${innerRadius}"
+    fill="none"
+    stroke="#1d4ed8"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-dasharray="${carbsOverflowLength} ${circumference}"
+    stroke-dashoffset="${-segmentLength}"
   />` : ''}
+
   ${fatOverflowLength > 0 ? `
   <circle
     cx="140"
     cy="140"
     r="${innerRadius}"
     fill="none"
-    stroke="#a855f7"
+    stroke="#ffffff"
     stroke-width="20"
     stroke-linecap="round"
     stroke-dasharray="${fatOverflowLength} ${circumference}"
-    stroke-dashoffset="0"
-    opacity="1"
-  />` : ''}
-  
-  <!-- Overflow main arcs -->
-  ${proteinOverflowLength > 0 ? `
+    stroke-dashoffset="${-segmentLength * 2}"
+  />
   <circle
     cx="140"
     cy="140"
     r="${innerRadius}"
     fill="none"
-    stroke="#a855f7"
-    stroke-width="16"
-    stroke-linecap="round"
-    stroke-dasharray="${proteinOverflowLength} ${circumference}"
-    stroke-dashoffset="${0 - proteinNormalLength}"
-    opacity="1"
-  />` : ''}
-  ${carbsOverflowLength > 0 ? `
-  <circle
-    cx="140"
-    cy="140"
-    r="${innerRadius}"
-    fill="none"
-    stroke="#3b82f6"
-    stroke-width="16"
-    stroke-linecap="round"
-    stroke-dasharray="${carbsOverflowLength} ${circumference}"
-    stroke-dashoffset="${-segmentLength - carbsNormalLength}"
-    opacity="1"
-  />` : ''}
-  ${fatOverflowLength > 0 ? `
-  <circle
-    cx="140"
-    cy="140"
-    r="${innerRadius}"
-    fill="none"
-    stroke="#f59e0b"
+    stroke="#b45309"
     stroke-width="16"
     stroke-linecap="round"
     stroke-dasharray="${fatOverflowLength} ${circumference}"
-    stroke-dashoffset="0"
-    opacity="1"
+    stroke-dashoffset="${-segmentLength * 2}"
   />` : ''}
-  
   </g>
   
-  <!-- Center Calories Text (rendered on top, not rotated) -->
-  <text
-    x="140"
-    y="160"
-    text-anchor="middle"
-    dominant-baseline="central"
-    font-family="system-ui, -apple-system, 'Segoe UI', Arial, sans-serif"
-    font-size="68"
-    font-weight="200"
-    fill="#1f2937"
-    letter-spacing="-0.02em"
-  >${totalCalories.toLocaleString()}</text>
+  <g transform="translate(140, 140)">
+    <text
+      text-anchor="middle"
+      dominant-baseline="central"
+      y="${hubCalLineY}"
+      font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      font-size="${centerCaloriesFontSize}"
+      font-weight="700"
+      fill="#111827"
+      letter-spacing="-0.03em"
+    >${calCenterStr}</text>
+    <text
+      text-anchor="middle"
+      dominant-baseline="central"
+      y="${hubKcalLineY}"
+      font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      font-size="${kcalSubFont}"
+      font-weight="600"
+      fill="#9ca3af"
+      letter-spacing="0.05em"
+    >KCAL</text>
+  </g>
   
-  <!-- Macro Details List -->
-  <g transform="translate(0, 300)">
+  <g transform="translate(${legendPadX}, 310)">
     ${userLanguage === 'he' ? `
-    <!-- Calories (RTL - inverted) -->
-    <g transform="translate(50, 0)">
-      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
-        ${totalCalories.toLocaleString()} / ${dailyGoals.calories.toLocaleString()}
+    <g transform="translate(0, 0)">
+      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">
+        ${totalCalories.toLocaleString()} <tspan fill="#9ca3af" font-weight="400">/ ${dailyGoals.calories.toLocaleString()}</tspan>
       </text>
-      <circle cx="184" cy="8" r="6" fill="#10b981"/>
-      <text x="170" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
-        קלוריות
-      </text>
+      <g transform="translate(218, 0)">
+        <circle cx="-40" cy="8" r="6" fill="#10b981"/>
+        <text x="-30" y="12" text-anchor="end" direction="rtl" unicode-bidi="embed" xml:lang="he" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="500" fill="#4b5563">
+          קלוריות
+        </text>
+      </g>
     </g>
-    
-    <!-- Protein (RTL - inverted) -->
-    <g transform="translate(50, 30)">
-      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
-        ${formatWeight(totalProtein)} / ${formatWeight(dailyGoals.protein)}
+    <g transform="translate(0, 35)">
+      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">
+        ${formatWeight(totalProtein)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(dailyGoals.protein)}</tspan>
       </text>
-      <circle cx="184" cy="8" r="6" fill="#a855f7"/>
-      <text x="170" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
-        חלבון
-      </text>
+      <g transform="translate(218, 0)">
+        <circle cx="-40" cy="8" r="6" fill="#a855f7"/>
+        <text x="-30" y="12" text-anchor="end" direction="rtl" unicode-bidi="embed" xml:lang="he" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="500" fill="#4b5563">
+          חלבון
+        </text>
+      </g>
     </g>
-    
-    <!-- Carbs (RTL - inverted) -->
-    <g transform="translate(50, 60)">
-      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
-        ${formatWeight(totalCarbs)} / ${formatWeight(dailyGoals.carbs)}
+    <g transform="translate(0, 70)">
+      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">
+        ${formatWeight(totalCarbs)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(dailyGoals.carbs)}</tspan>
       </text>
-      <circle cx="184" cy="8" r="6" fill="#3b82f6"/>
-      <text x="170" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
-        פחמימות
-      </text>
+      <g transform="translate(218, 0)">
+        <circle cx="-40" cy="8" r="6" fill="#3b82f6"/>
+        <text x="-30" y="12" text-anchor="end" direction="rtl" unicode-bidi="embed" xml:lang="he" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="500" fill="#4b5563">
+          פחמימות
+        </text>
+      </g>
     </g>
-    
-    <!-- Fat (RTL - inverted) -->
-    <g transform="translate(50, 90)">
-      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
-        ${formatWeight(totalFat)} / ${formatWeight(dailyGoals.fat)}
+    <g transform="translate(0, 105)">
+      <text x="0" y="12" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">
+        ${formatWeight(totalFat)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(dailyGoals.fat)}</tspan>
       </text>
-      <circle cx="184" cy="8" r="6" fill="#f59e0b"/>
-      <text x="170" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
-        שומן
-      </text>
+      <g transform="translate(218, 0)">
+        <circle cx="-40" cy="8" r="6" fill="#f59e0b"/>
+        <text x="-30" y="12" text-anchor="end" direction="rtl" unicode-bidi="embed" xml:lang="he" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="500" fill="#4b5563">
+          שומן
+        </text>
+      </g>
     </g>
     ` : `
-    <!-- Calories -->
-    <g transform="translate(50, 0)">
+    <g transform="translate(0, 0)">
       <circle cx="6" cy="8" r="6" fill="#10b981"/>
-      <text x="20" y="12" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+      <text x="20" y="13" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="500" fill="#4b5563">
         Calories
       </text>
-      <text x="180" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
-        ${totalCalories.toLocaleString()} / ${dailyGoals.calories.toLocaleString()}
+      <text x="${legendValueX}" y="13" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">
+        ${totalCalories.toLocaleString()} <tspan fill="#9ca3af" font-weight="400">/ ${dailyGoals.calories.toLocaleString()}</tspan>
       </text>
     </g>
-    
-    <!-- Protein -->
-    <g transform="translate(50, 30)">
+    <g transform="translate(0, 35)">
       <circle cx="6" cy="8" r="6" fill="#a855f7"/>
-      <text x="20" y="12" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+      <text x="20" y="13" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="500" fill="#4b5563">
         Protein
       </text>
-      <text x="180" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
-        ${formatWeight(totalProtein)} / ${formatWeight(dailyGoals.protein)}
+      <text x="${legendValueX}" y="13" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">
+        ${formatWeight(totalProtein)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(dailyGoals.protein)}</tspan>
       </text>
     </g>
-    
-    <!-- Carbs -->
-    <g transform="translate(50, 60)">
+    <g transform="translate(0, 70)">
       <circle cx="6" cy="8" r="6" fill="#3b82f6"/>
-      <text x="20" y="12" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+      <text x="20" y="13" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="500" fill="#4b5563">
         Carbs
       </text>
-      <text x="180" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
-        ${formatWeight(totalCarbs)} / ${formatWeight(dailyGoals.carbs)}
+      <text x="${legendValueX}" y="13" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">
+        ${formatWeight(totalCarbs)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(dailyGoals.carbs)}</tspan>
       </text>
     </g>
-    
-    <!-- Fat -->
-    <g transform="translate(50, 90)">
+    <g transform="translate(0, 105)">
       <circle cx="6" cy="8" r="6" fill="#f59e0b"/>
-      <text x="20" y="12" font-family="system-ui, Arial, sans-serif" font-size="14" fill="#6b7280">
+      <text x="20" y="13" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="500" fill="#4b5563">
         Fat
       </text>
-      <text x="180" y="12" text-anchor="end" font-family="system-ui, Arial, sans-serif" font-size="14" font-weight="500" fill="#1f2937">
-        ${formatWeight(totalFat)} / ${formatWeight(dailyGoals.fat)}
+      <text x="${legendValueX}" y="13" text-anchor="start" font-family="system-ui, Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">
+        ${formatWeight(totalFat)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(dailyGoals.fat)}</tspan>
       </text>
     </g>
     `}
@@ -5877,7 +5934,7 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     // can fail (wrong native binary, missing libvips); fall back to SVG so the image still displays.
     try {
       const pngBuffer = await sharp(Buffer.from(svg))
-        .resize(1200, 1929, {
+        .resize(1200, Math.round((1200 * 460) / 280), {
           fit: 'contain',
           background: { r: 255, g: 255, b: 255, alpha: 1 }
         })
