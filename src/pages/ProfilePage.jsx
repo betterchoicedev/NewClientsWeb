@@ -10914,22 +10914,8 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
 
   // Function to render message content with attachments and formatting (same logic as Chat.jsx)
   const renderMessageContent = (msg) => {
-    // Check both message and content columns for base64 data
-    const messageData = msg.message || msg.content || '';
-    const trimmedMessageData = messageData.trim();
     const topic = msg.topic;
-    const topicLower = topic ? topic.toLowerCase() : '';
-    
-    // Detect base64 image
-    const hasBase64Image = topicLower === 'image' && trimmedMessageData.startsWith('data:image');
-    
-    // Detect base64 audio  
-    const hasBase64Audio = topicLower === 'audio' && trimmedMessageData.startsWith('data:audio');
-    
-    // Normalize the data before rendering
-    const normalizedImageData = hasBase64Image ? normalizeDataUri(trimmedMessageData, 'image') : null;
-    const normalizedAudioData = hasBase64Audio ? normalizeDataUri(trimmedMessageData, 'audio') : null;
-    
+
     // Get content from message or content field
     let content = msg.message || msg.content || '';
     
@@ -10986,11 +10972,16 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
     content = content.replace(/\[.*?\]/g, ''); // Remove [button text] patterns
     content = content.replace(/button:\s*[^\n]+/gi, ''); // Remove button: patterns
     content = content.trim();
-    
+
+    // Detect embedded media from final text (do not rely on topic — DB rows often omit topic)
+    const hasBase64Image = content.startsWith('data:image');
+    const hasBase64Audio = content.startsWith('data:audio');
+    const normalizedImageData = hasBase64Image ? normalizeDataUri(content, 'image') : null;
+    const normalizedAudioData = hasBase64Audio ? normalizeDataUri(content, 'audio') : null;
+
     // Filter out base64 data from text rendering
     // Only show text if it's not base64 data and not empty
-    const isBase64Data = hasBase64Image || hasBase64Audio || 
-                         content.startsWith('data:image') || content.startsWith('data:audio');
+    const isBase64Data = hasBase64Image || hasBase64Audio;
     const text = content && content.trim() && !isBase64Data ? content : '';
     
     // Render base64 media before attachments
@@ -11133,27 +11124,61 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
       );
     }
     
-    // Handle legacy image URLs in text
+    // Inline data:image/...;base64,... plus legacy http(s) image URLs in text
+    const dataUriImageRegex = /(data:image[^;]*;base64,[A-Za-z0-9+/=]+)/gi;
     const urlRegex = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?[^\s]*)?)/gi;
-    const parts = content.split(urlRegex);
-    
-    return parts.map((part, index) => {
-      if (urlRegex.test(part)) {
-        return (
+
+    const renderHttpImageOrText = (segment, keyPrefix) => {
+      if (!segment) return [];
+      const parts = segment.split(urlRegex);
+      return parts
+        .map((part, index) => {
+          if (!part) return null;
+          const isHttpImage = /^https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(part);
+          if (isHttpImage) {
+            return (
+              <img
+                key={`${keyPrefix}-http-${index}`}
+                src={part}
+                alt="Food analysis image"
+                className="max-w-full h-auto rounded-lg mt-2 shadow-md cursor-pointer"
+                style={{ maxHeight: '300px' }}
+                onClick={() => handleImageClick(part)}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+            );
+          }
+          return (
+            <span key={`${keyPrefix}-t-${index}`} className="whitespace-pre-wrap break-words">
+              {part}
+            </span>
+          );
+        })
+        .filter(Boolean);
+    };
+
+    const chunks = content.split(dataUriImageRegex);
+    return chunks.flatMap((chunk, index) => {
+      if (!chunk) return [];
+      if (/^data:image[^;]*;base64,/i.test(chunk)) {
+        const norm = normalizeDataUri(chunk, 'image');
+        return [
           <img
-            key={index}
-            src={part}
-            alt="Food analysis image"
+            key={`data-uri-${index}`}
+            src={norm}
+            alt="Client image"
             className="max-w-full h-auto rounded-lg mt-2 shadow-md cursor-pointer"
             style={{ maxHeight: '300px' }}
-            onClick={() => handleImageClick(part)}
+            onClick={() => handleImageClick(norm)}
             onError={(e) => {
               e.target.style.display = 'none';
             }}
-          />
-        );
+          />,
+        ];
       }
-      return <span key={index} className="whitespace-pre-wrap break-words">{part}</span>;
+      return renderHttpImageOrText(chunk, `seg-${index}`);
     });
   };
 
