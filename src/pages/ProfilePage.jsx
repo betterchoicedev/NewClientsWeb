@@ -3962,67 +3962,168 @@ const WeeklyMealSchedule = ({ allPlans, selectedDay, onDaySelect, language, them
     ? ['א\'', 'ב\'', 'ג\'', 'ד\'', 'ה\'', 'ו\'', 'ש\''] 
     : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // Helper function to check if a day has an active meal plan
+  // Per-plan palette (unselected / selected) — same order as plan list grouping
+  const segmentPalette = [
+    {
+      base: 'border-emerald-400/70 bg-emerald-100/90 text-emerald-900 hover:bg-emerald-200/90 dark:border-emerald-500/40 dark:bg-emerald-950/45 dark:text-emerald-100 dark:hover:bg-emerald-900/55',
+      sel: 'border-emerald-500 bg-emerald-500 text-white shadow-md ring-2 ring-emerald-400/40 dark:bg-emerald-500 dark:ring-emerald-400/30',
+    },
+    {
+      base: 'border-sky-400/70 bg-sky-100/90 text-sky-900 hover:bg-sky-200/90 dark:border-sky-500/40 dark:bg-sky-950/45 dark:text-sky-100 dark:hover:bg-sky-900/55',
+      sel: 'border-sky-500 bg-sky-500 text-white shadow-md ring-2 ring-sky-400/40 dark:bg-sky-500 dark:ring-sky-400/30',
+    },
+    {
+      base: 'border-violet-400/70 bg-violet-100/90 text-violet-900 hover:bg-violet-200/90 dark:border-violet-500/40 dark:bg-violet-950/45 dark:text-violet-100 dark:hover:bg-violet-900/55',
+      sel: 'border-violet-500 bg-violet-500 text-white shadow-md ring-2 ring-violet-400/40 dark:bg-violet-500 dark:ring-violet-400/30',
+    },
+    {
+      base: 'border-amber-400/70 bg-amber-100/90 text-amber-900 hover:bg-amber-200/90 dark:border-amber-500/40 dark:bg-amber-950/45 dark:text-amber-100 dark:hover:bg-amber-900/55',
+      sel: 'border-amber-500 bg-amber-500 text-white shadow-md ring-2 ring-amber-400/40 dark:bg-amber-500 dark:ring-amber-400/30',
+    },
+    {
+      base: 'border-rose-400/70 bg-rose-100/90 text-rose-900 hover:bg-rose-200/90 dark:border-rose-500/40 dark:bg-rose-950/45 dark:text-rose-100 dark:hover:bg-rose-900/55',
+      sel: 'border-rose-500 bg-rose-500 text-white shadow-md ring-2 ring-rose-400/40 dark:bg-rose-500 dark:ring-rose-400/30',
+    },
+  ];
+
+  // Same resolution order as getMealPlanForDay in MyPlanTab: first matching plan wins
   const getDayPlan = (dayIndex) => {
     if (!allPlans || !Array.isArray(allPlans)) return null;
-    
-    // Find the first plan that is active for this day
+
     return allPlans.find(plan => {
-      // If active_days is null, it means it's active every day
       if (plan.active_days === null) return true;
-      
-      // Handle both string and number arrays (database might return strings)
-      const activeDays = Array.isArray(plan.active_days) 
+
+      const activeDays = Array.isArray(plan.active_days)
         ? plan.active_days.map(day => typeof day === 'string' ? parseInt(day, 10) : day)
         : [];
-      
+
       return activeDays.includes(dayIndex);
-    });
+    }) ?? null;
   };
 
+  const planGroups = (() => {
+    if (!allPlans || !Array.isArray(allPlans)) return [];
+
+    const byId = new Map();
+    for (const plan of allPlans) {
+      if (plan && plan.id != null) {
+        byId.set(plan.id, { plan, dayIndices: [] });
+      }
+    }
+
+    for (let d = 0; d < 7; d++) {
+      const p = getDayPlan(d);
+      if (p && byId.has(p.id)) {
+        byId.get(p.id).dayIndices.push(d);
+      }
+    }
+
+    return allPlans
+      .map(p => (p && p.id != null ? byId.get(p.id) : null))
+      .filter(g => g && g.dayIndices.length > 0);
+  })();
+
+  const planColorIndex = (plan) => {
+    if (!plan || plan.id == null) return 0;
+    const idx = planGroups.findIndex(g => g.plan.id === plan.id);
+    return idx >= 0 ? idx % segmentPalette.length : 0;
+  };
+
+  /** One merged button per contiguous run of the same plan (week order Sun→Sat). */
+  const weekSegments = (() => {
+    const segments = [];
+    for (let d = 0; d < 7; d++) {
+      const plan = getDayPlan(d);
+      const key = plan?.id ?? `__empty_${d}`;
+      const last = segments[segments.length - 1];
+      if (last && last.key === key) {
+        last.dayIndices.push(d);
+      } else {
+        segments.push({ key, plan, dayIndices: [d] });
+      }
+    }
+    return segments;
+  })();
+
+  const formatSegmentLabel = (dayIndices) => {
+    if (dayIndices.length === 1) return days[dayIndices[0]];
+    const a = days[dayIndices[0]];
+    const b = days[dayIndices[dayIndices.length - 1]];
+    return `${a}\u2009–\u2009${b}`;
+  };
+
+  const planCount = planGroups.length;
+  const countLabel =
+    language === 'hebrew'
+      ? planCount === 1
+        ? 'תוכנית תזונה אחת'
+        : `${planCount} תוכניות תזונה`
+      : planCount === 1
+        ? '1 meal plan'
+        : `${planCount} meal plans`;
+
+  const defaultPlanTitle = (idx) =>
+    language === 'hebrew' ? `תפריט ${idx + 1}` : `Meal plan ${idx + 1}`;
+
   return (
-    <div className={`mt-4 mb-6 p-4 rounded-xl border ${themeClasses.borderPrimary} ${themeClasses.bgCard}`}>
-      <h4 className={`${themeClasses.textPrimary} font-bold mb-4 text-sm`}>
-        {language === 'hebrew' ? 'בחר יום לצפייה בתפריט:' : 'Select Day to View Meal Plan:'}
-      </h4>
-      <div className="flex justify-between gap-3">
-        {days.map((day, index) => {
-          const dayPlan = getDayPlan(index);
-          const hasPlan = dayPlan !== null;
-          const isSelected = selectedDay === index;
-          
-          return (
-            <button
-              key={index}
-              onClick={() => hasPlan && onDaySelect(index)}
-              disabled={!hasPlan}
-              className={`flex-1 flex flex-col items-center p-3 rounded-lg transition-all ${
-                isSelected
-                  ? 'bg-emerald-500 dark:bg-emerald-600 border-emerald-600 dark:border-emerald-500 border-2 scale-105 shadow-lg'
-                  : hasPlan
-                  ? 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-500 border hover:bg-emerald-200 dark:hover:bg-emerald-900/50 cursor-pointer'
-                  : 'opacity-40 grayscale border-transparent border cursor-not-allowed'
-              }`}
-            >
-              <span className={`text-xs font-bold ${
-                isSelected 
-                  ? 'text-white' 
-                  : hasPlan 
-                  ? 'text-emerald-600 dark:text-emerald-400' 
-                  : themeClasses.textSecondary
-              }`}>
-                {day}
-              </span>
-              {hasPlan && (
-                <div className={`w-1.5 h-1.5 rounded-full mt-1 ${
-                  isSelected 
-                    ? 'bg-white shadow-[0_0_5px_rgba(255,255,255,0.8)]' 
-                    : 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]'
-                }`} />
-              )}
-            </button>
-          );
-        })}
+    <div className={`mt-4 mb-6 p-3 sm:p-4 rounded-xl border ${themeClasses.borderPrimary} ${themeClasses.bgCard}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 mb-3">
+        <h4 className={`${themeClasses.textPrimary} font-bold text-sm`}>
+          {language === 'hebrew' ? 'בחר יום לצפייה בתפריט:' : 'Select Day to View Meal Plan:'}
+        </h4>
+        <span
+          className={`inline-flex items-center self-start rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            themeClasses.bgSecondary
+          } ${themeClasses.textSecondary}`}
+        >
+          {countLabel}
+        </span>
+      </div>
+
+      {/* Single row: English LTR (Sun left). Hebrew RTL so week starts on the right (א׳–ד׳ right, ה׳–ש׳ left). */}
+      <div className="overflow-x-auto pb-0.5" dir={language === 'hebrew' ? 'rtl' : 'ltr'}>
+        <div className="flex min-w-min flex-nowrap items-stretch gap-1.5 sm:gap-2">
+          {weekSegments.map((seg, segIdx) => {
+            const hasPlan = seg.plan != null;
+            const isSelected =
+              hasPlan && seg.dayIndices.some((i) => i === selectedDay);
+            const cIdx = hasPlan ? planColorIndex(seg.plan) : 0;
+            const pal = segmentPalette[cIdx];
+            const planIdxInList = hasPlan
+              ? planGroups.findIndex((g) => g.plan.id === seg.plan.id)
+              : -1;
+            const planTitle =
+              hasPlan &&
+              ((seg.plan.meal_plan_name && String(seg.plan.meal_plan_name).trim()) ||
+                defaultPlanTitle(planIdxInList >= 0 ? planIdxInList : 0));
+            const label = formatSegmentLabel(seg.dayIndices);
+
+            return (
+              <button
+                key={`${seg.key}-${segIdx}`}
+                type="button"
+                disabled={!hasPlan}
+                title={hasPlan ? planTitle : undefined}
+                onClick={() => hasPlan && onDaySelect(seg.dayIndices[0])}
+                className={`flex min-h-[2.5rem] min-w-0 flex-1 items-center justify-center rounded-lg border-2 px-2 py-2 text-center transition-all sm:min-w-[4rem] sm:px-3 ${
+                  !hasPlan
+                    ? `cursor-not-allowed opacity-40 ${themeClasses.bgSecondary} border-transparent`
+                    : isSelected
+                    ? pal.sel
+                    : pal.base
+                }`}
+              >
+                <span
+                  className={`text-xs font-bold leading-none sm:text-sm ${
+                    !hasPlan ? themeClasses.textMuted : ''
+                  }`}
+                >
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
