@@ -11019,6 +11019,24 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
 
     // Get content from message or content field
     let content = msg.message || msg.content || '';
+
+    // dietitian_image: DB may store a raw data URI or JSON { text: caption, image: dataUri }
+    let dietitianImageCaption = null;
+    if (topic === 'dietitian_image' && typeof content === 'string' && content.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(content);
+        const img = parsed.image;
+        if (typeof img === 'string' && img.startsWith('data:image')) {
+          const capFromText = parsed.text != null ? String(parsed.text).trim() : '';
+          const capFromCaption = parsed.caption != null ? String(parsed.caption).trim() : '';
+          const cap = capFromText || capFromCaption;
+          if (cap) dietitianImageCaption = cap;
+          content = img;
+        }
+      } catch (e) {
+        // keep content as-is
+      }
+    }
     
     // For assistant role messages, extract only response_text from JSON
     if (msg.role === 'assistant' && content.trim().startsWith('{')) {
@@ -11095,7 +11113,7 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
           {normalizedImageData ? (
             <img
               src={normalizedImageData}
-              alt="Client image"
+              alt={dietitianImageCaption || 'Client image'}
               className="rounded-lg max-w-full max-h-64 object-cover shadow-sm border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity duration-200"
               onClick={() => handleImageClick(normalizedImageData)}
               onError={(e) => {
@@ -11104,6 +11122,17 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
             />
           ) : (
             <div>Image data not found</div>
+          )}
+          {dietitianImageCaption && (
+            <div
+              className={`mt-2 text-xs whitespace-pre-wrap break-words ${
+                msg.sender === 'user'
+                  ? 'text-emerald-50/95'
+                  : themeClasses.textSecondary
+              }`}
+            >
+              {dietitianImageCaption}
+            </div>
           )}
         </div>
       );
