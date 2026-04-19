@@ -69,6 +69,15 @@ function getDigitalOnlyAmount(subscription) {
   return Number(Math.max(0, amount).toFixed(2));
 }
 
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Middleware - Temporary permissive CORS for debugging
 app.use(cors({
   origin: true, // Allow all origins temporarily for debugging
