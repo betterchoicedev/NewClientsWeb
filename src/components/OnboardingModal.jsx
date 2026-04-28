@@ -51,6 +51,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     goal: '',
     region: '',
     medical_conditions: '',
+    nursing_status: '',
     timezone: '',
     first_meal_time: '',
     last_meal_time: '',
@@ -425,8 +426,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       fields: ['date_of_birth']
     },
     {
-      title: language === 'hebrew' ? 'מין' : 'Gender',
-      fields: ['gender']
+      title: language === 'hebrew' ? 'מין ומצב פיזיולוגי' : 'Gender & Physiological State',
+      fields: ['gender', 'nursing_status']
     },
     {
       title: language === 'hebrew' ? 'גובה ומשקל נוכחי' : 'Height & Current Weight',
@@ -601,12 +602,21 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   };
 
   // Calculate daily target calories
-  const calculateDailyCalories = (age, gender, weight_kg, height_cm, activityLevel, goal) => {
+  const calculateDailyCalories = (age, gender, weight_kg, height_cm, activityLevel, goal, nursingStatus) => {
     const bmr = calculateBMR(age, gender, weight_kg, height_cm);
     if (!bmr) return null;
     
     const tdee = bmr * getActivityMultiplier(activityLevel);
-    const targetCalories = tdee * getGoalFactor(goal);
+    let targetCalories = tdee * getGoalFactor(goal);
+    
+    // Nursing/Breastfeeding calorie adjustment
+    if (gender === 'female') {
+      if (nursingStatus === 'exclusive') {
+        targetCalories += 500;
+      } else if (nursingStatus === 'partial') {
+        targetCalories += 300;
+      }
+    }
     
     return Math.round(targetCalories);
   };
@@ -641,7 +651,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       parseFloat(formData.weight_kg),
       parseFloat(formData.height_cm),
       formData.activity_level,
-      formData.goal
+      formData.goal,
+      formData.nursing_status
     );
   };
 
@@ -1003,6 +1014,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           timezone: data.timezone || prev.timezone || '',
           date_of_birth: dateInInternalFormat || prev.date_of_birth || '',
           gender: data.gender || prev.gender || '',
+          nursing_status: chatUserMealData?.nursing_status || prev.nursing_status || '',
           weight_kg: data.current_weight ? data.current_weight.toString() : (prev.weight_kg || ''),
           target_weight: data.target_weight ? data.target_weight.toString() : (prev.target_weight || ''),
           height_cm: data.height ? data.height.toString() : (prev.height_cm || ''),
@@ -1208,6 +1220,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.log('✓ Gender has value:', data?.gender);
       }
       
+      if (data?.gender === 'female' && isEmpty(chatUserMealData?.nursing_status)) {
+        missingFields.push('nursing_status');
+      } else if (data?.gender === 'female') {
+        console.log('✓ Nursing status has value:', chatUserMealData?.nursing_status);
+      }
+      
       if (isEmpty(data?.current_weight)) {
         missingFields.push('weight_kg');
       } else {
@@ -1303,6 +1321,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           // Always show Preferred Language step (so it appears right after welcome, before name)
           if (step.fields.length === 1 && step.fields[0] === 'language') {
             return { ...step, fields: ['language'] };
+          }
+          // Keep gender + nursing together when either is relevant/missing
+          if (step.fields.includes('gender') && step.fields.includes('nursing_status')) {
+            if (missingFields.includes('gender') || missingFields.includes('nursing_status')) {
+              return { ...step, fields: ['gender', 'nursing_status'] };
+            }
           }
           // Always show Daily Calories & Macros step (user can enter manually if we can't calculate yet)
           if (step.fields.includes('daily_calories') && step.fields.includes('macros')) {
@@ -1909,6 +1933,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       if (optionalFields.includes(field)) {
         return;
       }
+      // Nursing status is only required for female users
+      if (field === 'nursing_status' && formData.gender !== 'female') {
+        return;
+      }
       
       // Special validation for meal_descriptions - check if all meals have descriptions
       if (field === 'meal_descriptions') {
@@ -2276,7 +2304,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                 parseFloat(formData.weight_kg),
                 parseFloat(formData.height_cm),
                 formData.activity_level,
-                formData.goal
+                formData.goal,
+                formData.nursing_status
               )
             : null);
         
@@ -2306,7 +2335,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           parseFloat(formData.weight_kg),
           parseFloat(formData.height_cm),
           formData.activity_level,
-          formData.goal
+          formData.goal,
+          formData.nursing_status
         );
         
         if (dailyCalories) {
@@ -2478,6 +2508,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         date_of_birth: allOnboardingFields.includes('date_of_birth') && formData.date_of_birth ? convertDDMMYYYYToYYYYMMDD(formData.date_of_birth) : undefined,
         age: (allOnboardingFields.includes('date_of_birth') && age !== null && age !== undefined) ? age : undefined,
         gender: formData.gender,
+        nursing_status: allOnboardingFields.includes('nursing_status') ? (formData.gender === 'female' ? (formData.nursing_status || null) : null) : undefined,
         weight_kg: weightKg,
         height_cm: heightCm,
         food_allergies: formData.food_allergies || null,
@@ -3412,12 +3443,23 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                       key={gender.value}
                       type="button"
                       onClick={() => {
-                        setFormData(prev => ({ ...prev, gender: gender.value }));
+                        setFormData(prev => ({
+                          ...prev,
+                          gender: gender.value,
+                          nursing_status: gender.value === 'female' ? prev.nursing_status : ''
+                        }));
                         // Clear error for this field when selecting
                         if (fieldErrors['gender']) {
                           setFieldErrors(prev => {
                             const newErrors = { ...prev };
                             delete newErrors['gender'];
+                            return newErrors;
+                          });
+                        }
+                        if (fieldErrors['nursing_status'] && gender.value !== 'female') {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors['nursing_status'];
                             return newErrors;
                           });
                         }
@@ -3433,6 +3475,91 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                   );
                 })}
               </div>
+            </div>
+          )}
+          
+          {currentFields.includes('nursing_status') && formData.gender === 'female' && (
+            <div className="group mt-4 pt-4 border-t border-gray-600/30 animate-fadeIn">
+              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'האם את מניקה?' : 'Are you nursing?'}
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                {[
+                  { value: 'yes', labelHe: 'כן', labelEn: 'Yes' },
+                  { value: 'no', labelHe: 'לא', labelEn: 'No' }
+                ].map((choice) => {
+                  const isSelected = choice.value === 'yes'
+                    ? formData.nursing_status === 'exclusive' || formData.nursing_status === 'partial'
+                    : formData.nursing_status === 'none';
+                  return (
+                    <button
+                      key={choice.value}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          nursing_status: choice.value === 'yes'
+                            ? ((prev.nursing_status === 'exclusive' || prev.nursing_status === 'partial') ? prev.nursing_status : 'exclusive')
+                            : 'none'
+                        }));
+                        if (fieldErrors['nursing_status']) {
+                          setFieldErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors['nursing_status'];
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-center rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                        isSelected
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      } ${fieldErrors['nursing_status'] && !isSelected ? 'border-red-500' : ''}`}
+                    >
+                      {language === 'hebrew' ? choice.labelHe : choice.labelEn}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              {(formData.nursing_status === 'exclusive' || formData.nursing_status === 'partial') && (
+                <div className="mt-4">
+                  <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
+                    {language === 'hebrew' ? 'סוג הנקה' : 'Nursing Type'}
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                    {[
+                      { value: 'exclusive', labelHe: 'הנקה מלאה', labelEn: 'Exclusive' },
+                      { value: 'partial', labelHe: 'הנקה חלקית', labelEn: 'Partial/Combo' }
+                    ].map((status) => {
+                      const isSelected = formData.nursing_status === status.value;
+                      return (
+                        <button
+                          key={status.value}
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, nursing_status: status.value }));
+                            if (fieldErrors['nursing_status']) {
+                              setFieldErrors(prev => {
+                                const newErrors = { ...prev };
+                                delete newErrors['nursing_status'];
+                                return newErrors;
+                              });
+                            }
+                          }}
+                          className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-center rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                            isSelected
+                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
+                              : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                          } ${fieldErrors['nursing_status'] && !isSelected ? 'border-red-500' : ''}`}
+                        >
+                          {language === 'hebrew' ? status.labelHe : status.labelEn}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
