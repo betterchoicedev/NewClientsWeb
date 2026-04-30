@@ -1453,6 +1453,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       }
 
       // Check if a request already exists for this client
+      const requestKey = 'personalized_meal_plan_request';
       const requestTitle = language === 'hebrew'
         ? 'בקשה לתוכנית תזונה מותאמת'
         : 'Request for Personalized Meal Plan';
@@ -1461,7 +1462,9 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         `${apiUrl}/api/profile/system-message-exists?` + 
         `providerId=${encodeURIComponent(providerId)}&` +
         `userCode=${encodeURIComponent(userCode)}&` +
-        `title=${encodeURIComponent(requestTitle)}`
+        `userId=${encodeURIComponent(user?.id || '')}&` +
+        `messageType=${encodeURIComponent('info')}&` +
+        `requestKey=${encodeURIComponent(requestKey)}`
       );
       const checkResult = await checkResponse.json();
 
@@ -1483,11 +1486,12 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         body: JSON.stringify({
           title: requestTitle,
           content: language === 'hebrew'
-            ? `הלקוח ${userCode} מבקש תוכנית תזונה מותאמת ומדויקת יותר.`
-            : `Client ${userCode} is requesting a better and more precise personalized meal plan.`,
+            ? `הלקוח ${userCode} מבקש תוכנית תזונה מותאמת ומדויקת יותר.\nrequest_key:${requestKey}`
+            : `Client ${userCode} is requesting a better and more precise personalized meal plan.\nrequest_key:${requestKey}`,
           messageType: 'info',
           priority: 'medium',
-          directedTo: providerId
+          directedTo: providerId,
+          userId: user?.id || null
         })
       });
 

@@ -597,6 +597,106 @@ app.post('/api/stripe/create-payment-intent', async (req, res) => {
   }
 });
 
+// Validate onboarding access code (free-tier path)
+app.post('/api/subscription/validate-access-code', async (req, res) => {
+  try {
+    const { code, user_id, user_code } = req.body || {};
+
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ valid: false, error: 'Code is required' });
+    }
+    if (!chatSupabase) {
+      return res.status(500).json({ valid: false, error: 'Chat database not configured' });
+    }
+
+    const normalizedCode = code.trim().toUpperCase();
+    if (!normalizedCode) {
+      return res.status(400).json({ valid: false, error: 'Code is required' });
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data: accessCode, error: codeError } = await chatSupabase
+      .from('onboarding_access_codes')
+      .select('*')
+      .eq('code', normalizedCode)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (codeError) {
+      console.error('❌ Error validating access code:', codeError);
+      return res.status(500).json({ valid: false, error: 'Failed to validate code' });
+    }
+
+    if (!accessCode) {
+      return res.status(404).json({ valid: false, error: 'Code is invalid or unavailable' });
+    }
+
+    const now = new Date(nowIso);
+    if (accessCode.valid_from && new Date(accessCode.valid_from) > now) {
+      return res.status(400).json({ valid: false, error: 'Code is not active yet' });
+    }
+    if (accessCode.valid_until && new Date(accessCode.valid_until) < now) {
+      return res.status(400).json({ valid: false, error: 'Code has expired' });
+    }
+
+    const usedCount = Number(accessCode.used_count || 0);
+    const maxUses = accessCode.max_uses == null ? null : Number(accessCode.max_uses);
+    if (maxUses != null && usedCount >= maxUses) {
+      return res.status(400).json({ valid: false, error: 'Code usage limit reached' });
+    }
+
+    const updates = {
+      used_count: usedCount + 1,
+      last_used_at: nowIso,
+      updated_at: nowIso
+    };
+
+    // Store the internal chat_users.id (chat project), not auth user id
+    let resolvedUserCode = user_code || null;
+    if (!resolvedUserCode && user_id) {
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('user_code')
+        .eq('user_id', user_id)
+        .maybeSingle();
+      resolvedUserCode = clientData?.user_code || null;
+    }
+    if (resolvedUserCode) {
+      const { data: chatUserData } = await chatSupabase
+        .from('chat_users')
+        .select('id')
+        .eq('user_code', resolvedUserCode)
+        .maybeSingle();
+      if (chatUserData?.id) {
+        updates.last_used_by_user_id = chatUserData.id;
+      }
+    }
+
+    const { error: updateError } = await chatSupabase
+      .from('onboarding_access_codes')
+      .update(updates)
+      .eq('id', accessCode.id);
+
+    if (updateError) {
+      console.error('❌ Error updating access code usage:', updateError);
+      return res.status(500).json({ valid: false, error: 'Failed to apply code usage' });
+    }
+
+    return res.json({
+      valid: true,
+      code: normalizedCode,
+      message: 'Code validated successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error in subscription/validate-access-code endpoint:', error);
+    return res.status(500).json({
+      valid: false,
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
 // ====================================
 // SUBSCRIPTION MANAGEMENT ROUTES
 // ====================================
@@ -2420,7 +2520,7 @@ app.get('/api/profile/chat-user', async (req, res) => {
 
     const { data, error } = await chatSupabase
       .from('chat_users')
-      .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language, subscription_status, subscription_type, subscription_expires_at')
+      .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language, subscription_status, subscription_type, subscription_expires_at, is_blocked, user_code')
       .eq('user_code', userCode)
       .maybeSingle();
 
@@ -2859,8 +2959,8 @@ app.get('/api/profile/provider', async (req, res) => {
 // Check if system message already exists
 app.get('/api/profile/system-message-exists', async (req, res) => {
   try {
-    const { providerId, userCode, title } = req.query;
-    if (!providerId || !userCode || !title) {
+    const { providerId, userCode, userId, title, messageType, requestKey } = req.query;
+    if (!providerId || (!userCode && !userId)) {
       return res.status(400).json({ error: 'Missing required parameters' });
     }
 
@@ -2868,14 +2968,58 @@ app.get('/api/profile/system-message-exists', async (req, res) => {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    let query = chatSupabase
       .from('system_messages')
       .select('id')
       .eq('directed_to', providerId)
-      .eq('message_type', 'info')
-      .eq('title', title)
-      .ilike('content', `%${userCode}%`)
       .eq('is_active', true);
+
+    if (messageType) {
+      query = query.eq('message_type', messageType);
+    }
+
+    if (title) {
+      query = query.eq('title', title);
+    }
+
+    if (requestKey) {
+      query = query.ilike('content', `%request_key:${requestKey}%`);
+    }
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    } else if (userCode) {
+      query = query.ilike('content', `%${userCode}%`);
+    }
+
+    let { data, error } = await query;
+
+    // Backward compatibility: if checking by user_id found nothing, also check legacy messages by user_code in content.
+    if ((!data || data.length === 0) && userId && userCode) {
+      let fallbackQuery = chatSupabase
+        .from('system_messages')
+        .select('id')
+        .eq('directed_to', providerId)
+        .eq('is_active', true)
+        .ilike('content', `%${userCode}%`);
+
+      if (messageType) {
+        fallbackQuery = fallbackQuery.eq('message_type', messageType);
+      }
+      if (title) {
+        fallbackQuery = fallbackQuery.eq('title', title);
+      }
+      if (requestKey) {
+        fallbackQuery = fallbackQuery.ilike('content', `%request_key:${requestKey}%`);
+      }
+
+      const fallbackResult = await fallbackQuery;
+      if (!fallbackResult.error) {
+        data = fallbackResult.data;
+      } else if (!error) {
+        error = fallbackResult.error;
+      }
+    }
 
     if (error && error.code !== 'PGRST116') {
       throw error;
@@ -2891,7 +3035,7 @@ app.get('/api/profile/system-message-exists', async (req, res) => {
 // Create system message
 app.post('/api/profile/system-message', async (req, res) => {
   try {
-    const { title, content, messageType, priority, directedTo } = req.body;
+    const { title, content, messageType, priority, directedTo, userId } = req.body;
     if (!title || !content || !directedTo) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -2908,7 +3052,8 @@ app.post('/api/profile/system-message', async (req, res) => {
         message_type: messageType || 'info',
         priority: priority || 'medium',
         is_active: true,
-        directed_to: directedTo
+        directed_to: directedTo,
+        user_id: userId || null
       })
       .select()
       .single();

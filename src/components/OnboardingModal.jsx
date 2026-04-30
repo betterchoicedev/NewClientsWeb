@@ -3227,12 +3227,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       setPromoCodeLoading(true);
       setPromoCodeError('');
       try {
+        const resolvedUserCode = completedOnboardingContext?.userCode || userCode;
         const validateResponse = await fetch(`${apiUrl}/api/subscription/validate-access-code`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             code: promoCode.trim(),
-            user_id: user?.id
+            user_id: user?.id,
+            user_code: resolvedUserCode || null
           })
         });
 
@@ -3245,7 +3247,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           return;
         }
 
-        const resolvedUserCode = completedOnboardingContext?.userCode || userCode;
         if (resolvedUserCode) {
           const oneMonthFromNow = new Date();
           oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);

@@ -9,6 +9,7 @@ const PricingTab = ({ themeClasses, user, language }) => {
   const [userSubscriptions, setUserSubscriptions] = useState([]);
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
   const [usdExchangeRate, setUsdExchangeRate] = useState(null); // ILS per 1 USD (Bank of Israel)
+  const [isContactingSupport, setIsContactingSupport] = useState(false);
 
   const allProducts = getAllProducts();
 
@@ -20,6 +21,10 @@ const PricingTab = ({ themeClasses, user, language }) => {
   const consultationProducts = getProductsByCategory('consultation');
 
   const [subscriptionsLastFetched, setSubscriptionsLastFetched] = useState(null);
+  const userCode = user?.user_code || user?.userCode || user?.code || '';
+  const userId = user?.id || '';
+  const clientName = user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || '';
+  const isUserBlocked = user?.is_blocked === true || user?.is_blocked === 1 || user?.is_blocked === 'true';
 
   const fetchUserSubscriptions = async () => {
     try {
@@ -100,6 +105,100 @@ const PricingTab = ({ themeClasses, user, language }) => {
     }
   };
 
+  const handleContactSupport = async () => {
+    if ((!userCode && !userId) || !user) {
+      alert(
+        language === 'hebrew'
+          ? 'שגיאה: לא ניתן לזהות את המשתמש'
+          : 'Error: Unable to identify user'
+      );
+      return;
+    }
+
+    try {
+      setIsContactingSupport(true);
+
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+
+      // Same provider lookup flow used in MyPlanTab
+      const providerResponse = await fetch(`${apiUrl}/api/profile/provider?userCode=${encodeURIComponent(userCode)}`);
+      const providerResult = await providerResponse.json();
+
+      if (!providerResponse.ok || !providerResult.provider_id) {
+        throw new Error(
+          language === 'hebrew'
+            ? 'לא נמצא דיאטנית משויכת'
+            : 'No associated dietitian found'
+        );
+      }
+
+      const providerId = providerResult.provider_id;
+      const requestKey = 'blocked_account_reactivation';
+      const requestTitle = language === 'hebrew'
+        ? 'בקשה להפעלה מחדש - חשבון נחסם'
+        : 'Manual reactivation request - blocked account';
+
+      const checkResponse = await fetch(
+        `${apiUrl}/api/profile/system-message-exists?` +
+        `providerId=${encodeURIComponent(providerId)}&` +
+        `userCode=${encodeURIComponent(userCode)}&` +
+        `userId=${encodeURIComponent(userId)}&` +
+        `messageType=${encodeURIComponent('warning')}&` +
+        `requestKey=${encodeURIComponent(requestKey)}`
+      );
+      const checkResult = await checkResponse.json();
+
+      if (checkResponse.ok && checkResult.exists) {
+        alert(
+          language === 'hebrew'
+            ? 'הבקשה כבר נשלחה בעבר. ניצור איתכם קשר בקרוב!'
+            : 'Request already sent. We will contact you soon!'
+        );
+        return;
+      }
+
+      const messageResponse = await fetch(`${apiUrl}/api/profile/system-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: requestTitle,
+          content: language === 'hebrew'
+            ? `הלקוח ${clientName || 'לא ידוע'} (קוד משתמש: ${userCode}) מבקש בדיקה ידנית והפעלה מחדש של חשבון שנחסם בעקבות חוסר פעילות.\nrequest_key:${requestKey}`
+            : `Client ${clientName || 'Unknown'} (User Code: ${userCode}) requests manual review and reactivation after account blocking due to inactivity.\nrequest_key:${requestKey}`,
+          messageType: 'warning',
+          priority: 'high',
+          directedTo: providerId,
+          userId
+        })
+      });
+
+      const messageResult = await messageResponse.json();
+      if (!messageResponse.ok) {
+        throw new Error(
+          language === 'hebrew'
+            ? `שגיאה בשליחת הבקשה: ${messageResult.error || 'שגיאה לא ידועה'}`
+            : `Error sending request: ${messageResult.error || 'Unknown error'}`
+        );
+      }
+
+      alert(
+        language === 'hebrew'
+          ? 'הבקשה נשלחה בהצלחה. ניצור איתכם קשר בקרוב!'
+          : 'Your request was sent. We will contact you soon!'
+      );
+    } catch (error) {
+      console.error('Error contacting support:', error);
+      alert(
+        error.message ||
+        (language === 'hebrew'
+          ? 'שגיאה בשליחת הבקשה. אנא נסה שוב מאוחר יותר.'
+          : 'Error sending request. Please try again later.')
+      );
+    } finally {
+      setIsContactingSupport(false);
+    }
+  };
+
   const hasActiveSubscription = (productId) => {
     return userSubscriptions.some(sub => {
       if (sub.status !== 'active') return false;
@@ -158,6 +257,50 @@ const PricingTab = ({ themeClasses, user, language }) => {
 
   return (
     <div className="min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn">
+      {isUserBlocked && (
+        <div className="mb-6 sm:mb-8 animate-slideInUp">
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 sm:p-6 shadow-lg">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 h-9 w-9 rounded-lg bg-red-500 text-white flex items-center justify-center flex-shrink-0">
+                <span className="text-lg">🚫</span>
+              </div>
+              <div className="flex-1">
+                <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-semibold mb-2`}>
+                  {language === 'hebrew' ? 'הגישה הוסרה: החשבון הושבת' : 'Access Revoked: Account Deactivated'}
+                </h3>
+                <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-3`}>
+                  {language === 'hebrew'
+                    ? 'שמנו לב שלא הייתה אינטראקציה עם הבוט מעל 14 ימים, ולכן החשבון הושבת אוטומטית כחלק משמירה על קהילה פעילה וממוקדת.'
+                    : 'We noticed you have not interacted with the bot for over 14 days, so your account was automatically deactivated as part of maintaining an active and focused community.'
+                  }
+                </p>
+                <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-2`}>
+                  {language === 'hebrew'
+                    ? 'הפעלה מחדש אינה אוטומטית ודורשת בדיקה ידנית של הצוות.'
+                    : 'Reactivation is not automatic and requires a manual review by our team.'
+                  }
+                </p>
+                {!!userCode && (
+                  <p className={`${themeClasses.textPrimary} text-sm font-medium mb-4`}>
+                    {language === 'hebrew' ? 'קוד משתמש: ' : 'User Code: '}{userCode}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleContactSupport}
+                  disabled={isContactingSupport}
+                  className="inline-flex items-center rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 transition-colors"
+                >
+                  {isContactingSupport
+                    ? (language === 'hebrew' ? 'שולח...' : 'Sending...')
+                    : (language === 'hebrew' ? 'צור קשר עם התמיכה' : 'Contact Support')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp">
         <div className="flex items-center mb-8">

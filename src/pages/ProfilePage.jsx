@@ -175,6 +175,7 @@ const ProfilePage = () => {
     city: '',
     timezone: '',
     userLanguage: '',
+    isBlocked: false,
     companyId: '',
     profileImageUrl: ''
   });
@@ -511,6 +512,7 @@ const ProfilePage = () => {
           city: (chatUserData?.city || data?.city) || '',
           timezone: (chatUserData?.timezone || data?.timezone) || '',
           userLanguage: (chatUserData?.language || data?.user_language) || '',
+          isBlocked: chatUserData?.is_blocked === true || chatUserData?.is_blocked === 1 || chatUserData?.is_blocked === 'true',
           companyId: prev.companyId || '',
           profileImageUrl: data?.profile_image_url || ''
         }));
@@ -1454,7 +1456,16 @@ const ProfilePage = () => {
                 <MessagesTab themeClasses={themeClasses} t={t} userCode={profileData.userCode} activeTab={activeTab} language={language} />
               )}
               {activeTab === 'pricing' && (
-                <PricingTab themeClasses={themeClasses} user={user} language={language} />
+                <PricingTab
+                  themeClasses={themeClasses}
+                  user={{
+                    ...user,
+                    user_code: profileData.userCode || user?.user_code,
+                    is_blocked: profileData.isBlocked,
+                    full_name: `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || user?.full_name || ''
+                  }}
+                  language={language}
+                />
               )}
               {activeTab === 'settings' && (
                 <SettingsTab themeClasses={themeClasses} language={language} userCode={profileData.userCode} />
