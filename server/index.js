@@ -2420,7 +2420,7 @@ app.get('/api/profile/chat-user', async (req, res) => {
 
     const { data, error } = await chatSupabase
       .from('chat_users')
-      .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language')
+      .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language, subscription_status, subscription_type, subscription_expires_at')
       .eq('user_code', userCode)
       .maybeSingle();
 

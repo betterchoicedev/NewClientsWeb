@@ -20,6 +20,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const [showUsageBasedOffer, setShowUsageBasedOffer] = useState(false);
   const [completedOnboardingContext, setCompletedOnboardingContext] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoCodeLoading, setPromoCodeLoading] = useState(false);
+  const [promoCodeError, setPromoCodeError] = useState('');
+  const [commitToBotUsage, setCommitToBotUsage] = useState(false);
   const [showPWAInstallPrompt, setShowPWAInstallPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
@@ -807,9 +811,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   // Save form data to localStorage whenever it changes (only if modal is open and we have progress)
   useEffect(() => {
     if (isOpen && user && currentStep >= 0) {
+      const currentStepField = filteredSteps[currentStep]?.fields?.[0] || null;
       const saveData = {
         formData,
         currentStep,
+        currentStepField,
         dobDay,
         dobMonth,
         dobYear,
@@ -826,7 +832,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       };
       localStorage.setItem(`onboarding_${user.id}`, JSON.stringify(saveData));
     }
-  }, [formData, currentStep, dobDay, dobMonth, dobYear, weightUnit, heightUnit, selectedAllergies, allergiesOtherText, selectedLimitations, limitationsOtherText, editedDailyCalories, editedMacros, macroEditMode, lockedMacros, isOpen, user]);
+  }, [formData, currentStep, filteredSteps, dobDay, dobMonth, dobYear, weightUnit, heightUnit, selectedAllergies, allergiesOtherText, selectedLimitations, limitationsOtherText, editedDailyCalories, editedMacros, macroEditMode, lockedMacros, isOpen, user]);
 
   // Restore current step from localStorage when modal opens (before loadExistingData runs)
   useEffect(() => {
@@ -835,9 +841,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         const savedData = localStorage.getItem(`onboarding_${user.id}`);
         if (savedData) {
           const parsed = JSON.parse(savedData);
-          // Restore current step if we have saved progress (not just welcome screen)
+          // Restore local answers/UI state but do NOT restore step index.
+          // Step position should always be derived from first incomplete DB-backed step.
           if (parsed.currentStep !== undefined && parsed.currentStep >= 0) {
-            setCurrentStep(parsed.currentStep);
             // Restore UI state (units, date fields, selections)
             setDobDay(parsed.dobDay || '');
             setDobMonth(parsed.dobMonth || '');
@@ -866,6 +872,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       setFieldErrors({});
     }
   }, [isOpen, user]);
+
+  useEffect(() => {
+    if (!isOpen || filteredSteps.length === 0 || currentStep < 0) return;
+    if (currentStep > filteredSteps.length - 1) {
+      setCurrentStep(filteredSteps.length - 1);
+    }
+  }, [filteredSteps, isOpen, currentStep]);
 
   // Auto-detect timezone on mount
   useEffect(() => {
@@ -946,6 +959,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     setCheckingData(true);
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      let shouldReopenUsageOffer = false;
       
       // Fetch client data via API
       const clientResponse = await fetch(`${apiUrl}/api/onboarding/client-data?user_id=${encodeURIComponent(user.id)}`);
@@ -957,6 +971,31 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       const clientResult = await clientResponse.json();
       const data = clientResult.data;
       const error = clientResult.error ? { code: clientResult.error } : null;
+      const resolvedUserCode = userCode || data?.user_code || null;
+
+      // Backend-only payment pending flag:
+      // if subscription_status is pending_payment and onboarding is not completed,
+      // reopen directly to the payment offer instead of form steps.
+      if (resolvedUserCode && data?.onboarding_completed !== true) {
+        try {
+          const chatProfileResponse = await fetch(`${apiUrl}/api/profile/chat-user?userCode=${encodeURIComponent(resolvedUserCode)}`);
+          if (chatProfileResponse.ok) {
+            const chatProfileResult = await chatProfileResponse.json();
+            const subscriptionStatus = chatProfileResult?.data?.subscription_status;
+            if (subscriptionStatus === 'pending_payment') {
+              setCompletedOnboardingContext(prev => ({
+                ...(prev || {}),
+                userCode: resolvedUserCode
+              }));
+              // Keep loading and pre-filling onboarding values so user can go back
+              // from payment and still see all previously entered answers.
+              shouldReopenUsageOffer = true;
+            }
+          }
+        } catch (pendingStatusError) {
+          console.warn('Could not check pending payment status:', pendingStatusError);
+        }
+      }
 
       // Also check chat_users for number_of_meals via API
       let chatUserMealData = null;
@@ -1318,9 +1357,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       // Filter steps to only show steps with missing fields
       let filtered = allSteps
         .map(step => {
-          // Always show Preferred Language step (so it appears right after welcome, before name)
+          // Show Preferred Language step only when language is actually missing
           if (step.fields.length === 1 && step.fields[0] === 'language') {
-            return { ...step, fields: ['language'] };
+            return {
+              ...step,
+              fields: missingFields.includes('language') ? ['language'] : []
+            };
           }
           // Keep gender + nursing together when either is relevant/missing
           if (step.fields.includes('gender') && step.fields.includes('nursing_status')) {
@@ -1344,6 +1386,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         .filter(step => step.fields.length > 0);
 
       setFilteredSteps(filtered);
+
+      if (shouldReopenUsageOffer) {
+        setShowUsageBasedOffer(true);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -2014,7 +2060,147 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
     setError('');
 
+    const persistCurrentStepToDb = async () => {
+      if (!user?.id) return;
+
+      const currentStepDef = filteredSteps[currentStep];
+      if (!currentStepDef || !Array.isArray(currentStepDef.fields) || currentStepDef.fields.length === 0) return;
+
+      const fields = currentStepDef.fields;
+      const partialClientData = {
+        onboarding_completed: false,
+        updated_at: new Date().toISOString()
+      };
+      const partialChatUserData = {
+        onboarding_done: false,
+        updated_at: new Date().toISOString()
+      };
+
+      if (fields.includes('first_name') && formData.first_name) partialClientData.first_name = formData.first_name;
+      if (fields.includes('last_name') && formData.last_name) partialClientData.last_name = formData.last_name;
+      if ((fields.includes('first_name') || fields.includes('last_name')) && (formData.first_name || formData.last_name)) {
+        const fullName = `${formData.first_name || ''} ${formData.last_name || ''}`.trim();
+        partialClientData.full_name = fullName;
+        partialChatUserData.full_name = fullName;
+      }
+      if (fields.includes('language') && formData.language) {
+        partialClientData.user_language = formData.language;
+        partialChatUserData.language = formData.language;
+        partialChatUserData.user_language = formData.language;
+      }
+      if (fields.includes('city') && formData.city) partialClientData.city = formData.city;
+      if (fields.includes('city') && formData.city) partialChatUserData.city = formData.city;
+      if (fields.includes('region') && formData.region) {
+        partialClientData.region = formData.region;
+        partialChatUserData.region = formData.region;
+      }
+      if (fields.includes('timezone') && formData.timezone) {
+        partialClientData.timezone = formData.timezone;
+        partialChatUserData.timezone = formData.timezone;
+      }
+      if (fields.includes('gender') && formData.gender) {
+        partialClientData.gender = formData.gender;
+        partialChatUserData.gender = formData.gender;
+      }
+      if (fields.includes('weight_kg') && formData.weight_kg) {
+        const weightKg = parseFloat(formData.weight_kg);
+        partialClientData.current_weight = weightKg;
+        partialChatUserData.weight_kg = weightKg;
+      }
+      if (fields.includes('target_weight') && formData.target_weight) partialClientData.target_weight = parseFloat(formData.target_weight);
+      if (fields.includes('height_cm') && formData.height_cm) {
+        const heightCm = parseFloat(formData.height_cm);
+        partialClientData.height = heightCm;
+        partialChatUserData.height_cm = heightCm;
+      }
+      if (fields.includes('activity_level') && formData.activity_level) {
+        partialClientData.activity_level = formData.activity_level;
+        partialChatUserData.Activity_level = formData.activity_level;
+      }
+      if (fields.includes('goal') && formData.goal) {
+        partialClientData.goal = formData.goal;
+        partialChatUserData.goal = formData.goal;
+      }
+      if (fields.includes('medical_conditions')) partialClientData.medical_conditions = formData.medical_conditions || null;
+      if (fields.includes('medical_conditions')) partialChatUserData.medical_conditions = formData.medical_conditions || null;
+      if (fields.includes('food_allergies')) {
+        partialClientData.food_allergies = formData.food_allergies || null;
+        partialChatUserData.food_allergies = formData.food_allergies || null;
+      }
+      if (fields.includes('food_limitations')) {
+        partialClientData.food_limitations = formData.food_limitations || null;
+        partialChatUserData.food_limitations = formData.food_limitations || null;
+      }
+      if (fields.includes('date_of_birth') && formData.date_of_birth) {
+        const birthDate = convertDDMMYYYYToYYYYMMDD(formData.date_of_birth);
+        partialClientData.birth_date = birthDate;
+        partialChatUserData.date_of_birth = birthDate;
+        const age = calculateAge(formData.date_of_birth);
+        if (age !== null && age !== undefined) {
+          partialClientData.age = age;
+          partialChatUserData.age = age;
+        }
+      }
+      if (fields.includes('nursing_status')) {
+        partialChatUserData.nursing_status = formData.gender === 'female' ? (formData.nursing_status || null) : null;
+      }
+      if (fields.includes('first_meal_time') && formData.first_meal_time) {
+        partialChatUserData.first_meal_time = formData.first_meal_time;
+      }
+      if (fields.includes('last_meal_time') && formData.last_meal_time) {
+        partialChatUserData.last_meal_time = formData.last_meal_time;
+      }
+      if (fields.includes('number_of_meals') && formData.number_of_meals) {
+        partialChatUserData.number_of_meals = parseInt(formData.number_of_meals, 10);
+      }
+      if (fields.includes('client_preference')) {
+        partialChatUserData.client_preference = formData.client_preference
+          ? { dietary_preferences: formData.client_preference.trim() }
+          : null;
+      }
+
+      if (fields.includes('phone') && formData.phone && formData.phone.trim()) {
+        let phoneNumber = normalizePhoneForDatabase(formData.phone.trim());
+        if (phoneNumber.startsWith('0') && formData.phoneCountryCode === '+972') {
+          phoneNumber = formData.phoneCountryCode + phoneNumber.substring(1);
+        } else if (!phoneNumber.startsWith('+')) {
+          phoneNumber = formData.phoneCountryCode + phoneNumber;
+        }
+        partialClientData.phone = phoneNumber;
+        partialChatUserData.phone_number = phoneNumber;
+        partialChatUserData.whatsapp_number = phoneNumber;
+      }
+
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+        await fetch(`${apiUrl}/api/onboarding/update-client`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: user.id,
+            clientData: partialClientData
+          })
+        });
+
+        const resolvedUserCode = userCode || completedOnboardingContext?.userCode;
+        if (resolvedUserCode) {
+          await fetch(`${apiUrl}/api/onboarding/update-chat-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_code: resolvedUserCode,
+              chatUserData: partialChatUserData
+            })
+          });
+        }
+      } catch (persistError) {
+        // Non-blocking: allow user to continue and rely on local/on-submit persistence.
+        console.warn('Step progress persistence warning:', persistError);
+      }
+    };
+
     if (currentStep < filteredSteps.length - 1) {
+      await persistCurrentStepToDb();
       setCurrentStep(currentStep + 1);
     } else {
       // Last step - save data
@@ -2388,7 +2574,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       
       // Prepare data for clients - include all fields from onboarding
       const clientData = {
-        onboarding_completed: true,
+        onboarding_completed: false,
         updated_at: new Date().toISOString()
       };
 
@@ -2666,7 +2852,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
             user_id: user.id,
             clientData: {
               ...clientData,
-              onboarding_completed: true
+              onboarding_completed: false
             }
           })
         });
@@ -2758,44 +2944,40 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.warn('⚠️ No userCode available - chat_users table was not updated. This may happen for new Google signups.');
       }
 
-      console.log('✅ Onboarding data saved successfully — generating meal plan...');
-      
-      // Generate meal plan automatically if we have user_code and targets to persist
-      if (finalUserCode && dailyCalories) {
-        const clientName = fullName || 
-                          (formData.first_name && formData.last_name ? `${formData.first_name} ${formData.last_name}`.trim() : '') ||
-                          formData.first_name || 
-                          formData.last_name || 
-                          'Client';
-        
-        const userLanguage = formData.language || language;
-        
-        // Generate meal plan (don't block if it fails)
-        const mealPlanResult = await generateMealPlan(
-          finalUserCode,
-          dailyCalories,
-          macros,
-          clientName,
-          userLanguage
-        );
-        
-        if (mealPlanResult.success) {
-          console.log('✅ Meal plan generated successfully!');
-        } else {
-          console.warn('⚠️ Meal plan generation failed (non-blocking):', mealPlanResult.error);
-        }
-      } else {
-        console.log('ℹ️ Skipping meal plan generation - missing required data:', {
-          hasUserCode: !!finalUserCode,
-          hasDailyCalories: !!dailyCalories
-        });
-      }
-      
-      console.log('✅ Onboarding complete — showing support offer. WhatsApp welcome will be sent after payment.');
-      
-      // WhatsApp welcome message is sent only after payment (via backend Stripe webhook for onboarding upsell)
+      const clientName = fullName ||
+                        (formData.first_name && formData.last_name ? `${formData.first_name} ${formData.last_name}`.trim() : '') ||
+                        formData.first_name ||
+                        formData.last_name ||
+                        'Client';
+      const userLanguage = formData.language || language;
+
+      console.log('✅ Onboarding base data saved. Waiting for subscription path before meal plan generation.');
       
       setLoading(false);
+      setCompletedOnboardingContext({
+        userCode: finalUserCode || userCode || null,
+        dailyCalories,
+        macros,
+        clientName,
+        userLanguage
+      });
+      if (finalUserCode) {
+        try {
+          await fetch(`${apiUrl}/api/onboarding/update-chat-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_code: finalUserCode,
+              chatUserData: {
+                subscription_status: 'pending_payment',
+                updated_at: new Date().toISOString()
+              }
+            })
+          });
+        } catch (pendingUpdateError) {
+          console.warn('Could not set pending payment flag in backend:', pendingUpdateError);
+        }
+      }
       setShowUsageBasedOffer(true);
       return;
     } catch (err) {
@@ -2958,10 +3140,59 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   // Usage-based support offer (after onboarding save, before WhatsApp) — skippable
   if (showUsageBasedOffer) {
     const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+    const finalizeOnboardingAfterSubscription = async ({ requireActiveSubscription = false, sendWelcome = false } = {}) => {
+      const resolvedUserCode = completedOnboardingContext?.userCode || userCode;
+      if (!resolvedUserCode) {
+        throw new Error(language === 'hebrew' ? 'לא נמצא קוד משתמש' : 'User code is missing');
+      }
+
+      if (requireActiveSubscription) {
+        const subCheckResponse = await fetch(`${apiUrl}/api/profile/chat-user?userCode=${encodeURIComponent(resolvedUserCode)}`);
+        const subCheckResult = await subCheckResponse.json().catch(() => ({}));
+        const subscriptionStatus = subCheckResult?.data?.subscription_status;
+        if (!subCheckResponse.ok || subscriptionStatus !== 'active') {
+          throw new Error(language === 'hebrew' ? 'נדרש מנוי פעיל כדי להמשיך' : 'An active subscription is required to continue');
+        }
+      }
+
+      const completeResponse = await fetch(`${apiUrl}/api/onboarding/update-client`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user?.id,
+          clientData: {
+            onboarding_completed: true,
+            updated_at: new Date().toISOString()
+          }
+        })
+      });
+      if (!completeResponse.ok) {
+        const completeResult = await completeResponse.json().catch(() => ({}));
+        throw new Error(completeResult?.error || (language === 'hebrew' ? 'שגיאה בסיום האונבורדינג' : 'Failed to complete onboarding'));
+      }
+
+      const mealPlanResult = await generateMealPlan(
+        resolvedUserCode,
+        completedOnboardingContext?.dailyCalories,
+        completedOnboardingContext?.macros,
+        completedOnboardingContext?.clientName || 'Client',
+        completedOnboardingContext?.userLanguage || language
+      );
+      if (!mealPlanResult.success) {
+        console.warn('⚠️ Meal plan generation failed (non-blocking):', mealPlanResult.error);
+      }
+
+      if (sendWelcome) {
+        sendWhatsAppAndClose();
+      }
+    };
+
     const handleSupport = async () => {
       setCheckoutLoading(true);
       setError('');
       try {
+        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: false, sendWelcome: false });
+
         const res = await fetch(`${apiUrl}/api/stripe/create-checkout-session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2987,9 +3218,111 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       }
     };
 
+    const handleContinueWithCode = async () => {
+      if (!promoCode.trim()) {
+        setPromoCodeError(language === 'hebrew' ? 'יש להזין קוד' : 'Please enter a code');
+        return;
+      }
+
+      setPromoCodeLoading(true);
+      setPromoCodeError('');
+      try {
+        const validateResponse = await fetch(`${apiUrl}/api/subscription/validate-access-code`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: promoCode.trim(),
+            user_id: user?.id
+          })
+        });
+
+        const validateResult = await validateResponse.json().catch(() => ({}));
+        if (!validateResponse.ok || validateResult?.valid !== true) {
+          setPromoCodeError(
+            validateResult?.error ||
+            (language === 'hebrew' ? 'קוד לא תקין או לא זמין' : 'Code is invalid or unavailable')
+          );
+          return;
+        }
+
+        const resolvedUserCode = completedOnboardingContext?.userCode || userCode;
+        if (resolvedUserCode) {
+          const oneMonthFromNow = new Date();
+          oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
+          await fetch(`${apiUrl}/api/onboarding/update-chat-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_code: resolvedUserCode,
+              chatUserData: {
+                subscription_type: 'free_tier',
+                subscription_status: 'active',
+                subscription_expires_at: oneMonthFromNow.toISOString(),
+                updated_at: new Date().toISOString()
+              }
+            })
+          });
+        }
+
+        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: true, sendWelcome: true });
+      } catch (e) {
+        setPromoCodeError(e.message || (language === 'hebrew' ? 'שגיאה בחיבור לשרת' : 'Connection error'));
+      } finally {
+        setPromoCodeLoading(false);
+      }
+    };
+
+    const handleContinueWithoutPayment = async () => {
+      if (!commitToBotUsage) {
+        setPromoCodeError(
+          language === 'hebrew'
+            ? 'יש לאשר את ההתחייבות לשימוש בבוט'
+            : 'Please confirm your commitment to use the bot'
+        );
+        return;
+      }
+
+      setPromoCodeLoading(true);
+      setPromoCodeError('');
+      try {
+        const resolvedUserCode = completedOnboardingContext?.userCode || userCode;
+        if (!resolvedUserCode) {
+          throw new Error(language === 'hebrew' ? 'לא נמצא קוד משתמש' : 'User code is missing');
+        }
+
+        const updateFreeTierResponse = await fetch(`${apiUrl}/api/onboarding/update-chat-user`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_code: resolvedUserCode,
+            chatUserData: {
+              subscription_type: 'free_tier',
+              subscription_status: 'active',
+              subscription_expires_at: (() => {
+                const oneMonthFromNow = new Date();
+                oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
+                return oneMonthFromNow.toISOString();
+              })(),
+              updated_at: new Date().toISOString()
+            }
+          })
+        });
+        if (!updateFreeTierResponse.ok) {
+          const updateFreeTierResult = await updateFreeTierResponse.json().catch(() => ({}));
+          throw new Error(updateFreeTierResult?.error || (language === 'hebrew' ? 'שגיאה בעדכון סטטוס מנוי' : 'Failed to update subscription status'));
+        }
+
+        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: true, sendWelcome: true });
+      } catch (e) {
+        setPromoCodeError(e.message || (language === 'hebrew' ? 'שגיאה בחיבור לשרת' : 'Connection error'));
+      } finally {
+        setPromoCodeLoading(false);
+      }
+    };
+
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4" dir={direction}>
-  <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 p-6 sm:p-8 md:p-10 max-w-lg w-full max-h-[95vh] overflow-y-auto animate-scaleIn relative text-center`}>
+  <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 pt-4 px-4 pb-0 sm:pt-8 sm:px-8 sm:pb-0 md:pt-10 md:px-10 md:pb-0 max-w-lg w-full h-[95vh] sm:max-h-[95vh] overflow-y-auto animate-scaleIn relative text-center flex flex-col`}>
     
     {/* עיצוב רקע עליון */}
     <div className="absolute top-0 left-0 right-0 h-16 sm:h-24 bg-gradient-to-br from-emerald-500/20 via-blue-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none" />
@@ -3003,7 +3336,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
     </button>
 
-    <div className="relative mt-6 sm:mt-4 mb-6">
+    <div className="relative mt-4 sm:mt-4 mb-4">
       {/* אייקון מוטיבציה */}
       <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
         <span className="text-3xl">🏁</span>
@@ -3053,19 +3386,90 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
             : '**you can cancel the charge at any time'}
         </p>
       </div>
+      <div className={`mt-3 text-[11px] sm:text-xs ${themeClasses.textSecondary} opacity-80 flex items-center justify-center gap-2`}>
+        <span className="animate-bounce">↓</span>
+        <span>{language === 'hebrew' ? 'גלול/י למטה לעוד אפשרויות' : 'Scroll down for more options'}</span>
+      </div>
+
+      <div className={`mt-4 p-3 sm:p-4 rounded-xl border border-gray-600/40 ${themeClasses.bgCard}`}>
+        <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+          {language === 'hebrew' ? 'יש לך קוד?' : 'Have a code?'}
+        </label>
+        <input
+          type="text"
+          value={promoCode}
+          onChange={(e) => {
+            setPromoCode(e.target.value);
+            if (promoCodeError) setPromoCodeError('');
+          }}
+          placeholder={language === 'hebrew' ? 'הזן קוד' : 'Enter code'}
+          className={`w-full px-3 py-2.5 text-sm ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary}`}
+        />
+
+        {promoCodeError && (
+          <p className="text-red-400 text-xs sm:text-sm mt-2">{promoCodeError}</p>
+        )}
+
+        <button
+          onClick={handleContinueWithCode}
+          disabled={promoCodeLoading}
+          className="w-full mt-3 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-60"
+        >
+          {promoCodeLoading
+            ? (language === 'hebrew' ? 'מאמת קוד...' : 'Validating code...')
+            : (language === 'hebrew' ? 'המשך עם קוד' : 'Continue with code')}
+        </button>
+      </div>
     </div>
 
     {/* כפתורי פעולה */}
-    <div className="flex flex-col gap-3 mt-6">
+    <div className={`sticky bottom-[-1px] z-30 mt-auto py-2 -mx-4 sm:-mx-8 md:-mx-10 px-4 sm:px-8 md:px-10 ${themeClasses.bgCard} bg-opacity-100 border-t border-gray-700/40 flex flex-col gap-2 shadow-[0_-8px_20px_rgba(0,0,0,0.35)]`}>
       <button
         onClick={handleSupport}
         disabled={checkoutLoading}
-        className="w-full py-4 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25"
+        className="w-full py-3 sm:py-3.5 px-5 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25"
       >
         {checkoutLoading
           ? (language === 'hebrew' ? 'מתחברים...' : 'Connecting...')
           : (language === 'hebrew' ? 'אני בפנים, בואו נתחיל!' : 'I\'m in, let\'s start!')}
       </button>
+      <details className="text-left opacity-80">
+        <summary className={`cursor-pointer text-[10px] sm:text-[11px] ${themeClasses.textSecondary} leading-tight`}>
+          {language === 'hebrew'
+            ? 'אפשרות אחרונה (ללא תשלום)'
+            : 'Last option (without payment)'}
+        </summary>
+        <div className="mt-1.5 space-y-1.5">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={commitToBotUsage}
+              onChange={(e) => {
+                setCommitToBotUsage(e.target.checked);
+                if (promoCodeError) setPromoCodeError('');
+              }}
+              className="mt-0.5 h-3 w-3 accent-emerald-500"
+            />
+            <span className={`text-[10px] sm:text-[11px] leading-tight ${themeClasses.textSecondary}`}>
+              {language === 'hebrew'
+                ? 'אני מתחייב/ת להשתמש בבוט ולא לדלג יותר מ-4 ימים.'
+                : 'I commit to using the bot and not skipping more than 4 days.'}
+            </span>
+          </label>
+          {promoCodeError && (
+            <p className="text-red-400 text-[10px] sm:text-xs">{promoCodeError}</p>
+          )}
+          <button
+            onClick={handleContinueWithoutPayment}
+            disabled={promoCodeLoading}
+            className={`w-full py-1.5 px-3 rounded-lg text-[11px] sm:text-xs font-medium border border-gray-600/40 ${themeClasses.textSecondary} ${themeClasses.bgCard} hover:border-emerald-500/40 transition-all disabled:opacity-60`}
+          >
+            {promoCodeLoading
+              ? (language === 'hebrew' ? 'מעדכן...' : 'Updating...')
+              : (language === 'hebrew' ? 'המשך ללא תשלום' : 'Continue without payment')}
+          </button>
+        </div>
+      </details>
     </div>
   </div>
 </div>
