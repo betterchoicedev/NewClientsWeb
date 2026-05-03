@@ -2122,6 +2122,93 @@ app.post('/api/onboarding/update-chat-user', async (req, res) => {
   }
 });
 
+// AI-powered activity level classification from open-text description
+app.post('/api/onboarding/classify-activity', async (req, res) => {
+  try {
+    const { activityDescription } = req.body;
+    if (!activityDescription || !activityDescription.trim()) {
+      return res.status(400).json({ error: 'activityDescription is required' });
+    }
+
+    const apiBase = (process.env.AZURE_OPENAI_API_BASE || '').replace(/\/$/, '');
+    const apiKey = process.env.AZURE_OPENAI_API_KEY;
+    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+
+    if (!apiBase || !apiKey || !deployment) {
+      return res.status(500).json({ error: 'Azure OpenAI is not configured on the server' });
+    }
+
+    const url = `${apiBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+
+    const systemPrompt = `You are an expert fitness and nutrition routing AI. Your exact task is to analyze a user's open-text description of their daily physical activity, job, and lifestyle, and accurately assign them the correct Harris-Benedict Activity Level.
+
+Use the following strict classifications:
+- "sedentary": Little to no intentional exercise. Desk jobs, mostly sitting or lying down. (Equivalent to 1.2)
+- "light": Light exercise or sports 1-3 days a week. E.g., casual walking, easy yoga, or a job that requires occasional standing/walking. (Equivalent to 1.375)
+- "moderate": Moderate exercise or sports 3-5 days a week. E.g., consistent gym-going, jogging, or a job that requires being on their feet most of the day (e.g., nurse, server). (Equivalent to 1.55)
+- "very": Hard exercise or sports 6-7 days a week. High-intensity training, competitive sports, or heavy labor jobs (e.g., construction). (Equivalent to 1.725)
+- "extra": Very hard exercise, physical job AND daily training, or 2x a day training. Professional athletes, military in training, etc. (Equivalent to 1.9)
+
+Analyze the input carefully. Look for frequency (days/week), intensity (casual vs. hard), and occupational movement. If a user's description falls between two categories, default to the lower category to prevent overestimating caloric burn.`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': apiKey
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `User Input:\n"${activityDescription.trim()}"` }
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'activity_classification',
+            strict: true,
+            schema: {
+              type: 'object',
+              properties: {
+                activity_factor: {
+                  type: 'string',
+                  enum: ['sedentary', 'light', 'moderate', 'very', 'extra']
+                },
+                reasoning: {
+                  type: 'string',
+                  description: 'A one-sentence explanation justifying the classification based on the user\'s text.'
+                }
+              },
+              required: ['activity_factor', 'reasoning'],
+              additionalProperties: false
+            }
+          }
+        },
+        max_tokens: 200
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('❌ Azure OpenAI classify-activity error:', errText);
+      return res.status(502).json({ error: 'AI classification failed', details: errText });
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      return res.status(502).json({ error: 'Empty response from AI' });
+    }
+
+    const parsed = JSON.parse(content);
+    console.log(`✅ Activity classified as "${parsed.activity_factor}": ${parsed.reasoning}`);
+    return res.json({ activity_factor: parsed.activity_factor, reasoning: parsed.reasoning });
+  } catch (error) {
+    console.error('❌ Error in classify-activity:', error);
+    res.status(500).json({ error: 'Internal server error', message: error.message });
+  }
+});
+
 // ====================================
 // WHATSAPP API ROUTES
 // ====================================

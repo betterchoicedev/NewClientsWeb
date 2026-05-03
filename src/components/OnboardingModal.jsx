@@ -7,6 +7,54 @@ import { translateMenu } from '../services/translateService';
 const CREATE_MEAL_PLAN_API_URL =
   'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
 
+/** Any answer already stored on clients or chat_users (used to skip welcome and open at first DB gap). */
+const hasAnyPersistedOnboardingAnswer = (clientRow, chatRow) => {
+  const ne = (v) => {
+    if (v === null || v === undefined) return false;
+    if (typeof v === 'string') return v.trim() !== '';
+    if (typeof v === 'number') return !Number.isNaN(v);
+    return !!v;
+  };
+  const d = clientRow;
+  const c = chatRow;
+  if (d) {
+    if (
+      ne(d.user_code) ||
+      ne(d.first_name) ||
+      ne(d.last_name) ||
+      ne(d.phone) ||
+      ne(d.user_language) ||
+      ne(d.city) ||
+      ne(d.region) ||
+      ne(d.timezone) ||
+      ne(d.birth_date) ||
+      ne(d.gender) ||
+      ne(d.current_weight) ||
+      ne(d.target_weight) ||
+      ne(d.height) ||
+      ne(d.food_allergies) ||
+      ne(d.food_limitations) ||
+      ne(d.activity_level) ||
+      ne(d.goal) ||
+      ne(d.medical_conditions)
+    ) {
+      return true;
+    }
+  }
+  if (c) {
+    if (ne(c.nursing_status)) return true;
+    if (c.number_of_meals != null && c.number_of_meals !== '' && Number(c.number_of_meals) > 0) return true;
+    if (Array.isArray(c.meal_plan_structure) && c.meal_plan_structure.length > 0) return true;
+    if (ne(c.first_meal_time) || ne(c.last_meal_time)) return true;
+    const cp = c.client_preference;
+    if (cp != null) {
+      if (typeof cp === 'string' && cp.trim()) return true;
+      if (typeof cp === 'object' && cp !== null && ne(cp.dietary_preferences)) return true;
+    }
+  }
+  return false;
+};
+
 const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const { language, t, direction, toggleLanguage, setLanguage, setDirection } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();
@@ -35,6 +83,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const [mealPlanGenerationProgress, setMealPlanGenerationProgress] = useState(0);
   const [mealPlanGenerationStep, setMealPlanGenerationStep] = useState('');
   const [welcomeMessageSent, setWelcomeMessageSent] = useState(false);
+  // 'idle' | 'pending' | 'success' | 'failed'
+  const [aiActivityStatus, setAiActivityStatus] = useState('idle');
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -52,6 +102,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     food_limitations: '',
     client_preference: '',
     activity_level: '',
+    activity_description: '',
     goal: '',
     region: '',
     medical_conditions: '',
@@ -236,8 +287,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     { value: 'sedentary', labelHe: 'יושבני - מעט או ללא פעילות גופנית', labelEn: 'Sedentary - Little or no exercise' },
     { value: 'light', labelHe: 'פעילות קלה - 1-3 פעמים בשבוע', labelEn: 'Light Activity - 1-3 days/week' },
     { value: 'moderate', labelHe: 'פעילות בינונית - 3-5 פעמים בשבוע', labelEn: 'Moderate Activity - 3-5 days/week' },
-    { value: 'active', labelHe: 'פעיל - 6-7 פעמים בשבוע', labelEn: 'Active - 6-7 days/week' },
-    { value: 'extreme', labelHe: 'קיצוני - פעילות אינטנסיבית/עבודה פיזית', labelEn: 'Extreme - Very hard exercise/physical job' }
+    { value: 'very', labelHe: 'פעיל מאוד - 6-7 פעמים בשבוע', labelEn: 'Very Active - 6-7 days/week' },
+    { value: 'extra', labelHe: 'קיצוני - פעילות אינטנסיבית מאוד/עבודה פיזית', labelEn: 'Extra Active - Very hard exercise/physical job' }
   ];
 
   // Goal options with bilingual labels
@@ -446,8 +497,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       fields: ['medical_conditions']
     },
     {
-      title: language === 'hebrew' ? 'רמת פעילות' : 'Activity Level',
-      fields: ['activity_level']
+      title: language === 'hebrew' ? 'תיאור פעילות גופנית' : 'Describe Your Activity',
+      fields: ['activity_description']
     },
     {
       title: language === 'hebrew' ? 'מטרה' : 'Goal',
@@ -468,6 +519,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     {
       title: language === 'hebrew' ? 'חלון האכילה היומי' : 'Daily Eating Window',
       fields: ['first_meal_time', 'last_meal_time']
+    },
+    {
+      title: language === 'hebrew' ? 'רמת פעילות' : 'Activity Level',
+      fields: ['activity_level']
     },
     {
       title: language === 'hebrew' ? 'קלוריות ומאקרו יומיים' : 'Daily Calories & Macros',
@@ -496,12 +551,15 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     return (maleBMR + femaleBMR) / 2;
   };
 
-  // Activity multipliers
+  // Activity multipliers (supports both legacy keys and new AI-returned keys)
   const getActivityMultiplier = (activityLevel) => {
     const multipliers = {
       sedentary: 1.2,
       light: 1.375,
       moderate: 1.55,
+      very: 1.725,
+      extra: 1.9,
+      // Legacy keys for backward compatibility
       active: 1.725,
       extreme: 1.9
     };
@@ -832,19 +890,16 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       };
       localStorage.setItem(`onboarding_${user.id}`, JSON.stringify(saveData));
     }
-  }, [formData, currentStep, filteredSteps, dobDay, dobMonth, dobYear, weightUnit, heightUnit, selectedAllergies, allergiesOtherText, selectedLimitations, limitationsOtherText, editedDailyCalories, editedMacros, macroEditMode, lockedMacros, isOpen, user]);
+  }, [formData, currentStep, filteredSteps, dobDay, dobMonth, dobYear, weightUnit, heightUnit, selectedAllergies, allergiesOtherText, selectedLimitations, limitationsOtherText, editedDailyCalories, editedMacros, macroEditMode, lockedMacros, isOpen, user?.id]);
 
-  // Restore current step from localStorage when modal opens (before loadExistingData runs)
+  // Restore draft from localStorage when modal opens (loadExistingData merges DB on top)
   useEffect(() => {
     if (isOpen && user) {
       try {
         const savedData = localStorage.getItem(`onboarding_${user.id}`);
         if (savedData) {
           const parsed = JSON.parse(savedData);
-          // Restore local answers/UI state but do NOT restore step index.
-          // Step position should always be derived from first incomplete DB-backed step.
           if (parsed.currentStep !== undefined && parsed.currentStep >= 0) {
-            // Restore UI state (units, date fields, selections)
             setDobDay(parsed.dobDay || '');
             setDobMonth(parsed.dobMonth || '');
             setDobYear(parsed.dobYear || '');
@@ -858,20 +913,19 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
             setEditedMacros(parsed.editedMacros || { protein: null, carbs: null, fat: null });
             setMacroEditMode(parsed.macroEditMode || 'percentage');
             setLockedMacros(parsed.lockedMacros || { protein: false, carbs: false, fat: false });
-            // Restore form data (will be merged with database data by loadExistingData)
             setFormData(prev => ({ ...prev, ...parsed.formData }));
-            return; // Don't reset to welcome if we have saved progress
+            // Step index always comes from DB/chat_users after load (first incomplete), not from localStorage.
+            return;
           }
         }
       } catch (error) {
         console.error('Error restoring onboarding data:', error);
       }
-      // Only reset to welcome if no saved progress
       setCurrentStep(-1);
       setError('');
       setFieldErrors({});
     }
-  }, [isOpen, user]);
+  }, [isOpen, user?.id]);
 
   useEffect(() => {
     if (!isOpen || filteredSteps.length === 0 || currentStep < 0) return;
@@ -897,12 +951,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     }
   }, [isOpen]);
 
-  // Load existing data and determine which fields to show
+  // Load existing data and determine which fields to show (use user.id: Supabase refreshes
+  // session on tab focus and replaces the user object reference, which must not re-run this.)
   useEffect(() => {
     if (isOpen && user) {
       loadExistingData();
     }
-  }, [isOpen, user]);
+  }, [isOpen, user?.id]);
 
   // Normalize meal_names so each slot is chronologically valid (e.g. no Breakfast after Brunch)
   useEffect(() => {
@@ -957,6 +1012,20 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
   const loadExistingData = async () => {
     setCheckingData(true);
+    let savedProgress = null;
+    try {
+      const rawSaved = localStorage.getItem(`onboarding_${user.id}`);
+      if (rawSaved) savedProgress = JSON.parse(rawSaved);
+    } catch (_) {
+      savedProgress = null;
+    }
+    const hasLocalDraft =
+      savedProgress &&
+      typeof savedProgress.currentStep === 'number' &&
+      savedProgress.currentStep >= 0;
+    // Which steps exist = DB + chat_users only (SPA entry, refresh, or reopen profile).
+    const draftForm = {};
+
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       let shouldReopenUsageOffer = false;
@@ -997,11 +1066,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         }
       }
 
-      // Also check chat_users for number_of_meals via API
+      // Also load chat_users meal-related fields (use client row user_code when prop not ready yet)
       let chatUserMealData = null;
-      if (userCode) {
+      if (resolvedUserCode) {
         try {
-          const mealDataResponse = await fetch(`${apiUrl}/api/onboarding/chat-user-meal-data?user_code=${encodeURIComponent(userCode)}`);
+          const mealDataResponse = await fetch(`${apiUrl}/api/onboarding/chat-user-meal-data?user_code=${encodeURIComponent(resolvedUserCode)}`);
           
           if (mealDataResponse.ok) {
             const mealDataResult = await mealDataResponse.json();
@@ -1076,10 +1145,20 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           })()
         }));
 
-        // Set separate date fields
-        setDobDay(day);
-        setDobMonth(month);
-        setDobYear(year);
+        // Set separate date fields (preserve draft DOB when DB row exists but birth_date is still empty)
+        if (birthDate && day && month && year) {
+          setDobDay(day);
+          setDobMonth(month);
+          setDobYear(year);
+        } else if (hasLocalDraft) {
+          setDobDay(savedProgress.dobDay || '');
+          setDobMonth(savedProgress.dobMonth || '');
+          setDobYear(savedProgress.dobYear || '');
+        } else {
+          setDobDay(day);
+          setDobMonth(month);
+          setDobYear(year);
+        }
 
         // Parse food_allergies to populate selectedAllergies and allergiesOtherText
         if (data.food_allergies && data.food_allergies.trim()) {
@@ -1130,6 +1209,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           
           setSelectedAllergies(parsedAllergies.length > 0 ? parsedAllergies : ['none']);
           setAllergiesOtherText(otherText);
+        } else if (hasLocalDraft && Array.isArray(savedProgress.selectedAllergies)) {
+          setSelectedAllergies(savedProgress.selectedAllergies);
+          setAllergiesOtherText(savedProgress.allergiesOtherText || '');
         } else {
           setSelectedAllergies(['none']);
           setAllergiesOtherText('');
@@ -1184,6 +1266,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           
           setSelectedLimitations(parsedLimitations.length > 0 ? parsedLimitations : ['none']);
           setLimitationsOtherText(otherText);
+        } else if (hasLocalDraft && Array.isArray(savedProgress.selectedLimitations)) {
+          setSelectedLimitations(savedProgress.selectedLimitations);
+          setLimitationsOtherText(savedProgress.limitationsOtherText || '');
         } else {
           setSelectedLimitations(['none']);
           setLimitationsOtherText('');
@@ -1201,150 +1286,195 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         return !value;
       };
 
-      // Check each field individually
-      console.log('Checking existing data from DB:', data);
-      
-      // Check each field with detailed logging
-      if (isEmpty(data?.first_name)) {
-        missingFields.push('first_name');
-      } else {
-        console.log('✓ First name has value:', data?.first_name);
-      }
-      
-      if (isEmpty(data?.last_name)) {
-        missingFields.push('last_name');
-      } else {
-        console.log('✓ Last name has value:', data?.last_name);
-      }
-      
-      if (isEmpty(data?.phone)) {
-        missingFields.push('phone');
-      } else {
-        console.log('✓ Phone has value:', data?.phone);
-      }
-      
-      if (isEmpty(data?.user_language)) {
-        missingFields.push('language');
-      } else {
-        console.log('✓ Language has value:', data?.user_language);
-      }
-      
-      if (isEmpty(data?.city)) {
-        missingFields.push('city');
-      } else {
-        console.log('✓ City has value:', data?.city);
-      }
-      
-      if (isEmpty(data?.region)) {
-        missingFields.push('region');
-      } else {
-        console.log('✓ Region has value:', data?.region);
-      }
-      
-      if (isEmpty(data?.timezone)) {
-        missingFields.push('timezone');
-      } else {
-        console.log('✓ Timezone has value:', data?.timezone);
-      }
-      
-      if (isEmpty(data?.birth_date)) {
-        missingFields.push('date_of_birth');
-      } else {
-        console.log('✓ Birth date has value:', data?.birth_date);
-      }
-      
-      if (isEmpty(data?.gender)) {
-        missingFields.push('gender');
-      } else {
-        console.log('✓ Gender has value:', data?.gender);
-      }
-      
-      if (data?.gender === 'female' && isEmpty(chatUserMealData?.nursing_status)) {
-        missingFields.push('nursing_status');
-      } else if (data?.gender === 'female') {
-        console.log('✓ Nursing status has value:', chatUserMealData?.nursing_status);
-      }
-      
-      if (isEmpty(data?.current_weight)) {
-        missingFields.push('weight_kg');
-      } else {
-        console.log('✓ Weight has value:', data?.current_weight);
-      }
-      
-      if (isEmpty(data?.target_weight)) {
-        missingFields.push('target_weight');
-      } else {
-        console.log('✓ Target weight has value:', data?.target_weight);
-      }
-      
-      if (isEmpty(data?.height)) {
-        missingFields.push('height_cm');
-      } else {
-        console.log('✓ Height has value:', data?.height);
-      }
-      
-      if (isEmpty(data?.food_allergies)) {
-        missingFields.push('food_allergies');
-      } else {
-        console.log('✓ Food allergies has value:', data?.food_allergies);
-      }
-      
-      if (isEmpty(data?.food_limitations)) {
-        missingFields.push('food_limitations');
-      } else {
-        console.log('✓ Food limitations has value:', data?.food_limitations);
-      }
-      
-      if (isEmpty(data?.activity_level)) {
-        missingFields.push('activity_level');
-      } else {
-        console.log('✓ Activity level has value:', data?.activity_level);
-      }
-      
-      if (isEmpty(data?.goal)) {
-        missingFields.push('goal');
-      } else {
-        console.log('✓ Goal has value:', data?.goal);
-      }
-      
-      if (isEmpty(data?.medical_conditions)) {
-        missingFields.push('medical_conditions');
-      } else {
-        console.log('✓ Medical conditions has value:', data?.medical_conditions);
-      }
-      
-      if (isEmpty(chatUserMealData?.number_of_meals)) {
-        missingFields.push('number_of_meals');
-      } else {
-        console.log('✓ Number of meals has value:', chatUserMealData?.number_of_meals);
-      }
-      
-      if (isEmpty(chatUserMealData?.meal_plan_structure)) {
-        missingFields.push('meal_descriptions');
-      } else {
-        console.log('✓ Meal plan structure has value:', chatUserMealData?.meal_plan_structure);
-      }
+      const draftMealDescriptionsComplete = () => {
+        const n = parseInt(draftForm.number_of_meals, 10) || 0;
+        if (n < 1) return false;
+        const arr = draftForm.meal_descriptions;
+        if (!Array.isArray(arr) || arr.length < n) return false;
+        for (let i = 0; i < n; i++) {
+          if (isEmpty(arr[i])) return false;
+        }
+        return true;
+      };
 
-      // First and last meal time (from chat_users)
-      if (isEmpty(chatUserMealData?.first_meal_time)) {
-        missingFields.push('first_meal_time');
-      } else {
-        console.log('✓ First meal time has value:', chatUserMealData?.first_meal_time);
-      }
+      const draftCpVal = draftForm.client_preference;
+      const hasDraftClientPreference = draftCpVal != null && (
+        (typeof draftCpVal === 'string' && draftCpVal.trim() !== '') ||
+        (typeof draftCpVal === 'object' && draftCpVal !== null && draftCpVal.dietary_preferences && String(draftCpVal.dietary_preferences).trim() !== '')
+      );
 
-      if (isEmpty(chatUserMealData?.last_meal_time)) {
-        missingFields.push('last_meal_time');
-      } else {
-        console.log('✓ Last meal time has value:', chatUserMealData?.last_meal_time);
-      }
-
-      // client_preference from chat_users (JSONB - likes/dislikes food)
+      // Treat DB + in-memory draft as one profile so step list does not collapse after token refresh / reload
+      const effFirstName = !isEmpty(data?.first_name) ? data.first_name : draftForm.first_name;
+      const effLastName = !isEmpty(data?.last_name) ? data.last_name : draftForm.last_name;
+      const effPhone = !isEmpty(data?.phone) ? data.phone : draftForm.phone;
+      const effLanguage = !isEmpty(data?.user_language) ? data.user_language : draftForm.language;
+      const effCity = !isEmpty(data?.city) ? data.city : draftForm.city;
+      const effRegion = !isEmpty(data?.region) ? data.region : draftForm.region;
+      const effTimezone = !isEmpty(data?.timezone) ? data.timezone : draftForm.timezone;
+      const effBirth = !isEmpty(data?.birth_date) ? data.birth_date : draftForm.date_of_birth;
+      const effGender = !isEmpty(data?.gender) ? data.gender : draftForm.gender;
+      const effNursing = !isEmpty(chatUserMealData?.nursing_status) ? chatUserMealData.nursing_status : draftForm.nursing_status;
+      const effWeight = !isEmpty(data?.current_weight) ? data.current_weight : draftForm.weight_kg;
+      const effTarget = !isEmpty(data?.target_weight) ? data.target_weight : draftForm.target_weight;
+      const effHeight = !isEmpty(data?.height) ? data.height : draftForm.height_cm;
+      const effAllergies = !isEmpty(data?.food_allergies) ? data.food_allergies : draftForm.food_allergies;
+      const effLimitations = !isEmpty(data?.food_limitations) ? data.food_limitations : draftForm.food_limitations;
+      const effActivityLevel = !isEmpty(data?.activity_level) ? data.activity_level : draftForm.activity_level;
+      const effActivityDesc = draftForm.activity_description;
+      const effGoal = !isEmpty(data?.goal) ? data.goal : draftForm.goal;
+      const effMedical = !isEmpty(data?.medical_conditions) ? data.medical_conditions : draftForm.medical_conditions;
+      const effNumMeals = !isEmpty(chatUserMealData?.number_of_meals)
+        ? chatUserMealData.number_of_meals
+        : draftForm.number_of_meals;
+      const effMealStructure = !isEmpty(chatUserMealData?.meal_plan_structure) || draftMealDescriptionsComplete();
+      const effFirstMeal = !isEmpty(chatUserMealData?.first_meal_time) ? chatUserMealData.first_meal_time : draftForm.first_meal_time;
+      const effLastMeal = !isEmpty(chatUserMealData?.last_meal_time) ? chatUserMealData.last_meal_time : draftForm.last_meal_time;
       const cpVal = chatUserMealData?.client_preference;
       const hasClientPreference = cpVal != null && (
         (typeof cpVal === 'string' && cpVal.trim() !== '') ||
         (typeof cpVal === 'object' && cpVal !== null && cpVal.dietary_preferences && String(cpVal.dietary_preferences).trim() !== '')
       );
-      if (!hasClientPreference) {
+      const effClientPref = hasClientPreference || hasDraftClientPreference;
+
+      // Check each field individually
+      console.log('Checking existing data from DB:', data);
+      
+      // Check each field with detailed logging
+      if (isEmpty(effFirstName)) {
+        missingFields.push('first_name');
+      } else {
+        console.log('✓ First name has value:', effFirstName);
+      }
+      
+      if (isEmpty(effLastName)) {
+        missingFields.push('last_name');
+      } else {
+        console.log('✓ Last name has value:', effLastName);
+      }
+      
+      if (isEmpty(effPhone)) {
+        missingFields.push('phone');
+      } else {
+        console.log('✓ Phone has value:', effPhone);
+      }
+      
+      if (isEmpty(effLanguage)) {
+        missingFields.push('language');
+      } else {
+        console.log('✓ Language has value:', effLanguage);
+      }
+      
+      if (isEmpty(effCity)) {
+        missingFields.push('city');
+      } else {
+        console.log('✓ City has value:', effCity);
+      }
+      
+      if (isEmpty(effRegion)) {
+        missingFields.push('region');
+      } else {
+        console.log('✓ Region has value:', effRegion);
+      }
+      
+      if (isEmpty(effTimezone)) {
+        missingFields.push('timezone');
+      } else {
+        console.log('✓ Timezone has value:', effTimezone);
+      }
+      
+      if (isEmpty(effBirth)) {
+        missingFields.push('date_of_birth');
+      } else {
+        console.log('✓ Birth date has value:', effBirth);
+      }
+      
+      if (isEmpty(effGender)) {
+        missingFields.push('gender');
+      } else {
+        console.log('✓ Gender has value:', effGender);
+      }
+      
+      if (effGender === 'female' && isEmpty(effNursing)) {
+        missingFields.push('nursing_status');
+      } else if (effGender === 'female') {
+        console.log('✓ Nursing status has value:', effNursing);
+      }
+      
+      if (isEmpty(effWeight)) {
+        missingFields.push('weight_kg');
+      } else {
+        console.log('✓ Weight has value:', effWeight);
+      }
+      
+      if (isEmpty(effTarget)) {
+        missingFields.push('target_weight');
+      } else {
+        console.log('✓ Target weight has value:', effTarget);
+      }
+      
+      if (isEmpty(effHeight)) {
+        missingFields.push('height_cm');
+      } else {
+        console.log('✓ Height has value:', effHeight);
+      }
+      
+      if (isEmpty(effAllergies)) {
+        missingFields.push('food_allergies');
+      } else {
+        console.log('✓ Food allergies has value:', effAllergies);
+      }
+      
+      if (isEmpty(effLimitations)) {
+        missingFields.push('food_limitations');
+      } else {
+        console.log('✓ Food limitations has value:', effLimitations);
+      }
+      
+      if (isEmpty(effActivityLevel) && isEmpty(effActivityDesc)) {
+        missingFields.push('activity_description'); // AI open-text input (primary)
+        missingFields.push('activity_level');        // fallback manual selection
+      } else {
+        console.log('✓ Activity level has value:', effActivityLevel || effActivityDesc);
+      }
+      
+      if (isEmpty(effGoal)) {
+        missingFields.push('goal');
+      } else {
+        console.log('✓ Goal has value:', effGoal);
+      }
+      
+      if (isEmpty(effMedical)) {
+        missingFields.push('medical_conditions');
+      } else {
+        console.log('✓ Medical conditions has value:', effMedical);
+      }
+      
+      if (isEmpty(effNumMeals)) {
+        missingFields.push('number_of_meals');
+      } else {
+        console.log('✓ Number of meals has value:', effNumMeals);
+      }
+      
+      if (!effMealStructure) {
+        missingFields.push('meal_descriptions');
+      } else {
+        console.log('✓ Meal plan structure has value (DB or draft)');
+      }
+
+      // First and last meal time (from chat_users)
+      if (isEmpty(effFirstMeal)) {
+        missingFields.push('first_meal_time');
+      } else {
+        console.log('✓ First meal time has value:', effFirstMeal);
+      }
+
+      if (isEmpty(effLastMeal)) {
+        missingFields.push('last_meal_time');
+      } else {
+        console.log('✓ Last meal time has value:', effLastMeal);
+      }
+
+      if (!effClientPref) {
         missingFields.push('client_preference');
       } else {
         console.log('✓ Client preference has value');
@@ -1386,6 +1516,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         .filter(step => step.fields.length > 0);
 
       setFilteredSteps(filtered);
+
+      // Incomplete onboarding + any saved row: land on first DB/chat gap (same for refresh or router → profile).
+      if (filtered.length > 0 && hasAnyPersistedOnboardingAnswer(data, chatUserMealData)) {
+        setCurrentStep(0);
+      }
 
       if (shouldReopenUsageOffer) {
         setShowUsageBasedOffer(true);
@@ -1957,6 +2092,33 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     }
   };
 
+  const fireActivityClassification = (description) => {
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+    setAiActivityStatus('pending');
+    fetch(`${apiUrl}/api/onboarding/classify-activity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activityDescription: description })
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (data?.activity_factor) {
+          setFormData(prev => ({ ...prev, activity_level: data.activity_factor }));
+          setAiActivityStatus('success');
+          console.log(`✅ AI classified activity as "${data.activity_factor}": ${data.reasoning}`);
+        } else {
+          setAiActivityStatus('failed');
+        }
+      })
+      .catch(err => {
+        console.warn('⚠️ Activity AI classification failed, fallback will be shown:', err.message);
+        setAiActivityStatus('failed');
+      });
+  };
+
   const handleNext = async () => {
     // If on welcome screen, move to first form step
     if (currentStep === -1) {
@@ -2059,6 +2221,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     }
 
     setError('');
+
+    // Fire async AI classification when leaving the activity_description step
+    if (currentStepFields.includes('activity_description') && formData.activity_description?.trim()) {
+      fireActivityClassification(formData.activity_description.trim());
+    }
 
     const persistCurrentStepToDb = async () => {
       if (!user?.id) return;
@@ -2201,7 +2368,19 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
     if (currentStep < filteredSteps.length - 1) {
       await persistCurrentStepToDb();
-      setCurrentStep(currentStep + 1);
+      // If the next step is the activity_level fallback but AI already set a value, skip it
+      const nextStepFields = filteredSteps[currentStep + 1]?.fields || [];
+      const nextIsActivityFallback =
+        nextStepFields.length === 1 &&
+        nextStepFields[0] === 'activity_level' &&
+        formData.activity_level;
+      if (nextIsActivityFallback && currentStep + 2 <= filteredSteps.length - 1) {
+        setCurrentStep(currentStep + 2);
+      } else if (nextIsActivityFallback && currentStep + 2 > filteredSteps.length - 1) {
+        await handleSubmit();
+      } else {
+        setCurrentStep(currentStep + 1);
+      }
     } else {
       // Last step - save data
       await handleSubmit();
@@ -4147,6 +4326,49 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
             </div>
           )}
 
+          {currentFields.includes('activity_description') && (
+            <div className="group">
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew'
+                  ? 'תאר את הפעילות השבועית שלך'
+                  : 'Describe your weekly movement'}
+              </label>
+              <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mb-3`}>
+                {language === 'hebrew'
+                  ? 'מה שגרת העבודה היומית שלך, ואילו אימונים אתה עושה (סוג, ימים בשבוע ומשך)?'
+                  : 'What is your daily job routine, and what workouts do you do (type, days per week, and duration)?'}
+              </p>
+              <textarea
+                name="activity_description"
+                value={formData.activity_description}
+                onChange={handleInputChange}
+                rows="5"
+                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${
+                  fieldErrors['activity_description'] ? 'border-red-500' : 'border-gray-600/50'
+                } rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 resize-none`}
+                placeholder={language === 'hebrew'
+                  ? 'לדוגמה: עובד במשרד 9-5, יושב רוב היום. מתאמן בחדר כושר 3 פעמים בשבוע, כ-45 דקות כל פעם (כוח + קרדיו).'
+                  : 'e.g., Office job 9-5, mostly sitting. I go to the gym 3x per week for about 45 min each (weights + cardio).'}
+              />
+              {fieldErrors['activity_description'] && (
+                <p className="mt-1.5 text-xs text-red-400">
+                  {language === 'hebrew' ? 'אנא תאר את הפעילות שלך' : 'Please describe your activity'}
+                </p>
+              )}
+              {aiActivityStatus === 'pending' && (
+                <p className={`mt-2 text-xs ${themeClasses.textSecondary} flex items-center gap-1.5`}>
+                  <span className="inline-block w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></span>
+                  {language === 'hebrew' ? 'מעבד את רמת הפעילות שלך...' : 'Analyzing your activity level...'}
+                </p>
+              )}
+              {aiActivityStatus === 'success' && (
+                <p className="mt-2 text-xs text-emerald-400">
+                  {language === 'hebrew' ? '✓ רמת הפעילות סווגה בהצלחה' : '✓ Activity level classified successfully'}
+                </p>
+              )}
+            </div>
+          )}
+
           {currentFields.includes('food_allergies') && (
             <div className="group">
               <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
@@ -4386,9 +4608,27 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
           {currentFields.includes('activity_level') && (
             <div className="group">
-              <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
+              <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'רמת פעילות' : 'Activity Level'}
               </label>
+              {aiActivityStatus === 'pending' ? (
+                <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mb-3 flex items-center gap-1.5`}>
+                  <span className="inline-block w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></span>
+                  {language === 'hebrew'
+                    ? 'ממתין לסיווג AI... אנא בחר ידנית אם אינך רוצה להמתין.'
+                    : 'Waiting for AI classification… Please select manually if you prefer not to wait.'}
+                </p>
+              ) : aiActivityStatus === 'failed' ? (
+                <p className={`text-xs sm:text-sm text-amber-400 mb-3`}>
+                  {language === 'hebrew'
+                    ? 'לא הצלחנו לסווג את הפעילות אוטומטית. אנא בחר ידנית:'
+                    : 'We could not automatically classify your activity. Please select manually:'}
+                </p>
+              ) : (
+                <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mb-3`}>
+                  {language === 'hebrew' ? 'אנא בחר את רמת הפעילות שלך:' : 'Please select your activity level:'}
+                </p>
+              )}
               <div className="grid grid-cols-1 gap-2 sm:gap-3">
                 {activityLevelOptions.map((activity) => {
                   const isSelected = formData.activity_level === activity.value;
