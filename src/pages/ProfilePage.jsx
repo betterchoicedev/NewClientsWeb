@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   AreaChart,
   Area,
@@ -153,6 +153,8 @@ export const getClientMealPlan = async (userCode) => {
 const ProfilePage = () => {
   const { user, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { companySlug: routeCompanySlug } = useParams();
   const { language, t, direction, toggleLanguage, isTransitioning } = useLanguage();
   const { isDarkMode, toggleTheme, themeClasses } = useTheme();
   const [activeTab, setActiveTab] = useState('dailyLog');
@@ -198,6 +200,17 @@ const ProfilePage = () => {
   const [showWhatsAppPopup, setShowWhatsAppPopup] = useState(false);
   const [isProfileDataReady, setIsProfileDataReady] = useState(false);
 
+  const toCompanySlug = useCallback((companyName) => {
+    const normalized = String(companyName || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return normalized;
+  }, []);
+
   const loadCompanyOptions = useCallback(async () => {
     try {
       setIsLoadingCompanies(true);
@@ -241,6 +254,35 @@ const ProfilePage = () => {
       console.error('Unexpected error fetching company assignment:', error);
     }
   }, []);
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) return;
+    if (!assignedCompanyName) return;
+
+    const resolvedSlug = toCompanySlug(assignedCompanyName);
+    if (!resolvedSlug) return;
+
+    const expectedTenantPath = `/c/${resolvedSlug}/profile`;
+    const isOnLegacyProfilePath = location.pathname === '/profile';
+    const isOnTenantProfilePath = /^\/c\/[^/]+\/profile\/?$/.test(location.pathname);
+
+    if (isOnLegacyProfilePath) {
+      navigate(expectedTenantPath, { replace: true });
+      return;
+    }
+
+    if (isOnTenantProfilePath && routeCompanySlug && routeCompanySlug !== resolvedSlug) {
+      navigate(expectedTenantPath, { replace: true });
+    }
+  }, [
+    assignedCompanyName,
+    isAuthenticated,
+    loading,
+    location.pathname,
+    navigate,
+    routeCompanySlug,
+    toCompanySlug
+  ]);
 
   // Check onboarding status
   const checkOnboardingStatus = useCallback(async () => {

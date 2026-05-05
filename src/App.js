@@ -47,6 +47,7 @@ function App() {
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/register/:phoneNumber" element={<WhatsAppRegisterPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/c/:companySlug/profile" element={<ProfilePage />} />
                   <Route path="/about" element={<AboutPage />} />
                   <Route path="/knowledge" element={<KnowledgePage />} />
                   <Route path="/recipes" element={<RecipesPage />} />
