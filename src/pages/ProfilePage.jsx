@@ -287,15 +287,6 @@ const ProfilePage = () => {
   // Check onboarding status
   const checkOnboardingStatus = useCallback(async () => {
     try {
-      // First check if profile tour is completed
-      const profileTourCompleted = localStorage.getItem('profileTourCompleted');
-      
-      // Don't show onboarding until profile tour is finished
-      if (profileTourCompleted !== 'true') {
-        console.log('⏸️ Onboarding delayed - waiting for profile tour to complete...');
-        return;
-      }
-
       if (!user) return;
 
       const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
@@ -325,7 +316,7 @@ const ProfilePage = () => {
           setShowOnboarding(false);
         }
       } else {
-        // No profile data at all - show onboarding (but only after tour is done)
+        // No profile data at all - show onboarding
         setOnboardingCompleted(false);
         setShowOnboarding(true);
       }

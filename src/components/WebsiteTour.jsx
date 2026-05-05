@@ -20,7 +20,7 @@ const WebsiteTour = () => {
 
   // Detect which page we're on
   const isHomePage = location.pathname === '/';
-  const isProfilePage = location.pathname === '/profile';
+  const isProfilePage = location.pathname === '/profile' || /^\/c\/[^/]+\/profile\/?$/.test(location.pathname);
 
   // Handle window resize to reposition tooltip
   useEffect(() => {
