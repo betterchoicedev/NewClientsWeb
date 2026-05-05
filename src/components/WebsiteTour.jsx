@@ -7,13 +7,15 @@ import { useAuth } from '../context/AuthContext';
 const WebsiteTour = () => {
   const { language, direction, toggleLanguage } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();
-  const { isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState(-1); // -1 = welcome screen, 0+ = tour steps
   const [isOpen, setIsOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [highlightedElement, setHighlightedElement] = useState(null);
   const [tooltipKey, setTooltipKey] = useState(0); // Force re-render on resize
+  const [isProfileTourEligible, setIsProfileTourEligible] = useState(false);
+  const [isCheckingProfileTourEligibility, setIsCheckingProfileTourEligibility] = useState(false);
   const highlightRef = useRef(null);
   const tourTimeoutRef = useRef(null); // Store timeout ID to cancel if user skips
   const hasCheckedTourRef = useRef(false); // Track if we've already checked for tour on this page
@@ -400,6 +402,52 @@ const WebsiteTour = () => {
 
   const tourSteps = getTourSteps();
 
+  // Profile tour should be available only after full onboarding (including payment/subscription activation)
+  useEffect(() => {
+    const checkProfileTourEligibility = async () => {
+      if (!isProfilePage || !isAuthenticated || !user?.id) {
+        setIsProfileTourEligible(false);
+        setIsCheckingProfileTourEligibility(false);
+        return;
+      }
+
+      setIsCheckingProfileTourEligibility(true);
+
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+        const clientResponse = await fetch(`${apiUrl}/api/profile/client?userId=${encodeURIComponent(user.id)}`);
+        const clientResult = await clientResponse.json();
+
+        if (!clientResponse.ok || !clientResult?.data) {
+          setIsProfileTourEligible(false);
+          return;
+        }
+
+        const clientData = clientResult.data;
+        const onboardingDone = clientData.onboarding_completed === true;
+        const resolvedUserCode = clientData.user_code;
+
+        if (!onboardingDone || !resolvedUserCode) {
+          setIsProfileTourEligible(false);
+          return;
+        }
+
+        const chatUserResponse = await fetch(`${apiUrl}/api/profile/chat-user?userCode=${encodeURIComponent(resolvedUserCode)}`);
+        const chatUserResult = await chatUserResponse.json();
+        const subscriptionStatus = chatUserResult?.data?.subscription_status;
+
+        setIsProfileTourEligible(chatUserResponse.ok && subscriptionStatus === 'active');
+      } catch (error) {
+        console.error('Error checking profile tour eligibility:', error);
+        setIsProfileTourEligible(false);
+      } finally {
+        setIsCheckingProfileTourEligibility(false);
+      }
+    };
+
+    checkProfileTourEligibility();
+  }, [isAuthenticated, isProfilePage, user?.id]);
+
   // Check if tour should be shown (like cookie consent - only once per page type)
   useEffect(() => {
     // Reset check flag when page changes
@@ -411,8 +459,9 @@ const WebsiteTour = () => {
       tourTimeoutRef.current = null;
     }
 
-    // Don't proceed if still loading
+    // Don't proceed if auth or profile tour eligibility is still loading
     if (loading) return;
+    if (isProfilePage && isAuthenticated && isCheckingProfileTourEligibility) return;
 
     // Only check once per page load
     if (hasCheckedTourRef.current) return;
@@ -441,6 +490,10 @@ const WebsiteTour = () => {
         tourTimeoutRef.current = null;
       }, 2000);
     } else if (isProfilePage && isAuthenticated) {
+      if (!isProfileTourEligible) {
+        return;
+      }
+
       // Check localStorage first - if already completed, don't show
       const profileTourCompleted = localStorage.getItem('profileTourCompleted');
       
@@ -473,7 +526,7 @@ const WebsiteTour = () => {
         tourTimeoutRef.current = null;
       }
     };
-  }, [isAuthenticated, loading, isHomePage, isProfilePage, location.pathname]);
+  }, [isAuthenticated, loading, isHomePage, isProfilePage, isProfileTourEligible, isCheckingProfileTourEligibility, location.pathname]);
 
   // Handle element highlighting
   useEffect(() => {
