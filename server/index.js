@@ -3844,14 +3844,52 @@ app.get('/api/client-company-assignment', async (req, res) => {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data: chatUserData, error: chatUserError } = await chatSupabase
       .from('chat_users')
-      .select('provider_id, provider:profiles!chat_users_provider_id_fkey(id, name, company_id)')
+      .select('provider_id')
       .eq('user_code', userCode)
       .maybeSingle();
 
-    if (error && error.code !== 'PGRST116') throw error;
-    res.json({ data: data || null });
+    if (chatUserError && chatUserError.code !== 'PGRST116') throw chatUserError;
+
+    const providerId = chatUserData?.provider_id || null;
+    if (!providerId) {
+      return res.json({
+        data: {
+          provider_id: null,
+          provider: null,
+          company: null
+        }
+      });
+    }
+
+    const { data: providerData, error: providerError } = await chatSupabase
+      .from('profiles')
+      .select('id, name, company_id')
+      .eq('id', providerId)
+      .maybeSingle();
+
+    if (providerError && providerError.code !== 'PGRST116') throw providerError;
+
+    let companyData = null;
+    if (providerData?.company_id) {
+      const { data: companyRow, error: companyError } = await chatSupabase
+        .from('companies')
+        .select('id, name')
+        .eq('id', providerData.company_id)
+        .maybeSingle();
+
+      if (companyError && companyError.code !== 'PGRST116') throw companyError;
+      companyData = companyRow || null;
+    }
+
+    res.json({
+      data: {
+        provider_id: providerId,
+        provider: providerData || null,
+        company: companyData
+      }
+    });
   } catch (error) {
     console.error('Error fetching client assignment:', error);
     res.status(500).json({ error: error.message });

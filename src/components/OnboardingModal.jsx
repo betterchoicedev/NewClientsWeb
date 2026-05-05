@@ -55,7 +55,7 @@ const hasAnyPersistedOnboardingAnswer = (clientRow, chatRow) => {
   return false;
 };
 
-const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
+const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) => {
   const { language, t, direction, toggleLanguage, setLanguage, setDirection } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();
   const [currentStep, setCurrentStep] = useState(-1); // -1 for welcome screen, 0+ for form steps
@@ -85,6 +85,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const [welcomeMessageSent, setWelcomeMessageSent] = useState(false);
   // 'idle' | 'pending' | 'success' | 'failed'
   const [aiActivityStatus, setAiActivityStatus] = useState('idle');
+  const normalizedCompanyName = String(companyName || '').trim().toLowerCase();
+  const isFitMamaCompany = normalizedCompanyName === 'fitmama';
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -481,8 +483,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       fields: ['date_of_birth']
     },
     {
-      title: language === 'hebrew' ? 'מין ומצב פיזיולוגי' : 'Gender & Physiological State',
-      fields: ['gender', 'nursing_status']
+      title: isFitMamaCompany
+        ? (language === 'hebrew' ? 'מין ומצב פיזיולוגי' : 'Gender & Physiological State')
+        : (language === 'hebrew' ? 'מין' : 'Gender'),
+      fields: isFitMamaCompany ? ['gender', 'nursing_status'] : ['gender']
     },
     {
       title: language === 'hebrew' ? 'גובה ומשקל נוכחי' : 'Height & Current Weight',
@@ -957,7 +961,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
     if (isOpen && user) {
       loadExistingData();
     }
-  }, [isOpen, user?.id]);
+  }, [isOpen, user?.id, companyName]);
 
   // Normalize meal_names so each slot is chronologically valid (e.g. no Breakfast after Brunch)
   useEffect(() => {
@@ -1394,9 +1398,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.log('✓ Gender has value:', effGender);
       }
       
-      if (effGender === 'female' && isEmpty(effNursing)) {
+      if (isFitMamaCompany && effGender === 'female' && isEmpty(effNursing)) {
         missingFields.push('nursing_status');
-      } else if (effGender === 'female') {
+      } else if (isFitMamaCompany && effGender === 'female') {
         console.log('✓ Nursing status has value:', effNursing);
       }
       
