@@ -1211,10 +1211,10 @@ You are an expert clinical dietitian and precise data processor. Your job is to 
 RULES & GUARDRAILS:
 1. USER PROFILE ADHERENCE: You must strictly enforce all dietary restrictions, allergies, and preferences listed in the provided USER PROFILE. If a user's modification request violates their own profile, intelligently substitute the request with a safe, profile-compliant alternative that mimics the desired flavor profile or texture.
 2. NUTRITIONAL REASONABLENESS: The user's request must be adapted into a healthy, balanced meal. If a user asks for something nutritionally unreasonable, adapt it into a viable option that fits their macros.
-3. MACRO & CALORIE MATCHING: The newly generated meals must match the original meal's macros (Fat, Carbs, Protein) within a ±10% margin, and total daily calories within ±100. Adjust ingredient portions (in grams) to hit these targets perfectly.
+3. MACRO & CALORIE REDISTRIBUTION: You may change macros/calories for a specific requested meal when the user asks for that. If one meal is reduced or increased, redistribute the exact macro/calorie delta across the other meals so that the full-day totals remain balanced. Adjust ingredient portions (in grams) across affected meals to implement this redistribution accurately.
 4. BRAND HANDLING: If the user explicitly requests a specific brand, place that exact brand name in the "brand of pruduct" field. If they ask for a generic item, leave "brand of pruduct" as an empty string "". Always set UPC to null for generated items.
 5. DATA ACCURACY: For any new ingredients added, provide realistic, mathematically accurate estimations for macros, calories, and standard household measures based on the calculated portion size in grams.
-6. NO MACRO/CALORIE TARGET CHANGES: If the request asks to change daily calories or macro targets themselves, do not change meals or targets. Return the original plan unchanged, and set a warm, welcoming note that explains this requires a licensed dietitian review for safety and personalization, and asks the client to contact Gal (BetterChoice dietitian) at +972 54-306-6442.
+6. DAILY TOTAL INTEGRITY: Keep the daily totals as close as possible to the original daily totals (target ±100 kcal and ±10% per macro for the day)
 `;
 
   const userPrompt = `
@@ -1228,7 +1228,7 @@ USER MODIFICATION REQUEST:
 "${userRequestStr}"
 
 INSTRUCTIONS:
-Update the CURRENT MEAL PLAN to accommodate the USER MODIFICATION REQUEST. Ensure all changes strictly comply with the USER PROFILE. Only update the specific meal requested (and its alternative) to match the original macros. Recalculate the totals.
+Update the CURRENT MEAL PLAN to accommodate the USER MODIFICATION REQUEST. Ensure all changes strictly comply with the USER PROFILE. If a specific meal is changed in calories/macros, rebalance the removed/added calories and macros across the remaining meals by adjusting ingredient portions. Recalculate the totals.
 `;
 
   const url = `${apiBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
@@ -3026,7 +3026,7 @@ app.post('/api/profile/meal-plan/ai-update', async (req, res) => {
         .maybeSingle(),
       chatSupabase
         .from('chat_users')
-        .select('food_allergies, client_preference, medical_conditions, language, user_language, full_name')
+        .select('food_allergies, recommendations, food_limitations, medical_conditions, nursing_status, client_preference, language, user_language, full_name')
         .eq('user_code', resolvedUserCode)
         .maybeSingle()
     ]);
@@ -3037,6 +3037,9 @@ app.post('/api/profile/meal-plan/ai-update', async (req, res) => {
       allergies: clientProfile?.food_allergies || chatProfile?.food_allergies || [],
       limitations: clientProfile?.food_limitations || null,
       medical_conditions: clientProfile?.medical_conditions || chatProfile?.medical_conditions || null,
+      recommendations: chatProfile?.recommendations || null,
+      chat_food_limitations: chatProfile?.food_limitations || null,
+      nursing_status: chatProfile?.nursing_status || null,
       preferences: chatProfile?.client_preference || null,
       language: chatProfile?.user_language || chatProfile?.language || 'english'
     };
