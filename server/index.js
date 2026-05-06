@@ -6020,11 +6020,26 @@ app.get('/api/weekly-macro-summary-svg', async (req, res) => {
       weeklyTotals.fat += logF;
     });
 
-    // 5. Mathematics for SVG rings (same geometry + label rules as /api/macro-summary-svg)
-    const calPct = weeklyGoals.calories > 0 ? Math.round((weeklyTotals.calories / weeklyGoals.calories) * 100) : 0;
-    const pPct = weeklyGoals.protein > 0 ? Math.round((weeklyTotals.protein / weeklyGoals.protein) * 100) : 0;
-    const cPct = weeklyGoals.carbs > 0 ? Math.round((weeklyTotals.carbs / weeklyGoals.carbs) * 100) : 0;
-    const fPct = weeklyGoals.fat > 0 ? Math.round((weeklyTotals.fat / weeklyGoals.fat) * 100) : 0;
+    // 5. Use 7-day averages for weekly summary values
+    const avgTotals = {
+      calories: weeklyTotals.calories / 7,
+      protein: weeklyTotals.protein / 7,
+      carbs: weeklyTotals.carbs / 7,
+      fat: weeklyTotals.fat / 7
+    };
+    const avgGoals = {
+      calories: weeklyGoals.calories / 7,
+      protein: weeklyGoals.protein / 7,
+      carbs: weeklyGoals.carbs / 7,
+      fat: weeklyGoals.fat / 7
+    };
+    const hasCalorieDeficit = avgGoals.calories > 0 && avgTotals.calories < avgGoals.calories;
+
+    // Mathematics for SVG rings (same geometry + label rules as /api/macro-summary-svg)
+    const calPct = avgGoals.calories > 0 ? Math.round((avgTotals.calories / avgGoals.calories) * 100) : 0;
+    const pPct = avgGoals.protein > 0 ? Math.round((avgTotals.protein / avgGoals.protein) * 100) : 0;
+    const cPct = avgGoals.carbs > 0 ? Math.round((avgTotals.carbs / avgGoals.carbs) * 100) : 0;
+    const fPct = avgGoals.fat > 0 ? Math.round((avgTotals.fat / avgGoals.fat) * 100) : 0;
 
     const outerRadius = 120;
     const innerRadius = 100;
@@ -6098,7 +6113,7 @@ app.get('/api/weekly-macro-summary-svg', async (req, res) => {
     ].filter(Boolean).join('\n');
 
     const innerClearR = innerRadius - 8;
-    const calCenterStr = weeklyTotals.calories.toLocaleString();
+    const calCenterStr = Math.round(avgTotals.calories).toLocaleString();
     const calCharFactor = 0.58;
     let centerCaloriesFontSize = 56;
     const estCalTextW = calCenterStr.length * calCharFactor * centerCaloriesFontSize;
@@ -6225,7 +6240,7 @@ app.get('/api/weekly-macro-summary-svg', async (req, res) => {
     const chartInnerY = 22;
     const legendTop = 198;
     const legendBottomPad = 14;
-    const svgH = legendTop + 105 + 18 + legendBottomPad;
+    const svgH = legendTop + 105 + 48 + legendBottomPad;
 
     // 6. Assemble SVG — horizontal; left 280 = daily ring column
     const svg = `
@@ -6280,7 +6295,7 @@ ${ringPctSvg}
 
   <g transform="translate(${cxRing}, ${cyRing})">
     <text text-anchor="middle" dominant-baseline="central" y="${hubCalLineY}" font-family="${fontUi}" font-size="${centerCaloriesFontSize}" font-weight="700" fill="#111827" letter-spacing="-0.03em">${calCenterStr}</text>
-    <text text-anchor="middle" dominant-baseline="central" y="${hubKcalLineY}" font-family="${fontUi}" font-size="${kcalSubFont}" font-weight="600" fill="${weeklySubFill}" letter-spacing="${weeklySubLetter}">${isHe ? 'שבועי' : 'WEEKLY'}</text>
+    <text text-anchor="middle" dominant-baseline="central" y="${hubKcalLineY}" font-family="${fontUi}" font-size="${kcalSubFont}" font-weight="600" fill="${weeklySubFill}" letter-spacing="${weeklySubLetter}">${isHe ? 'ממוצע יומי' : 'DAILY AVG'}</text>
   </g>
 
   <g transform="translate(${rightColX}, ${barBlockTop})">
@@ -6294,7 +6309,7 @@ ${ringPctSvg}
     ${isHe ? `
     <g transform="translate(0, 0)">
       <text x="0" y="12" text-anchor="start" font-family="${fontUi}" font-size="15" font-weight="700" fill="#111827">
-        ${weeklyTotals.calories.toLocaleString()} <tspan fill="#9ca3af" font-weight="400">/ ${weeklyGoals.calories.toLocaleString()}</tspan>
+        <tspan fill="#6b7280" font-weight="500">ממוצע </tspan>${Math.round(avgTotals.calories).toLocaleString()} <tspan fill="#9ca3af" font-weight="400">/ ${Math.round(avgGoals.calories).toLocaleString()}</tspan>
       </text>
       <g transform="translate(${heLegendLabelShift}, 0)">
         <circle cx="-40" cy="8" r="6" fill="#10b981"/>
@@ -6303,7 +6318,7 @@ ${ringPctSvg}
     </g>
     <g transform="translate(0, 35)">
       <text x="0" y="12" text-anchor="start" font-family="${fontUi}" font-size="15" font-weight="700" fill="#111827">
-        ${formatWeight(weeklyTotals.protein)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(weeklyGoals.protein)}</tspan>
+        <tspan fill="#6b7280" font-weight="500">ממוצע </tspan>${formatWeight(avgTotals.protein)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(avgGoals.protein)}</tspan>
       </text>
       <g transform="translate(${heLegendLabelShift}, 0)">
         <circle cx="-40" cy="8" r="6" fill="#a855f7"/>
@@ -6312,7 +6327,7 @@ ${ringPctSvg}
     </g>
     <g transform="translate(0, 70)">
       <text x="0" y="12" text-anchor="start" font-family="${fontUi}" font-size="15" font-weight="700" fill="#111827">
-        ${formatWeight(weeklyTotals.carbs)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(weeklyGoals.carbs)}</tspan>
+        <tspan fill="#6b7280" font-weight="500">ממוצע </tspan>${formatWeight(avgTotals.carbs)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(avgGoals.carbs)}</tspan>
       </text>
       <g transform="translate(${heLegendLabelShift}, 0)">
         <circle cx="-40" cy="8" r="6" fill="#3b82f6"/>
@@ -6321,7 +6336,7 @@ ${ringPctSvg}
     </g>
     <g transform="translate(0, 105)">
       <text x="0" y="12" text-anchor="start" font-family="${fontUi}" font-size="15" font-weight="700" fill="#111827">
-        ${formatWeight(weeklyTotals.fat)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(weeklyGoals.fat)}</tspan>
+        <tspan fill="#6b7280" font-weight="500">ממוצע </tspan>${formatWeight(avgTotals.fat)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(avgGoals.fat)}</tspan>
       </text>
       <g transform="translate(${heLegendLabelShift}, 0)">
         <circle cx="-40" cy="8" r="6" fill="#f59e0b"/>
@@ -6333,28 +6348,28 @@ ${ringPctSvg}
       <circle cx="6" cy="8" r="6" fill="#10b981"/>
       <text x="20" y="13" font-family="${fontUi}" font-size="15" font-weight="500" fill="#4b5563">Calories</text>
       <text x="${legendValueX}" y="13" text-anchor="start" font-family="${fontUi}" font-size="15" font-weight="700" fill="#111827">
-        ${weeklyTotals.calories.toLocaleString()} <tspan fill="#9ca3af" font-weight="400">/ ${weeklyGoals.calories.toLocaleString()}</tspan>
+        <tspan fill="#6b7280" font-weight="500">avg </tspan>${Math.round(avgTotals.calories).toLocaleString()} <tspan fill="#9ca3af" font-weight="400">/ ${Math.round(avgGoals.calories).toLocaleString()}</tspan>
       </text>
     </g>
     <g transform="translate(0, 35)">
       <circle cx="6" cy="8" r="6" fill="#a855f7"/>
       <text x="20" y="13" font-family="${fontUi}" font-size="15" font-weight="500" fill="#4b5563">Protein</text>
       <text x="${legendValueX}" y="13" text-anchor="start" font-family="${fontUi}" font-size="15" font-weight="700" fill="#111827">
-        ${formatWeight(weeklyTotals.protein)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(weeklyGoals.protein)}</tspan>
+        <tspan fill="#6b7280" font-weight="500">avg </tspan>${formatWeight(avgTotals.protein)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(avgGoals.protein)}</tspan>
       </text>
     </g>
     <g transform="translate(0, 70)">
       <circle cx="6" cy="8" r="6" fill="#3b82f6"/>
       <text x="20" y="13" font-family="${fontUi}" font-size="15" font-weight="500" fill="#4b5563">Carbs</text>
       <text x="${legendValueX}" y="13" text-anchor="start" font-family="${fontUi}" font-size="15" font-weight="700" fill="#111827">
-        ${formatWeight(weeklyTotals.carbs)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(weeklyGoals.carbs)}</tspan>
+        <tspan fill="#6b7280" font-weight="500">avg </tspan>${formatWeight(avgTotals.carbs)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(avgGoals.carbs)}</tspan>
       </text>
     </g>
     <g transform="translate(0, 105)">
       <circle cx="6" cy="8" r="6" fill="#f59e0b"/>
       <text x="20" y="13" font-family="${fontUi}" font-size="15" font-weight="500" fill="#4b5563">Fat</text>
       <text x="${legendValueX}" y="13" text-anchor="start" font-family="${fontUi}" font-size="15" font-weight="700" fill="#111827">
-        ${formatWeight(weeklyTotals.fat)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(weeklyGoals.fat)}</tspan>
+        <tspan fill="#6b7280" font-weight="500">avg </tspan>${formatWeight(avgTotals.fat)} <tspan fill="#9ca3af" font-weight="400">/ ${formatWeight(avgGoals.fat)}</tspan>
       </text>
     </g>
     `}
