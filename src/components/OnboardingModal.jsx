@@ -3323,7 +3323,26 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
   // Usage-based support offer (after onboarding save, before WhatsApp) — skippable
   if (showUsageBasedOffer) {
     const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-    const finalizeOnboardingAfterSubscription = async ({ requireActiveSubscription = false, sendWelcome = false } = {}) => {
+    const startAsyncMealPlanGeneration = () => {
+      fetch(`${apiUrl}/api/onboarding/start-async-meal-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user?.id || null,
+          user_code: completedOnboardingContext?.userCode || userCode || null
+        }),
+        keepalive: true
+      }).catch((startMealPlanError) => {
+        console.warn('Could not start async meal plan generation:', startMealPlanError);
+      });
+    };
+
+    const finalizeOnboardingAfterSubscription = async ({
+      requireActiveSubscription = false,
+      sendWelcome = false,
+      runMealPlanGeneration = true,
+      requireMealPlanSuccess = false
+    } = {}) => {
       const resolvedUserCode = completedOnboardingContext?.userCode || userCode;
       if (!resolvedUserCode) {
         throw new Error(language === 'hebrew' ? 'לא נמצא קוד משתמש' : 'User code is missing');
@@ -3354,15 +3373,23 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
         throw new Error(completeResult?.error || (language === 'hebrew' ? 'שגיאה בסיום האונבורדינג' : 'Failed to complete onboarding'));
       }
 
-      const mealPlanResult = await generateMealPlan(
-        resolvedUserCode,
-        completedOnboardingContext?.dailyCalories,
-        completedOnboardingContext?.macros,
-        completedOnboardingContext?.clientName || 'Client',
-        completedOnboardingContext?.userLanguage || language
-      );
-      if (!mealPlanResult.success) {
-        console.warn('⚠️ Meal plan generation failed (non-blocking):', mealPlanResult.error);
+      if (runMealPlanGeneration) {
+        const mealPlanResult = await generateMealPlan(
+          resolvedUserCode,
+          completedOnboardingContext?.dailyCalories,
+          completedOnboardingContext?.macros,
+          completedOnboardingContext?.clientName || 'Client',
+          completedOnboardingContext?.userLanguage || language
+        );
+        if (!mealPlanResult.success) {
+          if (requireMealPlanSuccess) {
+            throw new Error(
+              mealPlanResult.error ||
+              (language === 'hebrew' ? 'שגיאה ביצירת תפריט לפני מעבר לתשלום' : 'Failed to create meal plan before redirecting to payment')
+            );
+          }
+          console.warn('⚠️ Meal plan generation failed (non-blocking):', mealPlanResult.error);
+        }
       }
 
       if (sendWelcome) {
@@ -3374,7 +3401,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
       setCheckoutLoading(true);
       setError('');
       try {
-        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: false, sendWelcome: false });
+        await finalizeOnboardingAfterSubscription({
+          requireActiveSubscription: false,
+          sendWelcome: false,
+          runMealPlanGeneration: false
+        });
+
+        // Fire-and-forget: start backend meal plan build/save now, do not wait for completion.
+        startAsyncMealPlanGeneration();
 
         const res = await fetch(`${apiUrl}/api/stripe/create-checkout-session`, {
           method: 'POST',
@@ -3384,7 +3418,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
             mode: 'subscription',
             customerId: user?.id,
             customerEmail: user?.email,
-            metadata: { from: 'onboarding_upsell', user_id: user?.id }
+            metadata: {
+              from: 'onboarding_upsell',
+              user_id: user?.id,
+              user_code: completedOnboardingContext?.userCode || userCode || null
+            }
           })
         });
         const data = await res.json();
@@ -3448,7 +3486,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
           });
         }
 
-        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: true, sendWelcome: true });
+        // Fire-and-forget for code flow as well, so refresh/navigation won't interrupt generation.
+        startAsyncMealPlanGeneration();
+        await finalizeOnboardingAfterSubscription({
+          requireActiveSubscription: true,
+          sendWelcome: true,
+          runMealPlanGeneration: false
+        });
       } catch (e) {
         setPromoCodeError(e.message || (language === 'hebrew' ? 'שגיאה בחיבור לשרת' : 'Connection error'));
       } finally {
@@ -3496,7 +3540,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
           throw new Error(updateFreeTierResult?.error || (language === 'hebrew' ? 'שגיאה בעדכון סטטוס מנוי' : 'Failed to update subscription status'));
         }
 
-        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: true, sendWelcome: true });
+        // Fire-and-forget for free-tier flow as well, so refresh/navigation won't interrupt generation.
+        startAsyncMealPlanGeneration();
+        await finalizeOnboardingAfterSubscription({
+          requireActiveSubscription: true,
+          sendWelcome: true,
+          runMealPlanGeneration: false
+        });
       } catch (e) {
         setPromoCodeError(e.message || (language === 'hebrew' ? 'שגיאה בחיבור לשרת' : 'Connection error'));
       } finally {

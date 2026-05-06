@@ -4,6 +4,7 @@ const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { createClient } = require('@supabase/supabase-js');
 const sharp = require('sharp');
+const { randomUUID } = require('crypto');
 
 // Initialize Supabase client for main project (Stripe, clients, etc.)
 const supabase = createClient(
@@ -50,6 +51,7 @@ const PORT = normalizePort(
 const DIGITAL_ONLY_PRODUCT_ID = 'prod_TrcVkwBC0wmqKp';
 const DIGITAL_ONLY_PRICE_ID = 'price_1SyHX0HIeYfvCylDZyb1Lb3L';
 const DIGITAL_ONLY_BASE_AMOUNT_USD = 48;
+const CREATE_MEAL_PLAN_API_URL = 'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
 
 function isDigitalOnlyPlan(productId, priceId) {
   return productId === DIGITAL_ONLY_PRODUCT_ID || priceId === DIGITAL_ONLY_PRICE_ID;
@@ -1105,6 +1107,183 @@ async function updateSubscriptionInfo(customerEmail, subscriptionStatus, subscri
   ]);
 }
 
+function calculateMainTotalsFromMeals(meals) {
+  if (!Array.isArray(meals)) {
+    return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  }
+
+  return meals.reduce((acc, meal) => {
+    if (meal?.main?.nutrition) {
+      acc.calories += meal.main.nutrition.calories || 0;
+      acc.protein += meal.main.nutrition.protein || 0;
+      acc.carbs += meal.main.nutrition.carbs || 0;
+      acc.fat += meal.main.nutrition.fat || 0;
+    }
+    return acc;
+  }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+}
+
+async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode = null) {
+  try {
+    if (!chatSupabase) {
+      console.warn('⚠️ Skipping async meal plan generation: chat database is not configured');
+      return;
+    }
+
+    let resolvedUserCode = fallbackUserCode || null;
+    let clientName = 'Client';
+
+    if (userId) {
+      const { data: clientRecord, error: clientError } = await supabase
+        .from('clients')
+        .select('user_code, full_name, first_name, last_name')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (clientError && clientError.code !== 'PGRST116') {
+        throw clientError;
+      }
+
+      if (clientRecord?.user_code) resolvedUserCode = clientRecord.user_code;
+      if (clientRecord?.full_name) {
+        clientName = clientRecord.full_name;
+      } else {
+        clientName = `${clientRecord?.first_name || ''} ${clientRecord?.last_name || ''}`.trim() || clientName;
+      }
+    }
+
+    if (!resolvedUserCode) {
+      console.warn('⚠️ Skipping async meal plan generation: user_code is missing for user_id:', userId);
+      return;
+    }
+
+    const { data: chatUserData, error: chatUserError } = await chatSupabase
+      .from('chat_users')
+      .select('daily_target_total_calories, macros, user_language, language, full_name')
+      .eq('user_code', resolvedUserCode)
+      .maybeSingle();
+
+    if (chatUserError && chatUserError.code !== 'PGRST116') {
+      throw chatUserError;
+    }
+
+    if (chatUserData?.full_name) {
+      clientName = chatUserData.full_name;
+    }
+
+    const dailyCalories = Number(chatUserData?.daily_target_total_calories || 0);
+    const macros = chatUserData?.macros || null;
+    const userLanguage = chatUserData?.user_language || chatUserData?.language || 'english';
+
+    if (!dailyCalories) {
+      console.warn('⚠️ Skipping async meal plan generation: missing daily_target_total_calories for user_code:', resolvedUserCode);
+      return;
+    }
+
+    // Avoid duplicate plans if Stripe retries webhook events.
+    const { data: existingPlans, error: existingPlansError } = await supabase
+      .from('client_meal_plans')
+      .select('id')
+      .eq('user_code', resolvedUserCode)
+      .eq('active', true)
+      .limit(1);
+
+    if (existingPlansError) {
+      throw existingPlansError;
+    }
+
+    if (existingPlans && existingPlans.length > 0) {
+      console.log('ℹ️ Active meal plan already exists, skipping async onboarding generation for user_code:', resolvedUserCode);
+      return;
+    }
+
+    console.log('🧠 Generating onboarding meal plan asynchronously for user_code:', resolvedUserCode);
+    const createRes = await fetch(CREATE_MEAL_PLAN_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_code: resolvedUserCode })
+    });
+
+    if (!createRes.ok) {
+      const errText = await createRes.text().catch(() => '');
+      throw new Error(`Create meal plan API error (${createRes.status}): ${errText}`);
+    }
+
+    const raw = await createRes.json();
+    if (raw?.error) {
+      throw new Error(typeof raw.error === 'string' ? raw.error : JSON.stringify(raw.error));
+    }
+
+    const payload = raw?.data ?? raw?.result ?? raw;
+    const menu =
+      payload?.menu ??
+      payload?.meals ??
+      payload?.meal_plan?.meals ??
+      (Array.isArray(payload?.meal_plan) ? payload.meal_plan : null);
+
+    if (!Array.isArray(menu) || menu.length === 0) {
+      throw new Error('No meals were created by meal plan builder');
+    }
+
+    const template = payload?.template ?? payload?.schema ?? payload?.meal_plan?.template ?? null;
+    const menuData = {
+      meals: menu,
+      totals: payload?.totals ?? payload?.meal_plan?.totals ?? calculateMainTotalsFromMeals(menu),
+      note: payload?.note ?? payload?.meal_plan?.note ?? ''
+    };
+
+    const planId = randomUUID();
+    const now = new Date().toISOString();
+    const mealPlanName = `${clientName || 'Client'}'s Meal Plan`;
+
+    const { error: secondaryError } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .insert({
+        id: planId,
+        record_type: 'meal_plan',
+        user_code: resolvedUserCode,
+        meal_plan_name: mealPlanName,
+        schema: template,
+        meal_plan: menuData,
+        status: 'active',
+        daily_total_calories: dailyCalories,
+        macros_target: macros,
+        active_from: now,
+        created_at: now,
+        updated_at: now
+      });
+
+    if (secondaryError) throw secondaryError;
+
+    const { error: mainError } = await supabase
+      .from('client_meal_plans')
+      .insert({
+        id: planId,
+        user_code: resolvedUserCode,
+        original_meal_plan_id: planId,
+        meal_plan_name: mealPlanName,
+        dietitian_meal_plan: menuData,
+        active: true,
+        daily_total_calories: dailyCalories,
+        macros_target: macros,
+        created_at: now,
+        updated_at: now
+      });
+
+    if (mainError) {
+      await chatSupabase
+        .from('meal_plans_and_schemas')
+        .delete()
+        .eq('id', planId);
+      throw mainError;
+    }
+
+    console.log('✅ Async onboarding meal plan generated and saved for user_code:', resolvedUserCode, 'language:', userLanguage);
+  } catch (error) {
+    console.error('❌ Async onboarding meal plan generation failed:', error.message);
+  }
+}
+
 async function handleCheckoutCompleted(session) {
   console.log('🎉 Processing checkout completion:', session.id);
   
@@ -2118,6 +2297,33 @@ app.post('/api/onboarding/update-chat-user', async (req, res) => {
     res.status(500).json({ 
       error: 'Internal server error',
       message: error.message 
+    });
+  }
+});
+
+// Start async meal plan generation for onboarding without blocking checkout redirect
+app.post('/api/onboarding/start-async-meal-plan', async (req, res) => {
+  try {
+    const { user_id, user_code } = req.body || {};
+    if (!user_id && !user_code) {
+      return res.status(400).json({ error: 'user_id or user_code is required' });
+    }
+
+    console.log('🚀 Queuing async onboarding meal plan generation', { user_id, user_code });
+
+    // Return immediately so frontend can continue to Stripe checkout.
+    setImmediate(() => {
+      createAndSaveOnboardingMealPlanForUser(user_id || null, user_code || null).catch((err) => {
+        console.warn('⚠️ Async onboarding meal plan task failed:', err?.message || err);
+      });
+    });
+
+    res.json({ queued: true });
+  } catch (error) {
+    console.error('❌ Error in onboarding/start-async-meal-plan endpoint:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
     });
   }
 });
