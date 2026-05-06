@@ -100,6 +100,10 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   const [isEditAlternativePortionModalVisible, setIsEditAlternativePortionModalVisible] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState('');
+  const [aiMealPlanRequest, setAiMealPlanRequest] = useState('');
+  const [isSubmittingAiRequest, setIsSubmittingAiRequest] = useState(false);
+  const [aiLoadingMessage, setAiLoadingMessage] = useState('');
+  const hasUsedAiMealPlanChange = Boolean(planData?.ai_plan_change_used);
 
   // Load training plan when trainingPlan sub-tab is active
   useEffect(() => {
@@ -1095,6 +1099,106 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     }
   };
 
+  const handleAiMealPlanChangeRequest = async () => {
+    if (!planData?.id || !userCode) return;
+    if (hasUsedAiMealPlanChange) {
+      alert(
+        language === 'hebrew'
+          ? 'כבר השתמשת בשינוי התפריט החד-פעמי עם AI.'
+          : 'You have already used your one-time AI meal plan change.'
+      );
+      return;
+    }
+    if (!aiMealPlanRequest.trim()) {
+      alert(language === 'hebrew' ? 'אנא כתוב מה תרצה לשנות בתפריט' : 'Please describe what you want to change in your meal plan');
+      return;
+    }
+
+    try {
+      setIsSubmittingAiRequest(true);
+      setAiLoadingMessage(
+        language === 'hebrew'
+          ? 'מעבד את הבקשה שלך. זה יכול לקחת עד 30 שניות...'
+          : 'Processing your request. This may take up to 30 seconds...'
+      );
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const body = {
+        planId: planData.id,
+        userCode,
+        selectedDay,
+        requestText: aiMealPlanRequest.trim(),
+        overwriteEditedPlan: false
+      };
+
+      let response = await fetch(`${apiUrl}/api/profile/meal-plan/ai-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      let result = await response.json();
+
+      if (response.status === 409 && result?.requiresConfirmation) {
+        const confirmed = window.confirm(
+          language === 'hebrew'
+            ? 'יש לך כבר תפריט ערוך. יצירת תפריט חדש תמחוק את העריכה הקיימת. להמשיך?'
+            : 'You already have an edited meal plan. Creating a new plan will delete your current edited plan. Continue?'
+        );
+
+        if (!confirmed) {
+          return;
+        }
+
+        response = await fetch(`${apiUrl}/api/profile/meal-plan/ai-update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...body, overwriteEditedPlan: true })
+        });
+        result = await response.json();
+      }
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to generate updated meal plan');
+      }
+
+      const updatedMealPlan = result.mealPlan;
+      const updatedPlanData = {
+        ...planData,
+        meal_plan: updatedMealPlan,
+        client_edited_meal_plan: updatedMealPlan,
+        ai_plan_change_used: true,
+        ai_plan_change_used_at: new Date().toISOString(),
+        isClientEdited: true,
+        meals: updatedMealPlan.meals || [],
+        totals: updatedMealPlan.totals || planData.totals,
+        note: updatedMealPlan.note || ''
+      };
+
+      setPlanData(updatedPlanData);
+      setNotesValue(updatedPlanData.note || '');
+      setAiMealPlanRequest('');
+      setAllPlans(prevPlans => prevPlans.map(plan => (
+        plan.id === planData.id
+          ? {
+              ...plan,
+              meal_plan: updatedMealPlan,
+              client_edited_meal_plan: updatedMealPlan,
+              edited_plan_date: new Date().toISOString(),
+              isClientEdited: true
+            }
+          : plan
+      )));
+
+      alert(language === 'hebrew' ? 'התפריט עודכן בהצלחה' : 'Meal plan updated successfully');
+    } catch (error) {
+      console.error('Error updating meal plan with AI:', error);
+      alert(language === 'hebrew' ? 'לא ניתן לעדכן את התפריט כרגע' : 'Failed to update meal plan right now');
+    } finally {
+      setIsSubmittingAiRequest(false);
+      setAiLoadingMessage('');
+    }
+  };
+
   // Add ingredient to alternative meal
   const handleAddAlternativeIngredient = async (ingredient) => {
     if (selectedAlternativeMealIndex === null || !planData || selectedAlternativeType === null) return;
@@ -1389,7 +1493,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       const response = await fetch(`${apiUrl}/api/profile/meal-plan/clear-edited`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId: planData.id })
+        body: JSON.stringify({ planId: planData.id, selectedDay })
       });
 
       if (!response.ok) {
@@ -2470,6 +2574,68 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                 )}
               </div>
             )}
+
+          </div>
+        </div>
+      )}
+
+      {/* AI Meal Plan Change Section */}
+      {planData && (
+        <div className="mb-6 sm:mb-8 md:mb-10 lg:mb-12 animate-slideInUp relative rounded-xl p-4 sm:p-6" style={{
+          borderLeft: '3px solid',
+          borderLeftColor: isDarkMode ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.2)',
+          borderRight: '2px solid',
+          borderRightColor: isDarkMode ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.15)',
+          borderTop: '2px solid',
+          borderTopColor: isDarkMode ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.15)',
+          borderBottom: '2px solid',
+          borderBottomColor: isDarkMode ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.15)',
+          boxShadow: isDarkMode
+            ? 'inset 1px 0 0 rgba(99, 102, 241, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)'
+            : 'inset 1px 0 0 rgba(99, 102, 241, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+        }}>
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-violet-500/5 pointer-events-none rounded-xl" />
+          <div className="relative z-10 space-y-3">
+            <p className={`${themeClasses.textSecondary} text-sm`}>
+              {language === 'hebrew'
+                ? 'לא מרוצה מהתפריט? תכתבו כאן מה תרצה לשנות וה-AI יעדכן עבורך את התפריט.'
+                : 'Not satisfied with your meal plan? Describe what you want to change and AI will update it for you.'}
+            </p>
+            <textarea
+              value={aiMealPlanRequest}
+              onChange={(e) => setAiMealPlanRequest(e.target.value)}
+              placeholder={language === 'hebrew' ? 'לדוגמה: החלף את ארוחת הצהריים במשהו צמחוני עם יותר חלבון' : 'Example: Change lunch to a vegetarian option with more protein'}
+              className={`w-full p-3 rounded-lg border ${themeClasses.borderPrimary} ${themeClasses.bgCard} ${themeClasses.textPrimary} resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[90px]`}
+              rows={3}
+              disabled={isSubmittingAiRequest || hasUsedAiMealPlanChange}
+            />
+            {hasUsedAiMealPlanChange && (
+              <p className="text-sm text-amber-500 dark:text-amber-300">
+                {language === 'hebrew'
+                  ? 'כבר השתמשת בשינוי תפריט חד-פעמי עם AI.'
+                  : 'You have already used your one-time AI meal plan change.'}
+              </p>
+            )}
+            {isSubmittingAiRequest && (
+              <div className="flex items-center gap-2 text-sm text-indigo-500 dark:text-indigo-300">
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+                  <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                <span>{aiLoadingMessage}</span>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <button
+                onClick={handleAiMealPlanChangeRequest}
+                disabled={isSubmittingAiRequest || hasUsedAiMealPlanChange || !aiMealPlanRequest.trim()}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+              >
+                {isSubmittingAiRequest
+                  ? (language === 'hebrew' ? 'מעדכן תפריט...' : 'Updating plan...')
+                  : (language === 'hebrew' ? 'עדכן תפריט עם AI' : 'Update Plan with AI')}
+              </button>
+            </div>
           </div>
         </div>
       )}

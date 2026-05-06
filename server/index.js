@@ -1123,6 +1123,157 @@ function calculateMainTotalsFromMeals(meals) {
   }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
 }
 
+const nutritionSchema = {
+  type: 'object',
+  properties: {
+    fat: { type: 'number' },
+    carbs: { type: 'number' },
+    protein: { type: 'number' },
+    calories: { type: 'number' }
+  },
+  required: ['fat', 'carbs', 'protein', 'calories'],
+  additionalProperties: false
+};
+
+const ingredientSchema = {
+  type: 'object',
+  properties: {
+    UPC: { type: ['string', 'null'] },
+    fat: { type: 'number' },
+    item: { type: 'string' },
+    carbs: { type: 'number' },
+    protein: { type: 'number' },
+    calories: { type: 'number' },
+    'portionSI(gram)': { type: 'number' },
+    'brand of pruduct': { type: 'string' },
+    household_measure: { type: 'string' }
+  },
+  required: [
+    'UPC', 'fat', 'item', 'carbs', 'protein', 'calories',
+    'portionSI(gram)', 'brand of pruduct', 'household_measure'
+  ],
+  additionalProperties: false
+};
+
+const mealDetailsSchema = {
+  type: 'object',
+  properties: {
+    meal_name: { type: 'string' },
+    nutrition: nutritionSchema,
+    meal_title: { type: 'string' },
+    ingredients: {
+      type: 'array',
+      items: ingredientSchema
+    },
+    main_protein_source: { type: 'string' }
+  },
+  required: ['meal_name', 'nutrition', 'meal_title', 'ingredients', 'main_protein_source'],
+  additionalProperties: false
+};
+
+const mealOptionSchema = {
+  type: 'object',
+  properties: {
+    main: mealDetailsSchema,
+    meal: { type: 'string' },
+    alternative: mealDetailsSchema
+  },
+  required: ['main', 'meal', 'alternative'],
+  additionalProperties: false
+};
+
+const mealPlanSchema = {
+  type: 'object',
+  properties: {
+    note: { type: 'string' },
+    meals: {
+      type: 'array',
+      items: mealOptionSchema
+    },
+    totals: nutritionSchema
+  },
+  required: ['note', 'meals', 'totals'],
+  additionalProperties: false
+};
+
+async function generateUpdatedMealPlan(currentMealPlanStr, userRequestStr, userProfileObj) {
+  const apiBase = (process.env.AZURE_OPENAI_API_BASE || '').replace(/\/$/, '');
+  const apiKey = process.env.AZURE_OPENAI_API_KEY;
+  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+
+  if (!apiBase || !apiKey || !deployment) {
+    throw new Error('Azure OpenAI is not configured on the server');
+  }
+
+  const systemPrompt = `
+You are an expert clinical dietitian and precise data processor. Your job is to modify an existing meal plan based on a user's request while strictly maintaining nutritional balance, adhering to the User Profile, and conforming to the required schema.
+
+RULES & GUARDRAILS:
+1. USER PROFILE ADHERENCE: You must strictly enforce all dietary restrictions, allergies, and preferences listed in the provided USER PROFILE. If a user's modification request violates their own profile, intelligently substitute the request with a safe, profile-compliant alternative that mimics the desired flavor profile or texture.
+2. NUTRITIONAL REASONABLENESS: The user's request must be adapted into a healthy, balanced meal. If a user asks for something nutritionally unreasonable, adapt it into a viable option that fits their macros.
+3. MACRO & CALORIE MATCHING: The newly generated meals must match the original meal's macros (Fat, Carbs, Protein) within a ±10% margin, and total daily calories within ±100. Adjust ingredient portions (in grams) to hit these targets perfectly.
+4. BRAND HANDLING: If the user explicitly requests a specific brand, place that exact brand name in the "brand of pruduct" field. If they ask for a generic item, leave "brand of pruduct" as an empty string "". Always set UPC to null for generated items.
+5. DATA ACCURACY: For any new ingredients added, provide realistic, mathematically accurate estimations for macros, calories, and standard household measures based on the calculated portion size in grams.
+6. NO MACRO/CALORIE TARGET CHANGES: If the request asks to change daily calories or macro targets themselves, do not change meals or targets. Return the original plan unchanged, and set a warm, welcoming note that explains this requires a licensed dietitian review for safety and personalization, and asks the client to contact Gal (BetterChoice dietitian) at +972 54-306-6442.
+`;
+
+  const userPrompt = `
+USER PROFILE:
+${JSON.stringify(userProfileObj)}
+
+CURRENT MEAL PLAN:
+${currentMealPlanStr}
+
+USER MODIFICATION REQUEST:
+"${userRequestStr}"
+
+INSTRUCTIONS:
+Update the CURRENT MEAL PLAN to accommodate the USER MODIFICATION REQUEST. Ensure all changes strictly comply with the USER PROFILE. Only update the specific meal requested (and its alternative) to match the original macros. Recalculate the totals.
+`;
+
+  const url = `${apiBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': apiKey
+    },
+    body: JSON.stringify({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'updated_meal_plan',
+          strict: true,
+          schema: mealPlanSchema
+        }
+      },
+      temperature: 0.1,
+      max_tokens: 4000
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`Azure OpenAI meal-plan update failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('Azure OpenAI returned empty content for meal-plan update');
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch (parseError) {
+    throw new Error(`Failed to parse Azure OpenAI meal-plan JSON: ${parseError.message}`);
+  }
+}
+
 async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode = null) {
   try {
     if (!chatSupabase) {
@@ -2633,9 +2784,19 @@ app.get('/api/profile/meal-plan', async (req, res) => {
 // Update client meal plan (clear old edited plan)
 app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
   try {
-    const { planId } = req.body;
+    const { planId, selectedDay } = req.body;
     if (!planId) {
       return res.status(400).json({ error: 'Plan ID is required' });
+    }
+
+    const { data: planData, error: planFetchError } = await supabase
+      .from('client_meal_plans')
+      .select('id, user_code, meal_plan_name')
+      .eq('id', planId)
+      .single();
+
+    if (planFetchError || !planData) {
+      return res.status(404).json({ error: 'Plan not found' });
     }
 
     const { error } = await supabase
@@ -2647,6 +2808,71 @@ app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
       .eq('id', planId);
 
     if (error) throw error;
+
+    if (chatSupabase) {
+      const now = new Date().toISOString();
+      const selectedDayNumber = Number.isInteger(selectedDay) ? selectedDay : Number(selectedDay);
+
+      const { data: activePlans, error: activePlansError } = await chatSupabase
+        .from('meal_plans_and_schemas')
+        .select('id, active_days, created_at')
+        .eq('user_code', planData.user_code)
+        .eq('record_type', 'meal_plan')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (activePlansError) throw activePlansError;
+
+      const latestActivePlan = Array.isArray(activePlans) && activePlans.length > 0 ? activePlans[0] : null;
+      const planToDelete = Array.isArray(activePlans)
+        ? activePlans.find((plan) => {
+            if (!Number.isInteger(selectedDayNumber) || selectedDayNumber < 0 || selectedDayNumber > 6) {
+              return false;
+            }
+            if (!Array.isArray(plan.active_days) || plan.active_days.length === 0) {
+              return true;
+            }
+            return plan.active_days.includes(selectedDayNumber);
+          }) || latestActivePlan
+        : null;
+
+      if (planToDelete?.id) {
+        const { error: deleteError } = await chatSupabase
+          .from('meal_plans_and_schemas')
+          .delete()
+          .eq('id', planToDelete.id);
+
+        if (deleteError) throw deleteError;
+      }
+
+      const { data: previousPlan, error: previousPlanError } = await chatSupabase
+        .from('meal_plans_and_schemas')
+        .select('id')
+        .eq('user_code', planData.user_code)
+        .eq('record_type', 'meal_plan')
+        .eq('meal_plan_name', planData.meal_plan_name)
+        .neq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (previousPlanError) throw previousPlanError;
+
+      if (previousPlan?.id) {
+        const { error: activateError } = await chatSupabase
+          .from('meal_plans_and_schemas')
+          .update({
+            status: 'active',
+            active_from: now,
+            active_until: null,
+            updated_at: now
+          })
+          .eq('id', previousPlan.id);
+
+        if (activateError) throw activateError;
+      }
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error('Error clearing edited meal plan:', error);
@@ -2746,6 +2972,161 @@ app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
   } catch (error) {
     console.error('Error saving edited meal plan:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// AI update client meal plan from open request
+app.post('/api/profile/meal-plan/ai-update', async (req, res) => {
+  try {
+    const { planId, userCode, requestText, selectedDay, overwriteEditedPlan = false } = req.body;
+    if (!planId || !requestText || !String(requestText).trim()) {
+      return res.status(400).json({ error: 'planId and requestText are required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const { data: planData, error: planError } = await supabase
+      .from('client_meal_plans')
+      .select('id, user_code, meal_plan_name, dietitian_id, daily_total_calories, macros_target, active_days, dietitian_meal_plan, client_edited_meal_plan, ai_plan_change_used, ai_plan_change_used_at')
+      .eq('id', planId)
+      .single();
+
+    if (planError || !planData) {
+      return res.status(404).json({ error: 'Meal plan not found' });
+    }
+
+    if (planData.ai_plan_change_used) {
+      return res.status(403).json({
+        error: 'AI meal plan change already used',
+        code: 'AI_MEAL_PLAN_CHANGE_LIMIT_REACHED',
+        usedAt: planData.ai_plan_change_used_at || null
+      });
+    }
+
+    if (planData.client_edited_meal_plan && !overwriteEditedPlan) {
+      return res.status(409).json({
+        error: 'Existing edited meal plan will be overwritten',
+        requiresConfirmation: true
+      });
+    }
+
+    const resolvedUserCode = userCode || planData.user_code;
+    const baseMealPlan = planData.client_edited_meal_plan || planData.dietitian_meal_plan;
+    if (!baseMealPlan) {
+      return res.status(400).json({ error: 'No base meal plan found to update' });
+    }
+
+    const [{ data: clientProfile }, { data: chatProfile }] = await Promise.all([
+      supabase
+        .from('clients')
+        .select('food_allergies, dietary_preferences, medical_conditions, food_limitations, first_name, last_name, full_name')
+        .eq('user_code', resolvedUserCode)
+        .maybeSingle(),
+      chatSupabase
+        .from('chat_users')
+        .select('food_allergies, client_preference, medical_conditions, language, user_language, full_name')
+        .eq('user_code', resolvedUserCode)
+        .maybeSingle()
+    ]);
+
+    const userProfileObj = {
+      full_name: clientProfile?.full_name || chatProfile?.full_name || `${clientProfile?.first_name || ''} ${clientProfile?.last_name || ''}`.trim(),
+      diet: clientProfile?.dietary_preferences || null,
+      allergies: clientProfile?.food_allergies || chatProfile?.food_allergies || [],
+      limitations: clientProfile?.food_limitations || null,
+      medical_conditions: clientProfile?.medical_conditions || chatProfile?.medical_conditions || null,
+      preferences: chatProfile?.client_preference || null,
+      language: chatProfile?.user_language || chatProfile?.language || 'english'
+    };
+
+    const updatedMealPlan = await generateUpdatedMealPlan(
+      JSON.stringify(baseMealPlan),
+      String(requestText).trim(),
+      userProfileObj
+    );
+
+    const now = new Date().toISOString();
+
+    const { error: saveMainError } = await supabase
+      .from('client_meal_plans')
+      .update({
+        client_edited_meal_plan: updatedMealPlan,
+        edited_plan_date: now,
+        ai_plan_change_used: true,
+        ai_plan_change_used_at: now,
+        updated_at: now
+      })
+      .eq('id', planId);
+
+    if (saveMainError) throw saveMainError;
+
+    const { data: activePlans, error: activePlanError } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .select('id, schema, active_days')
+      .eq('user_code', resolvedUserCode)
+      .eq('record_type', 'meal_plan')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+
+    if (activePlanError) {
+      console.error('Error fetching active meal plan:', activePlanError);
+    }
+
+    const latestActivePlan = Array.isArray(activePlans) && activePlans.length > 0 ? activePlans[0] : null;
+    const selectedDayNumber = Number.isInteger(selectedDay) ? selectedDay : Number(selectedDay);
+    const planToExpire = Array.isArray(activePlans)
+      ? activePlans.find((plan) => {
+          if (!Number.isInteger(selectedDayNumber) || selectedDayNumber < 0 || selectedDayNumber > 6) {
+            return false;
+          }
+          if (!Array.isArray(plan.active_days) || plan.active_days.length === 0) {
+            return true; // daily/all-days plan
+          }
+          return plan.active_days.includes(selectedDayNumber);
+        }) || latestActivePlan
+      : null;
+
+    if (planToExpire?.id) {
+      const { error: deactivateError } = await chatSupabase
+        .from('meal_plans_and_schemas')
+        .update({
+          status: 'expired',
+          active_until: now,
+          updated_at: now
+        })
+        .eq('id', planToExpire.id);
+
+      if (deactivateError) throw deactivateError;
+    }
+
+    const newMealPlanId = randomUUID();
+    const { error: createActiveError } = await chatSupabase
+      .from('meal_plans_and_schemas')
+      .insert({
+        id: newMealPlanId,
+        record_type: 'meal_plan',
+        dietitian_id: planData.dietitian_id || null,
+        user_code: resolvedUserCode,
+        meal_plan_name: planData.meal_plan_name || 'Updated Meal Plan',
+        schema: latestActivePlan?.schema || null,
+        meal_plan: updatedMealPlan,
+        status: 'active',
+        active_from: now,
+        active_days: planData.active_days || null,
+        daily_total_calories: planData.daily_total_calories || null,
+        macros_target: planData.macros_target || null,
+        created_at: now,
+        updated_at: now
+      });
+
+    if (createActiveError) throw createActiveError;
+
+    res.json({ success: true, mealPlan: updatedMealPlan });
+  } catch (error) {
+    console.error('Error updating meal plan with AI:', error);
+    res.status(500).json({ error: error.message || 'Failed to update meal plan with AI' });
   }
 });
 
