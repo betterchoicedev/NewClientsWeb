@@ -1505,6 +1505,7 @@ const ProfilePage = () => {
                     full_name: `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || user?.full_name || ''
                   }}
                   language={language}
+                  companyName={assignedCompanyName}
                 />
               )}
               {activeTab === 'settings' && (

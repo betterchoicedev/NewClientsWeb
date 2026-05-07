@@ -411,6 +411,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
       customerEmail,
       successUrl,
       cancelUrl,
+      promoCode,
       metadata = {}
     } = req.body;
 
@@ -437,9 +438,32 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
         priceId,
         ...metadata
       },
-      // Allow promotion codes
+      // Allow promotion codes (disabled automatically when explicit discounts are attached)
       allow_promotion_codes: true,
     };
+
+    // If frontend passed a promo code, try to auto-apply matching Stripe promotion code.
+    if (promoCode && typeof promoCode === 'string' && promoCode.trim()) {
+      try {
+        const normalizedPromoCode = promoCode.trim().toUpperCase();
+        const promoLookup = await stripe.promotionCodes.list({
+          code: normalizedPromoCode,
+          active: true,
+          limit: 1
+        });
+        const stripePromoCode = promoLookup?.data?.[0];
+        if (stripePromoCode?.id) {
+          sessionConfig.discounts = [{ promotion_code: stripePromoCode.id }];
+          // Stripe forbids sending both allow_promotion_codes and discounts together.
+          delete sessionConfig.allow_promotion_codes;
+          console.log('✅ Applied Stripe promotion code to checkout:', normalizedPromoCode);
+        } else {
+          console.warn('⚠️ No matching active Stripe promotion code found for:', normalizedPromoCode);
+        }
+      } catch (promoLookupError) {
+        console.warn('⚠️ Failed to lookup/apply Stripe promo code:', promoLookupError?.message || promoLookupError);
+      }
+    }
 
     // Handle customer
     if (customerId || customerEmail) {
@@ -599,8 +623,8 @@ app.post('/api/stripe/create-payment-intent', async (req, res) => {
   }
 });
 
-// Validate onboarding access code (free-tier path)
-app.post('/api/subscription/validate-access-code', async (req, res) => {
+// Validate onboarding/pricing access code (free-tier path)
+app.post(['/api/subscription/validate-access-code', '/api/pricing/validate-access-code'], async (req, res) => {
   try {
     const { code, user_id, user_code } = req.body || {};
 

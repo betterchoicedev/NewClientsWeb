@@ -18,6 +18,9 @@ const PaymentSuccessPage = () => {
   const [error, setError] = useState(null);
 
   const sessionId = searchParams.get('session_id');
+  const normalizedCompanyName = String(user?.company_name || user?.companyName || user?.company || '').trim().toLowerCase();
+  const isNavyCompany = normalizedCompanyName === 'navy';
+  const [welcomeSentForThisPayment, setWelcomeSentForThisPayment] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -35,8 +38,25 @@ const PaymentSuccessPage = () => {
       const data = await getCheckoutSession(sessionId);
       setSessionData(data);
 
-      // WhatsApp welcome for onboarding upsell is sent once by the server Stripe webhook
-      // (customer.subscription.created) — do not send again here to avoid duplicate template.
+      // Navy-only: send welcome only after successful paid onboarding Digital Only checkout.
+      const isOnboardingUpsellCheckout = data?.metadata?.from === 'onboarding_upsell';
+      if (isNavyCompany && isOnboardingUpsellCheckout && !welcomeSentForThisPayment) {
+        try {
+          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+          const metadataUserId = data?.metadata?.user_id || null;
+          const resolvedUserId = user?.id || metadataUserId;
+          if (resolvedUserId) {
+            await fetch(`${apiUrl}/api/whatsapp/send-welcome-by-user-id`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: resolvedUserId })
+            });
+            setWelcomeSentForThisPayment(true);
+          }
+        } catch (welcomeError) {
+          console.warn('Could not send Navy post-payment welcome WhatsApp:', welcomeError);
+        }
+      }
 
       // If user isn't authenticated, redirect to login after showing success
       if (!isAuthenticated) {

@@ -1,15 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useStripe } from '../../context/StripeContext';
-import { getAllProducts, getProductsByCategory, getProduct } from '../../config/stripe-products';
+import { getAllProducts, getProductsByCategory, getProduct, STRIPE_PRODUCTS } from '../../config/stripe-products';
 import PricingCard from '../PricingCard';
+import { useCompanyConfig } from '../../company/useCompanyConfig';
 
-const PricingTab = ({ themeClasses, user, language }) => {
+const PricingTab = ({ themeClasses, user, language, companyName = '' }) => {
   const { getCustomerSubscriptions } = useStripe();
   const [activeCategory, setActiveCategory] = useState('all');
   const [userSubscriptions, setUserSubscriptions] = useState([]);
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
   const [usdExchangeRate, setUsdExchangeRate] = useState(null); // ILS per 1 USD (Bank of Israel)
   const [isContactingSupport, setIsContactingSupport] = useState(false);
+  const [navyPromoCode, setNavyPromoCode] = useState('');
+  const [navyPromoLoading, setNavyPromoLoading] = useState(false);
+  const [navyPromoError, setNavyPromoError] = useState('');
+  const [navyPromoAppliedCode, setNavyPromoAppliedCode] = useState('');
+  const [animatedDigitalPrice, setAnimatedDigitalPrice] = useState(48);
+  const companyConfig = useCompanyConfig(companyName || user?.company_name || user?.companyName || user?.company || '');
 
   const allProducts = getAllProducts();
 
@@ -25,6 +32,7 @@ const PricingTab = ({ themeClasses, user, language }) => {
   const userId = user?.id || '';
   const clientName = user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || '';
   const isUserBlocked = user?.is_blocked === true || user?.is_blocked === 1 || user?.is_blocked === 'true';
+  const isNavyCompany = companyConfig?.key === 'navy';
 
   const fetchUserSubscriptions = async () => {
     try {
@@ -254,75 +262,96 @@ const PricingTab = ({ themeClasses, user, language }) => {
   ].filter(category => category.count > 0);
 
   const filteredProducts = getFilteredProducts();
+  const digitalOnlyProduct = filteredProducts.find((product) => product.id === STRIPE_PRODUCTS.DIGITAL_ONLY);
 
-  return (
-    <div className="min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn">
-      {isUserBlocked && (
-        <div className="mb-6 sm:mb-8 animate-slideInUp">
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 sm:p-6 shadow-lg">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 h-9 w-9 rounded-lg bg-red-500 text-white flex items-center justify-center flex-shrink-0">
-                <span className="text-lg">🚫</span>
-              </div>
-              <div className="flex-1">
-                <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-semibold mb-2`}>
-                  {language === 'hebrew' ? 'הגישה הוסרה: החשבון הושבת' : 'Access Revoked: Account Deactivated'}
-                </h3>
-                <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-3`}>
-                  {language === 'hebrew'
-                    ? 'שמנו לב שלא הייתה אינטראקציה עם הבוט מעל 14 ימים, ולכן החשבון הושבת אוטומטית כחלק משמירה על קהילה פעילה וממוקדת.'
-                    : 'We noticed you have not interacted with the bot for over 14 days, so your account was automatically deactivated as part of maintaining an active and focused community.'
-                  }
-                </p>
-                <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-2`}>
-                  {language === 'hebrew'
-                    ? 'הפעלה מחדש אינה אוטומטית ודורשת בדיקה ידנית של הצוות.'
-                    : 'Reactivation is not automatic and requires a manual review by our team.'
-                  }
-                </p>
-                {!!userCode && (
-                  <p className={`${themeClasses.textPrimary} text-sm font-medium mb-4`}>
-                    {language === 'hebrew' ? 'קוד משתמש: ' : 'User Code: '}{userCode}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={handleContactSupport}
-                  disabled={isContactingSupport}
-                  className="inline-flex items-center rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 transition-colors"
-                >
-                  {isContactingSupport
-                    ? (language === 'hebrew' ? 'שולח...' : 'Sending...')
-                    : (language === 'hebrew' ? 'צור קשר עם התמיכה' : 'Contact Support')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+  useEffect(() => {
+    if (!navyPromoAppliedCode) {
+      setAnimatedDigitalPrice(48);
+      return;
+    }
+    let current = 48;
+    const interval = setInterval(() => {
+      current = Math.max(0, current - 2);
+      setAnimatedDigitalPrice(current);
+      if (current <= 0) {
+        clearInterval(interval);
+      }
+    }, 45);
 
-      {/* Header */}
+    return () => clearInterval(interval);
+  }, [navyPromoAppliedCode]);
+
+  const handleValidateNavyPromoCode = async () => {
+    if (!isNavyCompany || !digitalOnlyProduct) return;
+    if (!navyPromoCode.trim()) {
+      setNavyPromoError(language === 'hebrew' ? 'יש להזין קוד' : 'Please enter a promo code');
+      return;
+    }
+
+    setNavyPromoLoading(true);
+    setNavyPromoError('');
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/pricing/validate-access-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: navyPromoCode.trim(),
+          user_id: user?.id,
+          user_code: userCode || null
+        })
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result?.valid !== true) {
+        setNavyPromoAppliedCode('');
+        setNavyPromoError(
+          result?.error ||
+          (language === 'hebrew' ? 'קוד לא תקין או לא זמין' : 'Code is invalid or unavailable')
+        );
+        return;
+      }
+
+      setNavyPromoAppliedCode((result?.code || navyPromoCode).toUpperCase());
+    } catch (error) {
+      setNavyPromoAppliedCode('');
+      setNavyPromoError(error.message || (language === 'hebrew' ? 'שגיאת חיבור לשרת' : 'Connection error'));
+    } finally {
+      setNavyPromoLoading(false);
+    }
+  };
+
+  const pricingTitle = language === 'hebrew'
+    ? (companyConfig?.pricing?.content?.title?.hebrew || 'בחר את התוכנית המתאימה לך')
+    : (companyConfig?.pricing?.content?.title?.english || 'Choose Your Perfect Plan');
+
+  const pricingSubtitle = language === 'hebrew'
+    ? (companyConfig?.pricing?.content?.subtitle?.hebrew || 'השג את היעדים התזונתיים שלך עם המומחים שלנו. תוכניות מותאמות אישית לכל צורך ותקציב.')
+    : (companyConfig?.pricing?.content?.subtitle?.english || 'Achieve your nutrition goals with our expert team. Personalized plans for every need and budget.');
+
+  const sectionOrder = Array.isArray(companyConfig?.pricing?.sectionOrder)
+    ? companyConfig.pricing.sectionOrder
+    : ['header', 'categories', 'includes', 'exchangeRate', 'products'];
+
+  const sectionNodes = {
+    header: (
       <div className="mb-8 sm:mb-10 md:mb-12 animate-slideInUp">
         <div className="flex items-center mb-8">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center mr-4 shadow-lg shadow-blue-500/25 animate-pulse">
+          <div className={`w-12 h-12 bg-gradient-to-br ${companyConfig?.theme?.pricingHeaderIconGradient || 'from-blue-500 to-purple-500'} rounded-xl flex items-center justify-center mr-4 shadow-lg shadow-blue-500/25 animate-pulse`}>
             <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zM14 6a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2h6zM4 14a2 2 0 002 2h8a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2z" />
             </svg>
           </div>
           <div>
             <h2 className={`${themeClasses.textPrimary} text-3xl font-bold tracking-tight`}>
-              {language === 'hebrew' ? 'בחר את התוכנית המתאימה לך' : 'Choose Your Perfect Plan'}
+              {pricingTitle}
             </h2>
             <p className={`${themeClasses.textSecondary} text-base mt-1`}>
-              {language === 'hebrew'
-                ? 'השג את היעדים התזונתיים שלך עם המומחים שלנו. תוכניות מותאמות אישית לכל צורך ותקציב.'
-                : 'Achieve your nutrition goals with our expert team. Personalized plans for every need and budget.'
-              }
+              {pricingSubtitle}
             </p>
           </div>
         </div>
 
-        {/* Current Subscriptions Alert */}
         {userSubscriptions.length > 0 && (
           <div className={`${themeClasses.bgCard} border border-emerald-500/30 rounded-2xl p-6 mb-8 shadow-lg animate-slideInUp`}>
             <div className="flex items-center mb-4">
@@ -390,37 +419,35 @@ const PricingTab = ({ themeClasses, user, language }) => {
           </div>
         )}
       </div>
-
-      {/* Category Filter */}
-      {categories.length > 1 && (
-        <div className="mb-8 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
-          <div className="flex flex-wrap gap-3">
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => setActiveCategory(category.id)}
-                className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  activeCategory === category.id
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/25'
-                    : `${themeClasses.bgCard} ${themeClasses.textSecondary} hover:${themeClasses.bgSecondary} border ${themeClasses.borderPrimary}`
-                }`}
+    ),
+    categories: categories.length > 1 && (
+      <div className="mb-8 animate-slideInUp" style={{ animationDelay: '0.2s' }}>
+        <div className="flex flex-wrap gap-3">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              onClick={() => setActiveCategory(category.id)}
+              className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                activeCategory === category.id
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg shadow-blue-500/25'
+                  : `${themeClasses.bgCard} ${themeClasses.textSecondary} hover:${themeClasses.bgSecondary} border ${themeClasses.borderPrimary}`
+              }`}
+            >
+              {category.label}
+              <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
+                activeCategory === category.id
+                  ? 'bg-white/20'
+                  : `${themeClasses.bgSecondary}`
+              }`}
               >
-                {category.label}
-                <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
-                  activeCategory === category.id
-                    ? 'bg-white/20'
-                    : `${themeClasses.bgSecondary}`
-                }`}
-                >
-                  {category.count}
-                </span>
-              </button>
-            ))}
-          </div>
+                {category.count}
+              </span>
+            </button>
+          ))}
         </div>
-      )}
-
-      {/* What Every Plan Includes */}
+      </div>
+    ),
+    includes: companyConfig.pricing.showWhatEveryPlanIncludes && (
       <div className="mb-8 animate-slideInUp" style={{ animationDelay: '0.3s' }}>
         <div className={`${themeClasses.bgCard} border ${themeClasses.borderPrimary} rounded-2xl p-6 md:p-8 shadow-lg`}>
           <h3 className={`${themeClasses.textPrimary} text-xl font-bold mb-4 ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
@@ -439,12 +466,8 @@ const PricingTab = ({ themeClasses, user, language }) => {
               <div>
                 <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>פגישות מעקב:</h4>
                 <ul className={`${themeClasses.textSecondary} space-y-2 text-sm`}>
-                  <li>
-                    <span className="font-medium">פגישה אחת לשבועיים:</span> מתאימה למי שרוצה ליווי צמוד יותר, דיוק ונוכחות גבוהה של הדיאטן/נית שלנו לאורך הדרך
-                  </li>
-                  <li>
-                    <span className="font-medium">פגישה אחת לחודש:</span> מתאימה למי שמעדיף מרווחים, עבודה הדרגתית ועצמאות גבוהה יותר
-                  </li>
+                  <li><span className="font-medium">פגישה אחת לשבועיים:</span> מתאימה למי שרוצה ליווי צמוד יותר, דיוק ונוכחות גבוהה של הדיאטן/נית שלנו לאורך הדרך</li>
+                  <li><span className="font-medium">פגישה אחת לחודש:</span> מתאימה למי שמעדיף מרווחים, עבודה הדרגתית ועצמאות גבוהה יותר</li>
                 </ul>
               </div>
               <div>
@@ -457,9 +480,7 @@ const PricingTab = ({ themeClasses, user, language }) => {
               </div>
               <div>
                 <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>התאמות ושינויים אישיים:</h4>
-                <p className={`${themeClasses.textSecondary} text-sm`}>
-                  בהתאם להתקדמות, לתחושות ולמציאות המשתנה
-                </p>
+                <p className={`${themeClasses.textSecondary} text-sm`}>בהתאם להתקדמות, לתחושות ולמציאות המשתנה</p>
               </div>
               <div>
                 <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>תקופות מחויבות:</h4>
@@ -482,12 +503,8 @@ const PricingTab = ({ themeClasses, user, language }) => {
               <div>
                 <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>Follow-up Sessions:</h4>
                 <ul className={`${themeClasses.textSecondary} space-y-2 text-sm`}>
-                  <li>
-                    <span className="font-medium">One session every two weeks:</span> Suitable for those who want closer guidance, precision and high presence of our dietician/nutritionist throughout the process.
-                  </li>
-                  <li>
-                    <span className="font-medium">One session per month:</span> Suitable for those who prefer intervals, gradual work and higher independence.
-                  </li>
+                  <li><span className="font-medium">One session every two weeks:</span> Suitable for those who want closer guidance, precision and high presence of our dietician/nutritionist throughout the process.</li>
+                  <li><span className="font-medium">One session per month:</span> Suitable for those who prefer intervals, gradual work and higher independence.</li>
                 </ul>
               </div>
               <div>
@@ -500,9 +517,7 @@ const PricingTab = ({ themeClasses, user, language }) => {
               </div>
               <div>
                 <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>Personal Adjustments and Changes:</h4>
-                <p className={`${themeClasses.textSecondary} text-sm`}>
-                  According to progress, feelings and changing reality
-                </p>
+                <p className={`${themeClasses.textSecondary} text-sm`}>According to progress, feelings and changing reality</p>
               </div>
               <div>
                 <h4 className={`${themeClasses.textPrimary} font-semibold mb-2`}>Commitment Periods:</h4>
@@ -515,21 +530,17 @@ const PricingTab = ({ themeClasses, user, language }) => {
           )}
         </div>
       </div>
-
-      {/* USD conversion note (Bank of Israel rate) */}
-      {usdExchangeRate != null && (
-        <div className={`mb-6 animate-slideInUp ${themeClasses.bgCard} border ${themeClasses.borderPrimary} rounded-xl px-4 py-3 shadow-sm`} style={{ animationDelay: '0.35s' }}>
-          <p className={`${themeClasses.textSecondary} text-xs sm:text-sm ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
-            {language === 'hebrew' ? (
-              <>השער המרה לדולר מתעדכן רק פעם ביום (בימי חול סביב 15:30–16:00, ובימי שישי סביב 12:30). אין עדכונים בשבת ובראשון. שער המרה לדולר: בנק ישראל.</>
-            ) : (
-              <>The exchange rate to USD is updated once a day (weekdays around 15:30–16:00, Fridays around 12:30). No updates on Saturday and Sunday. Exchange rate to USD from Bank of Israel.</>
-            )}
-          </p>
-        </div>
-      )}
-
-      {/* Products Grid */}
+    ),
+    exchangeRate: companyConfig.pricing.showExchangeRateNote && usdExchangeRate != null && (
+      <div className={`mb-6 animate-slideInUp ${themeClasses.bgCard} border ${themeClasses.borderPrimary} rounded-xl px-4 py-3 shadow-sm`} style={{ animationDelay: '0.35s' }}>
+        <p className={`${themeClasses.textSecondary} text-xs sm:text-sm ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
+          {language === 'hebrew'
+            ? <>השער המרה לדולר מתעדכן רק פעם ביום (בימי חול סביב 15:30–16:00, ובימי שישי סביב 12:30). אין עדכונים בשבת ובראשון. שער המרה לדולר: בנק ישראל.</>
+            : <>The exchange rate to USD is updated once a day (weekdays around 15:30–16:00, Fridays around 12:30). No updates on Saturday and Sunday. Exchange rate to USD from Bank of Israel.</>}
+        </p>
+      </div>
+    ),
+    products: (
       <div className="animate-slideInUp" style={{ animationDelay: '0.4s' }}>
         {filteredProducts.length === 0 ? (
           <div className="text-center py-12">
@@ -556,6 +567,17 @@ const PricingTab = ({ themeClasses, user, language }) => {
                     hasActiveSubscription={hasActiveSubscription(product.id)}
                     hasAnyActiveSubscription={hasAnyActiveSubscription()}
                     usdExchangeRate={usdExchangeRate}
+                    showNavyDigitalPromo={companyConfig.pricing.enableDigitalPromoCode && product.id === STRIPE_PRODUCTS.DIGITAL_ONLY}
+                    navyPromoCode={navyPromoCode}
+                    onNavyPromoCodeChange={(value) => {
+                      setNavyPromoCode(value);
+                      if (navyPromoError) setNavyPromoError('');
+                    }}
+                    onNavyPromoValidate={handleValidateNavyPromoCode}
+                    navyPromoLoading={navyPromoLoading}
+                    navyPromoError={navyPromoError}
+                    navyPromoAppliedCode={navyPromoAppliedCode}
+                    animatedDigitalPrice={animatedDigitalPrice}
                     className={`h-full flex flex-col transform hover:scale-[1.02] transition-all duration-300 ${
                       hasActiveSubscription(product.id) ? 'ring-2 ring-emerald-500' : ''
                     }`}
@@ -576,6 +598,60 @@ const PricingTab = ({ themeClasses, user, language }) => {
           </div>
         )}
       </div>
+    )
+  };
+
+  return (
+    <div className="min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn">
+      {isUserBlocked && (
+        <div className="mb-6 sm:mb-8 animate-slideInUp">
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 sm:p-6 shadow-lg">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 h-9 w-9 rounded-lg bg-red-500 text-white flex items-center justify-center flex-shrink-0">
+                <span className="text-lg">🚫</span>
+              </div>
+              <div className="flex-1">
+                <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-semibold mb-2`}>
+                  {language === 'hebrew' ? 'הגישה הוסרה: החשבון הושבת' : 'Access Revoked: Account Deactivated'}
+                </h3>
+                <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-3`}>
+                  {language === 'hebrew'
+                    ? 'שמנו לב שלא הייתה אינטראקציה עם הבוט מעל 14 ימים, ולכן החשבון הושבת אוטומטית כחלק משמירה על קהילה פעילה וממוקדת.'
+                    : 'We noticed you have not interacted with the bot for over 14 days, so your account was automatically deactivated as part of maintaining an active and focused community.'
+                  }
+                </p>
+                <p className={`${themeClasses.textSecondary} text-sm sm:text-base mb-2`}>
+                  {language === 'hebrew'
+                    ? 'הפעלה מחדש אינה אוטומטית ודורשת בדיקה ידנית של הצוות.'
+                    : 'Reactivation is not automatic and requires a manual review by our team.'
+                  }
+                </p>
+                {!!userCode && (
+                  <p className={`${themeClasses.textPrimary} text-sm font-medium mb-4`}>
+                    {language === 'hebrew' ? 'קוד משתמש: ' : 'User Code: '}{userCode}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleContactSupport}
+                  disabled={isContactingSupport}
+                  className="inline-flex items-center rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 transition-colors"
+                >
+                  {isContactingSupport
+                    ? (language === 'hebrew' ? 'שולח...' : 'Sending...')
+                    : (language === 'hebrew' ? 'צור קשר עם התמיכה' : 'Contact Support')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sectionOrder
+        .filter((sectionKey) => sectionNodes[sectionKey])
+        .map((sectionKey) => (
+          <React.Fragment key={sectionKey}>{sectionNodes[sectionKey]}</React.Fragment>
+        ))}
 
       {/* Loading State */}
       {loadingSubscriptions && (

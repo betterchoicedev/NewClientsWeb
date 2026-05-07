@@ -4,7 +4,23 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 
-const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', hasActiveSubscription = false, hasAnyActiveSubscription = false, usdExchangeRate = null }) => {
+const PricingCard = ({
+  product,
+  selectedPriceId,
+  onPriceSelect,
+  className = '',
+  hasActiveSubscription = false,
+  hasAnyActiveSubscription = false,
+  usdExchangeRate = null,
+  showNavyDigitalPromo = false,
+  navyPromoCode = '',
+  onNavyPromoCodeChange = null,
+  onNavyPromoValidate = null,
+  navyPromoLoading = false,
+  navyPromoError = '',
+  navyPromoAppliedCode = '',
+  animatedDigitalPrice = 48
+}) => {
   const { createCheckoutSession, loading, error } = useStripe();
   const { user, isAuthenticated } = useAuth();
   const { language } = useLanguage();
@@ -59,6 +75,10 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
       await createCheckoutSession(selectedPrice, {
         customerId: user?.id,
         customerEmail: user?.email,
+        promoCode: showNavyDigitalPromo && navyPromoAppliedCode ? navyPromoAppliedCode : undefined,
+        metadata: showNavyDigitalPromo && navyPromoAppliedCode
+          ? { navy_access_code: navyPromoAppliedCode }
+          : undefined
       });
     } catch (error) {
       console.error('Purchase error:', error);
@@ -177,6 +197,9 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
   };
 
   const savings = calculateSavings();
+  const isPromoAnimating = showNavyDigitalPromo && !!navyPromoAppliedCode && animatedDigitalPrice > 0;
+  const isPromoFinished = showNavyDigitalPromo && !!navyPromoAppliedCode && animatedDigitalPrice <= 0;
+  const isNavyPromoLocked = hasAnyActiveSubscription || hasActiveSubscription || isBlocked;
 
   return (
     <div className={`relative flex flex-col ${themeClasses.bgCard} rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border ${themeClasses.borderPrimary} ${className}`}>
@@ -302,33 +325,68 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
           // Single price display
           <div className="text-center mb-6">
             {product.prices?.[0] && (
-              <div className="inline-flex flex-wrap items-center justify-center gap-2">
-                {isApproximate(product.prices[0]) && <span className={`text-sm font-normal ${themeClasses.textMuted}`}>{approxLabel}</span>}
-                <span className={`text-3xl font-bold ${themeClasses.textPrimary}`}>
-                  {formatPrice(product.prices[0])}
-                </span>
-                {product.prices[0].interval && (
-                  <span className={`${themeClasses.textSecondary}`}>
-                    /{language === 'hebrew' ? (product.prices[0].interval === 'month' ? 'חודש' : product.prices[0].interval) : product.prices[0].interval}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowUSD(!showUSD)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
-                    showUSD 
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
-                      : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
-                  } hover:scale-105`}
-                >
-                  {showUSD ? '₪' : '$'}
-                </button>
-                {product.prices[0].commitment && (
-                  <div className={`text-sm ${themeClasses.textMuted} mt-2 w-full basis-full`}>
-                    {product.prices[0].commitment} {language === 'hebrew' ? 'חודשי מחויבות' : 'month commitment'}
+              <>
+                {showNavyDigitalPromo ? (
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <div className="relative text-xl font-semibold text-slate-400">
+                      $48
+                      <div className={`absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 bg-red-500 origin-left ${navyPromoAppliedCode ? 'animate-strike' : 'scale-x-0'}`} />
+                    </div>
+                    <div
+                      className={`inline-flex items-center gap-1 transition-all duration-200 ${
+                        isPromoAnimating ? 'blur-[2px] scale-90 text-indigo-500' : ''
+                      } ${isPromoFinished ? 'text-emerald-500 animate-bouncePop' : `${themeClasses.textPrimary}`}`}
+                    >
+                      <span className="text-2xl font-bold">$</span>
+                      <span className="text-4xl font-black tabular-nums">
+                        {isPromoFinished ? '0' : animatedDigitalPrice}
+                      </span>
+                      <span className={`${themeClasses.textSecondary} text-sm`}>
+                        /{language === 'hebrew' ? 'חודש' : 'month'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowUSD(!showUSD)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                        showUSD
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
+                          : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
+                      } hover:scale-105`}
+                    >
+                      {showUSD ? '₪' : '$'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="inline-flex flex-wrap items-center justify-center gap-2">
+                    {isApproximate(product.prices[0]) && <span className={`text-sm font-normal ${themeClasses.textMuted}`}>{approxLabel}</span>}
+                    <span className={`text-3xl font-bold ${themeClasses.textPrimary}`}>
+                      {formatPrice(product.prices[0])}
+                    </span>
+                    {product.prices[0].interval && (
+                      <span className={`${themeClasses.textSecondary}`}>
+                        /{language === 'hebrew' ? (product.prices[0].interval === 'month' ? 'חודש' : product.prices[0].interval) : product.prices[0].interval}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowUSD(!showUSD)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                        showUSD 
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
+                          : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
+                      } hover:scale-105`}
+                    >
+                      {showUSD ? '₪' : '$'}
+                    </button>
+                    {product.prices[0].commitment && (
+                      <div className={`text-sm ${themeClasses.textMuted} mt-2 w-full basis-full`}>
+                        {product.prices[0].commitment} {language === 'hebrew' ? 'חודשי מחויבות' : 'month commitment'}
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         )}
@@ -345,6 +403,59 @@ const PricingCard = ({ product, selectedPriceId, onPriceSelect, className = '', 
               </li>
             ))}
           </ul>
+        )}
+
+        {showNavyDigitalPromo && (
+          <div className="mb-6 rounded-xl border border-blue-500/30 p-3 bg-blue-500/5">
+            <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+              {language === 'hebrew' ? 'קוד קופון (Navy)' : 'Promo code (Navy)'}
+            </label>
+            <input
+              type="text"
+              value={navyPromoCode}
+              onChange={(e) => onNavyPromoCodeChange && onNavyPromoCodeChange(e.target.value)}
+              placeholder={language === 'hebrew' ? 'הזינו קוד קופון' : 'Enter promo code'}
+              disabled={isNavyPromoLocked}
+              className={`w-full px-3 py-2 rounded-lg border ${themeClasses.borderPrimary} ${themeClasses.bgSecondary} ${themeClasses.textPrimary}`}
+            />
+            <button
+              type="button"
+              onClick={() => onNavyPromoValidate && onNavyPromoValidate()}
+              disabled={navyPromoLoading || isNavyPromoLocked}
+              className="w-full mt-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold disabled:opacity-60"
+            >
+              {navyPromoLoading
+                ? (language === 'hebrew' ? 'מאמת...' : 'Validating...')
+                : (language === 'hebrew' ? 'אימות קוד' : 'Validate code')}
+            </button>
+            {isNavyPromoLocked && (
+              <p className="text-amber-500 text-xs mt-2">
+                {language === 'hebrew'
+                  ? 'קוד קופון נחסם למשתמש עם מנוי פעיל.'
+                  : 'Promo code is locked while you have an active subscription.'}
+              </p>
+            )}
+            {navyPromoError && <p className="text-red-500 text-xs mt-2">{navyPromoError}</p>}
+            {navyPromoAppliedCode && (
+              <div className="mt-2 text-xs rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-2">
+                <p className={`${themeClasses.textPrimary} font-medium`}>
+                  {language === 'hebrew'
+                    ? `הקוד ${navyPromoAppliedCode} אושר. המחיר הוא $0.`
+                    : `Code ${navyPromoAppliedCode} approved. Price is $0.`}
+                </p>
+                <p className={`${themeClasses.textSecondary} mt-1`}>
+                  {language === 'hebrew'
+                    ? `אנימציה: $${animatedDigitalPrice}/mo -> $0/mo`
+                    : `Animation: $${animatedDigitalPrice}/mo -> $0/mo`}
+                </p>
+                <p className="text-amber-500 mt-1">
+                  {language === 'hebrew'
+                    ? `יש להזין את אותו קוד גם ב-Stripe Checkout.`
+                    : `Enter this exact code in Stripe Checkout too.`}
+                </p>
+              </div>
+            )}
+          </div>
         )}
 
         {/* CTA Button - mt-auto keeps it at bottom when card stretches */}
