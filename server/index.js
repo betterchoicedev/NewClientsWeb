@@ -6428,13 +6428,19 @@ app.get('/api/weekly-macro-summary-svg', async (req, res) => {
       weeklyTotals.fat += logF;
     });
 
-    // 5. Use 7-day averages for weekly summary values
-    const avgTotals = {
-      calories: weeklyTotals.calories / 7,
-      protein: weeklyTotals.protein / 7,
-      carbs: weeklyTotals.carbs / 7,
-      fat: weeklyTotals.fat / 7
-    };
+    // 5. Averages for logged intake: only count days with calories > 0 (not full 7)
+    const daysWithCalories = dailyStats.filter((d) => d.calories > 0).length;
+    const avgTotals =
+      daysWithCalories > 0
+        ? {
+            calories: weeklyTotals.calories / daysWithCalories,
+            protein: weeklyTotals.protein / daysWithCalories,
+            carbs: weeklyTotals.carbs / daysWithCalories,
+            fat: weeklyTotals.fat / daysWithCalories
+          }
+        : { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
+    // Goals stay as true 7-day weekly averages (meal plan targets per calendar week)
     const avgGoals = {
       calories: weeklyGoals.calories / 7,
       protein: weeklyGoals.protein / 7,
