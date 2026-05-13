@@ -3221,7 +3221,7 @@ app.get('/api/profile/chat-user', async (req, res) => {
 
     const { data, error } = await chatSupabase
       .from('chat_users')
-      .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language, subscription_status, subscription_type, subscription_expires_at, is_blocked, user_code')
+      .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language, subscription_status, subscription_type, subscription_expires_at, is_blocked, user_code, Activity_level, base_daily_total_calories, daily_target_total_calories, macros, height_cm, weight_kg')
       .eq('user_code', userCode)
       .maybeSingle();
 
@@ -3379,6 +3379,54 @@ app.post('/api/profile/sync-chat-user', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error syncing to chat_users:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save nutritional profile to chat_users
+// Accepts: daily_target_total_calories, base_daily_total_calories, macros, height_cm, Activity_level
+app.post('/api/profile/save-nutritional', async (req, res) => {
+  try {
+    const { userCode, daily_target_total_calories, base_daily_total_calories, macros, height_cm, Activity_level } = req.body;
+    if (!userCode) {
+      return res.status(400).json({ error: 'User code is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const updatePayload = {};
+    if (daily_target_total_calories !== undefined && daily_target_total_calories !== null) {
+      updatePayload.daily_target_total_calories = Number(daily_target_total_calories);
+    }
+    if (base_daily_total_calories !== undefined && base_daily_total_calories !== null) {
+      updatePayload.base_daily_total_calories = Number(base_daily_total_calories);
+    }
+    if (macros !== undefined && macros !== null) {
+      updatePayload.macros = macros;
+    }
+    if (height_cm !== undefined && height_cm !== null && height_cm !== '') {
+      const parsed = parseFloat(height_cm);
+      if (!Number.isNaN(parsed)) updatePayload.height_cm = parsed;
+    }
+    if (Activity_level !== undefined && Activity_level !== null && Activity_level !== '') {
+      updatePayload.Activity_level = Activity_level;
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      return res.status(400).json({ error: 'No data to update' });
+    }
+
+    const { error } = await chatSupabase
+      .from('chat_users')
+      .update(updatePayload)
+      .eq('user_code', userCode);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving nutritional profile:', error);
     res.status(500).json({ error: error.message });
   }
 });

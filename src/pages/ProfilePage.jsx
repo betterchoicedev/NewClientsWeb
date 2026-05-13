@@ -183,7 +183,13 @@ const ProfilePage = () => {
     userLanguage: '',
     isBlocked: false,
     companyId: '',
-    profileImageUrl: ''
+    profileImageUrl: '',
+    activityLevel: '',
+    bmrCalories: null,
+    targetCalories: null,
+    macros: null,
+    heightCm: null,
+    weightKg: null
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
@@ -554,7 +560,13 @@ const ProfilePage = () => {
           userLanguage: (chatUserData?.language || data?.user_language) || '',
           isBlocked: chatUserData?.is_blocked === true || chatUserData?.is_blocked === 1 || chatUserData?.is_blocked === 'true',
           companyId: prev.companyId || '',
-          profileImageUrl: data?.profile_image_url || ''
+          profileImageUrl: data?.profile_image_url || '',
+          activityLevel: chatUserData?.Activity_level || '',
+          bmrCalories: chatUserData?.base_daily_total_calories ?? null,
+          targetCalories: chatUserData?.daily_target_total_calories ?? null,
+          macros: chatUserData?.macros ?? null,
+          heightCm: chatUserData?.height_cm ?? null,
+          weightKg: chatUserData?.weight_kg ?? null
         }));
 
         // Sync web language: site is EN/HE only; default to English when preference is not en/he (e.g. es, fr).
