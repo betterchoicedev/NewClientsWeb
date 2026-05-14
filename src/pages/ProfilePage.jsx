@@ -189,7 +189,8 @@ const ProfilePage = () => {
     targetCalories: null,
     macros: null,
     heightCm: null,
-    weightKg: null
+    weightKg: null,
+    measurementSystem: 'metric'
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
@@ -566,7 +567,8 @@ const ProfilePage = () => {
           targetCalories: chatUserData?.daily_target_total_calories ?? null,
           macros: chatUserData?.macros ?? null,
           heightCm: chatUserData?.height_cm ?? null,
-          weightKg: chatUserData?.weight_kg ?? null
+          weightKg: chatUserData?.weight_kg ?? null,
+          measurementSystem: data?.measurement_system ?? prev.measurementSystem ?? 'metric'
         }));
 
         // Sync web language: site is EN/HE only; default to English when preference is not en/he (e.g. es, fr).

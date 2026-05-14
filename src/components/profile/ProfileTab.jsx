@@ -1,6 +1,16 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../supabase/supabaseClient';
 import { createWeightLog } from '../../supabase/secondaryClient';
+import { useSettings } from '../../context/SettingsContext';
+
+const CM_PER_IN = 2.54;
+
+const roundMeasurementDisplay = (value, decimals = 1) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  const p = 10 ** decimals;
+  return Math.round(n * p) / p;
+};
 
 // ─── Nutritional helper constants & functions ─────────────────────────────────
 const KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 };
@@ -188,6 +198,27 @@ const serializeMultiSelectField = (selected, otherText, knownValueSet) => {
 };
 
 const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, errorMessage, themeClasses, t, companyOptions, isLoadingCompanies, companyError, language, onboardingCompleted = false, user, onSaveProfileImageUrl }) => {
+  const { settings } = useSettings();
+  const displayMeasurementSystem = !settings.loading ? (settings.measurementSystem || 'metric') : (profileData.measurementSystem || 'metric');
+  const heightIsImperial = String(displayMeasurementSystem).toLowerCase() === 'imperial';
+
+  const toWeightKgFromInput = useCallback((raw) => {
+    if (raw === '' || raw == null) return null;
+    const n = parseFloat(String(raw).trim());
+    if (Number.isNaN(n)) return NaN;
+    return n;
+  }, []);
+
+  const toHeightCmFromInput = useCallback(
+    (raw) => {
+      if (raw === '' || raw == null) return null;
+      const n = parseFloat(String(raw).trim());
+      if (Number.isNaN(n)) return NaN;
+      return heightIsImperial ? n * CM_PER_IN : n;
+    },
+    [heightIsImperial]
+  );
+
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState('');
   const [showCropModal, setShowCropModal] = useState(false);
@@ -215,17 +246,28 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   const [weightInput, setWeightInput]     = useState('');
   const [heightInput, setHeightInput]     = useState('');
   const [activityLevel, setActivityLevel] = useState('');
-  const measurementsInitialized = useRef(false);
+  const measurementDisplayKeyRef = useRef('');
 
-  // One-time init from profileData once it arrives
+  // Sync editable weight/height fields from stored kg/cm when source values or height display unit changes
   useEffect(() => {
-    if (measurementsInitialized.current) return;
-    if (profileData.weightKg == null && profileData.heightCm == null && !profileData.activityLevel) return;
-    measurementsInitialized.current = true;
-    if (profileData.weightKg  != null) setWeightInput(String(profileData.weightKg));
-    if (profileData.heightCm  != null) setHeightInput(String(profileData.heightCm));
-    if (profileData.activityLevel)     setActivityLevel(profileData.activityLevel);
-  }, [profileData.weightKg, profileData.heightCm, profileData.activityLevel]);
+    const ms = String(displayMeasurementSystem || 'metric').toLowerCase();
+    const key = `${profileData.weightKg ?? ''}|${profileData.heightCm ?? ''}|${ms}`;
+    if (key === measurementDisplayKeyRef.current) return;
+    measurementDisplayKeyRef.current = key;
+
+    if (profileData.weightKg != null) {
+      const kg = Number(profileData.weightKg);
+      setWeightInput(String(roundMeasurementDisplay(kg)));
+    }
+    if (profileData.heightCm != null) {
+      const cm = Number(profileData.heightCm);
+      setHeightInput(String(ms === 'imperial' ? roundMeasurementDisplay(cm / CM_PER_IN) : roundMeasurementDisplay(cm)));
+    }
+  }, [profileData.weightKg, profileData.heightCm, displayMeasurementSystem]);
+
+  useEffect(() => {
+    if (profileData.activityLevel) setActivityLevel(profileData.activityLevel);
+  }, [profileData.activityLevel]);
 
   useEffect(() => {
     if (nutritionalInitialized.current) return;
@@ -257,13 +299,13 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   // Pure recalculation only — no DB write happens here.
   // Persisting to the database is done by the "Save Nutritional Profile" button.
   useEffect(() => {
-    const w = parseFloat(weightInput);
-    const h = parseFloat(heightInput);
+    const w = toWeightKgFromInput(weightInput);
+    const h = toHeightCmFromInput(heightInput);
     const gender = profileData.gender;
     const age    = profileData.age ? Number(profileData.age) : null;
 
-    if (!w || !h || !gender || !age || !activityLevel) return;
-    if (isNaN(w) || isNaN(h)) return;
+    if (w == null || h == null || !gender || !age || !activityLevel) return;
+    if (Number.isNaN(w) || Number.isNaN(h) || w <= 0 || h <= 0) return;
 
     const newBmr  = computeBMR(age, gender, w, h);
     const newTdee = computeTDEE(newBmr, activityLevel);
@@ -275,12 +317,28 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
     setMacroGrams((prev) => scaleMacrosToTdee(prev, newTdee, lockedMacro));
     setAutoCalcActive(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weightInput, heightInput, profileData.gender, activityLevel]);
+  }, [weightInput, heightInput, profileData.gender, profileData.age, activityLevel, toWeightKgFromInput, toHeightCmFromInput]);
 
   // Slider range = ±30% of the current TDEE (recalculates when engine fires).
   const calAnchor = originalTargetCals ?? null;
   const calMin = calAnchor ? Math.round(calAnchor * 0.7) : 0;
   const calMax = calAnchor ? Math.round(calAnchor * 1.3) : 9999;
+
+  const weightInputMin = 20;
+  const weightInputMax = 500;
+  const heightInputMin = heightIsImperial ? roundMeasurementDisplay(50 / CM_PER_IN, 1) : 50;
+  const heightInputMax = heightIsImperial ? roundMeasurementDisplay(300 / CM_PER_IN, 1) : 300;
+
+  const currentWeightDisplay =
+    profileData.weightKg == null
+      ? null
+      : `${roundMeasurementDisplay(Number(profileData.weightKg))} kg`;
+  const currentHeightDisplay =
+    profileData.heightCm == null
+      ? null
+      : heightIsImperial
+        ? `${roundMeasurementDisplay(Number(profileData.heightCm) / CM_PER_IN)} in`
+        : `${roundMeasurementDisplay(Number(profileData.heightCm))} cm`;
 
   // Scale macros when calories slider changes
   const handleCaloriesChange = useCallback((newCals) => {
@@ -381,15 +439,15 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
     setIsSavingNutritional(true);
     setNutritionalSaveStatus('');
 
-    const newWeight = weightInput !== '' ? parseFloat(weightInput) : null;
-    const newHeight = heightInput !== '' ? parseFloat(heightInput) : null;
+    const newWeightKg = toWeightKgFromInput(weightInput);
+    const newHeightCm = toHeightCmFromInput(heightInput);
 
-    if (newWeight !== null && (Number.isNaN(newWeight) || newWeight <= 0 || newWeight > 500)) {
+    if (newWeightKg !== null && (Number.isNaN(newWeightKg) || newWeightKg <= 0 || newWeightKg > 500)) {
       setNutritionalSaveStatus('error');
       setIsSavingNutritional(false);
       return;
     }
-    if (newHeight !== null && (Number.isNaN(newHeight) || newHeight <= 0 || newHeight > 300)) {
+    if (newHeightCm !== null && (Number.isNaN(newHeightCm) || newHeightCm <= 0 || newHeightCm > 300)) {
       setNutritionalSaveStatus('error');
       setIsSavingNutritional(false);
       return;
@@ -399,13 +457,13 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
       const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const tasks = [];
 
-      // 1. Weight → weight_logs (only if changed)
-      const weightChanged = newWeight !== null
-        && (profileData.weightKg == null || Number(profileData.weightKg) !== newWeight);
+      // 1. Weight → weight_logs (only if changed; always stored as kg)
+      const weightChanged = newWeightKg !== null
+        && (profileData.weightKg == null || Math.abs(Number(profileData.weightKg) - newWeightKg) > 1e-3);
       if (weightChanged) {
         tasks.push(
           createWeightLog(profileData.userCode, {
-            weight_kg: newWeight,
+            weight_kg: newWeightKg,
             measurement_date: new Date().toISOString().split('T')[0],
           }).then((res) => {
             if (res.error) throw new Error(res.error.message || 'Weight log failed');
@@ -421,9 +479,9 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
       };
       if (calculatedBmr) body.base_daily_total_calories = calculatedBmr;
       if (activityLevel) body.Activity_level = activityLevel;
-      const heightChanged = newHeight !== null
-        && (profileData.heightCm == null || Number(profileData.heightCm) !== newHeight);
-      if (heightChanged) body.height_cm = newHeight;
+      const heightChanged = newHeightCm !== null
+        && (profileData.heightCm == null || Math.abs(Number(profileData.heightCm) - newHeightCm) > 1e-3);
+      if (heightChanged) body.height_cm = newHeightCm;
 
       tasks.push(
         fetch(`${apiUrl}/api/profile/save-nutritional`, {
@@ -1106,7 +1164,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  {/* Weight input */}
+                  {/* Weight input (always kg in UI; stored as kg) */}
                   <div>
                     <label className={`${themeClasses.textSecondary} block text-xs font-semibold mb-1.5`}>
                       {isHebrew ? 'משקל נוכחי (ק"ג)' : 'Current Weight (kg)'}
@@ -1115,8 +1173,8 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                       <input
                         type="number"
                         inputMode="decimal"
-                        min={20}
-                        max={500}
+                        min={weightInputMin}
+                        max={weightInputMax}
                         step={0.1}
                         value={weightInput}
                         onChange={(e) => setWeightInput(e.target.value)}
@@ -1125,10 +1183,10 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                       />
                       <span className={`text-xs ${themeClasses.textSecondary} whitespace-nowrap`}>kg</span>
                     </div>
-                    {profileData.weightKg != null && (
+                    {currentWeightDisplay != null && (
                       <p className={`mt-1 text-[11px] sm:text-xs ${themeClasses.textSecondary} opacity-70`}>
                         {isHebrew ? 'נוכחי: ' : 'Current: '}
-                        <span className="font-medium">{Number(profileData.weightKg)} kg</span>
+                        <span className="font-medium">{currentWeightDisplay}</span>
                       </p>
                     )}
                   </div>
@@ -1136,26 +1194,34 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                   {/* Height input */}
                   <div>
                     <label className={`${themeClasses.textSecondary} block text-xs font-semibold mb-1.5`}>
-                      {isHebrew ? 'גובה (ס"מ)' : 'Height (cm)'}
+                      {isHebrew
+                        ? (heightIsImperial ? 'גובה (אינץ׳)' : 'גובה (ס"מ)')
+                        : (heightIsImperial ? 'Height (in)' : 'Height (cm)')}
                     </label>
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
                         inputMode="decimal"
-                        min={50}
-                        max={300}
+                        min={heightInputMin}
+                        max={heightInputMax}
                         step={0.1}
                         value={heightInput}
                         onChange={(e) => setHeightInput(e.target.value)}
-                        placeholder={isHebrew ? 'לדוגמה 175' : 'e.g. 175'}
+                        placeholder={
+                          isHebrew
+                            ? (heightIsImperial ? 'לדוגמה 69' : 'לדוגמה 175')
+                            : (heightIsImperial ? 'e.g. 69' : 'e.g. 175')
+                        }
                         className={`flex-1 min-w-0 px-3 py-2.5 rounded-lg border-2 transition-all font-semibold text-base sm:text-sm ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-orange-500 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800`}
                       />
-                      <span className={`text-xs ${themeClasses.textSecondary} whitespace-nowrap`}>cm</span>
+                      <span className={`text-xs ${themeClasses.textSecondary} whitespace-nowrap`}>
+                        {heightIsImperial ? 'in' : 'cm'}
+                      </span>
                     </div>
-                    {profileData.heightCm != null && (
+                    {currentHeightDisplay != null && (
                       <p className={`mt-1 text-[11px] sm:text-xs ${themeClasses.textSecondary} opacity-70`}>
                         {isHebrew ? 'נוכחי: ' : 'Current: '}
-                        <span className="font-medium">{Number(profileData.heightCm)} cm</span>
+                        <span className="font-medium">{currentHeightDisplay}</span>
                       </p>
                     )}
                   </div>
