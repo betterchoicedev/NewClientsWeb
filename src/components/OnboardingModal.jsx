@@ -3,7 +3,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { normalizePhoneForDatabase, createClientRecord } from '../supabase/auth';
 import { translateMenu } from '../services/translateService';
-import { getCompanyOnboardingPolicy } from './onboarding/companyOnboardingPolicy';
 
 const CREATE_MEAL_PLAN_API_URL =
   'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
@@ -56,7 +55,7 @@ const hasAnyPersistedOnboardingAnswer = (clientRow, chatRow) => {
   return false;
 };
 
-const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) => {
+const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
   const { language, t, direction, toggleLanguage, setLanguage, setDirection } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();
   const [currentStep, setCurrentStep] = useState(-1); // -1 for welcome screen, 0+ for form steps
@@ -86,8 +85,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
   const [welcomeMessageSent, setWelcomeMessageSent] = useState(false);
   // 'idle' | 'pending' | 'success' | 'failed'
   const [aiActivityStatus, setAiActivityStatus] = useState('idle');
-  const companyPolicy = getCompanyOnboardingPolicy(companyName);
-  const isFitMamaCompany = companyPolicy.includeNursingStatusQuestion;
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -484,10 +481,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
       fields: ['date_of_birth']
     },
     {
-      title: isFitMamaCompany
-        ? (language === 'hebrew' ? 'מין ומצב פיזיולוגי' : 'Gender & Physiological State')
-        : (language === 'hebrew' ? 'מין' : 'Gender'),
-      fields: isFitMamaCompany ? ['gender', 'nursing_status'] : ['gender']
+      title: language === 'hebrew' ? 'מין ומצב פיזיולוגי' : 'Gender & Physiological State',
+      fields: ['gender', 'nursing_status']
     },
     {
       title: language === 'hebrew' ? 'גובה ומשקל נוכחי' : 'Height & Current Weight',
@@ -962,7 +957,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
     if (isOpen && user) {
       loadExistingData();
     }
-  }, [isOpen, user?.id, companyName]);
+  }, [isOpen, user?.id]);
 
   // Normalize meal_names so each slot is chronologically valid (e.g. no Breakfast after Brunch)
   useEffect(() => {
@@ -1399,9 +1394,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
         console.log('✓ Gender has value:', effGender);
       }
       
-      if (isFitMamaCompany && effGender === 'female' && isEmpty(effNursing)) {
+      if (effGender === 'female' && isEmpty(effNursing)) {
         missingFields.push('nursing_status');
-      } else if (isFitMamaCompany && effGender === 'female') {
+      } else if (effGender === 'female') {
         console.log('✓ Nursing status has value:', effNursing);
       }
       
@@ -2411,11 +2406,6 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
 
   const sendWhatsAppAndClose = () => {
     const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-    if (companyPolicy.sendWelcomeAfterSuccessfulPaymentOnly) {
-      // Navy flow: defer welcome WhatsApp until successful paid checkout.
-      onClose();
-      return;
-    }
     // Prefer /api/whatsapp/send-welcome-message when we have phone + language; otherwise fall back to send-welcome-by-user-id
     let phoneForWelcome = null;
     if (formData.phone?.trim()) {
@@ -3150,62 +3140,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
         clientName,
         userLanguage
       });
-      if (!companyPolicy.showUsageBasedOffer) {
-        try {
-          const resolvedUserCode = finalUserCode || userCode || null;
-          if (!resolvedUserCode) {
-            throw new Error(language === 'hebrew' ? 'לא נמצא קוד משתמש' : 'User code is missing');
-          }
-
-          const oneMonthFromNow = new Date();
-          oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
-          await fetch(`${apiUrl}/api/onboarding/update-chat-user`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              user_code: resolvedUserCode,
-              chatUserData: {
-                subscription_type: 'free_tier',
-                subscription_status: 'active',
-                subscription_expires_at: oneMonthFromNow.toISOString(),
-                updated_at: new Date().toISOString()
-              }
-            })
-          });
-
-          await fetch(`${apiUrl}/api/onboarding/update-client`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              user_id: user?.id,
-              clientData: {
-                onboarding_completed: true,
-                updated_at: new Date().toISOString()
-              }
-            })
-          });
-
-          // Navy: generate meal plan immediately with the same loading UI used in onboarding flows.
-          const navyMealPlanResult = await generateMealPlan(
-            resolvedUserCode,
-            dailyCalories,
-            macros,
-            clientName,
-            userLanguage
-          );
-          if (!navyMealPlanResult?.success) {
-            console.warn('⚠️ Navy meal plan generation failed (non-blocking):', navyMealPlanResult?.error);
-          }
-
-        } catch (navyFinalizeError) {
-          console.warn('Navy finalize path failed, continuing to close onboarding:', navyFinalizeError);
-        }
-
-        if (user?.id) localStorage.removeItem(`onboarding_${user.id}`);
-        onClose();
-        return;
-      }
-      if (finalUserCode && companyPolicy.setPendingPaymentAfterSubmit) {
+      if (finalUserCode) {
         try {
           await fetch(`${apiUrl}/api/onboarding/update-chat-user`, {
             method: 'POST',
@@ -3222,7 +3157,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
           console.warn('Could not set pending payment flag in backend:', pendingUpdateError);
         }
       }
-      setShowUsageBasedOffer(companyPolicy.showUsageBasedOffer);
+      setShowUsageBasedOffer(true);
       return;
     } catch (err) {
       console.error('❌ Error saving onboarding data:', err);
@@ -3384,26 +3319,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
   // Usage-based support offer (after onboarding save, before WhatsApp) — skippable
   if (showUsageBasedOffer) {
     const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-    const startAsyncMealPlanGeneration = () => {
-      fetch(`${apiUrl}/api/onboarding/start-async-meal-plan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user?.id || null,
-          user_code: completedOnboardingContext?.userCode || userCode || null
-        }),
-        keepalive: true
-      }).catch((startMealPlanError) => {
-        console.warn('Could not start async meal plan generation:', startMealPlanError);
-      });
-    };
-
-    const finalizeOnboardingAfterSubscription = async ({
-      requireActiveSubscription = false,
-      sendWelcome = false,
-      runMealPlanGeneration = true,
-      requireMealPlanSuccess = false
-    } = {}) => {
+    const finalizeOnboardingAfterSubscription = async ({ requireActiveSubscription = false, sendWelcome = false } = {}) => {
       const resolvedUserCode = completedOnboardingContext?.userCode || userCode;
       if (!resolvedUserCode) {
         throw new Error(language === 'hebrew' ? 'לא נמצא קוד משתמש' : 'User code is missing');
@@ -3434,23 +3350,15 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
         throw new Error(completeResult?.error || (language === 'hebrew' ? 'שגיאה בסיום האונבורדינג' : 'Failed to complete onboarding'));
       }
 
-      if (runMealPlanGeneration) {
-        const mealPlanResult = await generateMealPlan(
-          resolvedUserCode,
-          completedOnboardingContext?.dailyCalories,
-          completedOnboardingContext?.macros,
-          completedOnboardingContext?.clientName || 'Client',
-          completedOnboardingContext?.userLanguage || language
-        );
-        if (!mealPlanResult.success) {
-          if (requireMealPlanSuccess) {
-            throw new Error(
-              mealPlanResult.error ||
-              (language === 'hebrew' ? 'שגיאה ביצירת תפריט לפני מעבר לתשלום' : 'Failed to create meal plan before redirecting to payment')
-            );
-          }
-          console.warn('⚠️ Meal plan generation failed (non-blocking):', mealPlanResult.error);
-        }
+      const mealPlanResult = await generateMealPlan(
+        resolvedUserCode,
+        completedOnboardingContext?.dailyCalories,
+        completedOnboardingContext?.macros,
+        completedOnboardingContext?.clientName || 'Client',
+        completedOnboardingContext?.userLanguage || language
+      );
+      if (!mealPlanResult.success) {
+        console.warn('⚠️ Meal plan generation failed (non-blocking):', mealPlanResult.error);
       }
 
       if (sendWelcome) {
@@ -3462,14 +3370,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
       setCheckoutLoading(true);
       setError('');
       try {
-        await finalizeOnboardingAfterSubscription({
-          requireActiveSubscription: false,
-          sendWelcome: false,
-          runMealPlanGeneration: false
-        });
-
-        // Fire-and-forget: start backend meal plan build/save now, do not wait for completion.
-        startAsyncMealPlanGeneration();
+        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: false, sendWelcome: false });
 
         const res = await fetch(`${apiUrl}/api/stripe/create-checkout-session`, {
           method: 'POST',
@@ -3479,11 +3380,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
             mode: 'subscription',
             customerId: user?.id,
             customerEmail: user?.email,
-            metadata: {
-              from: 'onboarding_upsell',
-              user_id: user?.id,
-              user_code: completedOnboardingContext?.userCode || userCode || null
-            }
+            metadata: { from: 'onboarding_upsell', user_id: user?.id }
           })
         });
         const data = await res.json();
@@ -3547,13 +3444,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
           });
         }
 
-        // Fire-and-forget for code flow as well, so refresh/navigation won't interrupt generation.
-        startAsyncMealPlanGeneration();
-        await finalizeOnboardingAfterSubscription({
-          requireActiveSubscription: true,
-          sendWelcome: companyPolicy.sendWelcomeDuringOnboarding,
-          runMealPlanGeneration: false
-        });
+        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: true, sendWelcome: true });
       } catch (e) {
         setPromoCodeError(e.message || (language === 'hebrew' ? 'שגיאה בחיבור לשרת' : 'Connection error'));
       } finally {
@@ -3601,13 +3492,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
           throw new Error(updateFreeTierResult?.error || (language === 'hebrew' ? 'שגיאה בעדכון סטטוס מנוי' : 'Failed to update subscription status'));
         }
 
-        // Fire-and-forget for free-tier flow as well, so refresh/navigation won't interrupt generation.
-        startAsyncMealPlanGeneration();
-        await finalizeOnboardingAfterSubscription({
-          requireActiveSubscription: true,
-          sendWelcome: companyPolicy.sendWelcomeDuringOnboarding,
-          runMealPlanGeneration: false
-        });
+        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: true, sendWelcome: true });
       } catch (e) {
         setPromoCodeError(e.message || (language === 'hebrew' ? 'שגיאה בחיבור לשרת' : 'Connection error'));
       } finally {
@@ -3649,42 +3534,38 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
           : 'Our goal is your health. If you stay consistent with the system - completely free.'}
       </p>
 
-      {companyPolicy.showUsageOfferPaidCta && (
-        <>
-          {/* פירוט המחיר */}
-          <div className={`p-5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 mb-6 shadow-inner`}>
-            <p className={`${themeClasses.textSecondary} text-sm sm:text-lg leading-relaxed`}>
-              {language === 'hebrew' ? (
-                <>
-                  כל יום שימוש שווה <span className="text-emerald-400 font-bold">כסף</span>, <br />
-                  <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">אבל מותר לכם כמה ימים בחודש</span> <br />
-                  ועדיין לקבל את כל השירות בחינם!
-                </>
-              ) : (
-                <>
-                  Each day of use is <span className="text-emerald-400 font-bold">money</span>, <br />
-                  <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">but you can miss a couple of days a month</span> <br />
-                  and still get everything for free!
-                </>
-              )}
-            </p>
-          </div>
+      {/* פירוט המחיר */}
+      <div className={`p-5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 mb-6 shadow-inner`}>
+        <p className={`${themeClasses.textSecondary} text-sm sm:text-lg leading-relaxed`}>
+          {language === 'hebrew' ? (
+            <>
+              כל יום שימוש שווה <span className="text-emerald-400 font-bold">כסף</span>, <br />
+              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">אבל מותר לכם כמה ימים בחודש</span> <br />
+              ועדיין לקבל את כל השירות בחינם!
+            </>
+          ) : (
+            <>
+              Each day of use is <span className="text-emerald-400 font-bold">money</span>, <br />
+              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">but you can miss a couple of days a month</span> <br />
+              and still get everything for free!
+            </>
+          )}
+        </p>
+      </div>
 
-          {/* כוכביות הסבר */}
-          <div className="space-y-1">
-            <p className={`${themeClasses.textPrimary} font-medium italic opacity-90 text-xs sm:text-sm`}>
-              {language === 'hebrew' 
-                ? '*החיוב יתבצע רק אם לא תעמדו ביעד ההתמדה (מקסימום $48 לחודש)' 
-                : '*Payment is only required if the consistency goal isn\'t met (max $48/mo)'}
-            </p>
-            <p className={`${themeClasses.textSecondary} italic opacity-70 text-[10px] sm:text-xs`}>
-              {language === 'hebrew'
-                ? '**ניתן לבטל את החיוב בכל שלב'
-                : '**you can cancel the charge at any time'}
-            </p>
-          </div>
-        </>
-      )}
+      {/* כוכביות הסבר */}
+      <div className="space-y-1">
+        <p className={`${themeClasses.textPrimary} font-medium italic opacity-90 text-xs sm:text-sm`}>
+          {language === 'hebrew' 
+            ? '*החיוב יתבצע רק אם לא תעמדו ביעד ההתמדה (מקסימום $48 לחודש)' 
+            : '*Payment is only required if the consistency goal isn\'t met (max $48/mo)'}
+        </p>
+        <p className={`${themeClasses.textSecondary} italic opacity-70 text-[10px] sm:text-xs`}>
+          {language === 'hebrew'
+            ? '**ניתן לבטל את החיוב בכל שלב'
+            : '**you can cancel the charge at any time'}
+        </p>
+      </div>
       <div className={`mt-3 text-[11px] sm:text-xs ${themeClasses.textSecondary} opacity-80 flex items-center justify-center gap-2`}>
         <span className="animate-bounce">↓</span>
         <span>{language === 'hebrew' ? 'גלול/י למטה לעוד אפשרויות' : 'Scroll down for more options'}</span>
@@ -3723,17 +3604,15 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName = '' }) 
 
     {/* כפתורי פעולה */}
     <div className={`sticky bottom-[-1px] z-30 mt-auto py-2 -mx-4 sm:-mx-8 md:-mx-10 px-4 sm:px-8 md:px-10 ${themeClasses.bgCard} bg-opacity-100 border-t border-gray-700/40 flex flex-col gap-2 shadow-[0_-8px_20px_rgba(0,0,0,0.35)]`}>
-      {companyPolicy.showUsageOfferPaidCta && (
-        <button
-          onClick={handleSupport}
-          disabled={checkoutLoading}
-          className="w-full py-3 sm:py-3.5 px-5 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25"
-        >
-          {checkoutLoading
-            ? (language === 'hebrew' ? 'מתחברים...' : 'Connecting...')
-            : (language === 'hebrew' ? 'אני בפנים, בואו נתחיל!' : 'I\'m in, let\'s start!')}
-        </button>
-      )}
+      <button
+        onClick={handleSupport}
+        disabled={checkoutLoading}
+        className="w-full py-3 sm:py-3.5 px-5 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25"
+      >
+        {checkoutLoading
+          ? (language === 'hebrew' ? 'מתחברים...' : 'Connecting...')
+          : (language === 'hebrew' ? 'אני בפנים, בואו נתחיל!' : 'I\'m in, let\'s start!')}
+      </button>
       <details className="text-left opacity-80">
         <summary className={`cursor-pointer text-[10px] sm:text-[11px] ${themeClasses.textSecondary} leading-tight`}>
           {language === 'hebrew'
