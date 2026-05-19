@@ -117,6 +117,7 @@ registerAuthSessionRoutes(app, {
   supabaseAuth,
   supabaseUrl: process.env.REACT_APP_SUPABASE_URL,
   supabaseAnonKey: process.env.REACT_APP_SUPABASE_ANON_KEY,
+  supabaseDb: supabase,
 });
 
 // Require Bearer JWT on protected /api/* routes
@@ -130,7 +131,52 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development'
   });
 });
+const MOBILE_APP_OAUTH_REDIRECT = (
+  process.env.MOBILE_OAUTH_REDIRECT || 'betterchoicemobile://auth/callback'
+).trim();
 
+function buildMobileAppOAuthRedirect(session) {
+  const fragment = new URLSearchParams({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: String(session.expires_at ?? ''),
+    expires_in: String(session.expires_in ?? ''),
+    token_type: session.token_type || 'bearer',
+  }).toString();
+  const joiner = MOBILE_APP_OAUTH_REDIRECT.includes('#') ? '&' : '#';
+  return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
+}
+
+app.get('/api/auth/oauth/mobile-callback', async (req, res) => {
+  try {
+    const oauthError = req.query.error || req.query.error_description;
+    if (oauthError) {
+      const msg = typeof oauthError === 'string' ? oauthError : 'oauth_failed';
+      return res.redirect(
+        `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent(msg)}`
+      );
+    }
+
+    const code = req.query.code;
+    if (!code) {
+      return res.redirect(
+        `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent('oauth_missing_code')}`
+      );
+    }
+
+    const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+
+    res.redirect(buildMobileAppOAuthRedirect(data.session));
+  } catch (error) {
+    console.error('GET /api/auth/oauth/mobile-callback error:', error);
+    res.redirect(
+      `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent(
+        error.message || 'oauth_failed'
+      )}`
+    );
+  }
+});
 // Bank of Israel exchange rates proxy (avoids CORS – browser can't call boi.org.il directly)
 const BOI_EXCHANGE_RATES_URL = 'https://boi.org.il/PublicApi/GetExchangeRates?asXml=false';
 app.get('/api/exchange-rates', async (req, res) => {

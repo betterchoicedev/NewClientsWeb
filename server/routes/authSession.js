@@ -2,6 +2,10 @@
  * Session & OAuth routes (browser never touches Supabase directly).
  */
 
+const MOBILE_APP_OAUTH_REDIRECT = (
+  process.env.MOBILE_OAUTH_REDIRECT || 'betterchoicemobile://auth/callback'
+).trim();
+
 function getFrontendOrigin() {
   return (
     process.env.FRONTEND_URL ||
@@ -19,7 +23,19 @@ function getApiPublicOrigin(req) {
   return `${proto}://${host}`;
 }
 
-function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAnonKey }) {
+function buildMobileAppOAuthRedirect(session) {
+  const fragment = new URLSearchParams({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: String(session.expires_at ?? ''),
+    expires_in: String(session.expires_in ?? ''),
+    token_type: session.token_type || 'bearer',
+  }).toString();
+  const joiner = MOBILE_APP_OAUTH_REDIRECT.includes('#') ? '&' : '#';
+  return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
+}
+
+function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAnonKey, supabaseDb }) {
   app.get('/api/auth/me', async (req, res) => {
     try {
       const authHeader = req.headers.authorization;
@@ -149,6 +165,37 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
     }
   });
 
+  app.get('/api/auth/oauth/mobile-callback', async (req, res) => {
+    try {
+      const oauthError = req.query.error || req.query.error_description;
+      if (oauthError) {
+        const msg = typeof oauthError === 'string' ? oauthError : 'oauth_failed';
+        return res.redirect(
+          `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent(msg)}`
+        );
+      }
+
+      const code = req.query.code;
+      if (!code) {
+        return res.redirect(
+          `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent('oauth_missing_code')}`
+        );
+      }
+
+      const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+
+      res.redirect(buildMobileAppOAuthRedirect(data.session));
+    } catch (error) {
+      console.error('GET /api/auth/oauth/mobile-callback error:', error);
+      res.redirect(
+        `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent(
+          error.message || 'oauth_failed'
+        )}`
+      );
+    }
+  });
+
   app.get('/api/auth/oauth/callback', async (req, res) => {
     try {
       const code = req.query.code;
@@ -176,6 +223,47 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
     } catch (error) {
       console.error('GET /api/auth/oauth/callback error:', error);
       res.redirect(`${getFrontendOrigin()}/login?error=oauth_failed`);
+    }
+  });
+
+  /** Exchange OAuth PKCE code for session (mobile app after browser redirect). */
+  app.post('/api/auth/oauth/exchange', async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code) {
+        return res.status(400).json({ error: 'code is required' });
+      }
+
+      const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+
+      let languageData = null;
+      if (supabaseDb && data.user?.id) {
+        try {
+          const { data: clientData, error: clientError } = await supabaseDb
+            .from('clients')
+            .select('user_language')
+            .eq('user_id', data.user.id)
+            .maybeSingle();
+          if (!clientError && clientData) {
+            languageData = clientData;
+          }
+        } catch (langError) {
+          console.error('⚠️ Error fetching language (non-critical):', langError);
+        }
+      }
+
+      res.json({
+        data: {
+          user: data.user,
+          session: data.session,
+        },
+        language: languageData,
+        error: null,
+      });
+    } catch (error) {
+      console.error('POST /api/auth/oauth/exchange error:', error);
+      res.status(401).json({ error: error.message || 'Failed to complete Google sign-in' });
     }
   });
 }
