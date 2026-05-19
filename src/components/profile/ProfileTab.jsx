@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../supabase/supabaseClient';
 import { createWeightLog } from '../../supabase/secondaryClient';
+import { apiFetch } from '../../lib/apiClient';
 import { useSettings } from '../../context/SettingsContext';
 
 const CM_PER_IN = 2.54;
@@ -702,80 +702,34 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
             return;
           }
 
-          // Get user_code from clients table
-          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-          const userCodeResponse = await fetch(`${apiUrl}/api/profile/user-code?userId=${encodeURIComponent(user.id)}`);
-          const userCodeResult = await userCodeResponse.json();
+          const reader = new FileReader();
+          const base64Promise = new Promise((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
 
-          if (!userCodeResponse.ok) {
-            console.error('Error fetching user_code:', userCodeResult.error);
-            setImageError(language === 'hebrew' ? 'שגיאה בטעינת פרטי המשתמש' : 'Error loading user information');
-            setUploadingImage(false);
-            setShowCropModal(false);
-            return;
-          }
-
-          const userCode = userCodeResult.user_code;
-          if (!userCode) {
-            setImageError(language === 'hebrew' ? 'קוד משתמש לא נמצא. אנא השלם את הגדרת הפרופיל תחילה.' : 'User code not found. Please complete your profile setup first.');
-            setUploadingImage(false);
-            setShowCropModal(false);
-            return;
-          }
-
-          // Generate unique filename
-          const timestamp = Date.now();
-          const filename = `${userCode}/${timestamp}.jpeg`;
-
-          // Check if user is authenticated
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            setImageError(language === 'hebrew' ? 'נא להתחבר כדי להעלות תמונה' : 'Please sign in to upload an image');
-            setUploadingImage(false);
-            setShowCropModal(false);
-            return;
-          }
-
-          // Upload to Supabase Storage
-          const bucketName = process.env.REACT_APP_SUPABASE_STORAGE_BUCKET_NAME || 'profile-pictures';
-          
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from(bucketName)
-            .upload(filename, blob, {
-              contentType: 'image/jpeg',
-              upsert: false,
-              cacheControl: '3600',
-              metadata: {
+          let publicUrl;
+          try {
+            const imageData = await base64Promise;
+            const uploadResult = await apiFetch('/api/profile/upload-image', {
+              method: 'POST',
+              body: JSON.stringify({
                 userId: user.id,
-                userCode: userCode,
-                uploadedAt: new Date().toISOString()
-              }
+                imageData,
+              }),
             });
-
-          if (uploadError) {
-            console.error('Error uploading to Supabase Storage:', uploadError);
-            if (uploadError.message?.includes('row-level security policy') || 
-                uploadError.message?.includes('RLS') ||
-                uploadError.statusCode === 400 ||
-                uploadError.message?.includes('violates')) {
-              const rlsErrorMsg = language === 'hebrew' 
-                ? `שגיאת הרשאות: מדיניות האבטחה חוסמת את ההעלאה.`
-                : `Permission error: Security policy is blocking the upload.`;
-              setImageError(rlsErrorMsg);
-            } else {
-              setImageError(uploadError.message || (language === 'hebrew' ? 'שגיאה בהעלאת התמונה' : 'Error uploading image'));
-            }
+            publicUrl = uploadResult.publicUrl;
+          } catch (uploadError) {
+            console.error('Error uploading profile image:', uploadError);
+            setImageError(
+              uploadError.message ||
+                (language === 'hebrew' ? 'שגיאה בהעלאת התמונה' : 'Error uploading image')
+            );
             setUploadingImage(false);
             setShowCropModal(false);
             return;
           }
-
-          // Get public URL
-          const { data: urlData } = supabase.storage
-            .from(bucketName)
-            .getPublicUrl(uploadData.path);
-
-          const publicUrl = urlData.publicUrl;
 
           // Update profile data
           onInputChange('profileImageUrl', publicUrl);

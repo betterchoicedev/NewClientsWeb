@@ -1,3 +1,2 @@
-// Export all Supabase utilities
-export { supabase } from './supabaseClient'
-export * from './auth'
+// Auth & API helpers (no direct Supabase in the browser)
+export * from './auth';

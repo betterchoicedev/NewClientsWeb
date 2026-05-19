@@ -30,6 +30,15 @@ const chatSupabase = chatSupabaseUrl && chatSupabaseServiceRoleKey
 console.log('Supabase connection:', process.env.REACT_APP_SUPABASE_URL ? 'Configured' : 'Missing URL');
 console.log('Chat/Secondary Supabase (registration_rules):', chatSupabase ? 'Configured' : 'Not configured – set CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY');
 
+const { createAuthMiddleware } = require('./middleware/auth');
+const { registerAuthSessionRoutes } = require('./routes/authSession');
+const {
+  requireAuth,
+  assertOwnUserCode,
+  verifyFoodLogOwnership,
+  apiAuthGuard,
+} = createAuthMiddleware(supabaseAuth, supabase, chatSupabase);
+
 const app = express();
 function normalizePort(value) {
   const port = parseInt(value, 10);
@@ -103,6 +112,15 @@ app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
+
+registerAuthSessionRoutes(app, {
+  supabaseAuth,
+  supabaseUrl: process.env.REACT_APP_SUPABASE_URL,
+  supabaseAnonKey: process.env.REACT_APP_SUPABASE_ANON_KEY,
+});
+
+// Require Bearer JWT on protected /api/* routes
+app.use(apiAuthGuard);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -3510,6 +3528,10 @@ app.post('/api/profile/upload-image', async (req, res) => {
       return res.status(400).json({ error: 'User ID and image data are required' });
     }
 
+    if (req.userId && userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     // Get user_code
     const { data: clientData, error: clientError } = await supabase
       .from('clients')
@@ -3841,7 +3863,7 @@ app.post('/api/profile/update-language', async (req, res) => {
 // ====================================
 
 // Get food logs
-app.get('/api/food-logs', async (req, res) => {
+app.get('/api/food-logs', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode, date } = req.query;
     if (!userCode) {
@@ -3886,7 +3908,7 @@ app.get('/api/food-logs', async (req, res) => {
 });
 
 // Create food log
-app.post('/api/food-logs', async (req, res) => {
+app.post('/api/food-logs', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode, foodLogData } = req.body;
     if (!userCode || !foodLogData) {
@@ -3948,6 +3970,10 @@ app.put('/api/food-logs/:id', async (req, res) => {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
+    if (!req.userCode || !(await verifyFoodLogOwnership(id, req.userCode))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const updateData = {
       updated_at: new Date().toISOString()
     };
@@ -3986,6 +4012,10 @@ app.delete('/api/food-logs/:id', async (req, res) => {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
+    if (!req.userCode || !(await verifyFoodLogOwnership(id, req.userCode))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const { data, error } = await chatSupabase
       .from('food_logs')
       .delete()
@@ -4001,7 +4031,7 @@ app.delete('/api/food-logs/:id', async (req, res) => {
 });
 
 // Daily XP (view_user_daily_xp) – today's status
-app.get('/api/daily-xp/today', async (req, res) => {
+app.get('/api/daily-xp/today', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode } = req.query;
     if (!userCode) {
@@ -4034,7 +4064,7 @@ app.get('/api/daily-xp/today', async (req, res) => {
 });
 
 // Daily XP – weekly progress (last 7 days)
-app.get('/api/daily-xp/weekly', async (req, res) => {
+app.get('/api/daily-xp/weekly', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode } = req.query;
     if (!userCode) {
@@ -4066,7 +4096,7 @@ app.get('/api/daily-xp/weekly', async (req, res) => {
 });
 
 // Get chat messages
-app.get('/api/chat-messages', async (req, res) => {
+app.get('/api/chat-messages', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode, beforeTimestamp } = req.query;
     if (!userCode) {
@@ -4125,7 +4155,7 @@ app.get('/api/chat-messages', async (req, res) => {
 });
 
 // Create chat message
-app.post('/api/chat-messages', async (req, res) => {
+app.post('/api/chat-messages', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode, messageData } = req.body;
     if (!userCode || !messageData) {
@@ -4200,7 +4230,7 @@ app.post('/api/chat-messages', async (req, res) => {
 });
 
 // Get weight logs
-app.get('/api/weight-logs', async (req, res) => {
+app.get('/api/weight-logs', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode } = req.query;
     if (!userCode) {
@@ -4226,7 +4256,7 @@ app.get('/api/weight-logs', async (req, res) => {
 });
 
 // Create weight log
-app.post('/api/weight-logs', async (req, res) => {
+app.post('/api/weight-logs', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode, weightLogData } = req.body;
     if (!userCode || !weightLogData) {
@@ -4636,7 +4666,7 @@ app.get('/api/training-plan', async (req, res) => {
 });
 
 // Get meal plan by user code
-app.get('/api/meal-plan', async (req, res) => {
+app.get('/api/meal-plan', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode } = req.query;
     if (!userCode) {
@@ -4764,7 +4794,7 @@ app.put('/api/meal-plan/:id', async (req, res) => {
 });
 
 // Get meal plan history
-app.get('/api/meal-plan-history', async (req, res) => {
+app.get('/api/meal-plan-history', assertOwnUserCode(), async (req, res) => {
   try {
     const { userCode } = req.query;
     if (!userCode) {
@@ -5765,6 +5795,25 @@ app.post('/api/auth/create-client', async (req, res) => {
       return res.status(400).json({ error: 'User ID, user data, and user code are required' });
     }
 
+    if (req.userId && userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { data: authUserData, error: authUserError } = await supabase.auth.admin.getUserById(userId);
+    if (authUserError || !authUserData?.user) {
+      return res.status(400).json({ error: 'Invalid user' });
+    }
+
+    const { data: existingClient } = await supabase
+      .from('clients')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingClient) {
+      return res.status(400).json({ error: 'Client record already exists' });
+    }
+
     const clientInsertData = {
       user_id: userId,
       full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
@@ -5894,6 +5943,10 @@ app.post('/api/auth/create-client', async (req, res) => {
 app.get('/api/auth/client/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+
+    if (req.userId && userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     
     const { data, error } = await supabase
       .from('clients')
@@ -5914,6 +5967,10 @@ app.put('/api/auth/client/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const { updates } = req.body;
+
+    if (req.userId && userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     
     if (!updates) {
       return res.status(400).json({ error: 'Updates are required' });

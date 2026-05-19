@@ -4,7 +4,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { signOut } from '../supabase/auth';
-import { supabase } from '../supabase/supabaseClient';
 
 function Navigation() {
   const { language, direction, toggleLanguage, t } = useLanguage();

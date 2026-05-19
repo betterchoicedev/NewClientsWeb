@@ -1,26 +1,20 @@
-import { supabase, supabaseSecondary } from './supabaseClient'
+import {
+  apiFetch,
+  getApiUrl,
+  setStoredSession,
+  clearStoredSession,
+  getStoredSession,
+  saveSessionFromAuthResponse,
+} from '../lib/apiClient';
 
-// API URL helper
-const getApiUrl = () => process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-
-// Check if email already exists in both databases
+// Check if email already exists
 export const checkEmailExists = async (email) => {
   try {
-    const normalizedEmail = email.toLowerCase();
-    
-    const apiUrl = getApiUrl();
-    const response = await fetch(`${apiUrl}/api/auth/check-email`, {
+    const result = await apiFetch('/api/auth/check-email', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: normalizedEmail })
+      body: JSON.stringify({ email: email.toLowerCase() }),
+      skipAuth: true,
     });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      return { exists: false, error: { message: result.error } };
-    }
-
     return { exists: result.exists, error: null };
   } catch (error) {
     console.error('Error checking email:', error);
@@ -28,32 +22,18 @@ export const checkEmailExists = async (email) => {
   }
 };
 
-// Helper function to normalize phone number (remove spaces and dashes)
-// Export this so it can be used globally across the app
 export const normalizePhoneForDatabase = (phone) => {
   if (!phone) return '';
-  // Remove all spaces, dashes, and other common separators
   return phone.replace(/[\s\-().]/g, '');
 };
 
-// Check if phone number already exists in both databases
 export const checkPhoneExists = async (phone) => {
   try {
-    const normalizedPhone = normalizePhoneForDatabase(phone);
-    
-    const apiUrl = getApiUrl();
-    const response = await fetch(`${apiUrl}/api/auth/check-phone`, {
+    const result = await apiFetch('/api/auth/check-phone', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: normalizedPhone })
+      body: JSON.stringify({ phone: normalizePhoneForDatabase(phone) }),
+      skipAuth: true,
     });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      return { exists: false, error: { message: result.error } };
-    }
-
     return { exists: result.exists, error: null };
   } catch (error) {
     console.error('Error checking phone:', error);
@@ -61,231 +41,191 @@ export const checkPhoneExists = async (phone) => {
   }
 };
 
-// Sign up with email and password
-export const signUp = async (email, password, userData = {}) => {
+export const signUp = async (email, password, userData = {}, extras = {}) => {
   try {
-    console.log('Attempting signup with:', { email, userData });
-    
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          first_na : userData.first_name,
-          last_name: userData.last_name,
-          phone: userData.phone,
-          newsletter: userData.newsletter,
-          full_name: `${userData.first_name} ${userData.last_name}`.trim()
-        }
-      }
-    })
-    
-    console.log('Signup response:', { data, error });
-    
-    if (error) throw error
-    return { data, error: null }
+    const result = await apiFetch('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        password,
+        userData,
+        invitationToken: extras.invitationToken,
+        providerId: extras.providerId,
+        managerLinkData: extras.managerLinkData,
+      }),
+      skipAuth: true,
+    });
+    if (result.data?.session) {
+      saveSessionFromAuthResponse(result.data);
+    }
+    return { data: result.data, error: null };
   } catch (error) {
-    console.error('Sign up error:', error)
-    return { data: null, error }
+    console.error('Sign up error:', error);
+    return { data: null, error: { message: error.message } };
   }
-}
+};
 
-// Sign in with email and password
 export const signIn = async (email, password) => {
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
-    
-    if (error) throw error
-    return { data, error: null }
+    const result = await apiFetch('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+      skipAuth: true,
+    });
+    if (result.data?.session) {
+      saveSessionFromAuthResponse(result.data);
+    }
+    return { data: result.data, error: null, language: result.language };
   } catch (error) {
-    console.error('Sign in error:', error)
-    return { data: null, error }
+    console.error('Sign in error:', error);
+    return { data: null, error: { message: error.message } };
   }
-}
+};
 
-// Sign in with Google OAuth
 export const signInWithGoogle = async () => {
-  try {
-    console.log('Attempting Google OAuth login...');
-    console.log('Current origin:', window.location.origin);
-    
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/profile`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        }
-      }
-    })
-    
-    if (error) {
-      console.error('Google OAuth error:', error);
-      throw error;
-    }
-    
-    console.log('Google OAuth initiated successfully');
-    return { data, error: null }
-  } catch (error) {
-    console.error('Google sign in error:', error);
-    return { data: null, error }
-  }
-}
+  const redirectTo = `${window.location.origin}/auth/callback`;
+  window.location.href = `${getApiUrl()}/api/auth/google?redirectTo=${encodeURIComponent(redirectTo)}`;
+  return { data: null, error: null };
+};
 
-// Sign in with Facebook OAuth
 export const signInWithFacebook = async () => {
-  try {
-    console.log('Attempting Facebook OAuth login...');
-    console.log('Current origin:', window.location.origin);
-    
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'facebook',
-      options: {
-        redirectTo: `${window.location.origin}/profile`
-      }
-    })
-    
-    if (error) {
-      console.error('Facebook OAuth error:', error);
-      throw error;
-    }
-    
-    console.log('Facebook OAuth initiated successfully');
-    return { data, error: null }
-  } catch (error) {
-    console.error('Facebook sign in error:', error);
-    return { data: null, error }
-  }
-}
+  return {
+    data: null,
+    error: { message: 'Facebook sign-in is not configured. Use Google or email.' },
+  };
+};
 
-// Sign out
 export const signOut = async () => {
   try {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-    return { error: null }
+    await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    clearStoredSession();
+    return { error: null };
   } catch (error) {
-    console.error('Sign out error:', error)
-    return { error }
+    clearStoredSession();
+    return { error };
   }
-}
+};
 
-// Get current user
 export const getCurrentUser = async () => {
   try {
-    const { data: { user }, error } = await supabase.auth.getUser()
-    if (error) throw error
-    return { user, error: null }
+    const session = getStoredSession();
+    if (!session?.access_token) {
+      return { user: null, error: null };
+    }
+    const result = await apiFetch('/api/auth/me');
+    return { user: result.user, error: null };
   } catch (error) {
-    console.error('Get current user error:', error)
-    return { user: null, error }
+    clearStoredSession();
+    return { user: null, error };
   }
-}
+};
 
-// Reset password - send email with link
 export const resetPassword = async (email) => {
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`
-    })
-    if (error) throw error
-    return { error: null }
+    await apiFetch('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+      skipAuth: true,
+    });
+    return { error: null };
   } catch (error) {
-    console.error('Reset password error:', error)
-    return { error }
+    console.error('Reset password error:', error);
+    return { error: { message: error.message } };
   }
-}
+};
 
-// Update password after reset
+export const establishRecoverySession = async (access_token, refresh_token) => {
+  try {
+    const result = await apiFetch('/api/auth/recovery/session', {
+      method: 'POST',
+      body: JSON.stringify({ access_token, refresh_token }),
+      skipAuth: true,
+    });
+    if (result.session) {
+      saveSessionFromAuthResponse(result);
+    }
+    return { error: null };
+  } catch (error) {
+    return { error: { message: error.message } };
+  }
+};
+
 export const updatePassword = async (newPassword) => {
   try {
-    const { data, error } = await supabase.auth.updateUser({
-      password: newPassword
-    })
-    if (error) throw error
-    return { data, error: null }
+    const result = await apiFetch('/api/auth/update-password', {
+      method: 'POST',
+      body: JSON.stringify({ password: newPassword }),
+    });
+    return { data: result.data, error: null };
   } catch (error) {
-    console.error('Update password error:', error)
-    return { data: null, error }
+    console.error('Update password error:', error);
+    return { data: null, error: { message: error.message } };
   }
-}
+};
 
-// Update user profile
 export const updateProfile = async (updates) => {
   try {
-    const { data, error } = await supabase.auth.updateUser({
-      data: updates
-    })
-    if (error) throw error
-    return { data, error: null }
+    const { user } = await getCurrentUser();
+    if (!user?.id) {
+      throw new Error('Not authenticated');
+    }
+    return updateClientRecord(user.id, updates);
   } catch (error) {
-    console.error('Update profile error:', error)
-    return { data: null, error }
+    console.error('Update profile error:', error);
+    return { data: null, error };
   }
-}
+};
 
-// Listen to auth changes
 export const onAuthStateChange = (callback) => {
-  return supabase.auth.onAuthStateChange(callback)
-}
+  const handler = () => {
+    getCurrentUser().then(({ user }) => {
+      callback('SIGNED_IN', user ? { user } : null);
+    });
+  };
+  window.addEventListener('bc-auth-changed', handler);
+  getCurrentUser().then(({ user }) => {
+    callback(user ? 'INITIAL_SESSION' : 'SIGNED_OUT', user ? { user } : null);
+  });
+  return {
+    data: {
+      subscription: {
+        unsubscribe: () => window.removeEventListener('bc-auth-changed', handler),
+      },
+    },
+  };
+};
 
-// Generate a unique 6-letter user code
 export const generateUniqueUserCode = async () => {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   let attempts = 0;
-  const maxAttempts = 100; // Prevent infinite loops
-  const apiUrl = getApiUrl();
+  const maxAttempts = 100;
 
   while (attempts < maxAttempts) {
-    // Generate random 6-letter code
     let userCode = '';
     for (let i = 0; i < 6; i++) {
       userCode += letters.charAt(Math.floor(Math.random() * letters.length));
     }
 
-    try {
-      const response = await fetch(`${apiUrl}/api/auth/check-user-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userCode })
-      });
+    const result = await apiFetch('/api/auth/check-user-code', {
+      method: 'POST',
+      body: JSON.stringify({ userCode }),
+      skipAuth: true,
+    });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to check user code');
-      }
-
-      // If code doesn't exist, we can use it
-      if (!result.exists) {
-        return userCode;
-      }
-
-      // Code exists, try again
-      attempts++;
-    } catch (error) {
-      console.error('Error checking user code uniqueness:', error);
-      throw error;
+    if (!result.exists) {
+      return userCode;
     }
+    attempts++;
   }
 
   throw new Error('Failed to generate unique user code after maximum attempts');
 };
 
-// Create client record in clients table and chat_users table
 export const createClientRecord = async (userId, userData, providerId = null) => {
   try {
-    // Generate unique user code
     const userCode = await generateUniqueUserCode();
-    
-    // Normalize phone number before saving (remove spaces and dashes)
     const normalizedPhone = userData.phone ? normalizePhoneForDatabase(userData.phone) : null;
-    
-    // Check for manager link data and invitation token in sessionStorage (for OAuth flows, e.g. Google signup)
+
     let managerLinkData = null;
     let invitationToken = null;
     try {
@@ -296,108 +236,69 @@ export const createClientRecord = async (userId, userData, providerId = null) =>
       console.error('Error parsing manager link data:', e);
     }
 
-    // Determine final provider ID
-    // Priority: manager_id from manager link > provided providerId > default provider
     let finalProviderId = providerId;
-    
-    if (managerLinkData && managerLinkData.manager_id) {
+    if (managerLinkData?.manager_id) {
       finalProviderId = managerLinkData.manager_id;
-      console.log('✅ Using manager ID from link:', finalProviderId);
-    } else if (!finalProviderId || (typeof finalProviderId === 'string' && finalProviderId.trim().length === 0)) {
+    } else if (!finalProviderId || (typeof finalProviderId === 'string' && !finalProviderId.trim())) {
       try {
-        const apiUrl = getApiUrl();
-        const providerResponse = await fetch(`${apiUrl}/api/auth/default-provider`);
-        const providerResult = await providerResponse.json();
-        
-        if (providerResponse.ok && providerResult.provider_id) {
+        const providerResult = await apiFetch('/api/auth/default-provider', { skipAuth: true });
+        if (providerResult.provider_id) {
           finalProviderId = providerResult.provider_id;
         }
       } catch (providerError) {
         console.error('Error finding default provider:', providerError);
       }
     }
-    
-    // Create client record via API
-    const apiUrl = getApiUrl();
-    const response = await fetch(`${apiUrl}/api/auth/create-client`, {
+
+    const result = await apiFetch('/api/auth/create-client', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId,
-        userData: {
-          ...userData,
-          phone: normalizedPhone
-        },
+        userData: { ...userData, phone: normalizedPhone },
         userCode,
         providerId: finalProviderId,
         invitationToken: invitationToken || undefined,
-        managerLinkData: managerLinkData || undefined
-      })
+        managerLinkData: managerLinkData || undefined,
+      }),
     });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error('Client record creation error:', result.error);
-      throw new Error(result.error);
-    }
-
-    return { 
-      data: result.data, 
+    return {
+      data: result.data,
       error: null,
       chatUserCreated: result.chatUserCreated,
-      chatUserData: result.chatUserData
+      chatUserData: result.chatUserData,
     };
   } catch (error) {
     console.error('Create client record error:', error);
-    return { data: null, error };
+    return { data: null, error: { message: error.message } };
   }
-}
+};
 
-// Get client record by user ID
 export const getClientRecord = async (userId) => {
   try {
-    const apiUrl = getApiUrl();
-    const response = await fetch(`${apiUrl}/api/auth/client/${userId}`);
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to get client record');
-    }
-
+    const result = await apiFetch(`/api/auth/client/${userId}`);
     return { data: result.data, error: null };
   } catch (error) {
     console.error('Get client record error:', error);
     return { data: null, error };
   }
-}
+};
 
-// Update client record in clients and optionally sync to chat_users
 export const updateClientRecord = async (userId, updates) => {
   try {
-    // Normalize phone number if it's being updated
     const normalizedUpdates = { ...updates };
     if (normalizedUpdates.phone) {
       normalizedUpdates.phone = normalizePhoneForDatabase(normalizedUpdates.phone);
     }
-    
-    const apiUrl = getApiUrl();
-    const response = await fetch(`${apiUrl}/api/auth/client/${userId}`, {
+
+    const result = await apiFetch(`/api/auth/client/${userId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updates: normalizedUpdates })
+      body: JSON.stringify({ updates: normalizedUpdates }),
     });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to update client record');
-    }
-
-    console.log('Chat user synced successfully');
     return { data: result.data, error: null };
   } catch (error) {
     console.error('Update client record error:', error);
     return { data: null, error };
   }
-}
+};

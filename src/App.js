@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import WaitingListPage from './pages/WaitingListPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import AuthCallbackPage from './pages/AuthCallbackPage';
 import WhatsAppRegisterPage from './pages/WhatsAppRegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import AboutPage from './pages/AboutPage';
@@ -42,6 +43,7 @@ function App() {
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/login" element={<LoginPage />} />
+                  <Route path="/auth/callback" element={<AuthCallbackPage />} />
                   <Route path="/signup" element={<SignupPage />} />
                   <Route path="/waiting-list" element={<WaitingListPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />

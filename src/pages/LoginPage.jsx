@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { signInWithGoogle, resetPassword } from '../supabase/auth';
+import { signInWithGoogle, resetPassword, signIn } from '../supabase/auth';
 
 function LoginPage() {
   const { language, direction, t, isTransitioning, toggleLanguage } = useLanguage();
@@ -109,28 +109,26 @@ function LoginPage() {
     setError('');
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-      const response = await fetch(`${apiUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        })
-      });
+      const { data, error: signInError, language: langPref } = await signIn(
+        formData.email,
+        formData.password
+      );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        setError(result.error || (language === 'hebrew' ? 'שגיאה בהתחברות' : 'Login failed'));
+      if (signInError) {
+        setError(signInError.message || (language === 'hebrew' ? 'שגיאה בהתחברות' : 'Login failed'));
         setLoading(false);
         return;
       }
 
+      if (!data?.session) {
+        setError(language === 'hebrew' ? 'שגיאה בהתחברות' : 'Login failed');
+        setLoading(false);
+        return;
+      }
+
+      const result = { language: langPref };
+
       // Login successful - sync language preference if available
-      // Website UI is English/Hebrew only; default to English for any other preferred language (e.g. es, fr).
       if (result.language?.user_language) {
         const languageMap = {
           'en': 'english',
@@ -143,23 +141,6 @@ function LoginPage() {
         // Only change if different from current language
         if (language !== webLanguage) {
           toggleLanguage();
-        }
-      }
-
-      // Set session in Supabase client for compatibility
-      // The session is already created by the API, but we need to set it in the client
-      if (result.data?.session) {
-        try {
-          const { supabase } = await import('../supabase/supabaseClient');
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: result.data.session.access_token,
-            refresh_token: result.data.session.refresh_token
-          });
-          if (sessionError) {
-            console.error('Error setting session:', sessionError);
-          }
-        } catch (sessionErr) {
-          console.error('Error importing supabase client:', sessionErr);
         }
       }
 

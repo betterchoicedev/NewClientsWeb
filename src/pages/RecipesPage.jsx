@@ -3,8 +3,6 @@ import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import Navigation from '../components/Navigation';
-import { supabase } from '../supabase/supabaseClient';
-
 function RecipesPage() {
   const { language, direction, t } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();

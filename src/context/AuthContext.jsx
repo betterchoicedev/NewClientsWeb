@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '../supabase/supabaseClient';
-import { onAuthStateChange } from '../supabase/auth';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { getCurrentUser, signOut as authSignOut } from '../supabase/auth';
+import { getStoredSession } from '../lib/apiClient';
 
 const AuthContext = createContext({});
 
@@ -16,42 +16,52 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const refreshUser = useCallback(async () => {
+    const session = getStoredSession();
+    if (!session?.access_token) {
+      setUser(null);
+      return;
+    }
+    const { user: currentUser } = await getCurrentUser();
+    setUser(currentUser ?? null);
+  }, []);
+
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
+    const init = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setUser(session?.user ?? null);
+        await refreshUser();
       } catch (error) {
-        console.error('Error getting initial session:', error);
+        console.error('Error loading auth session:', error);
+        setUser(null);
       } finally {
         setLoading(false);
       }
     };
 
-    getInitialSession();
+    init();
 
-    // Listen for auth changes
-    const { data: { subscription } } = onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    const onAuthChanged = () => {
+      refreshUser();
+    };
+    window.addEventListener('bc-auth-changed', onAuthChanged);
+    return () => window.removeEventListener('bc-auth-changed', onAuthChanged);
+  }, [refreshUser]);
 
-    return () => subscription.unsubscribe();
-  }, []);
+  const signOut = async () => {
+    await authSignOut();
+    setUser(null);
+  };
 
   const value = {
     user,
     loading,
     isAuthenticated: !!user,
-    userDisplayName: user?.user_metadata?.first_name 
+    signOut,
+    refreshUser,
+    userDisplayName: user?.user_metadata?.first_name
       ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim()
-      : user?.email?.split('@')[0] || 'User'
+      : user?.email?.split('@')[0] || 'User',
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

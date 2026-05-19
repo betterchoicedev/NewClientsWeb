@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { checkEmailExists, signInWithGoogle } from '../supabase/auth';
+import { checkEmailExists, signInWithGoogle, signUp } from '../supabase/auth';
+import { saveSessionFromAuthResponse } from '../lib/apiClient';
 
 function SignupPage() {
   const { language, direction, t, isTransitioning, toggleLanguage } = useLanguage();
@@ -261,46 +262,24 @@ function SignupPage() {
       // Get invitation token from state or sessionStorage
       const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1] || sessionStorage.getItem('invitation_token');
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-      const response = await fetch(`${apiUrl}/api/auth/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          userData: userData,
-          invitationToken: token,
-          providerId: providerId,
-          managerLinkData: managerLinkData // Pass manager link data for validation
-        })
-      });
+      const { data, error: signupError } = await signUp(
+        formData.email,
+        formData.password,
+        userData,
+        { invitationToken: token, providerId, managerLinkData }
+      );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        setError(result.error || (language === 'hebrew' ? 'שגיאה ביצירת החשבון' : 'Failed to create account'));
+      if (signupError) {
+        setError(signupError.message || (language === 'hebrew' ? 'שגיאה ביצירת החשבון' : 'Failed to create account'));
         setLoading(false);
         return;
       }
 
-      // Set session in Supabase client for compatibility (if available)
-      // Note: Session might be null if email confirmation is required
-      if (result.data?.session) {
-        try {
-          const { supabase } = await import('../supabase/supabaseClient');
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: result.data.session.access_token,
-            refresh_token: result.data.session.refresh_token
-          });
-          if (sessionError) {
-            console.error('Error setting session:', sessionError);
-          }
-        } catch (sessionErr) {
-          console.error('Error importing supabase client:', sessionErr);
-        }
+      if (data?.session) {
+        saveSessionFromAuthResponse(data);
       }
+
+      const result = { data };
 
       // Clear stored invitation token, manager link data, and dietitian ID after successful creation
       sessionStorage.removeItem('invitation_token');
