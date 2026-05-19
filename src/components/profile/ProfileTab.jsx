@@ -242,6 +242,17 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   const [autoCalcActive, setAutoCalcActive]       = useState(false);
   const nutritionalInitialized = useRef(false);
 
+  // ─── Per-section dirty & save state ─────────────────────────────────────────
+  const [personalInfoDirty, setPersonalInfoDirty]       = useState(false);
+  const [isSavingPersonalInfo, setIsSavingPersonalInfo] = useState(false);
+  const [personalInfoSaveStatus, setPersonalInfoSaveStatus] = useState('');
+
+  const [healthInfoDirty, setHealthInfoDirty]           = useState(false);
+  const [isSavingHealthInfo, setIsSavingHealthInfo]     = useState(false);
+  const [healthInfoSaveStatus, setHealthInfoSaveStatus] = useState('');
+
+  const [nutritionDirty, setNutritionDirty]             = useState(false);
+
   // ─── Weight, Height & Activity state (editable inputs) ───────────────────
   const [weightInput, setWeightInput]     = useState('');
   const [heightInput, setHeightInput]     = useState('');
@@ -343,6 +354,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   // Scale macros when calories slider changes
   const handleCaloriesChange = useCallback((newCals) => {
     const clamped = Math.max(calMin, Math.min(calMax, Number(newCals)));
+    setNutritionDirty(true);
     setTargetCals(clamped);
     setMacroGrams((prev) => {
       const currentKcal = totalKcalFromGrams(prev);
@@ -377,6 +389,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   // by the remaining (target − locked) calorie budget.
   const handleMacroChange = useCallback((changedMacro, newGrams) => {
     const requested = Math.max(0, Number(newGrams) || 0);
+    setNutritionDirty(true);
     setMacroGrams((prev) => {
       const target = targetCals || totalKcalFromGrams(prev);
       const lockedKcal = (lockedMacro && lockedMacro !== changedMacro)
@@ -496,6 +509,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
 
       await Promise.all(tasks);
       setNutritionalSaveStatus('success');
+      setNutritionDirty(false);
       setTimeout(() => setNutritionalSaveStatus(''), 3000);
     } catch (err) {
       console.error('Error saving nutritional profile:', err);
@@ -765,6 +779,80 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
     fileInputRef.current?.click();
   };
 
+  // ─── Per-section change wrappers ──────────────────────────────────────────
+  const handlePersonalFieldChange = (field, value) => {
+    onInputChange(field, value);
+    setPersonalInfoDirty(true);
+  };
+
+  const handleHealthFieldChange = (field, value) => {
+    onInputChange(field, value);
+    setHealthInfoDirty(true);
+  };
+
+  // ─── Save Personal Info (region, city, timezone) ─────────────────────────
+  const savePersonalInfo = async () => {
+    if (!user?.id) return;
+    setIsSavingPersonalInfo(true);
+    setPersonalInfoSaveStatus('');
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/profile/save-personal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userCode: profileData.userCode,
+          region: profileData.region,
+          city: profileData.city,
+          timezone: profileData.timezone,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Save failed');
+      setPersonalInfoSaveStatus('success');
+      setPersonalInfoDirty(false);
+      setTimeout(() => setPersonalInfoSaveStatus(''), 3000);
+    } catch (err) {
+      console.error('Error saving personal info:', err);
+      setPersonalInfoSaveStatus('error');
+    } finally {
+      setIsSavingPersonalInfo(false);
+    }
+  };
+
+  // ─── Save Health Info ─────────────────────────────────────────────────────
+  const saveHealthInfo = async () => {
+    if (!user?.id) return;
+    setIsSavingHealthInfo(true);
+    setHealthInfoSaveStatus('');
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/profile/save-health`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userCode: profileData.userCode,
+          dietaryPreferences: profileData.dietaryPreferences,
+          foodAllergies: profileData.foodAllergies,
+          foodLimitations: profileData.foodLimitations,
+          medicalConditions: profileData.medicalConditions,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Save failed');
+      setHealthInfoSaveStatus('success');
+      setHealthInfoDirty(false);
+      setTimeout(() => setHealthInfoSaveStatus(''), 3000);
+    } catch (err) {
+      console.error('Error saving health info:', err);
+      setHealthInfoSaveStatus('error');
+    } finally {
+      setIsSavingHealthInfo(false);
+    }
+  };
+
   return (
     <div className={`min-h-screen p-4 sm:p-6 md:p-8 animate-fadeIn`}>
       {/* Header Section */}
@@ -977,7 +1065,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
           </div>
         )}
 
-        {/* Personal Information */}
+        {/* Personal Information (merged with Location) */}
         <div className={`${themeClasses.bgCard} border border-indigo-500/30 rounded-2xl p-4 sm:p-6 md:p-8 shadow-xl shadow-indigo-500/10 transform hover:scale-[1.01] transition-all duration-300 animate-slideInUp`} style={{ animationDelay: '0.2s' }}>
           <div className="flex items-center mb-6 sm:mb-8">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center mr-3 sm:mr-4 shadow-lg shadow-indigo-500/25">
@@ -987,75 +1075,270 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
             </div>
             <div>
               <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold tracking-tight`}>
-                {t.profile.profileTab.personalInfo}
+                {language === 'hebrew' ? 'מידע אישי' : 'Personal Info'}
               </h3>
               <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mt-1`}>
-                {language === 'hebrew' ? 'פרטים אישיים - לא ניתן לערוך' : 'Your basic personal details - Read only'}
+                {language === 'hebrew' ? 'פרטים אישיים ומיקום' : 'Your personal details and location'}
               </p>
             </div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-            {shouldShowField(profileData.firstName) && (
-            <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                {t.profile.profileTab.firstName} *
-              </label>
-              <input
-                type="text"
-                value={profileData.firstName}
-                readOnly
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-80`}
-                required
-              />
-            </div>
-            )}
 
-            {shouldShowField(profileData.lastName) && (
-            <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                {t.profile.profileTab.lastName} *
-              </label>
-              <input
-                type="text"
-                value={profileData.lastName}
-                readOnly
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-80`}
-                required
-              />
-            </div>
-            )}
+          {/* Read-only identity fields */}
+          <div className="mb-6">
+            <p className={`${themeClasses.textSecondary} text-xs font-semibold uppercase tracking-wider mb-3 opacity-60`}>
+              {language === 'hebrew' ? 'פרטים אישיים — לקריאה בלבד' : 'Identity — Read only'}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+              {shouldShowField(profileData.firstName) && (
+              <div>
+                <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
+                  {t.profile.profileTab.firstName} *
+                </label>
+                <input
+                  type="text"
+                  value={profileData.firstName}
+                  readOnly
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-70`}
+                  required
+                />
+              </div>
+              )}
 
-            {shouldShowField(profileData.email) && (
-            <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                {t.profile.profileTab.email} *
-              </label>
-              <input
-                type="email"
-                value={profileData.email}
-                readOnly
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-80`}
-                required
-              />
-            </div>
-            )}
+              {shouldShowField(profileData.lastName) && (
+              <div>
+                <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
+                  {t.profile.profileTab.lastName} *
+                </label>
+                <input
+                  type="text"
+                  value={profileData.lastName}
+                  readOnly
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-70`}
+                  required
+                />
+              </div>
+              )}
 
-            {shouldShowField(profileData.phone) && (
-            <div>
+              {shouldShowField(profileData.email) && (
+              <div>
+                <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
+                  {t.profile.profileTab.email} *
+                </label>
+                <input
+                  type="email"
+                  value={profileData.email}
+                  readOnly
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-70`}
+                  required
+                />
+              </div>
+              )}
+
+              {shouldShowField(profileData.phone) && (
+              <div>
+                <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
+                  {t.profile.profileTab.phone}
+                </label>
+                <input
+                  type="tel"
+                  value={profileData.phone}
+                  readOnly
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-70`}
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+              )}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-indigo-500/15 mb-6" />
+
+          {/* Editable location fields */}
+          <div className="mb-4">
+            <p className={`${themeClasses.textSecondary} text-xs font-semibold uppercase tracking-wider mb-3 opacity-60`}>
+              {language === 'hebrew' ? 'מיקום' : 'Location'}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+              <div>
+                <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
+                  {language === 'hebrew' ? 'אזור' : 'Region'}
+                </label>
+                <select
+                  value={profileData.region}
+                  onChange={(e) => handlePersonalFieldChange('region', e.target.value)}
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-800`}
+                >
+                  <option value="">{language === 'hebrew' ? 'בחר אזור' : 'Select Region'}</option>
+                  <option value="israel">{language === 'hebrew' ? 'ישראל' : 'Israel'}</option>
+                  <option value="japan">{language === 'hebrew' ? 'יפן' : 'Japan'}</option>
+                  <option value="korea">{language === 'hebrew' ? 'קוריאה' : 'Korea'}</option>
+                  <option value="greater_china">{language === 'hebrew' ? 'סין/הונג קונג/טאיוואן' : 'Greater China (China/Hong Kong/Taiwan)'}</option>
+                  <option value="india_south_asia">{language === 'hebrew' ? 'הודו / דרום אסיה' : 'India / South Asia'}</option>
+                  <option value="southeast_asia">{language === 'hebrew' ? 'דרום־מזרח אסיה' : 'Southeast Asia'}</option>
+                  <option value="indonesia_malaysia">{language === 'hebrew' ? 'אינדונזיה/מלזיה' : 'Indonesia/Malaysia'}</option>
+                  <option value="turkey">{language === 'hebrew' ? 'טורקיה' : 'Turkey'}</option>
+                  <option value="persian_iranian">{language === 'hebrew' ? 'איראן/פרס' : 'Persian/Iranian'}</option>
+                  <option value="gulf_arabia">{language === 'hebrew' ? 'העולם הערבי-מפרץ' : 'Gulf Arabia'}</option>
+                  <option value="north_africa">{language === 'hebrew' ? 'צפון אפריקה' : 'North Africa'}</option>
+                  <option value="east_africa">{language === 'hebrew' ? 'אפריקה מזרחית' : 'East Africa'}</option>
+                  <option value="europe_mediterranean">{language === 'hebrew' ? 'אירופה - ים תיכוני' : 'Europe - Mediterranean'}</option>
+                  <option value="europe_west">{language === 'hebrew' ? 'אירופה - מרכז/מערב' : 'Europe - Central/West'}</option>
+                  <option value="europe_east_russian">{language === 'hebrew' ? 'אירופה - מזרח/רוסי' : 'Europe - East/Russian'}</option>
+                  <option value="mexico">{language === 'hebrew' ? 'אמריקה לטינית - מקסיקו' : 'Latin America - Mexico'}</option>
+                  <option value="latam_south_america">{language === 'hebrew' ? 'אמריקה לטינית - דרום אמריקה' : 'Latin America - South America'}</option>
+                  <option value="caribbean">{language === 'hebrew' ? 'קריביים' : 'Caribbean'}</option>
+                  <option value="north_america">{language === 'hebrew' ? 'צפון אמריקה' : 'North America'}</option>
+                  <option value="other">{language === 'hebrew' ? 'אחר' : 'Other'}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
+                  {language === 'hebrew' ? 'עיר' : 'City'}
+                </label>
+                <input
+                  type="text"
+                  value={profileData.city}
+                  onChange={(e) => handlePersonalFieldChange('city', e.target.value)}
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-800`}
+                  placeholder={language === 'hebrew' ? 'תל אביב' : 'Tel Aviv'}
+                />
+              </div>
+
+              <div>
+                <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
+                  {language === 'hebrew' ? 'אזור זמן' : 'Timezone'}
+                </label>
+                <select
+                  value={profileData.timezone}
+                  onChange={(e) => handlePersonalFieldChange('timezone', e.target.value)}
+                  className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-800`}
+                >
+                  <option value="">{language === 'hebrew' ? 'בחר אזור זמן' : 'Select Timezone'}</option>
+                  <optgroup label={language === 'hebrew' ? 'ישראל והמזרח התיכון' : 'Israel & Middle East'}>
+                    <option value="Asia/Jerusalem">{language === 'hebrew' ? 'ירושלים (ישראל)' : 'Asia/Jerusalem (Israel)'}</option>
+                    <option value="Asia/Dubai">{language === 'hebrew' ? 'דובאי (איחוד האמירויות)' : 'Asia/Dubai (UAE)'}</option>
+                    <option value="Asia/Riyadh">{language === 'hebrew' ? 'ריאד (ערב הסעודית)' : 'Asia/Riyadh (Saudi Arabia)'}</option>
+                    <option value="Asia/Tehran">{language === 'hebrew' ? 'טהרן (איראן)' : 'Asia/Tehran (Iran)'}</option>
+                  </optgroup>
+                  <optgroup label={language === 'hebrew' ? 'אירופה' : 'Europe'}>
+                    <option value="Europe/London">{language === 'hebrew' ? 'לונדון (GMT)' : 'Europe/London (GMT)'}</option>
+                    <option value="Europe/Paris">{language === 'hebrew' ? 'פריז (CET)' : 'Europe/Paris (CET)'}</option>
+                    <option value="Europe/Berlin">{language === 'hebrew' ? 'ברלין (CET)' : 'Europe/Berlin (CET)'}</option>
+                    <option value="Europe/Rome">{language === 'hebrew' ? 'רומא (CET)' : 'Europe/Rome (CET)'}</option>
+                    <option value="Europe/Madrid">{language === 'hebrew' ? 'מדריד (CET)' : 'Europe/Madrid (CET)'}</option>
+                    <option value="Europe/Amsterdam">{language === 'hebrew' ? 'אמסטרדם (CET)' : 'Europe/Amsterdam (CET)'}</option>
+                    <option value="Europe/Moscow">{language === 'hebrew' ? 'מוסקבה (MSK)' : 'Europe/Moscow (MSK)'}</option>
+                  </optgroup>
+                  <optgroup label={language === 'hebrew' ? 'צפון אמריקה' : 'North America'}>
+                    <option value="America/New_York">{language === 'hebrew' ? 'ניו יורק (EST)' : 'America/New_York (EST)'}</option>
+                    <option value="America/Chicago">{language === 'hebrew' ? 'שיקגו (CST)' : 'America/Chicago (CST)'}</option>
+                    <option value="America/Denver">{language === 'hebrew' ? 'דנבר (MST)' : 'America/Denver (MST)'}</option>
+                    <option value="America/Los_Angeles">{language === 'hebrew' ? 'לוס אנג\'לס (PST)' : 'America/Los_Angeles (PST)'}</option>
+                    <option value="America/Toronto">{language === 'hebrew' ? 'טורונטו (EST)' : 'America/Toronto (EST)'}</option>
+                    <option value="America/Vancouver">{language === 'hebrew' ? 'ונקובר (PST)' : 'America/Vancouver (PST)'}</option>
+                  </optgroup>
+                  <optgroup label={language === 'hebrew' ? 'אסיה' : 'Asia'}>
+                    <option value="Asia/Tokyo">{language === 'hebrew' ? 'טוקיו (JST)' : 'Asia/Tokyo (JST)'}</option>
+                    <option value="Asia/Shanghai">{language === 'hebrew' ? 'שנחאי (CST)' : 'Asia/Shanghai (CST)'}</option>
+                    <option value="Asia/Hong_Kong">{language === 'hebrew' ? 'הונג קונג (HKT)' : 'Asia/Hong_Kong (HKT)'}</option>
+                    <option value="Asia/Singapore">{language === 'hebrew' ? 'סינגפור (SGT)' : 'Asia/Singapore (SGT)'}</option>
+                    <option value="Asia/Kolkata">{language === 'hebrew' ? 'קולקטה (IST)' : 'Asia/Kolkata (IST)'}</option>
+                    <option value="Asia/Seoul">{language === 'hebrew' ? 'סיאול (KST)' : 'Asia/Seoul (KST)'}</option>
+                    <option value="Asia/Bangkok">{language === 'hebrew' ? 'בנגקוק (ICT)' : 'Asia/Bangkok (ICT)'}</option>
+                  </optgroup>
+                  <optgroup label={language === 'hebrew' ? 'אוקיאניה' : 'Oceania'}>
+                    <option value="Australia/Sydney">{language === 'hebrew' ? 'סידני (AEST)' : 'Australia/Sydney (AEST)'}</option>
+                    <option value="Australia/Melbourne">{language === 'hebrew' ? 'מלבורן (AEST)' : 'Australia/Melbourne (AEST)'}</option>
+                    <option value="Australia/Perth">{language === 'hebrew' ? 'פרת (AWST)' : 'Australia/Perth (AWST)'}</option>
+                    <option value="Pacific/Auckland">{language === 'hebrew' ? 'אוקלנד (NZST)' : 'Pacific/Auckland (NZST)'}</option>
+                  </optgroup>
+                  <optgroup label={language === 'hebrew' ? 'דרום אמריקה' : 'South America'}>
+                    <option value="America/Sao_Paulo">{language === 'hebrew' ? 'סאו פאולו (BRT)' : 'America/Sao_Paulo (BRT)'}</option>
+                    <option value="America/Buenos_Aires">{language === 'hebrew' ? 'בואנוס איירס (ART)' : 'America/Buenos_Aires (ART)'}</option>
+                    <option value="America/Lima">{language === 'hebrew' ? 'לימה (PET)' : 'America/Lima (PET)'}</option>
+                  </optgroup>
+                  <optgroup label={language === 'hebrew' ? 'אפריקה' : 'Africa'}>
+                    <option value="Africa/Cairo">{language === 'hebrew' ? 'קהיר (EET)' : 'Africa/Cairo (EET)'}</option>
+                    <option value="Africa/Johannesburg">{language === 'hebrew' ? 'יוהנסבורג (SAST)' : 'Africa/Johannesburg (SAST)'}</option>
+                    <option value="Africa/Lagos">{language === 'hebrew' ? 'לאגוס (WAT)' : 'Africa/Lagos (WAT)'}</option>
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 sm:mt-6">
               <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                {t.profile.profileTab.phone}
+                {language === 'hebrew' ? 'חברה' : 'Company'}
               </label>
-              <input
-                type="tel"
-                value={profileData.phone}
-                readOnly
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} cursor-not-allowed opacity-80`}
-                placeholder="+1 (555) 123-4567"
-              />
+              {companyError && (
+                <p className="text-red-500 text-xs mb-2">{companyError}</p>
+              )}
+              <select
+                value={profileData.companyId || ''}
+                onChange={(e) => onInputChange('companyId', e.target.value)}
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-indigo-500 cursor-not-allowed opacity-70`}
+                disabled={true}
+                readOnly={true}
+              >
+                <option value="">{language === 'hebrew' ? 'ללא חברה' : 'No company'}</option>
+                {companyOptions.map((company) => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+              {isLoadingCompanies && (
+                <p className={`${themeClasses.textSecondary} text-xs mt-2`}>
+                  {language === 'hebrew' ? 'טוען רשימת חברות...' : 'Loading companies...'}
+                </p>
+              )}
+              {!isLoadingCompanies && companyOptions.length === 0 && !companyError && (
+                <p className={`${themeClasses.textSecondary} text-xs mt-2`}>
+                  {language === 'hebrew' ? 'לא נמצאו חברות זמינות' : 'No companies available'}
+                </p>
+              )}
             </div>
-            )}
+          </div>
+
+          {/* Personal Info — conditional save button */}
+          {personalInfoDirty && (
+            <div className="mt-6 pt-5 border-t border-indigo-500/15 flex flex-col sm:flex-row sm:items-center gap-3">
+              <button
+                onClick={savePersonalInfo}
+                disabled={isSavingPersonalInfo}
+                className={`w-full sm:w-auto px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
+                  isSavingPersonalInfo
+                    ? 'bg-gray-400/50 cursor-not-allowed text-gray-500'
+                    : 'bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
+                }`}
+              >
+                {isSavingPersonalInfo ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    {isHebrew ? 'שומר...' : 'Saving...'}
+                  </span>
+                ) : (
+                  isHebrew ? 'שמור שינויים' : 'Save Changes'
+                )}
+              </button>
+              {personalInfoSaveStatus === 'success' && (
+                <span className="flex items-center gap-1.5 text-sm text-emerald-500 font-medium">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                  </svg>
+                  {isHebrew ? 'נשמר בהצלחה' : 'Saved successfully'}
+                </span>
+              )}
+              {personalInfoSaveStatus === 'error' && (
+                <span className="text-sm text-red-500 font-medium">
+                  {isHebrew ? 'שגיאה בשמירה' : 'Failed to save'}
+                </span>
+              )}
             </div>
+          )}
         </div>
         {/* Nutritional Profile */}
         {(() => {
@@ -1094,7 +1377,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 </div>
                 <select
                   value={activityLevel}
-                  onChange={(e) => setActivityLevel(e.target.value)}
+                  onChange={(e) => { setActivityLevel(e.target.value); setNutritionDirty(true); }}
                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border-2 text-base sm:text-sm transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-orange-500 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800`}
                 >
                   <option value="">{isHebrew ? 'בחר רמת פעילות' : 'Select activity level'}</option>
@@ -1131,7 +1414,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                         max={weightInputMax}
                         step={0.1}
                         value={weightInput}
-                        onChange={(e) => setWeightInput(e.target.value)}
+                        onChange={(e) => { setWeightInput(e.target.value); setNutritionDirty(true); }}
                         placeholder={isHebrew ? 'לדוגמה 72.5' : 'e.g. 72.5'}
                         className={`flex-1 min-w-0 px-3 py-2.5 rounded-lg border-2 transition-all font-semibold text-base sm:text-sm ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-orange-500 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800`}
                       />
@@ -1160,7 +1443,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                         max={heightInputMax}
                         step={0.1}
                         value={heightInput}
-                        onChange={(e) => setHeightInput(e.target.value)}
+                        onChange={(e) => { setHeightInput(e.target.value); setNutritionDirty(true); }}
                         placeholder={
                           isHebrew
                             ? (heightIsImperial ? 'לדוגמה 69' : 'לדוגמה 175')
@@ -1397,210 +1680,51 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 </div>
               )}
 
-              {/* Save nutritional profile */}
-              <div className="mt-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                <button
-                  onClick={saveNutritionalProfile}
-                  disabled={isSavingNutritional}
-                  className={`w-full sm:w-auto px-5 py-3 sm:py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
-                    isSavingNutritional
-                      ? 'bg-gray-400/50 cursor-not-allowed text-gray-500'
-                      : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
-                  }`}
-                >
-                  {isSavingNutritional ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                      </svg>
-                      {isHebrew ? 'שומר...' : 'Saving...'}
-                    </span>
-                  ) : (
-                    isHebrew ? 'שמור פרופיל תזונתי' : 'Save Nutritional Profile'
-                  )}
-                </button>
+              {/* Save nutritional profile — only visible when edited */}
+              {nutritionDirty && (
+                <div className="mt-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                  <button
+                    onClick={saveNutritionalProfile}
+                    disabled={isSavingNutritional}
+                    className={`w-full sm:w-auto px-5 py-3 sm:py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
+                      isSavingNutritional
+                        ? 'bg-gray-400/50 cursor-not-allowed text-gray-500'
+                        : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
+                    }`}
+                  >
+                    {isSavingNutritional ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                        {isHebrew ? 'שומר...' : 'Saving...'}
+                      </span>
+                    ) : (
+                      isHebrew ? 'שמור שינויים' : 'Save Changes'
+                    )}
+                  </button>
 
-                {nutritionalSaveStatus === 'success' && (
-                  <span className="flex items-center justify-center sm:justify-start gap-1.5 text-sm text-emerald-500 font-medium">
-                    <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
-                    </svg>
-                    {isHebrew ? 'נשמר בהצלחה' : 'Saved successfully'}
-                  </span>
-                )}
-                {nutritionalSaveStatus === 'error' && (
-                  <span className="text-sm text-red-500 font-medium text-center sm:text-left">
-                    {isHebrew ? 'שגיאה בשמירה' : 'Failed to save'}
-                  </span>
-                )}
-              </div>
+                  {nutritionalSaveStatus === 'success' && (
+                    <span className="flex items-center justify-center sm:justify-start gap-1.5 text-sm text-emerald-500 font-medium">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                      </svg>
+                      {isHebrew ? 'נשמר בהצלחה' : 'Saved successfully'}
+                    </span>
+                  )}
+                  {nutritionalSaveStatus === 'error' && (
+                    <span className="text-sm text-red-500 font-medium text-center sm:text-left">
+                      {isHebrew ? 'שגיאה בשמירה' : 'Failed to save'}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           );
         })()}
 
 
-        {/* Location Information */}
-        <div className={`${themeClasses.bgSecondary} rounded-xl p-4 sm:p-6 border-l-4 border-purple-500`}>
-          <div className="flex items-center mb-4 sm:mb-6">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center mr-3">
-              <span className="text-purple-600 dark:text-purple-400 text-base sm:text-lg">📍</span>
-            </div>
-            <div>
-              <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>
-                {language === 'hebrew' ? 'מידע מיקום' : 'Location Information'}
-              </h3>
-              <p className={`${themeClasses.textSecondary} text-xs sm:text-sm`}>
-                {language === 'hebrew' ? 'עזרו לנו לספק המלצות מותאמות למיקום' : 'Help us provide location-specific recommendations'}
-              </p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-            <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                {language === 'hebrew' ? 'אזור' : 'Region'}
-              </label>
-              <select
-                value={profileData.region}
-                onChange={(e) => onInputChange('region', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר אזור' : 'Select Region'}</option>
-                <option value="israel">{language === 'hebrew' ? 'ישראל' : 'Israel'}</option>
-                <option value="japan">{language === 'hebrew' ? 'יפן' : 'Japan'}</option>
-                <option value="korea">{language === 'hebrew' ? 'קוריאה' : 'Korea'}</option>
-                <option value="greater_china">{language === 'hebrew' ? 'סין/הונג קונג/טאיוואן' : 'Greater China (China/Hong Kong/Taiwan)'}</option>
-                <option value="india_south_asia">{language === 'hebrew' ? 'הודו / דרום אסיה' : 'India / South Asia'}</option>
-                <option value="southeast_asia">{language === 'hebrew' ? 'דרום־מזרח אסיה' : 'Southeast Asia'}</option>
-                <option value="indonesia_malaysia">{language === 'hebrew' ? 'אינדונזיה/מלזיה' : 'Indonesia/Malaysia'}</option>
-                <option value="turkey">{language === 'hebrew' ? 'טורקיה' : 'Turkey'}</option>
-                <option value="persian_iranian">{language === 'hebrew' ? 'איראן/פרס' : 'Persian/Iranian'}</option>
-                <option value="gulf_arabia">{language === 'hebrew' ? 'העולם הערבי-מפרץ' : 'Gulf Arabia'}</option>
-                <option value="north_africa">{language === 'hebrew' ? 'צפון אפריקה' : 'North Africa'}</option>
-                <option value="east_africa">{language === 'hebrew' ? 'אפריקה מזרחית' : 'East Africa'}</option>
-                <option value="europe_mediterranean">{language === 'hebrew' ? 'אירופה - ים תיכוני' : 'Europe - Mediterranean'}</option>
-                <option value="europe_west">{language === 'hebrew' ? 'אירופה - מרכז/מערב' : 'Europe - Central/West'}</option>
-                <option value="europe_east_russian">{language === 'hebrew' ? 'אירופה - מזרח/רוסי' : 'Europe - East/Russian'}</option>
-                <option value="mexico">{language === 'hebrew' ? 'אמריקה לטינית - מקסיקו' : 'Latin America - Mexico'}</option>
-                <option value="latam_south_america">{language === 'hebrew' ? 'אמריקה לטינית - דרום אמריקה' : 'Latin America - South America'}</option>
-                <option value="caribbean">{language === 'hebrew' ? 'קריביים' : 'Caribbean'}</option>
-                <option value="north_america">{language === 'hebrew' ? 'צפון אמריקה' : 'North America'}</option>
-                <option value="other">{language === 'hebrew' ? 'אחר' : 'Other'}</option>
-              </select>
-            </div>
-
-            <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                {language === 'hebrew' ? 'עיר' : 'City'}
-              </label>
-              <input
-                type="text"
-                value={profileData.city}
-                onChange={(e) => onInputChange('city', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800`}
-                placeholder={language === 'hebrew' ? 'תל אביב' : 'Tel Aviv'}
-              />
-            </div>
-
-            <div>
-              <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-                {language === 'hebrew' ? 'אזור זמן' : 'Timezone'}
-              </label>
-              <select
-                value={profileData.timezone}
-                onChange={(e) => onInputChange('timezone', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-800`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר אזור זמן' : 'Select Timezone'}</option>
-                <optgroup label={language === 'hebrew' ? 'ישראל והמזרח התיכון' : 'Israel & Middle East'}>
-                  <option value="Asia/Jerusalem">{language === 'hebrew' ? 'ירושלים (ישראל)' : 'Asia/Jerusalem (Israel)'}</option>
-                  <option value="Asia/Dubai">{language === 'hebrew' ? 'דובאי (איחוד האמירויות)' : 'Asia/Dubai (UAE)'}</option>
-                  <option value="Asia/Riyadh">{language === 'hebrew' ? 'ריאד (ערב הסעודית)' : 'Asia/Riyadh (Saudi Arabia)'}</option>
-                  <option value="Asia/Tehran">{language === 'hebrew' ? 'טהרן (איראן)' : 'Asia/Tehran (Iran)'}</option>
-                </optgroup>
-                <optgroup label={language === 'hebrew' ? 'אירופה' : 'Europe'}>
-                  <option value="Europe/London">{language === 'hebrew' ? 'לונדון (GMT)' : 'Europe/London (GMT)'}</option>
-                  <option value="Europe/Paris">{language === 'hebrew' ? 'פריז (CET)' : 'Europe/Paris (CET)'}</option>
-                  <option value="Europe/Berlin">{language === 'hebrew' ? 'ברלין (CET)' : 'Europe/Berlin (CET)'}</option>
-                  <option value="Europe/Rome">{language === 'hebrew' ? 'רומא (CET)' : 'Europe/Rome (CET)'}</option>
-                  <option value="Europe/Madrid">{language === 'hebrew' ? 'מדריד (CET)' : 'Europe/Madrid (CET)'}</option>
-                  <option value="Europe/Amsterdam">{language === 'hebrew' ? 'אמסטרדם (CET)' : 'Europe/Amsterdam (CET)'}</option>
-                  <option value="Europe/Moscow">{language === 'hebrew' ? 'מוסקבה (MSK)' : 'Europe/Moscow (MSK)'}</option>
-                </optgroup>
-                <optgroup label={language === 'hebrew' ? 'צפון אמריקה' : 'North America'}>
-                  <option value="America/New_York">{language === 'hebrew' ? 'ניו יורק (EST)' : 'America/New_York (EST)'}</option>
-                  <option value="America/Chicago">{language === 'hebrew' ? 'שיקגו (CST)' : 'America/Chicago (CST)'}</option>
-                  <option value="America/Denver">{language === 'hebrew' ? 'דנבר (MST)' : 'America/Denver (MST)'}</option>
-                  <option value="America/Los_Angeles">{language === 'hebrew' ? 'לוס אנג\'לס (PST)' : 'America/Los_Angeles (PST)'}</option>
-                  <option value="America/Toronto">{language === 'hebrew' ? 'טורונטו (EST)' : 'America/Toronto (EST)'}</option>
-                  <option value="America/Vancouver">{language === 'hebrew' ? 'ונקובר (PST)' : 'America/Vancouver (PST)'}</option>
-                </optgroup>
-                <optgroup label={language === 'hebrew' ? 'אסיה' : 'Asia'}>
-                  <option value="Asia/Tokyo">{language === 'hebrew' ? 'טוקיו (JST)' : 'Asia/Tokyo (JST)'}</option>
-                  <option value="Asia/Shanghai">{language === 'hebrew' ? 'שנחאי (CST)' : 'Asia/Shanghai (CST)'}</option>
-                  <option value="Asia/Hong_Kong">{language === 'hebrew' ? 'הונג קונג (HKT)' : 'Asia/Hong_Kong (HKT)'}</option>
-                  <option value="Asia/Singapore">{language === 'hebrew' ? 'סינגפור (SGT)' : 'Asia/Singapore (SGT)'}</option>
-                  <option value="Asia/Kolkata">{language === 'hebrew' ? 'קולקטה (IST)' : 'Asia/Kolkata (IST)'}</option>
-                  <option value="Asia/Seoul">{language === 'hebrew' ? 'סיאול (KST)' : 'Asia/Seoul (KST)'}</option>
-                  <option value="Asia/Bangkok">{language === 'hebrew' ? 'בנגקוק (ICT)' : 'Asia/Bangkok (ICT)'}</option>
-                </optgroup>
-                <optgroup label={language === 'hebrew' ? 'אוקיאניה' : 'Oceania'}>
-                  <option value="Australia/Sydney">{language === 'hebrew' ? 'סידני (AEST)' : 'Australia/Sydney (AEST)'}</option>
-                  <option value="Australia/Melbourne">{language === 'hebrew' ? 'מלבורן (AEST)' : 'Australia/Melbourne (AEST)'}</option>
-                  <option value="Australia/Perth">{language === 'hebrew' ? 'פרת (AWST)' : 'Australia/Perth (AWST)'}</option>
-                  <option value="Pacific/Auckland">{language === 'hebrew' ? 'אוקלנד (NZST)' : 'Pacific/Auckland (NZST)'}</option>
-                </optgroup>
-                <optgroup label={language === 'hebrew' ? 'דרום אמריקה' : 'South America'}>
-                  <option value="America/Sao_Paulo">{language === 'hebrew' ? 'סאו פאולו (BRT)' : 'America/Sao_Paulo (BRT)'}</option>
-                  <option value="America/Buenos_Aires">{language === 'hebrew' ? 'בואנוס איירס (ART)' : 'America/Buenos_Aires (ART)'}</option>
-                  <option value="America/Lima">{language === 'hebrew' ? 'לימה (PET)' : 'America/Lima (PET)'}</option>
-                </optgroup>
-                <optgroup label={language === 'hebrew' ? 'אפריקה' : 'Africa'}>
-                  <option value="Africa/Cairo">{language === 'hebrew' ? 'קהיר (EET)' : 'Africa/Cairo (EET)'}</option>
-                  <option value="Africa/Johannesburg">{language === 'hebrew' ? 'יוהנסבורג (SAST)' : 'Africa/Johannesburg (SAST)'}</option>
-                  <option value="Africa/Lagos">{language === 'hebrew' ? 'לאגוס (WAT)' : 'Africa/Lagos (WAT)'}</option>
-                </optgroup>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <label className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
-              {language === 'hebrew' ? 'חברה' : 'Company'}
-            </label>
-            {companyError && (
-              <p className="text-red-500 text-xs mb-2">
-                {companyError}
-              </p>
-            )}
-            <select
-              value={profileData.companyId || ''}
-              onChange={(e) => onInputChange('companyId', e.target.value)}
-              className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800`}
-              disabled={true}
-              readOnly={true}
-            >
-              <option value="">{language === 'hebrew' ? 'ללא חברה' : 'No company'}</option>
-              {companyOptions.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
-            {isLoadingCompanies && (
-              <p className={`${themeClasses.textSecondary} text-xs mt-2`}>
-                {language === 'hebrew' ? 'טוען רשימת חברות...' : 'Loading companies...'}
-              </p>
-            )}
-            {!isLoadingCompanies && companyOptions.length === 0 && !companyError && (
-              <p className={`${themeClasses.textSecondary} text-xs mt-2`}>
-                {language === 'hebrew' ? 'לא נמצאו חברות זמינות' : 'No companies available'}
-              </p>
-            )}
-          </div>
-
-        </div>
 
         {/* Health Information */}
         <div className={`${themeClasses.bgSecondary} rounded-xl p-4 sm:p-6 border-l-4 border-emerald-500`}>
@@ -1625,7 +1749,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               </label>
               <textarea
                 value={profileData.dietaryPreferences}
-                onChange={(e) => onInputChange('dietaryPreferences', e.target.value)}
+                onChange={(e) => handleHealthFieldChange('dietaryPreferences', e.target.value)}
                 rows={3}
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
                 placeholder={language === 'hebrew' ? 'לדוגמה: צמחוני, טבעוני, ללא גלוטן, דיאטה ים תיכונית...' : 'e.g., Vegetarian, Vegan, Gluten-free, Mediterranean diet...'}
@@ -1651,15 +1775,16 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                         type="button"
                         role="checkbox"
                         aria-checked={isSelected}
-                        onClick={() =>
+                        onClick={() => {
                           toggleMultiValueField(
                             'foodAllergies',
                             selectedAllergies,
                             allergiesOtherText,
                             option.value,
                             ALLERGY_VALUE_SET
-                          )
-                        }
+                          );
+                          setHealthInfoDirty(true);
+                        }}
                         className={`
                           group inline-flex items-center gap-2 min-h-[38px] px-3 py-1.5 rounded-full text-sm font-medium
                           border-2 transition-all
@@ -1701,14 +1826,15 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                     </label>
                     <textarea
                       value={allergiesOtherText}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         handleMultiSelectOtherTextChange(
                           'foodAllergies',
                           selectedAllergies,
                           e.target.value,
                           ALLERGY_VALUE_SET
-                        )
-                      }
+                        );
+                        setHealthInfoDirty(true);
+                      }}
                       rows={2}
                       className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
                       placeholder={
@@ -1739,15 +1865,16 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                         type="button"
                         role="checkbox"
                         aria-checked={isSelected}
-                        onClick={() =>
+                        onClick={() => {
                           toggleMultiValueField(
                             'foodLimitations',
                             selectedLimitations,
                             limitationsOtherText,
                             option.value,
                             LIMITATION_VALUE_SET
-                          )
-                        }
+                          );
+                          setHealthInfoDirty(true);
+                        }}
                         className={`
                           group inline-flex items-center gap-2 min-h-[38px] px-3 py-1.5 rounded-full text-sm font-medium
                           border-2 transition-all
@@ -1789,14 +1916,15 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                     </label>
                     <textarea
                       value={limitationsOtherText}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         handleMultiSelectOtherTextChange(
                           'foodLimitations',
                           selectedLimitations,
                           e.target.value,
                           LIMITATION_VALUE_SET
-                        )
-                      }
+                        );
+                        setHealthInfoDirty(true);
+                      }}
                       rows={2}
                       className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
                       placeholder={
@@ -1814,61 +1942,56 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               </label>
               <textarea
                 value={profileData.medicalConditions}
-                onChange={(e) => onInputChange('medicalConditions', e.target.value)}
+                onChange={(e) => handleHealthFieldChange('medicalConditions', e.target.value)}
                 rows={3}
                 className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800`}
                 placeholder={language === 'hebrew' ? 'לדוגמה: סוכרת, יתר לחץ דם, בעיות לב...' : 'e.g., Diabetes, Hypertension, Heart condition...'}
               />
             </div>
           </div>
-        </div>
 
-      </div>
-
-      {/* Save Button */}
-      <div className="mt-6 sm:mt-8 flex justify-end">
-        <button
-          onClick={onSave}
-          disabled={isSaving}
-          className={`w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold text-base sm:text-lg transition-all duration-200 transform hover:scale-105 ${
-            isSaving
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg hover:shadow-xl'
-          } text-white`}
-        >
-          {isSaving ? (
-            <div className="flex items-center">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-              {t.profile.profileTab.saving}
-            </div>
-          ) : (
-            <div className="flex items-center">
-              <span className="mr-2">💾</span>
-              {t.profile.profileTab.saveChanges}
+          {/* Health Info — conditional save button */}
+          {healthInfoDirty && (
+            <div className="mt-6 pt-5 border-t border-emerald-500/20 flex flex-col sm:flex-row sm:items-center gap-3">
+              <button
+                onClick={saveHealthInfo}
+                disabled={isSavingHealthInfo}
+                className={`w-full sm:w-auto px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
+                  isSavingHealthInfo
+                    ? 'bg-gray-400/50 cursor-not-allowed text-gray-500'
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md hover:shadow-lg active:scale-[0.98]'
+                }`}
+              >
+                {isSavingHealthInfo ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    {isHebrew ? 'שומר...' : 'Saving...'}
+                  </span>
+                ) : (
+                  isHebrew ? 'שמור שינויים' : 'Save Changes'
+                )}
+              </button>
+              {healthInfoSaveStatus === 'success' && (
+                <span className="flex items-center gap-1.5 text-sm text-emerald-500 font-medium">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                  </svg>
+                  {isHebrew ? 'נשמר בהצלחה' : 'Saved successfully'}
+                </span>
+              )}
+              {healthInfoSaveStatus === 'error' && (
+                <span className="text-sm text-red-500 font-medium">
+                  {isHebrew ? 'שגיאה בשמירה' : 'Failed to save'}
+                </span>
+              )}
             </div>
           )}
-        </button>
-      </div>
-
-      {/* Save Status */}
-      {saveStatus && (
-        <div className={`mt-6 p-4 rounded-xl border-l-4 ${
-          saveStatus === 'success' 
-            ? 'bg-green-50 border-green-400 dark:bg-green-900/20 dark:border-green-500' 
-            : 'bg-red-50 border-red-400 dark:bg-red-900/20 dark:border-red-500'
-        }`}>
-          <div className="flex items-center">
-            <span className="text-2xl mr-3">
-              {saveStatus === 'success' ? '✅' : '❌'}
-            </span>
-            <p className={`text-sm font-medium ${
-              saveStatus === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
-            }`}>
-              {saveStatus === 'success' ? t.profile.profileTab.saved : (errorMessage || 'Error saving profile')}
-            </p>
-          </div>
         </div>
-      )}
+
+      </div>
     </div>
   );
 };

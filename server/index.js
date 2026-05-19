@@ -3495,6 +3495,102 @@ app.post('/api/profile/save-nutritional', async (req, res) => {
   }
 });
 
+// Save personal info (location fields: region, city, timezone) to clients + chat_users
+app.post('/api/profile/save-personal', async (req, res) => {
+  try {
+    const { userId, userCode, region, city, timezone } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const clientPayload = {};
+    if (region !== undefined) clientPayload.region = region || null;
+    if (city !== undefined) clientPayload.city = city || null;
+    if (timezone !== undefined) clientPayload.timezone = timezone || null;
+
+    if (Object.keys(clientPayload).length === 0) {
+      return res.status(400).json({ error: 'No data to update' });
+    }
+
+    // Update clients table
+    const { error: clientError } = await supabase
+      .from('clients')
+      .update(clientPayload)
+      .eq('user_id', userId);
+
+    if (clientError) throw clientError;
+
+    // Sync to chat_users if userCode provided
+    if (userCode && chatSupabase) {
+      const chatPayload = {};
+      if (region !== undefined) chatPayload.region = region || null;
+      if (city !== undefined) chatPayload.city = city || null;
+      if (timezone !== undefined) chatPayload.timezone = timezone || null;
+
+      const { error: chatError } = await chatSupabase
+        .from('chat_users')
+        .update(chatPayload)
+        .eq('user_code', userCode);
+
+      if (chatError) console.error('Error syncing personal info to chat_users:', chatError);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving personal info:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save health info to clients + chat_users
+app.post('/api/profile/save-health', async (req, res) => {
+  try {
+    const { userId, userCode, dietaryPreferences, foodAllergies, foodLimitations, medicalConditions } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const clientPayload = {};
+    if (dietaryPreferences !== undefined) clientPayload.dietary_preferences = dietaryPreferences || null;
+    if (foodAllergies !== undefined) clientPayload.food_allergies = foodAllergies || null;
+    if (foodLimitations !== undefined) clientPayload.food_limitations = foodLimitations || null;
+    if (medicalConditions !== undefined) clientPayload.medical_conditions = medicalConditions || null;
+
+    if (Object.keys(clientPayload).length === 0) {
+      return res.status(400).json({ error: 'No data to update' });
+    }
+
+    // Update clients table
+    const { error: clientError } = await supabase
+      .from('clients')
+      .update(clientPayload)
+      .eq('user_id', userId);
+
+    if (clientError) throw clientError;
+
+    // Sync to chat_users if userCode provided
+    if (userCode && chatSupabase) {
+      const chatPayload = {};
+      if (dietaryPreferences !== undefined) chatPayload.client_preference = dietaryPreferences || null;
+      if (foodAllergies !== undefined) chatPayload.food_allergies = foodAllergies || null;
+      if (foodLimitations !== undefined) chatPayload.food_limitations = foodLimitations || null;
+      if (medicalConditions !== undefined) chatPayload.medical_conditions = medicalConditions || null;
+
+      const { error: chatError } = await chatSupabase
+        .from('chat_users')
+        .update(chatPayload)
+        .eq('user_code', userCode);
+
+      if (chatError) console.error('Error syncing health info to chat_users:', chatError);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving health info:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Save profile image URL
 app.post('/api/profile/save-image-url', async (req, res) => {
   try {
