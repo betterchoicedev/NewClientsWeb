@@ -104,3 +104,34 @@ export function parseHashParams() {
   if (!hash) return {};
   return Object.fromEntries(new URLSearchParams(hash));
 }
+
+/** True if URL hash contains Supabase OAuth tokens (after Google sign-in). */
+export function hasOAuthHash() {
+  return window.location.hash.includes('access_token=');
+}
+
+/**
+ * Save session from #access_token=… in the URL (Supabase implicit OAuth).
+ * Returns true if tokens were consumed.
+ */
+export function consumeOAuthHashIfPresent() {
+  if (!hasOAuthHash()) return false;
+
+  const params = parseHashParams();
+  const access_token = params.access_token;
+  const refresh_token = params.refresh_token;
+
+  if (!access_token || !refresh_token) return false;
+
+  saveSessionFromAuthResponse({
+    access_token,
+    refresh_token,
+    expires_at: params.expires_at ? Number(params.expires_at) : undefined,
+    expires_in: params.expires_in ? Number(params.expires_in) : undefined,
+  });
+
+  const cleanUrl =
+    window.location.pathname + window.location.search;
+  window.history.replaceState(null, '', cleanUrl || '/');
+  return true;
+}

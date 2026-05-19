@@ -125,14 +125,14 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
 
   app.get('/api/auth/google', async (req, res) => {
     try {
-      const apiOrigin = getApiPublicOrigin(req);
-      const nextPath = req.query.redirectTo || `${getFrontendOrigin()}/auth/callback`;
-      const callbackUrl = `${apiOrigin}/api/auth/oauth/callback?next=${encodeURIComponent(nextPath)}`;
+      // Redirect straight to the SPA callback (must be whitelisted in Supabase Auth → URL config).
+      const redirectTo =
+        req.query.redirectTo || `${getFrontendOrigin()}/auth/callback`;
 
       const { data, error } = await supabaseAuth.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: callbackUrl,
+          redirectTo,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',

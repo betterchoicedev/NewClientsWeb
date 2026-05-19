@@ -26,6 +26,7 @@ import { SettingsProvider } from './context/SettingsContext';
 import CookieConsent from './components/CookieConsent';
 import AccessibilityWidget from './components/AccessibilityWidget';
 import WebsiteTour from './components/WebsiteTour';
+import OAuthHashHandler from './components/OAuthHashHandler';
 import './App.css';
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
             <SettingsProvider>
             <Router>
               <div className="App">
+                <OAuthHashHandler />
                 <CookieConsent />
                 <AccessibilityWidget />
                 <WebsiteTour />

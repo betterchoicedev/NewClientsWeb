@@ -1,31 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { parseHashParams, saveSessionFromAuthResponse } from '../lib/apiClient';
+import { consumeOAuthHashIfPresent } from '../lib/apiClient';
 
 function AuthCallbackPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const params = parseHashParams();
-    const access_token = params.access_token;
-    const refresh_token = params.refresh_token;
-
-    if (!access_token || !refresh_token) {
-      setError('Sign-in failed. Please try again.');
-      setTimeout(() => navigate('/login'), 2500);
+    if (consumeOAuthHashIfPresent()) {
+      navigate('/profile', { replace: true });
       return;
     }
-
-    saveSessionFromAuthResponse({
-      access_token,
-      refresh_token,
-      expires_at: params.expires_at ? Number(params.expires_at) : undefined,
-      expires_in: params.expires_in ? Number(params.expires_in) : undefined,
-    });
-
-    window.history.replaceState(null, '', window.location.pathname);
-    navigate('/profile', { replace: true });
+    setError('Sign-in failed. Please try again.');
+    setTimeout(() => navigate('/login'), 2500);
   }, [navigate]);
 
   return (
