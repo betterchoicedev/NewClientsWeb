@@ -241,6 +241,10 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   const [nutritionalSaveStatus, setNutritionalSaveStatus] = useState('');
   const [autoCalcActive, setAutoCalcActive]       = useState(false);
   const nutritionalInitialized = useRef(false);
+  // Tracks whether the user has actively edited weight / height / activity inputs.
+  // While false, the BMR/TDEE auto-engine must not overwrite values that were
+  // loaded from the database (e.g. a user- or coach-set daily_target_total_calories).
+  const userEditedNutritionInputsRef = useRef(false);
 
   // ─── Per-section dirty & save state ─────────────────────────────────────────
   const [personalInfoDirty, setPersonalInfoDirty]       = useState(false);
@@ -322,11 +326,29 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
     const newTdee = computeTDEE(newBmr, activityLevel);
     if (!newBmr || !newTdee) return;
 
+    // BMR and the "original" anchor are formula-driven and must always reflect
+    // the current Harris-Benedict + activity computation. The ±30 % slider
+    // range is derived from originalTargetCals, so this guarantees the range
+    // stays anchored to the formula no matter what is saved in the DB.
     setCalculatedBmr(newBmr);
-    setTargetCals(newTdee);
     setOriginalTargetCals(newTdee);
-    setMacroGrams((prev) => scaleMacrosToTdee(prev, newTdee, lockedMacro));
-    setAutoCalcActive(true);
+
+    // The visible target (and macros) preserve values loaded from the DB until
+    // the user actively edits weight / height / activity. This prevents the
+    // engine from silently clobbering daily_target_total_calories on page load.
+    const hasLoadedTarget = profileData.targetCalories != null;
+    const hasLoadedMacros = profileData.macros != null;
+    const userEdited      = userEditedNutritionInputsRef.current;
+
+    if (userEdited || !hasLoadedTarget) {
+      setTargetCals(newTdee);
+    }
+    if (userEdited || !hasLoadedMacros) {
+      setMacroGrams((prev) => scaleMacrosToTdee(prev, newTdee, lockedMacro));
+    }
+    if (userEdited) {
+      setAutoCalcActive(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weightInput, heightInput, profileData.gender, profileData.age, activityLevel, toWeightKgFromInput, toHeightCmFromInput]);
 
@@ -1377,7 +1399,11 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                 </div>
                 <select
                   value={activityLevel}
-                  onChange={(e) => { setActivityLevel(e.target.value); setNutritionDirty(true); }}
+                  onChange={(e) => {
+                    setActivityLevel(e.target.value);
+                    setNutritionDirty(true);
+                    userEditedNutritionInputsRef.current = true;
+                  }}
                   className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg border-2 text-base sm:text-sm transition-all ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-orange-500 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800`}
                 >
                   <option value="">{isHebrew ? 'בחר רמת פעילות' : 'Select activity level'}</option>
@@ -1414,7 +1440,11 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                         max={weightInputMax}
                         step={0.1}
                         value={weightInput}
-                        onChange={(e) => { setWeightInput(e.target.value); setNutritionDirty(true); }}
+                        onChange={(e) => {
+                          setWeightInput(e.target.value);
+                          setNutritionDirty(true);
+                          userEditedNutritionInputsRef.current = true;
+                        }}
                         placeholder={isHebrew ? 'לדוגמה 72.5' : 'e.g. 72.5'}
                         className={`flex-1 min-w-0 px-3 py-2.5 rounded-lg border-2 transition-all font-semibold text-base sm:text-sm ${themeClasses.inputBg} ${themeClasses.textPrimary} focus:border-orange-500 focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800`}
                       />
@@ -1443,7 +1473,11 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
                         max={heightInputMax}
                         step={0.1}
                         value={heightInput}
-                        onChange={(e) => { setHeightInput(e.target.value); setNutritionDirty(true); }}
+                        onChange={(e) => {
+                          setHeightInput(e.target.value);
+                          setNutritionDirty(true);
+                          userEditedNutritionInputsRef.current = true;
+                        }}
                         placeholder={
                           isHebrew
                             ? (heightIsImperial ? 'לדוגמה 69' : 'לדוגמה 175')
