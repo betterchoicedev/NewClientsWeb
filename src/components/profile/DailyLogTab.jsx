@@ -15,6 +15,16 @@ import {
   WeeklySummaryComponent,
 } from '../../pages/ProfilePage';
 
+// Coerces values like 108, "108", "108g", "108 g", "108.5g" into a plain number.
+// macros_target is sometimes stored as gram-strings (e.g. "108g") by the
+// nutritional-profile save flow, which breaks downstream percent math.
+const parseGrams = (val) => {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+  const match = String(val).match(/[\d.]+/);
+  return match ? parseFloat(match[0]) : 0;
+};
+
 // Daily Log Tab Component
 const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direction }) => {
   const { settings } = useSettings();
@@ -313,26 +323,32 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
 
           // Try to get macros from macros_target field
           if (mealPlanData.macros_target) {
+            // macros_target may be stored as gram-strings (e.g. "108g") by the
+            // nutritional-profile save flow — coerce to numbers so percent math
+            // and SVG progress arcs don't end up as NaN.
+            const proteinNum = parseGrams(mealPlanData.macros_target.protein);
+            const carbsNum   = parseGrams(mealPlanData.macros_target.carbs);
+            const fatNum     = parseGrams(mealPlanData.macros_target.fat);
             targets = {
-              calories: mealPlanData.daily_total_calories || 2000,
-              protein: mealPlanData.macros_target.protein || 150,
-              carbs: mealPlanData.macros_target.carbs || 250,
-              fat: mealPlanData.macros_target.fat || 65
+              calories: Number(mealPlanData.daily_total_calories) || 2000,
+              protein: proteinNum > 0 ? proteinNum : 150,
+              carbs:   carbsNum   > 0 ? carbsNum   : 250,
+              fat:     fatNum     > 0 ? fatNum     : 65,
             };
           } else if (mealPlan && mealPlan.meals) {
             // Calculate targets from meal plan totals
             const totals = mealPlan.meals.reduce((acc, meal) => {
               if (meal.main && meal.main.nutrition) {
-                acc.calories += meal.main.nutrition.calories || 0;
-                acc.protein += meal.main.nutrition.protein || 0;
-                acc.carbs += meal.main.nutrition.carbs || 0;
-                acc.fat += meal.main.nutrition.fat || 0;
+                acc.calories += parseGrams(meal.main.nutrition.calories);
+                acc.protein  += parseGrams(meal.main.nutrition.protein);
+                acc.carbs    += parseGrams(meal.main.nutrition.carbs);
+                acc.fat      += parseGrams(meal.main.nutrition.fat);
               }
               return acc;
             }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
             targets = {
-              calories: totals.calories || mealPlanData.daily_total_calories || 2000,
+              calories: totals.calories || Number(mealPlanData.daily_total_calories) || 2000,
               protein: totals.protein || 150,
               carbs: totals.carbs || 250,
               fat: totals.fat || 65
@@ -1066,10 +1082,19 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
     fat: 65
   };
 
-  const caloriesPercent = Math.round((totalCalories / dailyGoals.calories) * 100);
-  const proteinPercent = Math.round((totalProtein / dailyGoals.protein) * 100);
-  const carbsPercent = Math.round((totalCarbs / dailyGoals.carbs) * 100);
-  const fatPercent = Math.round((totalFat / dailyGoals.fat) * 100);
+  // Safe percent calculator — guards against NaN / non-numeric goals so the
+  // SVG arcs and "% complete" label never render as NaN.
+  const safePercent = (current, goal) => {
+    const c = Number(current);
+    const g = parseGrams(goal);
+    if (!Number.isFinite(c) || !Number.isFinite(g) || g <= 0) return 0;
+    return Math.round((c / g) * 100);
+  };
+
+  const caloriesPercent = safePercent(totalCalories, dailyGoals.calories);
+  const proteinPercent  = safePercent(totalProtein,  dailyGoals.protein);
+  const carbsPercent    = safePercent(totalCarbs,    dailyGoals.carbs);
+  const fatPercent      = safePercent(totalFat,      dailyGoals.fat);
 
   const overallPercent = Math.round((caloriesPercent + proteinPercent + carbsPercent + fatPercent) / 4);
 

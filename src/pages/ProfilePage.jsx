@@ -3343,11 +3343,23 @@ export const WeeklySummaryComponent = ({ userCode, themeClasses, language, isDar
             fat: 65
           };
           if (mealPlanData.macros_target) {
+            // macros_target can be stored as gram-strings (e.g. "108g") by the
+            // nutritional-profile save flow — coerce to plain numbers so any
+            // downstream consumer (DailyLogTab, MyPlanTab) doesn't get NaN.
+            const toGramNum = (val) => {
+              if (val === null || val === undefined) return 0;
+              if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+              const m = String(val).match(/[\d.]+/);
+              return m ? parseFloat(m[0]) : 0;
+            };
+            const proteinNum = toGramNum(mealPlanData.macros_target.protein);
+            const carbsNum   = toGramNum(mealPlanData.macros_target.carbs);
+            const fatNum     = toGramNum(mealPlanData.macros_target.fat);
             targets = {
-              calories: mealPlanData.daily_total_calories || 2000,
-              protein: mealPlanData.macros_target.protein || 150,
-              carbs: mealPlanData.macros_target.carbs || 250,
-              fat: mealPlanData.macros_target.fat || 65
+              calories: Number(mealPlanData.daily_total_calories) || 2000,
+              protein: proteinNum > 0 ? proteinNum : 150,
+              carbs:   carbsNum   > 0 ? carbsNum   : 250,
+              fat:     fatNum     > 0 ? fatNum     : 65,
             };
           }
           setMealPlanTargets(targets);
