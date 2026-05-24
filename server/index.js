@@ -105,7 +105,10 @@ app.post('/api/webhooks/stripe', express.raw({ type: '*/*' }), (req, res, next) 
 });
 
 // JSON parser for all other routes
-app.use(express.json());
+// NOTE: limit raised to 20mb because several endpoints (profile image upload,
+// nutrition-label photo analysis, etc.) accept base64-encoded photos taken on
+// mobile devices that easily exceed the express default of 100kb.
+app.use(express.json({ limit: '20mb' }));
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -4169,6 +4172,280 @@ app.delete('/api/food-logs/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting food log:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ====================================
+// FOOD IMAGE ANALYSIS
+// Vision LLM returns per-100g macro baselines + estimated grams per item.
+// Final calories / protein / carbs / fat totals are computed in JS, NOT by the model.
+// ====================================
+
+// Resize the longest edge to <=1024px and re-encode as JPEG quality 80 to keep
+// the LLM payload small and predictable regardless of the input source format.
+async function compressFoodImage(buffer) {
+  return await sharp(buffer)
+    .rotate()
+    .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 80, mozjpeg: true })
+    .toBuffer();
+}
+
+// Strict structured-output schema. Nullable fields use ["type","null"] which is
+// the format Azure / OpenAI v1 structured outputs require alongside strict:true.
+const FOOD_IMAGE_LLM_SCHEMA = {
+  name: 'food_image_analysis',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      is_food: {
+        type: 'boolean',
+        description: 'True only when the image clearly contains food, beverages or a packaged food product that can be quantified.'
+      },
+      not_food_reason: {
+        type: ['string', 'null'],
+        description: 'Short reason when is_food is false (e.g. "image is a person", "image is too blurry"). null when is_food is true.'
+      },
+      meal_label: { type: ['string', 'null'] },
+      info_message: { type: ['string', 'null'] },
+      dietary_warnings: {
+        type: ['array', 'null'],
+        items: { type: 'string' }
+      },
+      food_items: {
+        type: ['array', 'null'],
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string' },
+            visual_evidence: {
+              type: 'string',
+              description: 'Short justification: cues used to identify the item and infer its weight & density (1-2 sentences max).'
+            },
+            estimated_weight_g: { type: 'number' },
+            confidence: { type: 'number', description: '0..1 confidence in identification + portion estimate.' },
+            macros_per_100g: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                calories_per_100g: { type: 'number' },
+                protein_per_100g: { type: 'number' },
+                carbs_per_100g:   { type: 'number' },
+                fat_per_100g:     { type: 'number' }
+              },
+              required: ['calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g']
+            }
+          },
+          required: ['name', 'visual_evidence', 'estimated_weight_g', 'confidence', 'macros_per_100g']
+        }
+      }
+    },
+    required: ['is_food', 'not_food_reason', 'meal_label', 'info_message', 'dietary_warnings', 'food_items']
+  }
+};
+
+function buildFoodImagePrompt(mealLabel, userCaption) {
+  const captionBlock = (userCaption && String(userCaption).trim())
+    ? `\n* **User description (sent with the photo):** ${String(userCaption).trim()}\n  Use this to refine identification and portions when it clarifies what is in the image.\n`
+    : '';
+
+  const meal = mealLabel ? String(mealLabel) : 'unknown';
+
+  return `Act as a Lead Forensic Food Scientist and Computer Vision Specialist. Your objective is to classify the image as food or not, and then perform the macro analysis.
+
+**CONTEXTUAL METADATA:**
+* **User Meal Time:** ${meal}
+${captionBlock}
+**STEP 0 — IMAGE TYPE GATE (execute first, before anything else):**
+* Is the image clearly a single dish, multiple food items, a beverage, or a packaged food product?
+  - If NO (it is not food at all – e.g. a person, scenery, document, screenshot, or quality is too poor to identify any food) → set \`is_food: false\`, fill \`not_food_reason\` with a short explanation, and leave \`food_items\` null. Skip the rest of the steps.
+  - If YES → set \`is_food: true\`, leave \`not_food_reason\` null, and continue to steps 1–5 below.
+
+**WHEN is_food IS TRUE — food photo analysis protocol:**
+
+1.  **IMAGE VALIDATION & CLASSIFICATION:**
+    * **Detection:** Food, beverage, or food-adjacent object (packaging)?
+    * **Image Quality Check:** Assess blur and lighting. If quality prevents accurate analysis, lower \`confidence\` accordingly.
+
+2.  **GEOMETRIC SCALE & CONTAINER STANDARDIZATION (CRITICAL FOR ACCURACY):**
+    * **Anchor Identification:** Identify standard reference objects (dinner fork ≈ 20cm, dinner plate ≈ 25-28cm, standard mug, Starbucks Grande cup, etc.).
+    * **Container Geometry:** If food is in a bowl/container, estimate the container's volume first. Is the container full, half-full, or 1/4 full?
+    * **Z-Axis Estimation:** Analyze shadows and layering to estimate height. Piled high (pyramid) or spread flat (cylinder)?
+
+3.  **COMPONENT DECOMPOSITION & DENSITY MAPPING:**
+    * Deconstruct the dish into distinct components (Protein, Starch, Veg, Sauce, etc.).
+    * **Shape & Dimensions:** Approximate geometric primitive and dimensions relative to the Anchor.
+    * **Porosity/Density Mapping:**
+        * High (Compact): Steak, dense brownie (>1.0 g/cm³).
+        * Medium: Pasta, rice (0.6–0.9 g/cm³).
+        * Low (Aerated): Popcorn, leafy salad, bread (<0.3 g/cm³).
+    * **Hidden Calorie Detection:**
+        * **Viscosity:** Watery sauce (low cal) vs. clinging/glossy (oil/cream-based)?
+        * **Absorption:** For items like eggplant or bread, assume oil absorption if surface sheen is high.
+    * **Final Weight Output:** Set \`estimated_weight_g\` for each component based on volume × density.
+
+4.  **MACRONUTRIENT BASELINES (CRITICAL HANDOFF):**
+    * **DO NOT** calculate the final total macros for the estimated weight.
+    * Provide ONLY the standard USDA / nutritional database baseline values **PER 100 GRAMS** for each component, in \`macros_per_100g\`.
+    * The backend will multiply these baselines by the estimated mass.
+
+5.  **CONTEXTUAL REASONING:**
+    * **Meal Label Logic:** Cross-reference contents with "${meal}" (e.g., Pancakes at 20:00 is "Breakfast for Dinner", not "Snack").
+
+Keep all string fields short (≤ 1–2 sentences). Numbers must be plain numbers (no units, no ranges). Respond ONLY with a valid JSON object matching the schema. Do not output markdown, explanations, or repetition of steps.`;
+}
+
+async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
+  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const model  = process.env.DEEPSEEK_DEPLOYMENT;
+
+  if (!apiBase || !apiKey || !model) {
+    throw new Error('Vision LLM is not configured on the server (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY / DEEPSEEK_DEPLOYMENT).');
+  }
+
+  const url = `${apiBase}/chat/completions`;
+  const dataUrl = `data:image/jpeg;base64,${compressedJpegBuffer.toString('base64')}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // Both header styles are accepted by the Azure AI Foundry OpenAI-compatible /openai/v1 path.
+      'api-key': apiKey,
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.2,
+      max_tokens: 1500,
+      response_format: {
+        type: 'json_schema',
+        json_schema: FOOD_IMAGE_LLM_SCHEMA
+      },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: dataUrl } }
+          ]
+        }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Vision LLM call failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('Empty content from vision LLM.');
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch (parseError) {
+    throw new Error(`Failed to parse vision LLM JSON: ${parseError.message}`);
+  }
+}
+
+// POST /api/food-logs/analyze-image
+// Body: {
+//   imageData:   string  (base64; with or without "data:image/...;base64," prefix)
+//   mealLabel?:  string  (e.g. "breakfast" / "lunch" / "snack")
+//   userCaption?: string (optional free-text description sent alongside the photo)
+// }
+//
+// Success 200:
+//   {
+//     food_items: [{ name, grams, calories, protein_g, carbs_g, fat_g, confidence, visual_evidence }],
+//     totals:     { calories, protein_g, carbs_g, fat_g },
+//     meal_label, info_message, dietary_warnings
+//   }
+//
+// Not-food 422:
+//   { error: 'not_food', message: <reason> }
+app.post('/api/food-logs/analyze-image', async (req, res) => {
+  try {
+    const { imageData, mealLabel, userCaption } = req.body || {};
+    if (!imageData || typeof imageData !== 'string') {
+      return res.status(400).json({ error: 'imageData (base64 string) is required' });
+    }
+
+    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+    const rawBuffer = Buffer.from(base64Data, 'base64');
+    if (!rawBuffer.length) {
+      return res.status(400).json({ error: 'imageData decoded to an empty buffer' });
+    }
+
+    let compressed;
+    try {
+      compressed = await compressFoodImage(rawBuffer);
+    } catch (compressErr) {
+      return res.status(400).json({ error: 'Could not decode/compress image', message: compressErr.message });
+    }
+
+    const prompt = buildFoodImagePrompt(mealLabel, userCaption);
+    const llmReport = await callFoodVisionLLM(compressed, prompt);
+
+    if (!llmReport.is_food || !Array.isArray(llmReport.food_items) || llmReport.food_items.length === 0) {
+      return res.status(422).json({
+        error: 'not_food',
+        message: llmReport.not_food_reason || 'The provided image does not contain food items.'
+      });
+    }
+
+    // ---- Math runs in code, NOT in the LLM ----
+    const items = [];
+    const totals = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+
+    for (const item of llmReport.food_items) {
+      const grams = Math.max(0, Number(item.estimated_weight_g) || 0);
+      const per100 = item.macros_per_100g || {};
+      const m = grams / 100;
+
+      const calories  = Math.round((Number(per100.calories_per_100g) || 0) * m);
+      const protein_g = Math.round((Number(per100.protein_per_100g) || 0) * m);
+      const carbs_g   = Math.round((Number(per100.carbs_per_100g)   || 0) * m);
+      const fat_g     = Math.round((Number(per100.fat_per_100g)     || 0) * m);
+
+      totals.calories  += calories;
+      totals.protein_g += protein_g;
+      totals.carbs_g   += carbs_g;
+      totals.fat_g     += fat_g;
+
+      items.push({
+        name: item.name,
+        grams: Math.round(grams),
+        calories,
+        protein_g,
+        carbs_g,
+        fat_g,
+        confidence: typeof item.confidence === 'number' ? item.confidence : null,
+        visual_evidence: item.visual_evidence || null
+      });
+    }
+
+    return res.json({
+      food_items: items,
+      totals,
+      meal_label: llmReport.meal_label || mealLabel || null,
+      info_message: llmReport.info_message || null,
+      dietary_warnings: llmReport.dietary_warnings || null
+    });
+  } catch (error) {
+    console.error('❌ Error in POST /api/food-logs/analyze-image:', error);
+    return res.status(500).json({
+      error: 'Failed to analyze food image',
+      message: error.message
+    });
   }
 });
 
