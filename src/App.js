@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import LandingPage from './pages/LandingPage';
 import SignupPage from './pages/SignupPage';
 import WaitingListPage from './pages/WaitingListPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -55,6 +56,7 @@ function App() {
                   <Route path="/about" element={<AboutPage />} />
                   <Route path="/knowledge" element={<KnowledgePage />} />
                   <Route path="/recipes" element={<RecipesPage />} />
+                  <Route path="/landing" element={<LandingPage />} />
                   <Route path="/pricing" element={<PricingPage />} />
                   <Route path="/payment-success" element={<PaymentSuccessPage />} />
                   <Route path="/payment-cancel" element={<PaymentCancelPage />} />

@@ -4004,6 +4004,104 @@ app.post('/api/profile/update-language', async (req, res) => {
 // SECONDARY CLIENT API ROUTES (Food Logs, Chat, Weight, etc.)
 // ====================================
 
+// =========================================================================
+// PUBLIC DYNAMIC LANDING PAGE VALIDATION ENDPOINT (CHAT DB RESOLVED)
+// =========================================================================
+app.post('/api/landing/validate', async (req, res) => {
+  const { managerId, linkId } = req.body;
+  
+  console.log(`=== [HANDSHAKE] === Validating Schema Route for Manager: ${managerId}, Link: ${linkId || 'None'}`);
+
+  try {
+    // 1. Fetch from profiles + join companies (Querying ONLY existing table columns)
+    const { data: profile, error: profileErr } = await chatSupabase
+      .from('profiles')
+      .select('name, role, company_id, companies(name)')
+      .eq('id', managerId)
+      .single();
+
+    if (profileErr || !profile) {
+      console.error('[-] Profile database search failure:', profileErr);
+      return res.status(404).json({ error: 'Manager profile data records not found' });
+    }
+
+    const companyData = profile.companies;
+    if (!companyData) {
+      return res.status(404).json({ error: 'Associated corporate master profile missing' });
+    }
+
+    // Initialize clean fallbacks for our campaign variables
+    let slotsRemaining = null;
+    let maxSlots = null;
+    let currentCount = 0;
+    let expiresAt = null;
+    let isSmartLinkActive = false;
+
+    // 2. Fetch campaign metrics using the exact registration_rules mapping columns
+    if (linkId) {
+      const { data: rule, error: ruleErr } = await chatSupabase
+        .from('registration_rules')
+        .select('max_slots, current_count, expires_at, is_active')
+        .eq('link_id', linkId) // Matching your schema constraint unique (link_id)
+        .single();
+
+      if (ruleErr) {
+        console.error('[-] Error fetching live campaign metrics:', ruleErr);
+        // Fallback or return warning instead of total screen crash
+      }
+
+      if (rule) {
+        // Enforce actual server-side validity parameters
+        if (rule.is_active === false) {
+          return res.status(410).json({ error: 'This specific campaign track has been deactivated' });
+        }
+        
+        if (rule.expires_at && new Date(rule.expires_at) < new Date()) {
+          return res.status(410).json({ error: 'Campaign tracking parameters have expired on the server clock' });
+        }
+
+        maxSlots = rule.max_slots ?? 30; // Matches your DDL default 30 limit
+        currentCount = rule.current_count ?? 0;
+        slotsRemaining = Math.max(0, maxSlots - currentCount);
+        expiresAt = rule.expires_at;
+        isSmartLinkActive = true;
+
+        if (slotsRemaining <= 0) {
+          return res.status(403).json({ error: 'Registration thresholds reached. No remaining available slots' });
+        }
+      }
+    }
+
+    // 3. Assemble dynamic response payload with calculated runtime slug properties
+    const payloadResponse = {
+      success: true,
+      company: {
+        id: profile.company_id,
+        name: companyData.name,
+        // Generates a safe lowercase skin lookup key on the fly out of the name text
+        slug: companyData.name.toLowerCase().replace(/\s+/g, '').trim()
+      },
+      manager: {
+        name: profile.name,
+        role: profile.role
+      },
+      campaign: {
+        isSmartLink: isSmartLinkActive,
+        maxSlots: maxSlots,
+        currentCount: currentCount,
+        slotsRemaining: slotsRemaining,
+        expiresAt: expiresAt
+      }
+    };
+
+    console.log('=== [SCHEMA PRODUCTION SUCCESS] === Dispatched Payload:', JSON.stringify(payloadResponse, null, 2));
+    return res.status(200).json(payloadResponse);
+
+  } catch (globalFaultException) {
+    console.error('[-] Fatal backend transaction collapse:', globalFaultException);
+    return res.status(500).json({ error: 'Internal secure service validation cluster fault' });
+  }
+});
 // Get food logs
 app.get('/api/food-logs', assertOwnUserCode(), async (req, res) => {
   try {
@@ -4668,6 +4766,7 @@ app.get('/api/companies', async (req, res) => {
 
 // Get client company assignment
 app.get('/api/client-company-assignment', async (req, res) => {
+  console.log("Supabase Key Used:", chatSupabaseServiceRoleKey ? "Key exists" : "Key missing");
   try {
     const { userCode } = req.query;
     if (!userCode) {
