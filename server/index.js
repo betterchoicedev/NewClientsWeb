@@ -4364,11 +4364,16 @@ async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
 // }
 //
 // Success 200:
-//   {
-//     food_items: [{ name, grams, calories, protein_g, carbs_g, fat_g, confidence, visual_evidence }],
-//     totals:     { calories, protein_g, carbs_g, fat_g },
-//     meal_label, info_message, dietary_warnings
-//   }
+//   [
+//     {
+//       name: string,
+//       macros: { fat_g, carbs_g, calories, protein_g },
+//       confidence: number,
+//       visual_evidence: string,
+//       portion_estimate: string   // e.g. "120g"
+//     },
+//     ...
+//   ]
 //
 // Not-food 422:
 //   { error: 'not_food', message: <reason> }
@@ -4403,10 +4408,7 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
     }
 
     // ---- Math runs in code, NOT in the LLM ----
-    const items = [];
-    const totals = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
-
-    for (const item of llmReport.food_items) {
+    const items = llmReport.food_items.map((item) => {
       const grams = Math.max(0, Number(item.estimated_weight_g) || 0);
       const per100 = item.macros_per_100g || {};
       const m = grams / 100;
@@ -4416,30 +4418,21 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
       const carbs_g   = Math.round((Number(per100.carbs_per_100g)   || 0) * m);
       const fat_g     = Math.round((Number(per100.fat_per_100g)     || 0) * m);
 
-      totals.calories  += calories;
-      totals.protein_g += protein_g;
-      totals.carbs_g   += carbs_g;
-      totals.fat_g     += fat_g;
-
-      items.push({
+      return {
         name: item.name,
-        grams: Math.round(grams),
-        calories,
-        protein_g,
-        carbs_g,
-        fat_g,
+        macros: {
+          fat_g,
+          carbs_g,
+          calories,
+          protein_g
+        },
         confidence: typeof item.confidence === 'number' ? item.confidence : null,
-        visual_evidence: item.visual_evidence || null
-      });
-    }
-
-    return res.json({
-      food_items: items,
-      totals,
-      meal_label: llmReport.meal_label || mealLabel || null,
-      info_message: llmReport.info_message || null,
-      dietary_warnings: llmReport.dietary_warnings || null
+        visual_evidence: item.visual_evidence || null,
+        portion_estimate: `${Math.round(grams)}g`
+      };
     });
+
+    return res.json(items);
   } catch (error) {
     console.error('❌ Error in POST /api/food-logs/analyze-image:', error);
     return res.status(500).json({
