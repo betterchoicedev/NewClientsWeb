@@ -120,6 +120,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
 
   const PROTECTED_API_PREFIXES = [
     '/api/user/',
+    '/api/health/',     // <-- add this line
     '/api/onboarding/',
     '/api/whatsapp/',
     '/api/profile/',
