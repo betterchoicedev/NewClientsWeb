@@ -5571,6 +5571,57 @@ app.post('/api/db/registration-links/:idOrLinkId/increment', async (req, res) =>
 // Body: { events: HealthEventInput[] }
 // Inserts raw events + upserts the daily summary in one round-trip.
 // ===================================================================
+// ===== Health ingest helpers =====
+const HEALTH_MAX_EVENTS_PER_REQUEST = 500;
+
+function isIsoDate(v) {
+  if (typeof v !== 'string') return false;
+  return Number.isFinite(Date.parse(v));
+}
+
+function isYmd(v) {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
+
+function validateHealthEvent(raw, idx) {
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, error: `events[${idx}]: must be an object` };
+  }
+  const { metric_type, start_time, end_time, summary_value, unit, date, payload } = raw;
+  if (typeof metric_type !== 'string' || !metric_type.trim()) {
+    return { ok: false, error: `events[${idx}]: metric_type required` };
+  }
+  if (!isIsoDate(start_time) || !isIsoDate(end_time)) {
+    return { ok: false, error: `events[${idx}]: start_time/end_time must be ISO timestamps` };
+  }
+  if (Date.parse(end_time) < Date.parse(start_time)) {
+    return { ok: false, error: `events[${idx}]: end_time before start_time` };
+  }
+  if (summary_value != null && !Number.isFinite(Number(summary_value))) {
+    return { ok: false, error: `events[${idx}]: summary_value must be numeric` };
+  }
+  if (unit != null && typeof unit !== 'string') {
+    return { ok: false, error: `events[${idx}]: unit must be a string` };
+  }
+  if (date != null && !isYmd(date)) {
+    return { ok: false, error: `events[${idx}]: date must be YYYY-MM-DD` };
+  }
+  if (payload != null && (typeof payload !== 'object' || Array.isArray(payload))) {
+    return { ok: false, error: `events[${idx}]: payload must be an object` };
+  }
+  return {
+    ok: true,
+    value: {
+      metric_type: metric_type.trim().toLowerCase(),
+      start_time,
+      end_time,
+      summary_value: summary_value != null ? Number(summary_value) : null,
+      unit: unit || null,
+      date: date || start_time.slice(0, 10),
+      payload: payload || {},
+    },
+  };
+}
 app.post('/api/health/ingest', async (req, res) => {
   try {
     const userId = req.userId;
