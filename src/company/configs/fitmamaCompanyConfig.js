@@ -1,5 +1,9 @@
 const fitmamaCompanyConfig = {
   key: 'fitmama',
+    onboarding: {
+    ...defaultCompanyConfig.onboarding,
+    includeNursingStatusQuestion: true
+    },
   theme: {
     heroGradientDark: 'from-slate-900 via-rose-950 to-slate-900',
     heroGradientLight: 'from-pink-50 via-rose-50 to-amber-50',

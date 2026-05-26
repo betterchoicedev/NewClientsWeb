@@ -1,5 +1,14 @@
 const defaultCompanyConfig = {
   key: 'betterchoice',
+    onboarding: {
+    includeNursingStatusQuestion: false,
+    showUsageBasedOffer: true,
+    showUsageOfferPaidCta: true,
+    setPendingPaymentAfterSubmit: true,
+    sendWelcomeDuringOnboarding: true,
+    sendWelcomeAfterSuccessfulPaymentOnly: false,
+    mealPlanTrigger: 'after_subscription_path'
+  },
   theme: {
     heroGradientDark: 'from-slate-900 via-emerald-950 to-slate-900',
     heroGradientLight: 'from-emerald-50 via-green-50 to-amber-50',
@@ -23,6 +32,23 @@ const defaultCompanyConfig = {
     ctaText: {
       english: "I'm ready to feel better →",
       hebrew: 'אני רוצה להרגיש טוב יותר ←'
+    }
+  },
+
+  pricing: {
+    enableDigitalPromoCode: false,
+    showWhatEveryPlanIncludes: true,
+    showExchangeRateNote: true,
+    sectionOrder: ['header', 'categories', 'includes', 'exchangeRate', 'products'],
+    content: {
+      title: {
+        hebrew: 'בחר את התוכנית המתאימה לך',
+        english: 'Choose Your Perfect Plan'
+      },
+      subtitle: {
+        hebrew: 'השג את היעדים התזונתיים שלך עם המומחים שלנו. תוכניות מותאמות אישית לכל צורך ותקציב.',
+        english: 'Achieve your nutrition goals with our expert team. Personalized plans for every need and budget.'
+      }
     }
   }
 };

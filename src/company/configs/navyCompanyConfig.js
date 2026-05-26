@@ -1,5 +1,14 @@
 const navyCompanyConfig = {
   key: 'navy',
+    onboarding: {
+    ...defaultCompanyConfig.onboarding,
+    showUsageBasedOffer: false,
+    showUsageOfferPaidCta: false,
+    setPendingPaymentAfterSubmit: false,
+    sendWelcomeDuringOnboarding: false,
+    sendWelcomeAfterSuccessfulPaymentOnly: true,
+    mealPlanTrigger: 'immediately_after_last_question'
+  },
   theme: {
     heroGradientDark: 'from-slate-900 via-blue-950 to-slate-900',
     heroGradientLight: 'from-blue-50 via-slate-50 to-cyan-100',
@@ -23,6 +32,18 @@ const navyCompanyConfig = {
     ctaText: {
       english: 'Initialize Deployment Plan →',
       hebrew: 'התחל תוכנית פריסה ←'
+    }
+  },
+  pricing: {
+    ...defaultCompanyConfig.pricing,
+    enableDigitalPromoCode: true,
+    sectionOrder: ['header', 'categories', 'includes', 'exchangeRate', 'products'],
+    content: {
+      ...defaultCompanyConfig.pricing.content,
+      subtitle: {
+        hebrew: 'תוכניות Navy מותאמות אישית עם הטבות ייחודיות.',
+        english: 'Navy-tailored plans with exclusive benefits.'
+      }
     }
   }
 };
