@@ -1,3 +1,5 @@
+import defaultCompanyConfig from './defaultCompanyConfig';
+
 const navyCompanyConfig = {
   key: 'navy',
     onboarding: {

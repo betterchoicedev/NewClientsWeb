@@ -114,6 +114,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/ingredient-reports',
     '/api/weekly-macro-summary-svg',
     '/api/macro-summary-svg',
+    '/api/db/registration-links',
     '/health',
   ];
 
@@ -134,7 +135,6 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/meal-plan-history',
     '/api/messages',
     '/api/debug/',
-    '/api/db/registration-links',
     '/api/foods/',
     '/api/stripe/subscriptions',
     '/api/stripe/process-checkout-session',

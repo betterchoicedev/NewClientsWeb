@@ -1,3 +1,5 @@
+import defaultCompanyConfig from './defaultCompanyConfig';
+
 const fitmamaCompanyConfig = {
   key: 'fitmama',
     onboarding: {
