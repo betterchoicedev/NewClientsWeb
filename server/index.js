@@ -5627,6 +5627,8 @@ app.post('/api/health/ingest', async (req, res) => {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
+    const userCode = req.userCode || null;
+
     // Health data lives in the secondary (chat) Supabase project
     if (!chatSupabase) {
       return res.status(503).json({ error: 'Health ingest requires CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
@@ -5655,6 +5657,7 @@ app.post('/api/health/ingest', async (req, res) => {
     // 1) Raw events — dedupe on (user_id, metric_type, start_time, end_time).
     const eventRows = events.map((e) => ({
       user_id: userId,
+      user_code: userCode,
       metric_type: e.metric_type,
       start_time: e.start_time,
       end_time: e.end_time,
@@ -5686,6 +5689,7 @@ app.post('/api/health/ingest', async (req, res) => {
       } else {
         summaryMap.set(key, {
           user_id: userId,
+          user_code: userCode,
           date: e.date,
           metric_type: e.metric_type,
           total_value: Number(e.summary_value || 0),
@@ -5743,7 +5747,7 @@ app.get('/api/health/summary', async (req, res) => {
 
     const { data, error } = await chatSupabase
       .from('user_health_daily_summary')
-      .select('date, metric_type, total_value, unit, sample_count')
+      .select('date, metric_type, total_value, unit, sample_count, user_code')
       .eq('user_id', userId)
       .eq('metric_type', metric_type)
       .gte('date', start_date)
