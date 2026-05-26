@@ -5566,7 +5566,150 @@ app.post('/api/db/registration-links/:idOrLinkId/increment', async (req, res) =>
     return res.status(500).json({ error: e.message });
   }
 });
+// ===================================================================
+// POST /api/health/ingest
+// Body: { events: HealthEventInput[] }
+// Inserts raw events + upserts the daily summary in one round-trip.
+// ===================================================================
+app.post('/api/health/ingest', async (req, res) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
+    // Health data lives in the secondary (chat) Supabase project
+    if (!chatSupabase) {
+      return res.status(503).json({ error: 'Health ingest requires CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
+    }
+
+    const raw = Array.isArray(req.body?.events) ? req.body.events : null;
+    if (!raw) {
+      return res.status(400).json({ error: 'Body must include `events` array' });
+    }
+    if (raw.length === 0) {
+      return res.json({ ok: true, inserted: 0, summarized: 0 });
+    }
+    if (raw.length > HEALTH_MAX_EVENTS_PER_REQUEST) {
+      return res.status(413).json({
+        error: `Too many events; max ${HEALTH_MAX_EVENTS_PER_REQUEST} per request`,
+      });
+    }
+
+    const events = [];
+    for (let i = 0; i < raw.length; i++) {
+      const result = validateHealthEvent(raw[i], i);
+      if (!result.ok) return res.status(400).json({ error: result.error });
+      events.push(result.value);
+    }
+
+    // 1) Raw events — dedupe on (user_id, metric_type, start_time, end_time).
+    const eventRows = events.map((e) => ({
+      user_id: userId,
+      metric_type: e.metric_type,
+      start_time: e.start_time,
+      end_time: e.end_time,
+      summary_value: e.summary_value,
+      unit: e.unit,
+      payload: e.payload,
+    }));
+
+    const { error: insertErr } = await chatSupabase
+      .from('user_health_events')
+      .upsert(eventRows, {
+        onConflict: 'user_id,metric_type,start_time,end_time',
+        ignoreDuplicates: true,
+      });
+
+    if (insertErr) {
+      console.error('[health/ingest] events insert failed:', insertErr);
+      return res.status(500).json({ error: 'Failed to store events' });
+    }
+
+    // 2) Daily summary — device sends authoritative daily total so we REPLACE.
+    const summaryMap = new Map();
+    for (const e of events) {
+      const key = `${e.date}|${e.metric_type}`;
+      const prev = summaryMap.get(key);
+      if (prev) {
+        prev.total_value += Number(e.summary_value || 0);
+        prev.sample_count += 1;
+      } else {
+        summaryMap.set(key, {
+          user_id: userId,
+          date: e.date,
+          metric_type: e.metric_type,
+          total_value: Number(e.summary_value || 0),
+          unit: e.unit,
+          sample_count: 1,
+          payload: {},
+          updated_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    const summaryRows = Array.from(summaryMap.values());
+    const { error: summaryErr } = await chatSupabase
+      .from('user_health_daily_summary')
+      .upsert(summaryRows, { onConflict: 'user_id,date,metric_type' });
+
+    if (summaryErr) {
+      console.error('[health/ingest] summary upsert failed:', summaryErr);
+      return res.status(500).json({ error: 'Failed to update summary' });
+    }
+
+    return res.json({
+      ok: true,
+      inserted: eventRows.length,
+      summarized: summaryRows.length,
+    });
+  } catch (err) {
+    console.error('[health/ingest] unexpected error:', err);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// ===================================================================
+// GET /api/health/summary?metric_type=steps&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+// Pre-aggregated daily totals — single indexed lookup, no JSONB parsing.
+// ===================================================================
+app.get('/api/health/summary', async (req, res) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Health data lives in the secondary (chat) Supabase project
+    if (!chatSupabase) {
+      return res.status(503).json({ error: 'Health summary requires CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
+    }
+
+    const metric_type = String(req.query.metric_type || '').trim().toLowerCase();
+    const start_date = String(req.query.start_date || '').trim();
+    const end_date = String(req.query.end_date || '').trim();
+
+    if (!metric_type) return res.status(400).json({ error: 'metric_type required' });
+    if (!isYmd(start_date) || !isYmd(end_date)) {
+      return res.status(400).json({ error: 'start_date / end_date must be YYYY-MM-DD' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('user_health_daily_summary')
+      .select('date, metric_type, total_value, unit, sample_count')
+      .eq('user_id', userId)
+      .eq('metric_type', metric_type)
+      .gte('date', start_date)
+      .lte('date', end_date)
+      .order('date', { ascending: true });
+
+    if (error) {
+      console.error('[health/summary] query failed:', error);
+      return res.status(500).json({ error: 'Query failed' });
+    }
+
+    res.json({ data: data || [] });
+  } catch (err) {
+    console.error('[health/summary] unexpected error:', err);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
 // ====================================
 // AUTH API ROUTES
 // ====================================
