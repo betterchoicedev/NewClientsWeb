@@ -4453,8 +4453,8 @@ async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
     },
     body: JSON.stringify({
       model,
-      max_completion_tokens: 1500,
-      reasoning_effort: "high",
+      max_completion_tokens: 4000,
+      reasoning_effort: "medium",
       response_format: {
         type: 'json_schema',
         json_schema: FOOD_IMAGE_LLM_SCHEMA
@@ -4477,9 +4477,12 @@ async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
   }
 
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
   if (!content) {
-    throw new Error('Empty content from vision LLM.');
+    const finishReason = choice?.finish_reason;
+    const usage = data.usage ? JSON.stringify(data.usage) : 'n/a';
+    throw new Error(`Empty content from vision LLM (finish_reason=${finishReason}, usage=${usage}).`);
   }
 
   try {
