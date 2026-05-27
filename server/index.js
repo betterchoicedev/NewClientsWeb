@@ -3303,6 +3303,41 @@ app.get('/api/profile/chat-user', async (req, res) => {
   }
 });
 
+// Load ALL chat_users columns for the authenticated client (identified by Bearer token).
+// The apiAuthGuard middleware validates the JWT and populates req.userCode from the
+// linked clients row, so no query/body params are needed.
+app.get('/api/profile/chat-user/me', async (req, res) => {
+  try {
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    const userCode = req.userCode;
+    if (!userCode) {
+      return res.status(404).json({ error: 'No user_code linked to this account' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('chat_users')
+      .select('*')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: 'Chat user not found' });
+    }
+
+    res.json({ data });
+  } catch (error) {
+    console.error('Error loading full chat_users row:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Helper function to parse time string to float (hour + minute/60)
 function parseTimeToFloat(timeValue) {
   if (typeof timeValue === 'number') {
