@@ -4454,9 +4454,9 @@ async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
     body: JSON.stringify({
       model,
       max_tokens: 1500,
+      reasoning_effort: "high",
       response_format: {
         type: 'json_schema',
-        reasoning_effort:"high",
         json_schema: FOOD_IMAGE_LLM_SCHEMA
       },
       messages: [
