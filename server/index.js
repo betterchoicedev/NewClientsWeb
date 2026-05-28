@@ -4309,7 +4309,8 @@ app.delete('/api/food-logs/:id', async (req, res) => {
 });
 
 // ====================================
-// FOOD IMAGE ANALYSIS
+// FOOD IMAGE ANALYSIS  [MOBILE APP API]
+// Consumed by the BetterChoice mobile app (photo-based meal logging flow).
 // Vision LLM returns per-100g macro baselines + estimated grams per item.
 // Final calories / protein / carbs / fat totals are computed in JS, NOT by the model.
 // ====================================
@@ -4573,6 +4574,100 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
     console.error('❌ Error in POST /api/food-logs/analyze-image:', error);
     return res.status(500).json({
       error: 'Failed to analyze food image',
+      message: error.message
+    });
+  }
+});
+
+// ====================================
+// CALENDAR EVENTS  [MOBILE APP API]
+// Backs the in-app calendar screen used by the BetterChoice mobile app.
+// Persists to chat_supabase → public.calendar_events.
+// ====================================
+
+// POST /api/calendar-events
+// Body: {
+//   userCode: string,
+//   event: {
+//     title:        string  (required)
+//     event_date:   string  (required, ISO-8601 timestamp with timezone)
+//     category?:    string
+//     description?: string
+//   }
+// }
+//
+// Success 200: { data: <inserted_row> }
+app.post('/api/calendar-events', assertOwnUserCode(), async (req, res) => {
+  try {
+    const { userCode, event } = req.body || {};
+
+    if (!userCode) {
+      return res.status(400).json({ error: 'userCode is required' });
+    }
+    if (!event || typeof event !== 'object') {
+      return res.status(400).json({ error: 'event payload is required' });
+    }
+
+    const title = typeof event.title === 'string' ? event.title.trim() : '';
+    const eventDateRaw = event.event_date;
+
+    if (!title) {
+      return res.status(400).json({ error: 'event.title is required' });
+    }
+    if (!eventDateRaw) {
+      return res.status(400).json({ error: 'event.event_date is required' });
+    }
+
+    // Validate event_date is parseable; store as ISO-8601 so PG `timestamp with time zone` accepts it.
+    const parsedDate = new Date(eventDateRaw);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return res.status(400).json({ error: 'event.event_date must be a valid ISO-8601 date string' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    // Resolve chat_users.id from user_code; same pattern used by /api/food-logs.
+    const { data: userData, error: userError } = await chatSupabase
+      .from('chat_users')
+      .select('id, user_code')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (userError) {
+      console.error('Error looking up chat_users for calendar event:', userError);
+      return res.status(500).json({ error: userError.message });
+    }
+    if (!userData) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const insertData = {
+      user_id: userData.id,
+      user_code: userData.user_code || userCode,
+      title,
+      event_date: parsedDate.toISOString(),
+    };
+    if (event.category !== undefined && event.category !== null) {
+      insertData.category = String(event.category);
+    }
+    if (event.description !== undefined && event.description !== null) {
+      insertData.description = String(event.description);
+    }
+
+    const { data, error } = await chatSupabase
+      .from('calendar_events')
+      .insert([insertData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return res.status(201).json({ data });
+  } catch (error) {
+    console.error('❌ Error in POST /api/calendar-events:', error);
+    return res.status(500).json({
+      error: 'Failed to create calendar event',
       message: error.message
     });
   }
