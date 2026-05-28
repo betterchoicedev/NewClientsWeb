@@ -36,6 +36,7 @@ const {
   requireAuth,
   assertOwnUserCode,
   verifyFoodLogOwnership,
+  verifyCalendarEventOwnership,
   apiAuthGuard,
 } = createAuthMiddleware(supabaseAuth, supabase, chatSupabase);
 
@@ -4668,6 +4669,115 @@ app.post('/api/calendar-events', assertOwnUserCode(), async (req, res) => {
     console.error('❌ Error in POST /api/calendar-events:', error);
     return res.status(500).json({
       error: 'Failed to create calendar event',
+      message: error.message
+    });
+  }
+});
+
+// PUT /api/calendar-events/:id
+// Edit an existing calendar event. Ownership is verified against the bearer-auth user's user_code.
+// Body: { event: { title?, event_date?, category?, description? } }
+// Any field omitted is left unchanged. Pass `null` to clear `category` / `description`.
+//
+// Success 200: { data: <updated_row> }
+app.put('/api/calendar-events/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { event } = req.body || {};
+
+    if (!id) {
+      return res.status(400).json({ error: 'Calendar event id is required' });
+    }
+    if (!event || typeof event !== 'object') {
+      return res.status(400).json({ error: 'event payload is required' });
+    }
+
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    if (!req.userCode || !(await verifyCalendarEventOwnership(id, req.userCode))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const updateData = {};
+
+    if (event.title !== undefined) {
+      const title = typeof event.title === 'string' ? event.title.trim() : '';
+      if (!title) {
+        return res.status(400).json({ error: 'event.title cannot be empty' });
+      }
+      updateData.title = title;
+    }
+
+    if (event.event_date !== undefined) {
+      const parsedDate = new Date(event.event_date);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ error: 'event.event_date must be a valid ISO-8601 date string' });
+      }
+      updateData.event_date = parsedDate.toISOString();
+    }
+
+    // Allow explicit null to clear these nullable columns.
+    if (event.category !== undefined) {
+      updateData.category = event.category === null ? null : String(event.category);
+    }
+    if (event.description !== undefined) {
+      updateData.description = event.description === null ? null : String(event.description);
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'No editable fields provided' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('calendar_events')
+      .update(updateData)
+      .eq('event_id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return res.json({ data });
+  } catch (error) {
+    console.error('❌ Error in PUT /api/calendar-events/:id:', error);
+    return res.status(500).json({
+      error: 'Failed to update calendar event',
+      message: error.message
+    });
+  }
+});
+
+// DELETE /api/calendar-events/:id
+// Remove a calendar event the authenticated user owns.
+// Success 200: { data: <deleted_row[]> }
+app.delete('/api/calendar-events/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Calendar event id is required' });
+    }
+    if (!chatSupabase) {
+      return res.status(500).json({ error: 'Chat database not configured' });
+    }
+
+    if (!req.userCode || !(await verifyCalendarEventOwnership(id, req.userCode))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { data, error } = await chatSupabase
+      .from('calendar_events')
+      .delete()
+      .eq('event_id', id)
+      .select();
+
+    if (error) throw error;
+    return res.json({ data });
+  } catch (error) {
+    console.error('❌ Error in DELETE /api/calendar-events/:id:', error);
+    return res.status(500).json({
+      error: 'Failed to delete calendar event',
       message: error.message
     });
   }

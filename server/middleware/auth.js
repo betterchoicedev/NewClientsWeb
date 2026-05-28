@@ -93,6 +93,26 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     return !!(log && log.user_id === chatUser.id);
   }
 
+  async function verifyCalendarEventOwnership(eventId, userCode) {
+    if (!chatSupabase || !eventId || !userCode) return false;
+
+    const { data: chatUser } = await chatSupabase
+      .from('chat_users')
+      .select('id')
+      .eq('user_code', userCode)
+      .maybeSingle();
+
+    if (!chatUser) return false;
+
+    const { data: evt } = await chatSupabase
+      .from('calendar_events')
+      .select('user_id')
+      .eq('event_id', eventId)
+      .maybeSingle();
+
+    return !!(evt && evt.user_id === chatUser.id);
+  }
+
   const PUBLIC_API_PREFIXES = [
     '/api/auth/login',
     '/api/auth/signup',
@@ -174,6 +194,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     assertSelfUserId,
     assertOwnUserCode,
     verifyFoodLogOwnership,
+    verifyCalendarEventOwnership,
     apiAuthGuard,
   };
 }
