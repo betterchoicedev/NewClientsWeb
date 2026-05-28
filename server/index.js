@@ -4816,6 +4816,9 @@ app.get('/api/daily-xp/today', assertOwnUserCode(), async (req, res) => {
   }
 });
 
+
+
+
 // Daily XP – weekly progress (last 7 days)
 app.get('/api/daily-xp/weekly', assertOwnUserCode(), async (req, res) => {
   try {
