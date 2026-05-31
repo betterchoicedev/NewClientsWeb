@@ -1,5 +1,8 @@
 import { getCompanyConfig, normalizeCompanyName } from '../../company/getCompanyConfig';
 
+/**
+ * Resolves the active onboarding rules for a specific client tenant.
+ */
 export const getCompanyOnboardingPolicy = (companyName = '') => {
   const config = getCompanyConfig(companyName);
   return {
@@ -8,4 +11,3 @@ export const getCompanyOnboardingPolicy = (companyName = '') => {
     ...config.onboarding
   };
 };
-
