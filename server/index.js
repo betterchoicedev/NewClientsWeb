@@ -4382,9 +4382,27 @@ const FOOD_IMAGE_LLM_SCHEMA = {
   }
 };
 
+// Hard cap on the free-text caption that gets injected into the LLM prompt.
+// Long enough for a sentence or two of useful context ("homemade lasagna, ~2
+// servings, extra cheese") but short enough that a malicious or buggy client
+// cannot blow up the prompt or smuggle in arbitrary instructions.
+const MAX_USER_CAPTION_LENGTH = 500;
+
+function sanitizeUserCaption(rawCaption) {
+  if (typeof rawCaption !== 'string') return '';
+  // Collapse all whitespace (including newlines) to a single space so the
+  // caption cannot break out of its prompt block via crafted line breaks.
+  const collapsed = rawCaption.replace(/\s+/g, ' ').trim();
+  if (!collapsed) return '';
+  return collapsed.length > MAX_USER_CAPTION_LENGTH
+    ? collapsed.slice(0, MAX_USER_CAPTION_LENGTH)
+    : collapsed;
+}
+
 function buildFoodImagePrompt(mealLabel, userCaption) {
-  const captionBlock = (userCaption && String(userCaption).trim())
-    ? `\n* **User description (sent with the photo):** ${String(userCaption).trim()}\n  Use this to refine identification and portions when it clarifies what is in the image.\n`
+  const cleanCaption = sanitizeUserCaption(userCaption);
+  const captionBlock = cleanCaption
+    ? `\n* **User description (sent with the photo):** "${cleanCaption}"\n  Treat this as ground truth about the dish identity, ingredients, preparation, or portion when it does not contradict clear visual evidence. Prefer the user's wording for \`name\` and let it refine portion / density estimates.\n`
     : '';
 
   const meal = mealLabel ? String(mealLabel) : 'unknown';
@@ -4498,7 +4516,12 @@ async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
 // Body: {
 //   imageData:   string  (base64; with or without "data:image/...;base64," prefix)
 //   mealLabel?:  string  (e.g. "breakfast" / "lunch" / "snack")
-//   userCaption?: string (optional free-text description sent alongside the photo)
+//   userCaption?: string (optional free-text description the user typed next to
+//                         the photo, e.g. "homemade lasagna, big slice, extra
+//                         cheese". Used to refine identification + portion.
+//                         Whitespace is collapsed and the caption is truncated
+//                         to MAX_USER_CAPTION_LENGTH characters before being
+//                         injected into the prompt.)
 // }
 //
 // Success 200:
