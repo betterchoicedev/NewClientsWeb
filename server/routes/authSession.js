@@ -126,11 +126,26 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
         return res.status(400).json({ error: 'Password must be at least 6 characters' });
       }
 
-      const { createClient } = require('@supabase/supabase-js');
-      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-        global: { headers: { Authorization: `Bearer ${token}` } },
-      });
-      const { data, error } = await userClient.auth.updateUser({ password });
+      // Verify the access token (could be a recovery token) and get the user id.
+      // supabase-js auth.updateUser() reads its session from the client's internal
+      // state, not from global headers, so we can't just attach a Bearer header to
+      // a fresh anon client. Instead, identify the user from the token and update
+      // the password via the service-role admin client.
+      const { data: userData, error: userError } = await supabaseAuth.auth.getUser(token);
+      if (userError || !userData?.user?.id) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+
+      if (!supabaseDb?.auth?.admin?.updateUserById) {
+        return res
+          .status(503)
+          .json({ error: 'Server missing SUPABASE_SERVICE_ROLE_KEY for password updates' });
+      }
+
+      const { data, error } = await supabaseDb.auth.admin.updateUserById(
+        userData.user.id,
+        { password }
+      );
       if (error) throw error;
       res.json({ data, error: null });
     } catch (error) {
