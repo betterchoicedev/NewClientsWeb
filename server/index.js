@@ -4051,11 +4051,15 @@ app.post('/api/landing/validate', async (req, res) => {
   
   console.log(`=== [HANDSHAKE] === Validating Schema Route for Manager: ${managerId}, Link: ${linkId || 'None'}`);
 
+  if (!managerId) {
+    return res.status(400).json({ error: 'INVALID_TOKEN_STRUCTURE' });
+  }
+
   try {
-    // 1. Fetch from profiles + join companies (Querying ONLY existing table columns)
+    // 1. Fetch from profiles + join companies (Explicitly requesting the new config JSONB column)
     const { data: profile, error: profileErr } = await chatSupabase
       .from('profiles')
-      .select('name, role, company_id, companies(name)')
+      .select('name, role, company_id, companies(name, config)')
       .eq('id', managerId)
       .single();
 
@@ -4086,11 +4090,9 @@ app.post('/api/landing/validate', async (req, res) => {
 
       if (ruleErr) {
         console.error('[-] Error fetching live campaign metrics:', ruleErr);
-        // Fallback or return warning instead of total screen crash
       }
 
       if (rule) {
-        // Enforce actual server-side validity parameters
         if (rule.is_active === false) {
           return res.status(410).json({ error: 'This specific campaign track has been deactivated' });
         }
@@ -4111,14 +4113,15 @@ app.post('/api/landing/validate', async (req, res) => {
       }
     }
 
-    // 3. Assemble dynamic response payload with calculated runtime slug properties
+    // 3. Assemble dynamic response payload passing the dynamic config block
     const payloadResponse = {
       success: true,
       company: {
         id: profile.company_id,
         name: companyData.name,
-        // Generates a safe lowercase skin lookup key on the fly out of the name text
-        slug: companyData.name.toLowerCase().replace(/\s+/g, '').trim()
+        slug: companyData.name.toLowerCase().replace(/\s+/g, '').trim(),
+        // Fallback to empty object if database config field is null
+        config: companyData.config || {} 
       },
       manager: {
         name: profile.name,
