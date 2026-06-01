@@ -5288,7 +5288,7 @@ app.get('/api/companies', async (req, res) => {
 
     const { data, error } = await chatSupabase
       .from('companies')
-      .select('id, name, managers:profiles!profiles_company_id_fkey(id, name, role)')
+      .select('id, name, config, managers:profiles!profiles_company_id_fkey(id, name, role)')
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -5296,6 +5296,7 @@ app.get('/api/companies', async (req, res) => {
     const formattedCompanies = (data || []).map((company) => ({
       id: company.id,
       name: company.name,
+      config: company.config || null,
       managers: (company.managers || []).filter((manager) => manager.role === 'company_manager')
     }));
 
@@ -5350,7 +5351,7 @@ app.get('/api/client-company-assignment', async (req, res) => {
     if (providerData?.company_id) {
       const { data: companyRow, error: companyError } = await chatSupabase
         .from('companies')
-        .select('id, name')
+        .select('id, name, config')
         .eq('id', providerData.company_id)
         .maybeSingle();
 

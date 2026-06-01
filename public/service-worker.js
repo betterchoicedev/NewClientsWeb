@@ -59,34 +59,32 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Skip service worker and manifest requests to prevent loops
-  if (event.request.url.includes('service-worker.js') || 
+  if (event.request.url.includes('service-worker.js') ||
       event.request.url.includes('manifest.json')) {
+    return;
+  }
+
+  // Never intercept non-GET requests (POST/PUT/DELETE/etc.) — they must reach
+  // the network directly, otherwise the SW can swallow them and produce
+  // "Failed to convert value to 'Response'" errors.
+  if (event.request.method !== 'GET') {
     return;
   }
 
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // Cache hit - return response
         if (response) {
           return response;
         }
 
-        // Clone the request because it's a stream
         const fetchRequest = event.request.clone();
 
         return fetch(fetchRequest).then((response) => {
-          // Check if valid response
           if (!response || response.status !== 200 || response.type !== 'basic') {
             return response;
           }
 
-          // Only cache GET requests
-          if (event.request.method !== 'GET') {
-            return response;
-          }
-
-          // Clone the response because it's a stream
           const responseToCache = response.clone();
 
           caches.open(CACHE_NAME).then((cache) => {
@@ -96,16 +94,27 @@ self.addEventListener('fetch', (event) => {
           });
 
           return response;
-        }).catch(() => {
-          // If fetch fails, try to return a cached version
-          // For navigation requests, return a basic offline page
+        }).catch(async () => {
+          // Network failed. For navigation requests, fall back to the cached
+          // shell. For all other GETs, return a synthetic 504 so the browser
+          // never sees `undefined` from respondWith().
           if (event.request.mode === 'navigate') {
-            return caches.match('/').catch(() => {
-              // If even the root page isn't cached, return a basic response
-              return new Response('Offline', { status: 503 });
+            const cached = await caches.match('/');
+            if (cached) return cached;
+            return new Response('Offline', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain' },
             });
           }
+          return new Response('', {
+            status: 504,
+            statusText: 'Gateway Timeout (offline)',
+          });
         });
+      })
+      .catch(() => {
+        // Last-resort guard so respondWith() always gets a Response.
+        return new Response('', { status: 504 });
       })
   );
 });

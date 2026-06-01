@@ -202,6 +202,7 @@ const ProfilePage = () => {
   const [companyError, setCompanyError] = useState('');
   const [assignedCompanyId, setAssignedCompanyId] = useState('');
   const [assignedCompanyName, setAssignedCompanyName] = useState('');
+  const [assignedCompanyConfig, setAssignedCompanyConfig] = useState(null);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [indicatorPosition, setIndicatorPosition] = useState({ top: 0, height: 0 });
   const tabRefs = useRef({});
@@ -255,8 +256,10 @@ const ProfilePage = () => {
 
       const companyId = data?.provider?.company_id || data?.company?.id || '';
       const companyName = data?.company?.name || '';
+      const companyConfig = data?.company?.config || null;
       setAssignedCompanyId(companyId || '');
       setAssignedCompanyName(companyName || '');
+      setAssignedCompanyConfig(companyConfig);
       setProfileData((prev) => ({
         ...prev,
         companyId: companyId || ''
@@ -1536,6 +1539,7 @@ const ProfilePage = () => {
           user={user}
           userCode={userCode}
           companyName={assignedCompanyName}
+          companyConfig={assignedCompanyConfig}
         />
 
         {/* Logout Confirmation Modal */}

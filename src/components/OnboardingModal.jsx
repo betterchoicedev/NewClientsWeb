@@ -55,9 +55,29 @@ const hasAnyPersistedOnboardingAnswer = (clientRow, chatRow) => {
   return false;
 };
 
-const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
+const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, companyConfig }) => {
   const { language, t, direction, toggleLanguage, setLanguage, setDirection } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();
+
+  // Company-driven onboarding settings (companies.config -> { onboarding: { ... } } in DB).
+  // When no config is provided (legacy clients, missing assignment), we fall back to the
+  // historical behavior so nothing changes for unconfigured tenants.
+  const onboardingConfig = companyConfig?.onboarding || {};
+  const includeNursingStatus = onboardingConfig.includeNursingStatusQuestion !== false; // default: show
+  // Helpful for future flags from the same config object:
+  //   onboardingConfig.showUsageBasedOffer
+  //   onboardingConfig.sendWelcomeDuringOnboarding
+  //   onboardingConfig.setPendingPaymentAfterSubmit
+  //   onboardingConfig.mealPlanTrigger
+
+  useEffect(() => {
+    console.log('[OnboardingModal] companyConfig:', {
+      companyName,
+      hasConfig: !!companyConfig,
+      onboarding: onboardingConfig,
+      includeNursingStatus
+    });
+  }, [companyConfig, companyName, includeNursingStatus]);
   const [currentStep, setCurrentStep] = useState(-1); // -1 for welcome screen, 0+ for form steps
   const [loading, setLoading] = useState(false);
   const [checkingData, setCheckingData] = useState(true);
@@ -481,8 +501,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
       fields: ['date_of_birth']
     },
     {
-      title: language === 'hebrew' ? 'מין ומצב פיזיולוגי' : 'Gender & Physiological State',
-      fields: ['gender', 'nursing_status']
+      title: includeNursingStatus
+        ? (language === 'hebrew' ? 'מין ומצב פיזיולוגי' : 'Gender & Physiological State')
+        : (language === 'hebrew' ? 'מין' : 'Gender'),
+      fields: includeNursingStatus ? ['gender', 'nursing_status'] : ['gender']
     },
     {
       title: language === 'hebrew' ? 'גובה ומשקל נוכחי' : 'Height & Current Weight',
@@ -953,11 +975,41 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
 
   // Load existing data and determine which fields to show (use user.id: Supabase refreshes
   // session on tab focus and replaces the user object reference, which must not re-run this.)
+  // Also re-run when includeNursingStatus flips: companyConfig usually arrives a tick AFTER
+  // the modal opens (separate fetch in ProfilePage), so without this dep we'd build
+  // filteredSteps with nursing_status still in it for tenants that disable it.
   useEffect(() => {
     if (isOpen && user) {
       loadExistingData();
     }
-  }, [isOpen, user?.id]);
+  }, [isOpen, user?.id, includeNursingStatus]);
+
+  // Safety net for the same race: if filteredSteps was already built while
+  // includeNursingStatus was still true (default), strip nursing_status the
+  // moment the company config tells us to. Keeps the current step index stable.
+  useEffect(() => {
+    if (includeNursingStatus) return;
+    if (!filteredSteps || filteredSteps.length === 0) return;
+    const stillHasNursing = filteredSteps.some(step => step.fields.includes('nursing_status'));
+    if (!stillHasNursing) return;
+    
+    setFilteredSteps(prev => prev
+      .map(step => {
+        if (!step.fields.includes('nursing_status')) return step;
+        const newFields = step.fields.filter(f => f !== 'nursing_status');
+        // If the step was the combined gender+nursing step, retitle it to plain Gender.
+        const wasGenderPlusNursing = step.fields.includes('gender');
+        return {
+          ...step,
+          fields: newFields,
+          title: wasGenderPlusNursing
+            ? (language === 'hebrew' ? 'מין' : 'Gender')
+            : step.title
+        };
+      })
+      .filter(step => step.fields.length > 0)
+    );
+  }, [includeNursingStatus, filteredSteps, language]);
 
   // Normalize meal_names so each slot is chronologically valid (e.g. no Breakfast after Brunch)
   useEffect(() => {
@@ -1394,10 +1446,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         console.log('✓ Gender has value:', effGender);
       }
       
-      if (effGender === 'female' && isEmpty(effNursing)) {
+      if (includeNursingStatus && effGender === 'female' && isEmpty(effNursing)) {
         missingFields.push('nursing_status');
-      } else if (effGender === 'female') {
+      } else if (includeNursingStatus && effGender === 'female') {
         console.log('✓ Nursing status has value:', effNursing);
+      } else if (!includeNursingStatus) {
+        console.log('ℹ️ Nursing status question disabled by company config');
       }
       
       if (isEmpty(effWeight)) {
@@ -1494,8 +1548,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
               fields: missingFields.includes('language') ? ['language'] : []
             };
           }
-          // Keep gender + nursing together when either is relevant/missing
-          if (step.fields.includes('gender') && step.fields.includes('nursing_status')) {
+          // Keep gender + nursing together when either is relevant/missing.
+          // When the company config disables the nursing question, the step
+          // collapses to gender-only and we fall through to the generic filter below.
+          if (
+            includeNursingStatus &&
+            step.fields.includes('gender') &&
+            step.fields.includes('nursing_status')
+          ) {
             if (missingFields.includes('gender') || missingFields.includes('nursing_status')) {
               return { ...step, fields: ['gender', 'nursing_status'] };
             }
@@ -3130,7 +3190,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
                         'Client';
       const userLanguage = formData.language || language;
 
-      console.log('✅ Onboarding base data saved. Waiting for subscription path before meal plan generation.');
+      console.log('✅ Onboarding base data saved. Generating meal plan before showing payment question.');
       
       setLoading(false);
       setCompletedOnboardingContext({
@@ -3157,7 +3217,28 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
           console.warn('Could not set pending payment flag in backend:', pendingUpdateError);
         }
       }
+
+      // Queue the payment screen first so the loading screen transitions
+      // directly into the payment question once the meal plan finishes.
       setShowUsageBasedOffer(true);
+
+      // Create the meal plan before the user sees the payment question.
+      // The loading UI (gated on `isGeneratingMealPlan`) is rendered ahead of
+      // the payment screen, so it overrides until generation completes.
+      if (finalUserCode) {
+        const mealPlanResult = await generateMealPlan(
+          finalUserCode,
+          dailyCalories,
+          macros,
+          clientName,
+          userLanguage
+        );
+        if (!mealPlanResult.success) {
+          console.warn('⚠️ Meal plan generation failed (non-blocking):', mealPlanResult.error);
+        }
+      } else {
+        console.warn('⚠️ No userCode available - skipping meal plan generation before payment question.');
+      }
       return;
     } catch (err) {
       console.error('❌ Error saving onboarding data:', err);
@@ -3350,16 +3431,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode }) => {
         throw new Error(completeResult?.error || (language === 'hebrew' ? 'שגיאה בסיום האונבורדינג' : 'Failed to complete onboarding'));
       }
 
-      const mealPlanResult = await generateMealPlan(
-        resolvedUserCode,
-        completedOnboardingContext?.dailyCalories,
-        completedOnboardingContext?.macros,
-        completedOnboardingContext?.clientName || 'Client',
-        completedOnboardingContext?.userLanguage || language
-      );
-      if (!mealPlanResult.success) {
-        console.warn('⚠️ Meal plan generation failed (non-blocking):', mealPlanResult.error);
-      }
+      // Meal plan was already generated immediately after the onboarding
+      // form submission (before this payment screen was shown), so we no
+      // longer need to create it here.
 
       if (sendWelcome) {
         sendWhatsAppAndClose();
