@@ -4379,9 +4379,33 @@ const FOOD_IMAGE_LLM_SCHEMA = {
           },
           required: ['name', 'visual_evidence', 'estimated_weight_g', 'confidence', 'macros_per_100g']
         }
+      },
+      overall_health_score: {
+        type: ['number', 'null'],
+        description: '0-10 general nutritional quality of the meal in the photo. INDEPENDENT of any meal plan. Null when is_food is false.'
+      },
+      overall_health_score_reason: {
+        type: ['string', 'null'],
+        description: 'Short (1 sentence) justification for overall_health_score. Null when is_food is false.'
+      },
+      plan_match_score: {
+        type: ['number', 'null'],
+        description: '0-10 how closely the photo matches the supplied plan meal (best of MAIN vs ALTERNATIVE). Null when no plan meal was supplied or when is_food is false.'
+      },
+      plan_match_reason: {
+        type: ['string', 'null'],
+        description: 'Short (1 sentence) justification for plan_match_score, mentioning which variant was used. Null when no plan meal was supplied or when is_food is false.'
+      },
+      plan_match_variant: {
+        type: ['string', 'null'],
+        description: 'Which plan variant the score was based on: "main", "alternative", or "none" if neither was a real match. Null when no plan meal was supplied or when is_food is false.'
       }
     },
-    required: ['is_food', 'not_food_reason', 'meal_label', 'info_message', 'dietary_warnings', 'food_items']
+    required: [
+      'is_food', 'not_food_reason', 'meal_label', 'info_message', 'dietary_warnings', 'food_items',
+      'overall_health_score', 'overall_health_score_reason',
+      'plan_match_score', 'plan_match_reason', 'plan_match_variant'
+    ]
   }
 };
 
@@ -4402,23 +4426,161 @@ function sanitizeUserCaption(rawCaption) {
     : collapsed;
 }
 
-function buildFoodImagePrompt(mealLabel, userCaption) {
+// Extract only the fields we need from a single plan ingredient and clip
+// strings so the prompt cannot be inflated by long / hostile payloads.
+function sanitizePlanIngredient(ing) {
+  if (!ing || typeof ing !== 'object') return null;
+  const safe = {};
+  if (typeof ing.item === 'string' && ing.item.trim()) {
+    safe.item = ing.item.trim().slice(0, 120);
+  } else {
+    return null;
+  }
+  const brand = ing['brand of pruduct'] ?? ing.brand;
+  if (typeof brand === 'string' && brand.trim()) {
+    safe.brand = brand.trim().slice(0, 80);
+  }
+  const grams = ing['portionSI(gram)'] ?? ing.grams;
+  if (typeof grams === 'number' && Number.isFinite(grams)) {
+    safe.grams = Math.round(grams * 10) / 10;
+  }
+  if (typeof ing.household_measure === 'string' && ing.household_measure.trim()) {
+    safe.household_measure = ing.household_measure.trim().slice(0, 120);
+  }
+  const macros = {};
+  if (typeof ing.calories === 'number') macros.calories = ing.calories;
+  if (typeof ing.protein  === 'number') macros.protein  = ing.protein;
+  if (typeof ing.carbs    === 'number') macros.carbs    = ing.carbs;
+  if (typeof ing.fat      === 'number') macros.fat      = ing.fat;
+  if (Object.keys(macros).length) safe.macros = macros;
+  return safe;
+}
+
+// Sanitize one variant (main OR alternative) from a plan-meal entry.
+function sanitizePlanVariant(variant) {
+  if (!variant || typeof variant !== 'object') return null;
+  const safe = {};
+  if (typeof variant.meal_title === 'string' && variant.meal_title.trim()) {
+    safe.meal_title = variant.meal_title.trim().slice(0, 200);
+  }
+  if (typeof variant.main_protein_source === 'string' && variant.main_protein_source.trim()) {
+    safe.main_protein_source = variant.main_protein_source.trim().slice(0, 100);
+  }
+  if (variant.nutrition && typeof variant.nutrition === 'object') {
+    const n = variant.nutrition;
+    safe.nutrition = {
+      calories: typeof n.calories === 'number' ? n.calories : null,
+      protein:  typeof n.protein  === 'number' ? n.protein  : null,
+      carbs:    typeof n.carbs    === 'number' ? n.carbs    : null,
+      fat:      typeof n.fat      === 'number' ? n.fat      : null
+    };
+  }
+  if (Array.isArray(variant.ingredients)) {
+    safe.ingredients = variant.ingredients
+      .slice(0, 25)
+      .map(sanitizePlanIngredient)
+      .filter(Boolean);
+  }
+  if (!safe.meal_title && !(safe.ingredients && safe.ingredients.length)) return null;
+  return safe;
+}
+
+// The client should send ONE entry from `meals[]` of the plan JSON (i.e. the
+// `{ main, meal, alternative }` slice for the meal being photographed). We
+// deliberately do not accept the full plan — that would just bloat the prompt.
+function sanitizePlanMeal(planMeal) {
+  if (!planMeal || typeof planMeal !== 'object') return null;
+  const main        = sanitizePlanVariant(planMeal.main);
+  const alternative = sanitizePlanVariant(planMeal.alternative);
+  if (!main && !alternative) return null;
+
+  let mealName = null;
+  if (typeof planMeal.meal === 'string' && planMeal.meal.trim()) {
+    mealName = planMeal.meal.trim().slice(0, 100);
+  } else if (typeof planMeal.main?.meal_name === 'string' && planMeal.main.meal_name.trim()) {
+    mealName = planMeal.main.meal_name.trim().slice(0, 100);
+  } else if (typeof planMeal.alternative?.meal_name === 'string' && planMeal.alternative.meal_name.trim()) {
+    mealName = planMeal.alternative.meal_name.trim().slice(0, 100);
+  }
+
+  return { meal_name: mealName, main, alternative };
+}
+
+// Render a sanitized plan-meal slice as a compact, prompt-friendly block.
+function formatPlanMealForPrompt(planMeal) {
+  if (!planMeal) return '';
+
+  const renderVariant = (label, v) => {
+    if (!v) return `  ${label}: (not provided)`;
+    const lines = [`  ${label}: ${v.meal_title || '(untitled)'}`];
+    if (v.nutrition) {
+      const n = v.nutrition;
+      const fmt = (x) => (x == null ? '?' : x);
+      lines.push(`    Target totals: ${fmt(n.calories)} kcal | P ${fmt(n.protein)}g | C ${fmt(n.carbs)}g | F ${fmt(n.fat)}g`);
+    }
+    if (v.main_protein_source) {
+      lines.push(`    Main protein: ${v.main_protein_source}`);
+    }
+    if (v.ingredients && v.ingredients.length) {
+      lines.push(`    Ingredients:`);
+      v.ingredients.forEach((ing) => {
+        const parts = [ing.item];
+        if (ing.brand) parts.push(`(${ing.brand})`);
+        if (ing.grams != null) parts.push(`${ing.grams}g`);
+        if (ing.household_measure) parts.push(`— ${ing.household_measure}`);
+        lines.push(`      • ${parts.join(' ')}`);
+      });
+    }
+    return lines.join('\n');
+  };
+
+  const header = planMeal.meal_name
+    ? `**CLIENT MEAL-PLAN ENTRY (what this "${planMeal.meal_name}" *should* be):**`
+    : `**CLIENT MEAL-PLAN ENTRY (what this meal *should* be):**`;
+
+  return `\n${header}\n${renderVariant('MAIN',        planMeal.main)}\n${renderVariant('ALTERNATIVE', planMeal.alternative)}\n`;
+}
+
+function buildFoodImagePrompt(mealLabel, userCaption, planMeal) {
   const cleanCaption = sanitizeUserCaption(userCaption);
   const captionBlock = cleanCaption
     ? `\n* **User description (sent with the photo):** "${cleanCaption}"\n  Treat this as ground truth about the dish identity, ingredients, preparation, or portion when it does not contradict clear visual evidence. Prefer the user's wording for \`name\` and let it refine portion / density estimates.\n`
     : '';
 
+  const planBlock = formatPlanMealForPrompt(planMeal);
+  const hasPlan = !!planBlock;
+
   const meal = mealLabel ? String(mealLabel) : 'unknown';
 
-  return `Act as a Lead Forensic Food Scientist and Computer Vision Specialist. Your objective is to classify the image as food or not, and then perform the macro analysis.
+  const planStep = hasPlan
+    ? `
+7.  **MEAL-PLAN ADHERENCE SCORE (a plan meal was supplied — produce real numbers):**
+    * Compare the dish in the photo against BOTH the MAIN and the ALTERNATIVE variant above.
+    * Pick whichever variant the photo most resembles, and base \`plan_match_score\` on that one only.
+    * The score is the client's adherence to their plan. Judge using:
+        - **Identity / ingredient overlap:** does the photo contain the plan variant's core ingredients (or close substitutes)?
+        - **Macro proximity:** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals.
+        - **Portion sanity:** significantly oversized or undersized portions reduce the score.
+    * Scoring guide:
+        - 9–10 = essentially the same dish, on-target macros and portion.
+        - 7–8  = same dish family with small substitutions or modest portion drift.
+        - 4–6  = partial match (right meal slot, but different dish or notably off macros / portion).
+        - 0–3  = unrelated food; neither variant is a real match.
+    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when neither is a real match — in that case keep \`plan_match_score\` ≤ 3).
+    * \`plan_match_reason\`: 1 short sentence, must name which variant you compared against.`
+    : `
+7.  **MEAL-PLAN ADHERENCE SCORE:**
+    * No plan meal was supplied for this photo. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
+
+  return `Act as a Lead Forensic Food Scientist and Computer Vision Specialist. Your objective is to classify the image as food or not, perform the macro analysis, and rate the meal.
 
 **CONTEXTUAL METADATA:**
 * **User Meal Time:** ${meal}
-${captionBlock}
+${captionBlock}${planBlock}
 **STEP 0 — IMAGE TYPE GATE (execute first, before anything else):**
 * Is the image clearly a single dish, multiple food items, a beverage, or a packaged food product?
-  - If NO (it is not food at all – e.g. a person, scenery, document, screenshot, or quality is too poor to identify any food) → set \`is_food: false\`, fill \`not_food_reason\` with a short explanation, and leave \`food_items\` null. Skip the rest of the steps.
-  - If YES → set \`is_food: true\`, leave \`not_food_reason\` null, and continue to steps 1–5 below.
+  - If NO (it is not food at all – e.g. a person, scenery, document, screenshot, or quality is too poor to identify any food) → set \`is_food: false\`, fill \`not_food_reason\` with a short explanation, and set EVERY other field (\`food_items\`, \`overall_health_score\`, \`overall_health_score_reason\`, \`plan_match_score\`, \`plan_match_reason\`, \`plan_match_variant\`, etc.) to \`null\`. Skip the rest of the steps.
+  - If YES → set \`is_food: true\`, leave \`not_food_reason\` null, and continue to steps 1–7 below.
 
 **WHEN is_food IS TRUE — food photo analysis protocol:**
 
@@ -4450,6 +4612,16 @@ ${captionBlock}
 
 5.  **CONTEXTUAL REASONING:**
     * **Meal Label Logic:** Cross-reference contents with "${meal}" (e.g., Pancakes at 20:00 is "Breakfast for Dinner", not "Snack").
+
+6.  **OVERALL HEALTH SCORE (always, when is_food is true — independent of any meal plan):**
+    * \`overall_health_score\` (0–10): general nutritional quality of the meal AS SHOWN. Judge macro balance, fiber / whole-food content, processing level, added sugar, fried / oily preparation, micronutrient density, and portion sanity.
+        - 0–3 = poor (ultra-processed, fried, sugary, nutritionally empty).
+        - 4–6 = mixed (some redeeming components, some poor ones).
+        - 7–8 = good (balanced, mostly whole foods, reasonable portion).
+        - 9–10 = excellent (clean, balanced, nutrient-dense).
+    * \`overall_health_score_reason\`: 1 short sentence justifying the score.
+    * This score MUST NOT be influenced by the supplied meal plan — it reflects only the photo itself.
+${planStep}
 
 Keep all string fields short (≤ 1–2 sentences). Numbers must be plain numbers (no units, no ranges). Respond ONLY with a valid JSON object matching the schema. Do not output markdown, explanations, or repetition of steps.`;
 }
@@ -4525,25 +4697,52 @@ async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
 //                         Whitespace is collapsed and the caption is truncated
 //                         to MAX_USER_CAPTION_LENGTH characters before being
 //                         injected into the prompt.)
+//   planMeal?:   object  (optional — ONE entry from the client's meal plan
+//                         `meals[]` array; the slice for the meal the user is
+//                         logging right now, NOT the full plan).
+//                         Shape: {
+//                           meal?: string,             // e.g. "Breakfast"
+//                           main?: {
+//                             meal_name?: string,
+//                             meal_title?: string,
+//                             main_protein_source?: string,
+//                             nutrition?: { calories, protein, carbs, fat },
+//                             ingredients?: [{
+//                               item, "brand of pruduct",
+//                               "portionSI(gram)", household_measure,
+//                               calories, protein, carbs, fat
+//                             }, ...]
+//                           },
+//                           alternative?: { ...same shape as main }
+//                         }
 // }
 //
 // Success 200:
-//   [
-//     {
-//       name: string,
-//       macros: { fat_g, carbs_g, calories, protein_g },
-//       confidence: number,
-//       visual_evidence: string,
-//       portion_estimate: string   // e.g. "120g"
-//     },
-//     ...
-//   ]
+//   {
+//     items: [
+//       {
+//         name: string,
+//         macros: { fat_g, carbs_g, calories, protein_g },
+//         confidence: number,
+//         visual_evidence: string,
+//         portion_estimate: string   // e.g. "120g"
+//       },
+//       ...
+//     ],
+//     overall_health_score: number | null,          // 0..10, plan-independent
+//     overall_health_score_reason: string | null,
+//     plan_match: null | {                          // null when no planMeal was sent
+//       score: number | null,                        // 0..10
+//       reason: string | null,
+//       variant: "main" | "alternative" | "none" | null
+//     }
+//   }
 //
 // Not-food 422:
 //   { error: 'not_food', message: <reason> }
 app.post('/api/food-logs/analyze-image', async (req, res) => {
   try {
-    const { imageData, mealLabel, userCaption } = req.body || {};
+    const { imageData, mealLabel, userCaption, planMeal } = req.body || {};
     if (!imageData || typeof imageData !== 'string') {
       return res.status(400).json({ error: 'imageData (base64 string) is required' });
     }
@@ -4561,7 +4760,11 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
       return res.status(400).json({ error: 'Could not decode/compress image', message: compressErr.message });
     }
 
-    const prompt = buildFoodImagePrompt(mealLabel, userCaption);
+    // Bad/empty plan payloads are silently ignored (sanitized → null) so the
+    // LLM behaves as if no plan was sent rather than failing the request.
+    const cleanPlanMeal = sanitizePlanMeal(planMeal);
+
+    const prompt = buildFoodImagePrompt(mealLabel, userCaption, cleanPlanMeal);
     const llmReport = await callFoodVisionLLM(compressed, prompt);
 
     if (!llmReport.is_food || !Array.isArray(llmReport.food_items) || llmReport.food_items.length === 0) {
@@ -4596,7 +4799,39 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
       };
     });
 
-    return res.json(items);
+    // Clamp the LLM's scores to [0, 10] with one decimal of precision so the
+    // client always gets a value in range, even if the model misbehaves.
+    const clampScore = (v) => {
+      if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+      return Math.max(0, Math.min(10, Math.round(v * 10) / 10));
+    };
+
+    const overall_health_score        = clampScore(llmReport.overall_health_score);
+    const overall_health_score_reason = typeof llmReport.overall_health_score_reason === 'string'
+      ? llmReport.overall_health_score_reason
+      : null;
+
+    let plan_match = null;
+    if (cleanPlanMeal) {
+      const variantRaw = typeof llmReport.plan_match_variant === 'string'
+        ? llmReport.plan_match_variant.toLowerCase()
+        : null;
+      const variant = (variantRaw === 'main' || variantRaw === 'alternative' || variantRaw === 'none')
+        ? variantRaw
+        : null;
+      plan_match = {
+        score: clampScore(llmReport.plan_match_score),
+        reason: typeof llmReport.plan_match_reason === 'string' ? llmReport.plan_match_reason : null,
+        variant
+      };
+    }
+
+    return res.json({
+      items,
+      overall_health_score,
+      overall_health_score_reason,
+      plan_match
+    });
   } catch (error) {
     console.error('❌ Error in POST /api/food-logs/analyze-image:', error);
     return res.status(500).json({
