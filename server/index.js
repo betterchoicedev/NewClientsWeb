@@ -5330,7 +5330,13 @@ app.post('/api/weight-logs', assertOwnUserCode(), async (req, res) => {
     if (weightLogData.neck_circumference_cm !== undefined && weightLogData.neck_circumference_cm !== null && weightLogData.neck_circumference_cm !== '') {
       insertData.neck_circumference_cm = parseFloat(weightLogData.neck_circumference_cm);
     }
-
+// height_cm lives on weight_logs alongside chat_users.height_cm so the
+    // Analytics screen can chart height over time too (children, post-op,
+    // etc.). Stored only when the client actually sent a value.
+    if (weightLogData.height_cm !== undefined && weightLogData.height_cm !== null && weightLogData.height_cm !== '') {
+      insertData.height_cm = parseFloat(weightLogData.height_cm);
+    }
+    
     const { data, error } = await chatSupabase
       .from('weight_logs')
       .insert([insertData])
