@@ -4364,6 +4364,14 @@ const FOOD_IMAGE_LLM_SCHEMA = {
               description: 'Short justification: cues used to identify the item and infer its weight & density (1-2 sentences max).'
             },
             estimated_weight_g: { type: 'number' },
+            is_beverage: {
+              type: 'boolean',
+              description: 'True for drinks / liquids people normally measure in volume (water, juice, milk, soda, coffee, tea, beer, wine, smoothie, milkshake, broth-as-drink, etc.). False for everything that is eaten with utensils.'
+            },
+            estimated_volume_ml: {
+              type: ['number', 'null'],
+              description: 'Volume in milliliters. MUST be filled when is_beverage is true. MUST be null when is_beverage is false.'
+            },
             confidence: { type: 'number', description: '0..1 confidence in identification + portion estimate.' },
             macros_per_100g: {
               type: 'object',
@@ -4377,7 +4385,7 @@ const FOOD_IMAGE_LLM_SCHEMA = {
               required: ['calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g']
             }
           },
-          required: ['name', 'visual_evidence', 'estimated_weight_g', 'confidence', 'macros_per_100g']
+          required: ['name', 'visual_evidence', 'estimated_weight_g', 'is_beverage', 'estimated_volume_ml', 'confidence', 'macros_per_100g']
         }
       },
       overall_health_score: {
@@ -4604,6 +4612,10 @@ ${captionBlock}${planBlock}
         * **Viscosity:** Watery sauce (low cal) vs. clinging/glossy (oil/cream-based)?
         * **Absorption:** For items like eggplant or bread, assume oil absorption if surface sheen is high.
     * **Final Weight Output:** Set \`estimated_weight_g\` for each component based on volume × density.
+    * **Beverage Handling (decides the user-facing unit):**
+        - Set \`is_beverage: true\` ONLY for drinks / pourable liquids that people naturally measure in volume (water, juice, milk, soft drinks, soda, coffee, tea, beer, wine, cocktails, smoothies, milkshakes, drinkable yogurts, broth served as a drink, etc.). Soups eaten with a spoon, ice cream, yogurt in a bowl, sauces, and dressings are NOT beverages.
+        - When \`is_beverage\` is true: fill \`estimated_volume_ml\` from container geometry (mug ≈ 250ml, standard glass ≈ 250ml, soda can ≈ 330ml, half-litre bottle ≈ 500ml, Starbucks Tall ≈ 350ml / Grande ≈ 470ml / Venti ≈ 590ml) and convert to grams using the drink's density (water / most soft drinks ≈ 1.0 g/ml, milk ≈ 1.03 g/ml, whole-milk smoothies ≈ 1.0–1.05 g/ml, beer ≈ 1.01 g/ml, oil ≈ 0.92 g/ml). \`estimated_weight_g\` must STILL be filled (macros math runs in grams).
+        - When \`is_beverage\` is false: set \`estimated_volume_ml: null\`.
 
 4.  **MACRONUTRIENT BASELINES (CRITICAL HANDOFF):**
     * **DO NOT** calculate the final total macros for the estimated weight.
@@ -4785,6 +4797,16 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
       const carbs_g   = Math.round((Number(per100.carbs_per_100g)   || 0) * m);
       const fat_g     = Math.round((Number(per100.fat_per_100g)     || 0) * m);
 
+      // For beverages, report the portion in ml so users see a familiar
+      // serving size ("250ml" of milk instead of "258g"). Macros math still
+      // runs in grams above — only the user-facing label changes.
+      const isBeverage = item.is_beverage === true;
+      const mlNum = Number(item.estimated_volume_ml);
+      const hasMl = isBeverage && Number.isFinite(mlNum) && mlNum > 0;
+      const portion_estimate = hasMl
+        ? `${Math.round(mlNum)}ml`
+        : `${Math.round(grams)}g`;
+
       return {
         name: item.name,
         macros: {
@@ -4795,7 +4817,7 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
         },
         confidence: typeof item.confidence === 'number' ? item.confidence : null,
         visual_evidence: item.visual_evidence || null,
-        portion_estimate: `${Math.round(grams)}g`
+        portion_estimate
       };
     });
 
