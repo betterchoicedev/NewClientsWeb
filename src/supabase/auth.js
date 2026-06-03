@@ -284,6 +284,73 @@ export const getClientRecord = async (userId) => {
   }
 };
 
+/**
+ * Ensure a `clients` row (and matching `chat_users` row with provider_id) exists for
+ * the currently authenticated user. Called from the OAuth callback path so that
+ * Google sign-ups have a user_code + company assignment by the time the
+ * OnboardingModal opens. Safe to call when a row already exists — returns early.
+ *
+ * Returns: { ok: boolean, alreadyExisted?: boolean, data?: any, error?: any }
+ */
+export const bootstrapClientRecordIfMissing = async () => {
+  try {
+    const { user } = await getCurrentUser();
+    if (!user?.id) {
+      return { ok: false, error: { message: 'No authenticated user' } };
+    }
+
+    const existing = await getClientRecord(user.id);
+    if (existing?.data?.user_id) {
+      return { ok: true, alreadyExisted: true, data: existing.data };
+    }
+
+    // Pull a best-effort first/last name out of the OAuth provider's user_metadata.
+    // Google fills user_metadata.full_name and user_metadata.name; manual sign-ups won't
+    // hit this path so the fallback to empty strings is fine.
+    const meta = user.user_metadata || {};
+    const fullName =
+      meta.full_name ||
+      meta.name ||
+      `${meta.given_name || ''} ${meta.family_name || ''}`.trim() ||
+      '';
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    const first_name = meta.given_name || parts[0] || null;
+    const last_name =
+      meta.family_name || (parts.length > 1 ? parts.slice(1).join(' ') : null);
+
+    const result = await createClientRecord(user.id, {
+      email: user.email || null,
+      first_name,
+      last_name,
+      phone: null,
+      user_language: meta.locale && String(meta.locale).startsWith('he') ? 'he' : 'en',
+    });
+
+    if (result.error) {
+      // Treat "already exists" as success — another tab / a previous bootstrap call won the race.
+      const msg = String(result.error.message || '').toLowerCase();
+      if (msg.includes('already exists')) {
+        return { ok: true, alreadyExisted: true };
+      }
+      return { ok: false, error: result.error };
+    }
+
+    // Clear the OAuth handoff context now that the row exists. Both the email/password
+    // and pre-bootstrap-Google paths used to leave these around until onboarding completion;
+    // we no longer need them after bootstrap, and stale values can confuse later sign-ups.
+    try {
+      sessionStorage.removeItem('invitation_token');
+      sessionStorage.removeItem('manager_link_data');
+      sessionStorage.removeItem('referral_dietitian_id');
+    } catch (_) {}
+
+    return { ok: true, alreadyExisted: false, data: result.data };
+  } catch (error) {
+    console.error('[bootstrapClientRecordIfMissing] exception:', error);
+    return { ok: false, error: { message: error?.message || 'bootstrap_failed' } };
+  }
+};
+
 export const updateClientRecord = async (userId, updates) => {
   try {
     const normalizedUpdates = { ...updates };

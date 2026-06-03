@@ -7114,14 +7114,22 @@ app.post('/api/auth/create-client', async (req, res) => {
       return res.status(400).json({ error: 'Invalid user' });
     }
 
+    // Idempotency: if a row already exists for this auth user, return it instead of
+    // failing. Bootstrap-from-OAuth-callback may race with the OnboardingModal's own
+    // create path, and the client expects a 2xx with the existing row in that case.
     const { data: existingClient } = await supabase
       .from('clients')
-      .select('user_id')
+      .select('*')
       .eq('user_id', userId)
       .maybeSingle();
 
     if (existingClient) {
-      return res.status(400).json({ error: 'Client record already exists' });
+      return res.json({
+        data: [existingClient],
+        alreadyExisted: true,
+        chatUserCreated: false,
+        chatUserData: null,
+      });
     }
 
     const clientInsertData = {
