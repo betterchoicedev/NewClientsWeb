@@ -33,13 +33,16 @@ export default function LandingPage() {
           throw new Error('INVALID_TOKEN_STRUCTURE');
         }
 
+        // 🛠️ FIX BUG 1: Convert corrupted spaces back to valid base64 '+' signs
+        const sanitizedHashToken = rawHashToken.replace(/ /g, '+');
+
         let manager_id = null;
         let link_id = null;
         let max_clients = null;
         let expiry_date = null;
 
         try {
-          let decodedString = atob(rawHashToken).trim();
+          let decodedString = atob(sanitizedHashToken).trim();
           
           if (!decodedString.startsWith('{') && decodedString.includes('"manager_id"')) {
             decodedString = '{"link_id":"' + decodedString;
@@ -93,17 +96,23 @@ export default function LandingPage() {
           throw errorInstance;
         }
 
+        // 🛠️ FIX BUG 2: Map structural fallbacks to handle both nested or flat DB configuration profiles
+        const rawCompanyConfig = resData.company.config || {};
         const safeConfig = {
           ui: {
-            layout: resData.company.config?.ui?.layout || 'centered',
-            themeSettings: resData.company.config?.ui?.themeSettings || {
-              innerBorder: 'border-gray-200',
-              ctaButtonClass: 'bg-emerald-500 text-white hover:bg-emerald-600',
-              accentTextColor: 'text-emerald-500',
-              innerBgGradient: ''
+            layout: rawCompanyConfig.ui?.layout || rawCompanyConfig.layout || 'centered',
+            themeSettings: rawCompanyConfig.ui?.themeSettings || rawCompanyConfig.themeSettings || {
+              colors: {
+                surface: "#ffffff",
+                primary: "#10b981",
+                secondary: "#a7f3d0",
+                accent: "#34d399",
+                textMain: "#064e3b",
+                textMuted: "#4b5563"
+              }
             }
           },
-          content: resData.company.config?.content || {
+          content: rawCompanyConfig.content || {
             heroTitle: { english: 'Welcome', hebrew: 'ברוכים הבאים' },
             heroSubtitle: { english: '', hebrew: '' },
             ctaText: { english: 'Continue', hebrew: 'המשך' }
@@ -142,28 +151,37 @@ export default function LandingPage() {
 
   if (isValidating) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 border-t-emerald-400 animate-spin" />
+          <p className="text-emerald-400 font-mono tracking-widest text-xs uppercase safe animate-pulse">
+            SECURE_HANDSHAKE_INIT // VALIDATING
+          </p>
+        </div>
       </div>
     );
   }
 
   if (errorMessage) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900" dir={direction}>
+      <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900" dir={direction}>
         <Navigation />
         <main className="flex-1 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900/50 rounded-2xl p-8 text-center shadow-xl">
-            <span className="text-5xl block mb-4">⚠️</span>
-            <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-2">
+          <div className="max-w-md w-full bg-stone-950/60 backdrop-blur-xl border border-rose-500/20 rounded-[2rem] p-8 md:p-12 shadow-2xl text-center transition-all duration-300">
+            <div className="w-16 h-16 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-6 animate-pulse">
+              ⚠️
+            </div>
+            <h2 className="text-2xl font-black text-white mb-3 tracking-tight">
               {language === 'hebrew' ? 'גישה מוגבלת' : 'Access Restricted'}
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 font-medium mb-6">{errorMessage}</p>
+            <p className="text-stone-300 font-medium text-sm leading-relaxed mb-8 px-2">
+              {errorMessage}
+            </p>
             <button 
               onClick={() => navigate('/')} 
-              className="bg-emerald-500 text-white px-6 py-2.5 rounded-full text-sm font-semibold shadow-md"
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold text-sm tracking-wide shadow-lg hover:from-emerald-600 hover:to-green-700 transition-all duration-300 transform active:scale-95"
             >
-              {language === 'hebrew' ? 'חזרה' : 'Return'}
+              {language === 'hebrew' ? 'חזרה לדף הבית' : 'Return to Safe Base'}
             </button>
           </div>
         </main>
@@ -171,7 +189,7 @@ export default function LandingPage() {
     );
   }
 
- const SelectedTemplate = getTemplate(dbConfig.ui.layout);
+  const SelectedTemplate = getTemplate(dbConfig?.ui?.layout);
 
   return (
     <div 
@@ -181,13 +199,8 @@ export default function LandingPage() {
     >
       <Navigation />
       
-      {/* 🌐 The outside background is locked to the master website theme fade */}
       <main 
-        className={`flex-1 overflow-y-auto custom-scrollbar flex flex-col ${
-          isDarkMode 
-            ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' 
-            : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'
-        }`} 
+        className="flex-1 overflow-y-auto custom-scrollbar flex flex-col bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900" 
         style={{ minHeight: 0 }}
       >
         <SelectedTemplate 
