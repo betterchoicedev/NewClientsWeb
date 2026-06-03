@@ -151,68 +151,66 @@ function buildMobileAppOAuthRedirect(session) {
   return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
 }
 
-// ---------------------------------------------------------------------------
-// Mobile OAuth flow (Google sign-in from the Expo app)
-// ---------------------------------------------------------------------------
-// The mobile client opens the Supabase OAuth URL inside expo-web-browser and
-// asks Supabase to redirect the one-time code back to this server's
-// `/api/auth/oauth/mobile-callback`. We then exchange the code for a session
-// and deep-link the tokens into the app via `MOBILE_APP_OAUTH_REDIRECT`.
-//
-// IMPORTANT — Supabase Dashboard configuration:
-//   Every backend host that serves `/api/auth/oauth/mobile-callback` MUST be
-//   listed under Authentication → URL Configuration → Redirect URLs in the
-//   Supabase Dashboard. Otherwise Supabase rejects the OAuth request with
-//   `redirect_to is not allowed`. Add the absolute URL for every environment
-//   you deploy, e.g. for production on Cloud Run:
-//     https://newclientsweb-615263253386.me-west1.run.app/api/auth/oauth/mobile-callback
-// ---------------------------------------------------------------------------
-app.get('/api/auth/oauth/mobile-callback', async (req, res) => {
-  try {
-    const oauthError = req.query.error || req.query.error_description;
-    if (oauthError) {
-      const msg = typeof oauthError === 'string' ? oauthError : 'oauth_failed';
-      return res.redirect(
-        `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent(msg)}`
-      );
-    }
-
-    const code = req.query.code;
-    if (!code) {
-      return res.redirect(
-        `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent('oauth_missing_code')}`
-      );
-    }
-
-    const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);
-    if (error) throw error;
-
-    res.redirect(buildMobileAppOAuthRedirect(data.session));
-  } catch (error) {
-    console.error('GET /api/auth/oauth/mobile-callback error:', error);
-    res.redirect(
-      `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent(
-        error.message || 'oauth_failed'
-      )}`
-    );
-  }
-});
-
 /**
  * Mobile app calls this to kick off Google sign-in.
  *
- * We do NOT redirect from here — the mobile client needs the raw OAuth URL
- * so it can open it inside `expo-web-browser`'s in-app browser (which keeps
- * the user's Google session cookie around and supports the deep-link
- * callback). We bake the absolute URL of THIS server's mobile-callback into
- * `redirectTo` so Supabase knows where to send the one-time code; the
- * mobile-callback then exchanges that code for a session and deep-links the
- * tokens back into the app.
+ * IMPORTANT — we intentionally bypass our own `/api/auth/oauth/mobile-callback`
+ * and tell Supabase to redirect **straight to the app's deep link**
+ * (`betterchoicemobile://auth/callback`). Why:
  *
- * NOTE: The `redirectTo` value below is what Supabase validates against the
- * Dashboard's Redirect URLs allow-list — see the comment block above the
- * mobile-callback route.
+ *   • Our `supabaseAuth` client is created without a `flowType` option, so
+ *     `auth.signInWithOAuth()` defaults to the **implicit** OAuth flow.
+ *     Implicit-flow tokens come back in the URL **fragment**
+ *     (`#access_token=…`) which browsers never send to servers — so our
+ *     server callback can never read them and would always end up
+ *     redirecting with `?error=oauth_missing_code`.
+ *
+ *   • The PKCE alternative requires server-side persistence of a
+ *     `code_verifier` between the start request and the callback. On
+ *     Cloud Run that's brittle (any new instance kills the verifier
+ *     because the Supabase JS client stores it in memory by default).
+ *
+ *   • Supabase's documented mobile pattern is exactly this: 302 the user
+ *     straight from Supabase into the app via its custom URL scheme,
+ *     with tokens in the fragment, and let the app parse them.
+ *
+ * Prerequisite: the deep link below MUST be present in the Supabase
+ * dashboard → Authentication → URL Configuration → Redirect URLs (an
+ * exact match or a wildcard like `betterchoicemobile://*` both work).
  */
+app.post('/api/auth/oauth/google/start', async (req, res) => {
+  try {
+    const supabaseUrl = (process.env.REACT_APP_SUPABASE_URL || '').trim();
+    if (!supabaseUrl) {
+      return res.status(500).json({ error: 'SUPABASE_URL is not configured' });
+    }
+
+    // Build the Supabase `/auth/v1/authorize` URL by hand. We do NOT
+    // include a `code_challenge`, so Supabase serves the implicit flow
+    // and returns tokens in the redirect's URL fragment. We also do NOT
+    // call `supabaseAuth.auth.signInWithOAuth(...)` because newer
+    // versions of @supabase/supabase-js silently switch to PKCE when
+    // available, which would round-trip back through our server (and we
+    // don't want that — see comment above).
+    const params = new URLSearchParams({
+      provider: 'google',
+      redirect_to: MOBILE_APP_OAUTH_REDIRECT,
+    });
+
+    const url = `${supabaseUrl.replace(/\/$/, '')}/auth/v1/authorize?${params.toString()}`;
+    res.json({ url });
+  } catch (error) {
+    console.error('POST /api/auth/oauth/google/start error:', error);
+    res.status(500).json({ error: error.message || 'Failed to start Google sign-in' });
+  }
+});
+
+// NOTE: `GET /api/auth/oauth/mobile-callback` is intentionally NOT defined
+// here — the live implementation lives in `server/routes/authSession.js`
+// (registered above via `registerAuthSessionRoutes`). Keeping a duplicate
+// here used to mask which one was active; if you need to change behavior,
+// edit the one in `authSession.js`.
+
 app.post('/api/auth/oauth/google/start', async (req, res) => {
   try {
     // Build the absolute URL of our own mobile-callback. Honors the
