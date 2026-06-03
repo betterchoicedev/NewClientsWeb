@@ -48,6 +48,22 @@ function registerValidSW(swUrl, config) {
   navigator.serviceWorker
     .register(swUrl)
     .then((registration) => {
+      // Proactively poll for SW updates so a redeployed bundle is picked up
+      // quickly instead of waiting for the browser's default 24h check. This
+      // is what makes the network-first navigation strategy in
+      // public/service-worker.js actually deliver new shells to existing tabs.
+      const triggerUpdate = () => {
+        registration.update().catch(() => {});
+      };
+      // On tab focus
+      window.addEventListener('focus', triggerUpdate);
+      // On visibility change (covers mobile resume)
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') triggerUpdate();
+      });
+      // And on a slow interval as a safety net
+      setInterval(triggerUpdate, 60 * 60 * 1000);
+
       registration.onupdatefound = () => {
         const installingWorker = registration.installing;
         if (installingWorker == null) {

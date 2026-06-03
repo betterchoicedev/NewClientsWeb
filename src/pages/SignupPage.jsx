@@ -162,10 +162,27 @@ function SignupPage() {
     setSocialLoading(true);
     setError('');
     try {
-      // Store invitation token and dietitian ID before OAuth redirect (hash will be lost during redirect)
+      // Persist link context to sessionStorage before OAuth redirect — the URL hash (#d=)
+      // is dropped by Google and replaced with the OAuth hash on return, so we rely on
+      // sessionStorage (same tab, same origin) to carry link_id + manager_id through the
+      // redirect. createClientRecord reads these back after the /auth/callback round-trip.
       const token = invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1];
       if (token) {
         sessionStorage.setItem('invitation_token', token);
+      }
+      // Re-derive and store manager_link_data so the link_id reaches the server even if
+      // it was cleared between mount and click.
+      if (token) {
+        const linkData = decodeRegistrationHash(token);
+        if (linkData) {
+          sessionStorage.setItem(
+            'manager_link_data',
+            JSON.stringify({
+              link_id: linkData.link_id || undefined,
+              manager_id: linkData.manager_id || undefined,
+            })
+          );
+        }
       }
       const id = dietitianId || getDietitianIdFromHash();
       if (id) {
@@ -530,8 +547,10 @@ function SignupPage() {
             </div>
           </form>
 
-          {/* Social Signup – hidden when using invitation/registration links (#d=) */}
-          {!hasInvitationToken && (
+          {/* Social Signup – also available for invitation/registration links (#d=).
+              The link_id + manager_id are persisted in sessionStorage before the OAuth
+              redirect, then read back in createClientRecord after the callback so the
+              new user is linked to their manager. */}
           <div className="mt-4 sm:mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -571,7 +590,6 @@ function SignupPage() {
               </button>
             </div>
           </div>
-          )}
             </>
           )}
         </div>

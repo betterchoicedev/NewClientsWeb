@@ -1,125 +1,150 @@
 // Service Worker for BetterChoice AI PWA
-const CACHE_NAME = 'betterchoice-ai-v1';
-const urlsToCache = [
-  '/',
+//
+// Caching strategy
+// ----------------
+// The previous v1 SW used cache-first for everything, including the HTML shell
+// `/`. After every redeploy, the cached `index.html` kept pointing at the old
+// hashed bundle (e.g. `main.68ec4caa.js`) which no longer exists on the server,
+// so users got a blank page with a 404 on `/static/js/main.<hash>.js`.
+//
+// v2 fixes that:
+//   • HTML / navigation requests → network-first (fall back to cache only when
+//     offline). The shell is never served stale after a deploy.
+//   • Hashed CRA build assets under `/static/*` → cache-first with cache write.
+//     These are content-addressed (`main.<hash>.js`), so they're safe to cache
+//     forever and the URL itself changes on every new build.
+//   • Everything else (API calls, OAuth, third-party) → pass through to the
+//     network untouched.
+//
+// Bumping CACHE_NAME forces the activate handler to delete the v1 cache that
+// still contains the stale shell on existing clients.
+const CACHE_NAME = 'betterchoice-ai-v2';
+const STATIC_CACHE = 'betterchoice-static-v2';
+
+// Pre-cache only static, non-versioning-sensitive assets. Do NOT precache `/`
+// or `index.html` — they must always come from the network so users pick up
+// the new bundle hash after a deploy.
+const PRECACHE_URLS = [
   '/manifest.json',
   '/favicon.ico',
   '/logo192.png',
   '/logo512.png',
-  '/image.png'
+  '/image.png',
 ];
 
-// Install event - cache resources
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Service Worker: Cache opened');
-        // Try to cache resources, but don't fail if some are missing
-        return Promise.allSettled(
-          urlsToCache.map(url => 
-            cache.add(url).catch(err => {
-              console.warn(`Service Worker: Failed to cache ${url}`, err);
-              return null;
-            })
-          )
-        );
-      })
-      .catch((error) => {
-        console.error('Service Worker: Cache failed', error);
-      })
+    caches.open(STATIC_CACHE).then((cache) =>
+      Promise.allSettled(
+        PRECACHE_URLS.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn(`SW: failed to precache ${url}`, err);
+            return null;
+          })
+        )
+      )
+    )
   );
-  // Force the waiting service worker to become the active service worker
   self.skipWaiting();
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Service Worker: Deleting old cache', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
+    (async () => {
+      const names = await caches.keys();
+      await Promise.all(
+        names
+          .filter((n) => n !== CACHE_NAME && n !== STATIC_CACHE)
+          .map((n) => caches.delete(n))
       );
-    })
+      await self.clients.claim();
+    })()
   );
-  // Take control of all pages immediately
-  return self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+function isStaticAsset(url) {
+  return (
+    url.pathname.startsWith('/static/') ||
+    /\.(?:js|css|woff2?|ttf|otf|eot|png|jpg|jpeg|gif|svg|webp|ico)$/i.test(
+      url.pathname
+    )
+  );
+}
+
 self.addEventListener('fetch', (event) => {
-  // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin)) {
+  const { request } = event;
+
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+
+  if (url.origin !== self.location.origin) return;
+
+  if (
+    url.pathname === '/service-worker.js' ||
+    url.pathname === '/manifest.json'
+  ) {
     return;
   }
 
-  // Skip service worker and manifest requests to prevent loops
-  if (event.request.url.includes('service-worker.js') ||
-      event.request.url.includes('manifest.json')) {
-    return;
-  }
-
-  // Never intercept non-GET requests (POST/PUT/DELETE/etc.) — they must reach
-  // the network directly, otherwise the SW can swallow them and produce
-  // "Failed to convert value to 'Response'" errors.
-  if (event.request.method !== 'GET') {
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        if (response) {
-          return response;
+  // Navigation / HTML → network-first. This is the critical fix: the shell is
+  // never served from cache while online, so a fresh `index.html` (with the
+  // current bundle hash) is always loaded. Cache only as an offline fallback.
+  if (request.mode === 'navigate' || request.destination === 'document') {
+    event.respondWith(
+      (async () => {
+        try {
+          const fresh = await fetch(request);
+          if (fresh && fresh.ok) {
+            const copy = fresh.clone();
+            caches.open(CACHE_NAME).then((c) => c.put('/', copy)).catch(() => {});
+          }
+          return fresh;
+        } catch (_) {
+          const cached = await caches.match('/');
+          if (cached) return cached;
+          return new Response('Offline', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain' },
+          });
         }
+      })()
+    );
+    return;
+  }
 
-        const fetchRequest = event.request.clone();
-
-        return fetch(fetchRequest).then((response) => {
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
+  // Hashed static assets → cache-first. Safe because the URL itself changes
+  // when the build changes (e.g. main.<hash>.js).
+  if (isStaticAsset(url)) {
+    event.respondWith(
+      (async () => {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        try {
+          const fresh = await fetch(request);
+          if (fresh && fresh.status === 200 && fresh.type === 'basic') {
+            const copy = fresh.clone();
+            caches
+              .open(STATIC_CACHE)
+              .then((c) => c.put(request, copy))
+              .catch(() => {});
           }
-
-          const responseToCache = response.clone();
-
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache).catch(err => {
-              console.warn('Service Worker: Failed to cache response', err);
-            });
-          });
-
-          return response;
-        }).catch(async () => {
-          // Network failed. For navigation requests, fall back to the cached
-          // shell. For all other GETs, return a synthetic 504 so the browser
-          // never sees `undefined` from respondWith().
-          if (event.request.mode === 'navigate') {
-            const cached = await caches.match('/');
-            if (cached) return cached;
-            return new Response('Offline', {
-              status: 503,
-              headers: { 'Content-Type': 'text/plain' },
-            });
-          }
-          return new Response('', {
-            status: 504,
-            statusText: 'Gateway Timeout (offline)',
-          });
-        });
-      })
-      .catch(() => {
-        // Last-resort guard so respondWith() always gets a Response.
-        return new Response('', { status: 504 });
-      })
-  );
+          return fresh;
+        } catch (_) {
+          return new Response('', { status: 504 });
+        }
+      })()
+    );
+    return;
+  }
 });
 
-// Handle push notifications (optional - for future use)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
   const title = data.title || 'BetterChoice AI';
@@ -128,19 +153,12 @@ self.addEventListener('push', (event) => {
     icon: '/logo192.png',
     badge: '/logo192.png',
     vibrate: [200, 100, 200],
-    data: data
+    data: data,
   };
-
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(
-    clients.openWindow(event.notification.data?.url || '/')
-  );
+  event.waitUntil(clients.openWindow(event.notification.data?.url || '/'));
 });
-
