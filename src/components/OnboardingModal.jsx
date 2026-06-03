@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { normalizePhoneForDatabase, createClientRecord } from '../supabase/auth';
@@ -6,6 +7,226 @@ import { translateMenu } from '../services/translateService';
 
 const CREATE_MEAL_PLAN_API_URL =
   'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
+
+/**
+ * PortalSelect — a styled, accessible replacement for native <select>.
+ * The dropdown list is rendered through a React portal to document.body so it
+ * floats above any overflow-clipped ancestor (modal cards, scroll containers).
+ *
+ * Props:
+ *   value           current selected value (matched against options[].value)
+ *   onChange(value) fires with the chosen option value
+ *   options         array of { value, label } (label may be string or ReactNode)
+ *   placeholder     text shown on the trigger when nothing is selected
+ *   disabled        bool
+ *   hasError        bool — adds the same red glow getBorderClass uses
+ *   className       passes through to the trigger button (use the same Tailwind chain inputs use)
+ *   isDarkMode      from useTheme, used for dropdown surface tint
+ *   themeClasses    from useTheme, used for text colors
+ *   direction       'ltr' | 'rtl'
+ *   name            optional, attached to a hidden input so existing
+ *                   document.querySelector('[name="..."]') focus/scroll logic still works
+ */
+function PortalSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled,
+  hasError,
+  className,
+  isDarkMode,
+  themeClasses,
+  direction,
+  name,
+  ariaLabel,
+}) {
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(-1);
+  const [rect, setRect] = useState(null);
+  const triggerRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  const selectedOption = options.find((o) => String(o.value) === String(value));
+  const hasValue = selectedOption !== undefined && value !== '' && value !== null && value !== undefined;
+
+  // Position tracking — recomputes on open / scroll / resize.
+  // Decides whether to open above the trigger if there's not enough room below.
+  useLayoutEffect(() => {
+    if (!open) {
+      setRect(null);
+      return undefined;
+    }
+    const update = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const desiredMax = 288; // ~max-h-72
+      const spaceBelow = window.innerHeight - r.bottom - 16;
+      const spaceAbove = r.top - 16;
+      const openUp = spaceBelow < Math.min(160, desiredMax) && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(120, Math.min(desiredMax, openUp ? spaceAbove : spaceBelow));
+      setRect({
+        top: openUp ? Math.max(8, r.top - 8 - maxHeight) : r.bottom + 8,
+        left: r.left,
+        width: r.width,
+        maxHeight,
+      });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open, options.length]);
+
+  // Click-outside closes.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocClick = (e) => {
+      const inTrigger = triggerRef.current && triggerRef.current.contains(e.target);
+      const inDropdown = dropdownRef.current && dropdownRef.current.contains(e.target);
+      if (!inTrigger && !inDropdown) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  // When opening, start the highlight on the currently selected option (or 0).
+  useEffect(() => {
+    if (!open) return;
+    const idx = options.findIndex((o) => String(o.value) === String(value));
+    setHighlight(idx >= 0 ? idx : 0);
+  }, [open, options, value]);
+
+  // Keep the highlighted item scrolled into view.
+  useEffect(() => {
+    if (!open || highlight < 0 || !dropdownRef.current) return;
+    const items = dropdownRef.current.querySelectorAll('[role="option"]');
+    const item = items[highlight];
+    if (item && typeof item.scrollIntoView === 'function') {
+      item.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlight, open]);
+
+  const handleKeyDown = (e) => {
+    if (disabled) return;
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlight((h) => (h + 1) % options.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlight((h) => (h <= 0 ? options.length - 1 : h - 1));
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (highlight >= 0 && options[highlight]) {
+        onChange(options[highlight].value);
+      }
+      setOpen(false);
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      setOpen(false);
+    }
+  };
+
+  // Error coloring: when hasError is true and consumer didn't already include error tokens
+  // in their className, layer them on top so the field looks identical to the city/text inputs.
+  const errorClasses = hasError
+    ? 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.1)]'
+    : '';
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        onKeyDown={handleKeyDown}
+        className={`${className} ${errorClasses} text-start flex items-center justify-between gap-2 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        <span className={`flex-1 truncate ${hasValue ? '' : 'text-gray-400'}`}>
+          {hasValue ? selectedOption.label : placeholder}
+        </span>
+        <svg
+          className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''} ${themeClasses?.textSecondary || 'text-gray-400'}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Hidden input so any external code that focuses/scrolls by name still works. */}
+      {name && (
+        <input
+          type="hidden"
+          name={name}
+          value={value == null ? '' : value}
+          readOnly
+        />
+      )}
+
+      {open && rect && createPortal(
+        <ul
+          ref={dropdownRef}
+          role="listbox"
+          dir={direction}
+          style={{
+            position: 'fixed',
+            top: `${rect.top}px`,
+            left: `${rect.left}px`,
+            width: `${rect.width}px`,
+            maxHeight: `${rect.maxHeight}px`,
+            zIndex: 9999,
+          }}
+          className={`overflow-y-auto custom-scrollbar rounded-2xl border shadow-2xl py-1 ${isDarkMode ? 'bg-gray-800 border-white/10' : 'bg-white border-gray-900/10'}`}
+        >
+          {options.map((opt, idx) => {
+            const isSelected = String(opt.value) === String(value);
+            const isHighlighted = idx === highlight;
+            return (
+              <li
+                key={`${opt.value}-${idx}`}
+                role="option"
+                aria-selected={isSelected}
+                onMouseEnter={() => setHighlight(idx)}
+                onMouseDown={(e) => {
+                  // Use onMouseDown so the trigger doesn't blur before the pick is applied.
+                  e.preventDefault();
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={`px-4 py-2.5 cursor-pointer text-sm sm:text-base truncate transition-colors duration-150 ${
+                  isHighlighted ? 'bg-emerald-500/10' : ''
+                } ${
+                  isSelected
+                    ? 'text-emerald-500 dark:text-emerald-400 font-semibold'
+                    : (themeClasses?.textPrimary || 'text-gray-100')
+                }`}
+              >
+                {opt.label}
+              </li>
+            );
+          })}
+        </ul>,
+        document.body
+      )}
+    </>
+  );
+}
 
 /** Any answer already stored on clients or chat_users (used to skip welcome and open at first DB gap). */
 const hasAnyPersistedOnboardingAnswer = (clientRow, chatRow) => {
@@ -105,6 +326,20 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
   const [welcomeMessageSent, setWelcomeMessageSent] = useState(false);
   // 'idle' | 'pending' | 'success' | 'failed'
   const [aiActivityStatus, setAiActivityStatus] = useState('idle');
+
+  // --- City autocomplete (powered by /api/cities/search → cities500 in chatSupabase) ---
+  const [cityQuery, setCityQuery] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState([]);
+  const [cityLoading, setCityLoading] = useState(false);
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
+  const [cityHighlight, setCityHighlight] = useState(-1);
+  const [selectedCityMeta, setSelectedCityMeta] = useState(null); // { name, country_code, timezone, ... }
+  const cityFetchTimerRef = useRef(null);
+  const cityFetchAbortRef = useRef(null);
+  const cityWrapperRef = useRef(null);
+  const cityInputRef = useRef(null);
+  const cityDropdownRef = useRef(null);
+  const [cityDropdownRect, setCityDropdownRect] = useState(null);
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -257,6 +492,160 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
     { value: 'north_america', labelHe: 'צפון אמריקה', labelEn: 'North America' },
     { value: 'other', labelHe: 'אחר', labelEn: 'Other' }
   ];
+
+  // Maps the broad region value above to ISO 3166-1 alpha-2 codes used by cities500.country_code.
+  // Used to scope city-search results to the area the user already chose, so a user in "Israel"
+  // doesn't see Tokyo as a top hit when they start typing.
+  const regionToCountryCodes = {
+    israel: ['IL'],
+    japan: ['JP'],
+    korea: ['KR', 'KP'],
+    greater_china: ['CN', 'HK', 'TW', 'MO'],
+    india_south_asia: ['IN', 'PK', 'BD', 'LK', 'NP', 'BT', 'MV'],
+    southeast_asia: ['TH', 'VN', 'PH', 'KH', 'LA', 'MM'],
+    indonesia_malaysia: ['ID', 'MY', 'SG', 'BN', 'TL'],
+    turkey: ['TR'],
+    persian_iranian: ['IR'],
+    gulf_arabia: ['SA', 'AE', 'QA', 'KW', 'BH', 'OM', 'YE', 'JO', 'IQ'],
+    north_africa: ['EG', 'LY', 'TN', 'DZ', 'MA', 'SD', 'MR'],
+    east_africa: ['KE', 'TZ', 'UG', 'ET', 'RW', 'BI', 'SO', 'DJ', 'ER'],
+    europe_mediterranean: ['IT', 'ES', 'GR', 'PT', 'CY', 'MT', 'AD', 'MC', 'SM', 'VA'],
+    europe_west: ['FR', 'DE', 'NL', 'BE', 'CH', 'AT', 'GB', 'IE', 'LU', 'DK', 'SE', 'NO', 'FI', 'IS', 'LI'],
+    europe_east_russian: ['RU', 'PL', 'UA', 'CZ', 'HU', 'RO', 'BG', 'SK', 'HR', 'RS', 'SI', 'BA', 'LT', 'LV', 'EE', 'BY', 'MD', 'AL', 'MK', 'ME', 'XK'],
+    mexico: ['MX'],
+    latam_south_america: ['BR', 'AR', 'CL', 'CO', 'PE', 'VE', 'UY', 'PY', 'BO', 'EC', 'GY', 'SR', 'GF'],
+    caribbean: ['CU', 'DO', 'JM', 'HT', 'TT', 'BS', 'BB', 'PR', 'KY', 'AW', 'CW', 'VI'],
+    north_america: ['US', 'CA'],
+    other: []
+  };
+
+  // Resolve UI-friendly display name from a cities500 row, preferring the user's UI language.
+  // alternatenames is a comma-joined blob of localized names — we scan it for a Hebrew token
+  // when the UI is Hebrew, otherwise fall back to ASCII / canonical.
+  const formatCityDisplay = (row) => {
+    if (!row) return '';
+    if (language === 'hebrew' && row.alternatenames) {
+      const hebrew = row.alternatenames
+        .split(',')
+        .map((s) => s.trim())
+        .find((s) => /[\u0590-\u05FF]/.test(s));
+      if (hebrew) return hebrew;
+    }
+    return row.asciiname || row.name || '';
+  };
+
+  // Debounced city search → /api/cities/search. Re-fires whenever the input changes,
+  // also re-scopes to the user's chosen region (passed as country codes).
+  useEffect(() => {
+    if (cityFetchTimerRef.current) {
+      clearTimeout(cityFetchTimerRef.current);
+      cityFetchTimerRef.current = null;
+    }
+
+    const q = (cityQuery || '').trim();
+    if (q.length < 1) {
+      setCitySuggestions([]);
+      setCityLoading(false);
+      return;
+    }
+
+    // If the input matches the already-selected city verbatim, don't re-query.
+    if (selectedCityMeta && formatCityDisplay(selectedCityMeta).toLowerCase() === q.toLowerCase()) {
+      return;
+    }
+
+    setCityLoading(true);
+    cityFetchTimerRef.current = setTimeout(async () => {
+      try {
+        if (cityFetchAbortRef.current) cityFetchAbortRef.current.abort();
+        const controller = new AbortController();
+        cityFetchAbortRef.current = controller;
+
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+        const params = new URLSearchParams({ q, limit: '10' });
+        const codes = regionToCountryCodes[formData.region] || [];
+        if (codes.length > 0) params.set('country', codes.join(','));
+
+        const res = await fetch(`${apiUrl}/api/cities/search?${params.toString()}`, {
+          signal: controller.signal
+        });
+        if (!res.ok) throw new Error(`City search failed: ${res.status}`);
+        const json = await res.json();
+        setCitySuggestions(Array.isArray(json.data) ? json.data : []);
+        setCityHighlight(-1);
+        setCityDropdownOpen(true);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.warn('City search error:', err);
+          setCitySuggestions([]);
+        }
+      } finally {
+        setCityLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      if (cityFetchTimerRef.current) clearTimeout(cityFetchTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cityQuery, formData.region]);
+
+  // Close the city dropdown when the user clicks anywhere else.
+  // The dropdown is rendered via a portal to escape the modal's overflow-hidden,
+  // so we also have to exempt the portal node from "outside" checks.
+  useEffect(() => {
+    if (!cityDropdownOpen) return undefined;
+    const onDocClick = (e) => {
+      const inWrapper = cityWrapperRef.current && cityWrapperRef.current.contains(e.target);
+      const inDropdown = cityDropdownRef.current && cityDropdownRef.current.contains(e.target);
+      if (!inWrapper && !inDropdown) {
+        setCityDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [cityDropdownOpen]);
+
+  // Keep the portal'd dropdown anchored to the input's current viewport position.
+  // useLayoutEffect runs before paint so there's no flicker on open / size changes.
+  // Capture-phase scroll listener catches scrolls in any ancestor (incl. the modal's
+  // inner overflow-y-auto container).
+  useLayoutEffect(() => {
+    if (!cityDropdownOpen) {
+      setCityDropdownRect(null);
+      return undefined;
+    }
+
+    const update = () => {
+      const el = cityInputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setCityDropdownRect({
+        top: r.bottom + 8,
+        left: r.left,
+        width: r.width
+      });
+    };
+
+    update();
+
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [cityDropdownOpen, citySuggestions.length, cityLoading]);
+
+  // Sync the visible query string to formData.city when the form is hydrated from the DB
+  // (e.g., user re-enters onboarding after a partial save). Avoids leaving the input blank
+  // while formData already has a city value.
+  useEffect(() => {
+    if (formData.city && !cityQuery) {
+      setCityQuery(formData.city);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.city]);
 
   // Preferred language options (for chatbot; website UI is English/Hebrew only)
   const PREFERRED_LANGUAGES = [
@@ -489,12 +878,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
       fields: ['region']
     },
     {
-      title: language === 'hebrew' ? 'עיר' : 'City',
-      fields: ['city']
-    },
-    {
-      title: language === 'hebrew' ? 'אזור זמן' : 'Timezone',
-      fields: ['timezone']
+      // City picker is powered by GeoNames cities500 and auto-derives the timezone too,
+      // so the previously-separate "Timezone" step is now part of the same step.
+      title: language === 'hebrew' ? 'עיר ואזור זמן' : 'City & Timezone',
+      fields: ['city', 'timezone']
     },
     {
       title: language === 'hebrew' ? 'תאריך לידה' : 'Date of Birth',
@@ -2027,9 +2414,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
   // Helper function to get border class based on field error
   const getBorderClass = (fieldName) => {
     if (fieldErrors[fieldName]) {
-      return 'border-red-500 border-2';
+      return 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.1)]';
     }
-    return 'border-gray-600/50 border-2';
+    return 'border-gray-500/20';
   };
 
   // Helper function to convert DD-MM-YYYY to YYYY-MM-DD
@@ -3657,7 +4044,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
             if (promoCodeError) setPromoCodeError('');
           }}
           placeholder={language === 'hebrew' ? 'הזן קוד' : 'Enter code'}
-          className={`w-full px-3 py-2.5 text-sm ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary}`}
+          className={`w-full px-4 py-3.5 text-sm bg-black/5 dark:bg-white/5 border border-gray-500/20 rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 placeholder:text-gray-400 outline-none`}
         />
 
         {promoCodeError && (
@@ -3812,43 +4199,59 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
 
   const currentFields = filteredSteps[currentStep]?.fields || [];
 
+  // Silently compute progress to drive conversational microcopy instead of "Step X of Y"
+  const progressRatio = filteredSteps.length > 0 ? (currentStep + 1) / filteredSteps.length : 0;
+  const progressPercent = progressRatio * 100;
+
+  let motivationalTextEn = "Let's get to know you...";
+  let motivationalTextHe = "בואו נכיר אותך קצת...";
+
+  if (progressRatio > 0.8) {
+    motivationalTextEn = "Almost done! Just the final touches ✨";
+    motivationalTextHe = "כמעט סיימנו! רק נגיעות אחרונות ✨";
+  } else if (progressRatio > 0.5) {
+    motivationalTextEn = "Just a little bit more... you're doing great! 🚀";
+    motivationalTextHe = "עוד קצת... אנחנו כמעט שם! 🚀";
+  } else if (progressRatio > 0.2) {
+    motivationalTextEn = "Great start! Let's keep going 🎯";
+    motivationalTextHe = "התחלה מעולה! בואו נמשיך 🎯";
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4" dir={direction}>
-      <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto animate-scaleIn relative`}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4 sm:pt-12" dir={direction}>
+      <div className={`${themeClasses.bgCard} rounded-2xl sm:rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] border border-white/10 p-5 sm:p-8 md:p-10 max-w-2xl w-full max-h-[95vh] sm:max-h-[85vh] overflow-hidden animate-scaleIn relative flex flex-col`}>
         {/* Decorative gradient overlay */}
-        <div className="absolute top-0 left-0 right-0 h-20 sm:h-32 bg-gradient-to-br from-established-500/20 via-emerald-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none"></div>
+        <div className="absolute top-0 left-0 right-0 h-20 sm:h-32 bg-gradient-to-br from-established-500/20 via-emerald-500/10 to-transparent rounded-t-2xl sm:rounded-t-[2rem] pointer-events-none"></div>
         
         {/* Language Toggle Button */}
         <button
           onClick={toggleLanguage}
-          className={`absolute top-2 right-2 sm:top-4 sm:right-4 md:top-6 ${direction === 'rtl' ? 'md:left-6 md:right-auto' : 'md:right-6'} z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all duration-200 text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
+          className={`absolute top-2 right-2 sm:top-4 sm:right-4 md:top-6 ${direction === 'rtl' ? 'md:left-6 md:right-auto' : 'md:right-6'} z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-xl ${themeClasses.bgCard} border border-gray-500/30 hover:border-emerald-500/50 transition-all duration-200 text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
           title={language === 'hebrew' ? 'Switch to English' : 'עברית'}
         >
           <span className="hidden sm:inline">{language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}</span>
           <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
         </button>
+
+        {/* Scrollable content (header, progress, fields, error) */}
+        <div className="flex-1 min-h-0 overflow-y-auto -mx-5 sm:-mx-8 md:-mx-10 px-5 sm:px-8 md:px-10 custom-scrollbar">
         
-        {/* Header */}
-        <div className="mb-4 sm:mb-6 md:mb-8 relative mt-8 sm:mt-0">
-          <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-gradient-to-br from-emerald-400 to-established-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg text-sm sm:text-base md:text-lg">
-              {(currentStep + 1)}
-            </div>
-            <h2 className={`text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-established-400 bg-clip-text text-transparent ${themeClasses.textPrimary} leading-tight`}>
-              {filteredSteps[currentStep]?.title || (language === 'hebrew' ? 'בואו נעשה כמה שאלות התחלה' : "Let's get started")}
-            </h2>
-          </div>
-          <p className={`${themeClasses.textSecondary} text-xs sm:text-sm ml-10 sm:ml-12 md:ml-14`}>
-            {language === 'hebrew' ? `שלב ${currentStep + 1} מתוך ${filteredSteps.length}` : `Step ${currentStep + 1} of ${filteredSteps.length}`}
+        {/* Conversational Header */}
+        <div className="mb-6 sm:mb-8 text-center relative mt-8 sm:mt-0 flex flex-col items-center">
+          <h2 className={`text-2xl sm:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-established-400 bg-clip-text text-transparent ${themeClasses.textPrimary} mb-2 leading-tight`}>
+            {filteredSteps[currentStep]?.title || (language === 'hebrew' ? 'בואו נעשה כמה שאלות התחלה' : "Let's get started")}
+          </h2>
+          <p className={`${themeClasses.textSecondary} text-sm sm:text-base font-medium transition-all duration-300`}>
+            {language === 'hebrew' ? motivationalTextHe : motivationalTextEn}
           </p>
         </div>
 
-        {/* Progress Bar */}
-        <div className="mb-4 sm:mb-6 md:mb-8">
-          <div className="w-full bg-gray-700/50 rounded-full h-2 sm:h-2.5 overflow-hidden">
+        {/* Sleek Progress Bar */}
+        <div className="mb-6 sm:mb-8 px-4 sm:px-12">
+          <div className="w-full bg-gray-700/30 rounded-full h-1.5 sm:h-2 overflow-hidden">
             <div
-              className="bg-gradient-to-r from-emerald-400 to-established-500 h-2 sm:h-2.5 rounded-full transition-all duration-500 ease-out shadow-lg shadow-emerald-500/50"
-              style={{ width: `${((currentStep + 1) / filteredSteps.length) * 100}%` }}
+              className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+              style={{ width: `${progressPercent}%` }}
             ></div>
           </div>
         </div>
@@ -3865,7 +4268,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 name="first_name"
                 value={formData.first_name}
                 onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('first_name')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('first_name')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-gray-500/40 outline-none`}
                 placeholder={language === 'hebrew' ? 'יוסי' : 'John'}
               />
             </div>
@@ -3881,7 +4284,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 name="last_name"
                 value={formData.last_name}
                 onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('last_name')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('last_name')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-gray-500/40 outline-none`}
                 placeholder={language === 'hebrew' ? 'כהן' : 'Doe'}
               />
             </div>
@@ -3893,24 +4296,29 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 {language === 'hebrew' ? 'מספר טלפון' : 'Phone Number'}
               </label>
               <div className="flex gap-2">
-                <select
-                  name="phoneCountryCode"
-                  value={formData.phoneCountryCode}
-                  onChange={handleInputChange}
-                  className={`px-2 py-2.5 sm:px-3 sm:py-3 md:py-3.5 text-xs sm:text-sm ${themeClasses.bgCard} ${getBorderClass('phone')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-                >
-                  {countryCodes.map((country) => (
-                    <option key={country.code} value={country.code}>
-                      {country.country} {country.code}
-                    </option>
-                  ))}
-                </select>
+                <div className="min-w-[120px] sm:min-w-[140px]">
+                  <PortalSelect
+                    name="phoneCountryCode"
+                    value={formData.phoneCountryCode}
+                    onChange={(v) => handleInputChange({ target: { name: 'phoneCountryCode', value: v } })}
+                    options={countryCodes.map((country) => ({
+                      value: country.code,
+                      label: `${country.country} ${country.code}`,
+                    }))}
+                    placeholder={language === 'hebrew' ? 'בחר' : 'Select'}
+                    hasError={!!fieldErrors['phone']}
+                    isDarkMode={isDarkMode}
+                    themeClasses={themeClasses}
+                    direction={direction}
+                    className={`w-full px-3 py-3.5 sm:px-4 sm:py-4 text-xs sm:text-sm bg-black/5 dark:bg-white/5 border ${getBorderClass('phone')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+                  />
+                </div>
                 <input
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('phone')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                  className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('phone')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-gray-500/40 outline-none`}
                   placeholder={language === 'hebrew' ? '50-123-4567' : '50-123-4567'}
                 />
               </div>
@@ -3927,17 +4335,18 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
               <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'שפה מועדפת' : 'Preferred Language'}
               </label>
-              <select
+              <PortalSelect
                 name="language"
                 value={formData.language}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('language')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר שפה' : 'Select language'}</option>
-                {PREFERRED_LANGUAGES.map((lang) => (
-                  <option key={lang.value} value={lang.value}>{lang.label}</option>
-                ))}
-              </select>
+                onChange={(v) => handleInputChange({ target: { name: 'language', value: v } })}
+                options={PREFERRED_LANGUAGES.map((lang) => ({ value: lang.value, label: lang.label }))}
+                placeholder={language === 'hebrew' ? 'בחר שפה' : 'Select language'}
+                hasError={!!fieldErrors['language']}
+                isDarkMode={isDarkMode}
+                themeClasses={themeClasses}
+                direction={direction}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('language')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+              />
             </div>
           )}
 
@@ -3964,11 +4373,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                           });
                         }
                       }}
-                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                      className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                         isSelected
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                      } ${fieldErrors['region'] && !isSelected ? 'border-red-500' : ''}`}
+                          ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                          : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                      } ${fieldErrors['region'] && !isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                     >
                       {language === 'hebrew' ? region.labelHe : region.labelEn}
                     </button>
@@ -3979,22 +4388,185 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
           )}
 
           {currentFields.includes('city') && (
-            <div className="group">
+            <div className="group" ref={cityWrapperRef}>
               <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'עיר' : 'City'}
               </label>
-              <input
-                type="text"
-                name="city"
-                value={formData.city}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('city')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
-                placeholder={language === 'hebrew' ? 'תל אביב' : 'Tel Aviv'}
-              />
+
+              <div className="relative">
+                <input
+                  ref={cityInputRef}
+                  type="text"
+                  name="city"
+                  autoComplete="off"
+                  value={cityQuery}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCityQuery(v);
+                    setSelectedCityMeta(null);
+                    setFormData((prev) => ({ ...prev, city: v, timezone: '' }));
+                    if (fieldErrors['city'] || fieldErrors['timezone']) {
+                      setFieldErrors((prev) => {
+                        const n = { ...prev };
+                        delete n.city;
+                        delete n.timezone;
+                        return n;
+                      });
+                    }
+                    setCityDropdownOpen(true);
+                  }}
+                  onFocus={() => {
+                    if (citySuggestions.length > 0) setCityDropdownOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (!cityDropdownOpen || citySuggestions.length === 0) {
+                      if (e.key === 'ArrowDown' && citySuggestions.length > 0) {
+                        setCityDropdownOpen(true);
+                      }
+                      return;
+                    }
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setCityHighlight((h) => (h + 1) % citySuggestions.length);
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setCityHighlight((h) => (h <= 0 ? citySuggestions.length - 1 : h - 1));
+                    } else if (e.key === 'Enter') {
+                      const pick = cityHighlight >= 0 ? citySuggestions[cityHighlight] : citySuggestions[0];
+                      if (pick) {
+                        e.preventDefault();
+                        const display = formatCityDisplay(pick);
+                        setSelectedCityMeta(pick);
+                        setCityQuery(display);
+                        setFormData((prev) => ({
+                          ...prev,
+                          city: display,
+                          timezone: pick.timezone || prev.timezone
+                        }));
+                        setCityDropdownOpen(false);
+                      }
+                    } else if (e.key === 'Escape') {
+                      setCityDropdownOpen(false);
+                    }
+                  }}
+                  className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('city')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-gray-500/40 outline-none`}
+                  placeholder={language === 'hebrew' ? 'התחל להקליד... למשל "תל אביב"' : 'Start typing... e.g. "Tel Aviv"'}
+                />
+
+                {cityLoading && (
+                  <span className={`absolute top-1/2 -translate-y-1/2 ${direction === 'rtl' ? 'left-4' : 'right-4'} inline-block w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin pointer-events-none`}></span>
+                )}
+
+                {/* Suggestions dropdown — rendered via a portal to escape the
+                    modal card's overflow-hidden, anchored to the input's viewport rect. */}
+                {cityDropdownOpen && cityDropdownRect && citySuggestions.length > 0 && createPortal(
+                  <ul
+                    ref={cityDropdownRef}
+                    role="listbox"
+                    dir={direction}
+                    style={{
+                      position: 'fixed',
+                      top: `${cityDropdownRect.top}px`,
+                      left: `${cityDropdownRect.left}px`,
+                      width: `${cityDropdownRect.width}px`,
+                      zIndex: 9999
+                    }}
+                    className={`max-h-72 overflow-y-auto custom-scrollbar rounded-2xl border shadow-2xl ${isDarkMode ? 'bg-gray-800 border-white/10' : 'bg-white border-gray-900/10'}`}
+                  >
+                    {citySuggestions.map((row, idx) => {
+                      const display = formatCityDisplay(row);
+                      const subtitle = display !== (row.asciiname || row.name)
+                        ? (row.asciiname || row.name)
+                        : null;
+                      const isHighlighted = idx === cityHighlight;
+                      return (
+                        <li
+                          key={row.geonameid}
+                          role="option"
+                          aria-selected={isHighlighted}
+                          onMouseEnter={() => setCityHighlight(idx)}
+                          onMouseDown={(e) => {
+                            // Use onMouseDown so the input doesn't blur before we apply the pick.
+                            e.preventDefault();
+                            setSelectedCityMeta(row);
+                            setCityQuery(display);
+                            setFormData((prev) => ({
+                              ...prev,
+                              city: display,
+                              timezone: row.timezone || prev.timezone
+                            }));
+                            setCityDropdownOpen(false);
+                          }}
+                          className={`px-4 py-3 cursor-pointer flex items-center justify-between gap-3 transition-colors duration-150 ${isHighlighted ? 'bg-emerald-500/10' : ''} ${themeClasses.textPrimary}`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm sm:text-base font-medium truncate">{display}</div>
+                            <div className={`text-xs ${themeClasses.textSecondary} truncate`}>
+                              {row.country_code || ''}
+                              {subtitle ? ` · ${subtitle}` : ''}
+                              {row.timezone ? ` · ${row.timezone}` : ''}
+                            </div>
+                          </div>
+                          {typeof row.population === 'number' && row.population > 0 && (
+                            <div className={`text-[10px] sm:text-xs ${themeClasses.textSecondary} whitespace-nowrap`}>
+                              {row.population.toLocaleString()}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>,
+                  document.body
+                )}
+
+                {cityDropdownOpen && cityDropdownRect && !cityLoading && citySuggestions.length === 0 && cityQuery.trim().length > 0 && createPortal(
+                  <div
+                    ref={cityDropdownRef}
+                    dir={direction}
+                    style={{
+                      position: 'fixed',
+                      top: `${cityDropdownRect.top}px`,
+                      left: `${cityDropdownRect.left}px`,
+                      width: `${cityDropdownRect.width}px`,
+                      zIndex: 9999
+                    }}
+                    className={`rounded-2xl border px-4 py-3 text-sm shadow-2xl ${isDarkMode ? 'bg-gray-800 border-white/10' : 'bg-white border-gray-900/10'} ${themeClasses.textSecondary}`}
+                  >
+                    {language === 'hebrew' ? 'לא נמצאו ערים תואמות' : 'No matching cities found'}
+                  </div>,
+                  document.body
+                )}
+              </div>
+
+              {/* Auto-detected timezone confirmation */}
+              {formData.timezone && (
+                <div className={`mt-3 flex items-center gap-2 text-xs sm:text-sm ${themeClasses.textSecondary}`}>
+                  <svg className="w-4 h-4 flex-shrink-0 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>
+                    {language === 'hebrew' ? 'אזור זמן: ' : 'Timezone: '}
+                    <span className={`font-semibold ${themeClasses.textPrimary}`}>{formData.timezone}</span>
+                    {selectedCityMeta && (
+                      <span className="ms-2 text-emerald-400">
+                        {language === 'hebrew' ? '— זוהה אוטומטית' : '— auto-detected'}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+
+              {fieldErrors['timezone'] && !formData.timezone && (
+                <p className="mt-2 text-xs sm:text-sm text-red-400">
+                  {language === 'hebrew'
+                    ? 'אנא בחר עיר מהרשימה כדי להגדיר את אזור הזמן'
+                    : 'Please pick a city from the suggestions to set your timezone'}
+                </p>
+              )}
             </div>
           )}
 
-          {currentFields.includes('timezone') && (
+          {currentFields.includes('timezone') && !currentFields.includes('city') && (
             <div className="group">
               <label className={`block text-xs sm:text-sm font-semibold mb-3 sm:mb-4 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'אזור זמן' : 'Timezone'}
@@ -4017,11 +4589,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                           });
                         }
                       }}
-                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                      className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                         isSelected
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                      } ${fieldErrors['timezone'] && !isSelected ? 'border-red-500' : ''}`}
+                          ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                          : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                      } ${fieldErrors['timezone'] && !isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                     >
                       {tz.label}
                     </button>
@@ -4041,48 +4613,55 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                   <label className={`block text-xs ${themeClasses.textSecondary} mb-1`}>
                     {language === 'hebrew' ? 'יום' : 'Day'}
                   </label>
-                  <select
+                  <PortalSelect
                     value={dobDay}
-                    onChange={(e) => handleDateChange('day', e.target.value)}
-                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('date_of_birth')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-                  >
-                    <option value="">{language === 'hebrew' ? 'יום' : 'Day'}</option>
-                    {days.map(day => (
-                      <option key={day} value={day.toString().padStart(2, '0')}>{day}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => handleDateChange('day', v)}
+                    options={days.map((day) => ({
+                      value: day.toString().padStart(2, '0'),
+                      label: String(day),
+                    }))}
+                    placeholder={language === 'hebrew' ? 'יום' : 'Day'}
+                    hasError={!!fieldErrors['date_of_birth']}
+                    isDarkMode={isDarkMode}
+                    themeClasses={themeClasses}
+                    direction={direction}
+                    className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('date_of_birth')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+                  />
                 </div>
                 <div>
                   <label className={`block text-xs ${themeClasses.textSecondary} mb-1`}>
                     {language === 'hebrew' ? 'חודש' : 'Month'}
                   </label>
-                  <select
+                  <PortalSelect
                     value={dobMonth}
-                    onChange={(e) => handleDateChange('month', e.target.value)}
-                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('date_of_birth')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-                  >
-                    <option value="">{language === 'hebrew' ? 'חודש' : 'Month'}</option>
-                    {months.map(month => (
-                      <option key={month.value} value={month.value.padStart(2, '0')}>
-                        {language === 'hebrew' ? month.labelHe : month.labelEn}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => handleDateChange('month', v)}
+                    options={months.map((month) => ({
+                      value: month.value.padStart(2, '0'),
+                      label: language === 'hebrew' ? month.labelHe : month.labelEn,
+                    }))}
+                    placeholder={language === 'hebrew' ? 'חודש' : 'Month'}
+                    hasError={!!fieldErrors['date_of_birth']}
+                    isDarkMode={isDarkMode}
+                    themeClasses={themeClasses}
+                    direction={direction}
+                    className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('date_of_birth')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+                  />
                 </div>
                 <div>
                   <label className={`block text-xs ${themeClasses.textSecondary} mb-1`}>
                     {language === 'hebrew' ? 'שנה' : 'Year'}
                   </label>
-                  <select
+                  <PortalSelect
                     value={dobYear}
-                    onChange={(e) => handleDateChange('year', e.target.value)}
-                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('date_of_birth')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-                  >
-                    <option value="">{language === 'hebrew' ? 'שנה' : 'Year'}</option>
-                    {years.map(year => (
-                      <option key={year} value={year.toString()}>{year}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => handleDateChange('year', v)}
+                    options={years.map((year) => ({ value: year.toString(), label: String(year) }))}
+                    placeholder={language === 'hebrew' ? 'שנה' : 'Year'}
+                    hasError={!!fieldErrors['date_of_birth']}
+                    isDarkMode={isDarkMode}
+                    themeClasses={themeClasses}
+                    direction={direction}
+                    className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('date_of_birth')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+                  />
                 </div>
               </div>
             </div>
@@ -4122,11 +4701,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                           });
                         }
                       }}
-                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                      className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                         isSelected
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                      } ${fieldErrors['gender'] && !isSelected ? 'border-red-500' : ''}`}
+                          ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                          : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                      } ${fieldErrors['gender'] && !isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                     >
                       {language === 'hebrew' ? gender.labelHe : gender.labelEn}
                     </button>
@@ -4168,11 +4747,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                           });
                         }
                       }}
-                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-center rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                      className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-center rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-center group overflow-hidden ${
                         isSelected
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                      } ${fieldErrors['nursing_status'] && !isSelected ? 'border-red-500' : ''}`}
+                          ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                          : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                      } ${fieldErrors['nursing_status'] && !isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                     >
                       {language === 'hebrew' ? choice.labelHe : choice.labelEn}
                     </button>
@@ -4205,11 +4784,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                               });
                             }
                           }}
-                          className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-center rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                          className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-center rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-center group overflow-hidden ${
                             isSelected
-                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                              : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                          } ${fieldErrors['nursing_status'] && !isSelected ? 'border-red-500' : ''}`}
+                              ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                              : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                          } ${fieldErrors['nursing_status'] && !isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                         >
                           {language === 'hebrew' ? status.labelHe : status.labelEn}
                         </button>
@@ -4252,19 +4831,21 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                   </button>
                 </div>
               </div>
-              <select
+              <PortalSelect
                 name="weight_kg"
-                value={getDisplayedWeight()}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('weight_kg')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר משקל' : 'Select Weight'}</option>
-                {(weightUnit === 'kg' ? weightOptionsKg : weightOptionsLbs).map((weight) => (
-                  <option key={weight} value={weight.toString()}>
-                    {weight} {weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליברה' : 'lbs')}
-                  </option>
-                ))}
-              </select>
+                value={String(getDisplayedWeight() ?? '')}
+                onChange={(v) => handleInputChange({ target: { name: 'weight_kg', value: v } })}
+                options={(weightUnit === 'kg' ? weightOptionsKg : weightOptionsLbs).map((weight) => ({
+                  value: weight.toString(),
+                  label: `${weight} ${weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליברה' : 'lbs')}`,
+                }))}
+                placeholder={language === 'hebrew' ? 'בחר משקל' : 'Select Weight'}
+                hasError={!!fieldErrors['weight_kg']}
+                isDarkMode={isDarkMode}
+                themeClasses={themeClasses}
+                direction={direction}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('weight_kg')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+              />
             </div>
           )}
 
@@ -4299,19 +4880,21 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                   </button>
                 </div>
               </div>
-              <select
+              <PortalSelect
                 name="target_weight"
-                value={getDisplayedTargetWeight()}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('target_weight')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר משקל מטרה' : 'Select Target Weight'}</option>
-                {(weightUnit === 'kg' ? weightOptionsKg : weightOptionsLbs).map((weight) => (
-                  <option key={weight} value={weight.toString()}>
-                    {weight} {weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליברה' : 'lbs')}
-                  </option>
-                ))}
-              </select>
+                value={String(getDisplayedTargetWeight() ?? '')}
+                onChange={(v) => handleInputChange({ target: { name: 'target_weight', value: v } })}
+                options={(weightUnit === 'kg' ? weightOptionsKg : weightOptionsLbs).map((weight) => ({
+                  value: weight.toString(),
+                  label: `${weight} ${weightUnit === 'kg' ? (language === 'hebrew' ? 'ק"ג' : 'kg') : (language === 'hebrew' ? 'ליברה' : 'lbs')}`,
+                }))}
+                placeholder={language === 'hebrew' ? 'בחר משקל מטרה' : 'Select Target Weight'}
+                hasError={!!fieldErrors['target_weight']}
+                isDarkMode={isDarkMode}
+                themeClasses={themeClasses}
+                direction={direction}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('target_weight')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+              />
             </div>
           )}
 
@@ -4346,19 +4929,21 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                   </button>
                 </div>
               </div>
-              <select
+              <PortalSelect
                 name="height_cm"
-                value={getDisplayedHeight()}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('height_cm')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר גובה' : 'Select Height'}</option>
-                {(heightUnit === 'cm' ? heightOptionsCm : heightOptionsInches).map((height) => (
-                  <option key={height} value={height.toString()}>
-                    {height} {heightUnit === 'cm' ? (language === 'hebrew' ? 'ס"מ' : 'cm') : (language === 'hebrew' ? 'אינץ' : 'in')}
-                  </option>
-                ))}
-              </select>
+                value={String(getDisplayedHeight() ?? '')}
+                onChange={(v) => handleInputChange({ target: { name: 'height_cm', value: v } })}
+                options={(heightUnit === 'cm' ? heightOptionsCm : heightOptionsInches).map((height) => ({
+                  value: height.toString(),
+                  label: `${height} ${heightUnit === 'cm' ? (language === 'hebrew' ? 'ס"מ' : 'cm') : (language === 'hebrew' ? 'אינץ' : 'in')}`,
+                }))}
+                placeholder={language === 'hebrew' ? 'בחר גובה' : 'Select Height'}
+                hasError={!!fieldErrors['height_cm']}
+                isDarkMode={isDarkMode}
+                themeClasses={themeClasses}
+                direction={direction}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('height_cm')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+              />
             </div>
           )}
 
@@ -4394,7 +4979,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 value={formData.medical_conditions}
                 onChange={handleInputChange}
                 rows="3"
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${!formData.medical_conditions ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50`}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${!formData.medical_conditions ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-gray-500/20'} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 placeholder:text-gray-400 outline-none`}
                 placeholder={!formData.medical_conditions ? (language === 'hebrew' ? 'לא נבחר - לחץ כדי להוסיף' : 'None selected - click to add') : (language === 'hebrew' ? 'לדוגמה: סוכרת, לחץ דם...' : 'e.g., diabetes, hypertension...')}
               />
             </div>
@@ -4417,9 +5002,9 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 value={formData.activity_description}
                 onChange={handleInputChange}
                 rows="5"
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${
-                  fieldErrors['activity_description'] ? 'border-red-500' : 'border-gray-600/50'
-                } rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 resize-none`}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${
+                  fieldErrors['activity_description'] ? 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-gray-500/20'
+                } rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none resize-none`}
                 placeholder={language === 'hebrew'
                   ? 'לדוגמה: עובד במשרד 9-5, יושב רוב היום. מתאמן בחדר כושר 3 פעמים בשבוע, כ-45 דקות כל פעם (כוח + קרדיו).'
                   : 'e.g., Office job 9-5, mostly sitting. I go to the gym 3x per week for about 45 min each (weights + cardio).'}
@@ -4453,10 +5038,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 <button
                   type="button"
                   onClick={() => handleAllergyToggle('none')}
-                  className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                  className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                     (selectedAllergies.length === 1 && selectedAllergies[0] === 'none') || (selectedAllergies.length === 0 && !formData.food_allergies)
-                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                      : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                      : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
                   }`}
                 >
                   {language === 'hebrew' ? 'אין' : 'None'}
@@ -4470,11 +5055,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                       key={allergy.value}
                       type="button"
                       onClick={() => handleAllergyToggle(allergy.value)}
-                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                      className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                         isSelected
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                      } ${fieldErrors['food_allergies'] && !isSelected ? 'border-red-500' : ''}`}
+                          ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                          : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                      } ${fieldErrors['food_allergies'] && !isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                     >
                       {language === 'hebrew' ? allergy.labelHe : allergy.labelEn}
                     </button>
@@ -4485,11 +5070,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 <button
                   type="button"
                   onClick={() => handleAllergyToggle('other')}
-                  className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                  className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                     selectedAllergies.includes('other')
-                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                      : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                  } ${fieldErrors['food_allergies'] && !selectedAllergies.includes('other') ? 'border-red-500' : ''}`}
+                      ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                      : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                  } ${fieldErrors['food_allergies'] && !selectedAllergies.includes('other') ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                 >
                   {language === 'hebrew' ? 'אחר' : 'Other'}
                 </button>
@@ -4505,7 +5090,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                     type="text"
                     value={allergiesOtherText}
                     onChange={(e) => handleAllergiesOtherTextChange(e.target.value)}
-                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 placeholder:text-gray-400`}
+                    className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border border-gray-500/20 rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-gray-500/40 outline-none`}
                     placeholder={language === 'hebrew' ? 'הזן אלרגיה אחרת' : 'Enter other allergy'}
                   />
                 </div>
@@ -4523,10 +5108,10 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 <button
                   type="button"
                   onClick={() => handleLimitationToggle('none')}
-                  className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                  className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                     (selectedLimitations.length === 1 && selectedLimitations[0] === 'none') || (selectedLimitations.length === 0 && !formData.food_limitations)
-                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                      : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
+                      ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                      : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
                   }`}
                 >
                   {language === 'hebrew' ? 'אין' : 'None'}
@@ -4540,11 +5125,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                       key={limitation.value}
                       type="button"
                       onClick={() => handleLimitationToggle(limitation.value)}
-                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                      className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                         isSelected
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                      } ${fieldErrors['food_limitations'] && !isSelected ? 'border-red-500' : ''}`}
+                          ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                          : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                      } ${fieldErrors['food_limitations'] && !isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                     >
                       {language === 'hebrew' ? limitation.labelHe : limitation.labelEn}
                     </button>
@@ -4555,11 +5140,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 <button
                   type="button"
                   onClick={() => handleLimitationToggle('other')}
-                  className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                  className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                     selectedLimitations.includes('other')
-                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                      : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                  } ${fieldErrors['food_limitations'] && !selectedLimitations.includes('other') ? 'border-red-500' : ''}`}
+                      ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                      : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                  } ${fieldErrors['food_limitations'] && !selectedLimitations.includes('other') ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                 >
                   {language === 'hebrew' ? 'אחר' : 'Other'}
                 </button>
@@ -4575,7 +5160,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                     type="text"
                     value={limitationsOtherText}
                     onChange={(e) => handleLimitationsOtherTextChange(e.target.value)}
-                    className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 placeholder:text-gray-400`}
+                    className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border border-gray-500/20 rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-gray-500/40 outline-none`}
                     placeholder={language === 'hebrew' ? 'הזן הגבלה אחרת' : 'Enter other limitation'}
                   />
                 </div>
@@ -4598,7 +5183,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                 value={formData.client_preference}
                 onChange={handleInputChange}
                 rows={4}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('client_preference')} border-2 border-gray-600/50 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 placeholder:text-gray-400 resize-y min-h-[80px]`}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('client_preference')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 placeholder:text-gray-400 outline-none resize-y min-h-[96px]`}
                 placeholder={language === 'hebrew' ? 'למשל: אוהב ירקות, לא אוהב חריף, מעדיף בשר לבן...' : 'e.g., I love vegetables, don\'t like spicy food, prefer white meat...'}
               />
             </div>
@@ -4721,11 +5306,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                           });
                         }
                       }}
-                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                      className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                         isSelected
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                      } ${fieldErrors['activity_level'] && !isSelected ? 'border-red-500' : ''}`}
+                          ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                          : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                      } ${fieldErrors['activity_level'] && !isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                     >
                       {language === 'hebrew' ? activity.labelHe : activity.labelEn}
                     </button>
@@ -4758,11 +5343,11 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                           });
                         }
                       }}
-                      className={`px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-left rounded-lg sm:rounded-xl transition-all duration-200 border-2 ${
+                      className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none flex items-center justify-between group overflow-hidden ${
                         isSelected
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 font-semibold shadow-lg shadow-emerald-500/20'
-                          : `${themeClasses.bgCard} border-gray-600/50 ${themeClasses.textPrimary} hover:border-emerald-500/50 hover:bg-emerald-500/10`
-                      } ${fieldErrors['goal'] && !isSelected ? 'border-red-500' : ''}`}
+                          ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                          : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                      } ${fieldErrors['goal'] && !isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
                     >
                       {language === 'hebrew' ? goal.labelHe : goal.labelEn}
                     </button>
@@ -4836,7 +5421,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                       setEditedMacros({ protein: null, carbs: null, fat: null });
                     }
                   }}
-                  className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 placeholder:text-gray-400`}
+                  className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border border-gray-500/20 rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-gray-500/40 outline-none`}
                   placeholder={language === 'hebrew' ? 'הזן קלוריות' : 'Enter calories'}
                 />
                 {getCurrentDailyCalories() && (
@@ -4933,7 +5518,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                               disabled={lockedMacros.protein}
                               min="0"
                               max="100"
-                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.protein ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.protein ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                              className={`flex-1 px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${lockedMacros.protein ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-gray-500/20'} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} ${lockedMacros.protein ? 'opacity-70 cursor-not-allowed' : 'hover:border-gray-500/40'} outline-none`}
                             />
                             <span className={`text-sm ${themeClasses.textSecondary}`}>%</span>
                             <span className={`text-xs ${themeClasses.textSecondary}`}>
@@ -4951,7 +5536,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                               }}
                               disabled={lockedMacros.protein}
                               min="0"
-                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.protein ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.protein ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                              className={`flex-1 px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${lockedMacros.protein ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-gray-500/20'} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} ${lockedMacros.protein ? 'opacity-70 cursor-not-allowed' : 'hover:border-gray-500/40'} outline-none`}
                             />
                             <span className={`text-sm ${themeClasses.textSecondary}`}>g</span>
                             <span className={`text-xs ${themeClasses.textSecondary}`}>
@@ -5008,7 +5593,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                               disabled={lockedMacros.carbs}
                               min="0"
                               max="100"
-                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.carbs ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.carbs ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                              className={`flex-1 px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${lockedMacros.carbs ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-gray-500/20'} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} ${lockedMacros.carbs ? 'opacity-70 cursor-not-allowed' : 'hover:border-gray-500/40'} outline-none`}
                             />
                             <span className={`text-sm ${themeClasses.textSecondary}`}>%</span>
                             <span className={`text-xs ${themeClasses.textSecondary}`}>
@@ -5026,7 +5611,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                               }}
                               disabled={lockedMacros.carbs}
                               min="0"
-                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.carbs ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.carbs ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                              className={`flex-1 px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${lockedMacros.carbs ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-gray-500/20'} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} ${lockedMacros.carbs ? 'opacity-70 cursor-not-allowed' : 'hover:border-gray-500/40'} outline-none`}
                             />
                             <span className={`text-sm ${themeClasses.textSecondary}`}>g</span>
                             <span className={`text-xs ${themeClasses.textSecondary}`}>
@@ -5083,7 +5668,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                               disabled={lockedMacros.fat}
                               min="0"
                               max="100"
-                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.fat ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.fat ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                              className={`flex-1 px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${lockedMacros.fat ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-gray-500/20'} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} ${lockedMacros.fat ? 'opacity-70 cursor-not-allowed' : 'hover:border-gray-500/40'} outline-none`}
                             />
                             <span className={`text-sm ${themeClasses.textSecondary}`}>%</span>
                             <span className={`text-xs ${themeClasses.textSecondary}`}>
@@ -5101,7 +5686,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                               }}
                               disabled={lockedMacros.fat}
                               min="0"
-                              className={`flex-1 px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} border-2 ${lockedMacros.fat ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-gray-600/50'} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} ${lockedMacros.fat ? 'opacity-70 cursor-not-allowed' : 'hover:border-emerald-500/50'}`}
+                              className={`flex-1 px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${lockedMacros.fat ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-gray-500/20'} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} ${lockedMacros.fat ? 'opacity-70 cursor-not-allowed' : 'hover:border-gray-500/40'} outline-none`}
                             />
                             <span className={`text-sm ${themeClasses.textSecondary}`}>g</span>
                             <span className={`text-xs ${themeClasses.textSecondary}`}>
@@ -5141,17 +5726,21 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
               <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
                 {language === 'hebrew' ? 'כמה ארוחות ביום? (ארוחות מלאות ו"נשנושים")' : 'How many meals per day? (full meals and "snacks")'}
               </label>
-              <select
+              <PortalSelect
                 name="number_of_meals"
-                value={formData.number_of_meals}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 md:py-3.5 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('number_of_meals')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-              >
-                <option value="">{language === 'hebrew' ? 'בחר מספר ארוחות' : 'Select number of meals'}</option>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                  <option key={num} value={num}>{num}</option>
-                ))}
-              </select>
+                value={String(formData.number_of_meals ?? '')}
+                onChange={(v) => handleInputChange({ target: { name: 'number_of_meals', value: v } })}
+                options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => ({
+                  value: String(num),
+                  label: String(num),
+                }))}
+                placeholder={language === 'hebrew' ? 'בחר מספר ארוחות' : 'Select number of meals'}
+                hasError={!!fieldErrors['number_of_meals']}
+                isDarkMode={isDarkMode}
+                themeClasses={themeClasses}
+                direction={direction}
+                className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('number_of_meals')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+              />
               {(() => {
                 const dailyCal = getCurrentDailyCalories();
                 const rec = dailyCal != null ? getMealRecommendationForCalories(dailyCal) : null;
@@ -5203,21 +5792,24 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
                       <label className={`block text-xs sm:text-sm font-medium ${themeClasses.textSecondary} flex-shrink-0`}>
                         {language === 'hebrew' ? 'שם ארוחה:' : 'Meal Name:'}
                       </label>
-                      <select
-                        value={displayValue}
-                        onChange={(e) => handleMealNameChange(index, e.target.value)}
-                        className={`flex-1 px-2 py-1.5 text-xs sm:text-sm ${themeClasses.bgCard} border-2 border-gray-600/50 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} hover:border-emerald-500/50 cursor-pointer`}
-                      >
-                        {allowedMealNames.map((name) => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
+                      <div className="flex-1">
+                        <PortalSelect
+                          value={displayValue}
+                          onChange={(v) => handleMealNameChange(index, v)}
+                          options={allowedMealNames.map((name) => ({ value: name, label: name }))}
+                          placeholder={language === 'hebrew' ? 'בחר שם ארוחה' : 'Select meal name'}
+                          isDarkMode={isDarkMode}
+                          themeClasses={themeClasses}
+                          direction={direction}
+                          className={`w-full px-3 py-2 text-xs sm:text-sm bg-black/5 dark:bg-white/5 border border-gray-500/20 rounded-xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+                        />
+                      </div>
                     </div>
                     <textarea
                       value={formData.meal_descriptions[index] || ''}
                       onChange={(e) => handleMealDescriptionChange(index, e.target.value)}
                       rows="2"
-                      className={`w-full px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base ${themeClasses.bgCard} ${getBorderClass('meal_descriptions')} rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-emerald-500/50`}
+                      className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass('meal_descriptions')} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-gray-500/40 outline-none`}
                       placeholder={language === 'hebrew' ? 'לדוגמה: ביצים, לחם וירקות' : 'e.g., eggs, bread and vegetables'}
                     />
                   </div>
@@ -5239,37 +5831,51 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
           </div>
         )}
 
-        {/* Buttons */}
-        <div className="flex justify-between items-center mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-white/10 gap-2 sm:gap-3">
+        </div>
+        {/* /Scrollable content */}
+
+        {/* Floating Action Bar (flush with modal edges, matches card color exactly) */}
+        <div className={`${themeClasses.bgCard} -mx-5 sm:-mx-8 md:-mx-10 -mb-5 sm:-mb-8 md:-mb-10 px-5 sm:px-8 md:px-10 py-4 mt-4 border-t flex justify-between items-center gap-3 ${isDarkMode ? 'border-white/10' : 'border-gray-900/10'}`}>
           <div>
             {currentStep >= 0 && (
               <button
                 onClick={handlePrevious}
                 disabled={loading}
-                className={`px-4 py-2 sm:px-6 sm:py-2.5 md:px-8 md:py-3.5 border-2 border-gray-600/50 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm md:text-base ${themeClasses.textSecondary} hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`inline-flex items-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 rounded-xl font-semibold text-sm sm:text-base transition-all duration-300 active:scale-[0.98] border ${themeClasses.textPrimary} ${isDarkMode ? 'border-white/15 hover:bg-white/10 hover:border-white/30' : 'border-gray-900/15 hover:bg-gray-900/5 hover:border-gray-900/30'} ${loading ? 'opacity-50 cursor-not-allowed' : (direction === 'rtl' ? 'hover:translate-x-1' : 'hover:-translate-x-1')}`}
               >
-                ← {language === 'hebrew' ? 'קודם' : 'Previous'}
+                {direction === 'rtl' ? (
+                  <>
+                    <span>{language === 'hebrew' ? 'קודם' : 'Back'}</span>
+                    <span className="text-lg leading-none">→</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-lg leading-none">←</span>
+                    <span>{language === 'hebrew' ? 'קודם' : 'Back'}</span>
+                  </>
+                )}
               </button>
             )}
           </div>
           <div className="flex gap-2 sm:gap-3">
-            {currentStep < filteredSteps.length - 1 ? (
-              <button
-                onClick={handleNext}
-                disabled={loading}
-                className={`px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 bg-emerald-500 text-white rounded-lg font-semibold text-xs sm:text-sm md:text-base hover:bg-emerald-600 transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {language === 'hebrew' ? 'הבא' : 'Next'} →
-              </button>
-            ) : (
-              <button
-                onClick={handleNext}
-                disabled={loading}
-                className={`px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 bg-emerald-500 text-white rounded-lg font-semibold text-xs sm:text-sm md:text-base hover:bg-emerald-600 transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {loading ? (language === 'hebrew' ? 'שומר...' : 'Saving...') : (language === 'hebrew' ? 'סיום' : 'Finish')}
-              </button>
-            )}
+            <button
+              onClick={handleNext}
+              disabled={loading}
+              className={`relative overflow-hidden group px-8 py-3 sm:px-10 sm:py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-bold text-sm sm:text-base transition-all duration-300 active:scale-[0.98] shadow-[0_8px_20px_-6px_rgba(16,185,129,0.5)] hover:shadow-[0_12px_25px_-6px_rgba(16,185,129,0.6)] ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'}`}
+            >
+              <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none"></div>
+
+              {currentStep < filteredSteps.length - 1 ? (
+                <span className="relative inline-flex items-center gap-2">
+                  {language === 'hebrew' ? 'המשך' : 'Continue'}
+                  <span className="text-lg leading-none">{direction === 'rtl' ? '←' : '→'}</span>
+                </span>
+              ) : (
+                <span className="relative">
+                  {loading ? (language === 'hebrew' ? 'שומר...' : 'Saving...') : (language === 'hebrew' ? 'סיום תהליך 🎉' : 'Complete Setup 🎉')}
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </div>

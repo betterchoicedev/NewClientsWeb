@@ -241,6 +241,13 @@ code {
   animation: scaleIn 0.3s ease-out;
 }
 
+/* Onboarding "Continue" button shimmer (powers Tailwind's animate-[shimmer_1.5s_infinite]) */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* Navy pricing promo animation */
 @keyframes strike {
   0% {

@@ -2384,6 +2384,74 @@ app.get('/api/onboarding/chat-user-meal-data', async (req, res) => {
 });
 
 // Check if phone number exists
+// City search powered by GeoNames cities500 table living in chatSupabase.
+// Returns a few candidates ordered by population so big cities win.
+// Hebrew/local names are matched via the comma-separated `alternatenames` column.
+app.get('/api/cities/search', async (req, res) => {
+  try {
+    if (!chatSupabase) {
+      return res.status(503).json({
+        error: 'City search is unavailable',
+        message: 'chatSupabase is not configured on this server (CHAT_SUPABASE_URL / CHAT_SUPABASE_SERVICE_ROLE_KEY missing)'
+      });
+    }
+
+    const rawQ = (req.query.q || '').toString().trim();
+    if (rawQ.length < 1) {
+      return res.json({ data: [] });
+    }
+
+    // PostgREST's .or() uses commas/parens as separators, so strip them from the user input
+    // before interpolating; this is purely a filter sanitizer, the value is still going through
+    // Supabase's parameterized .ilike() once parsed.
+    const safe = rawQ.replace(/[,()*]/g, '').trim();
+    if (safe.length < 1) {
+      return res.json({ data: [] });
+    }
+
+    const limitParam = parseInt(req.query.limit, 10);
+    const limit = Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 10, 1), 25);
+
+    const country = (req.query.country || '').toString().trim();
+    const countryCodes = country
+      ? country.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
+      : [];
+
+    // Prefix match on canonical/ascii name + substring match on alternate names
+    // (alternatenames is a comma-joined blob containing localized & historical names).
+    const orFilter = [
+      `name.ilike.${safe}%`,
+      `asciiname.ilike.${safe}%`,
+      `alternatenames.ilike.%${safe}%`
+    ].join(',');
+
+    let query = chatSupabase
+      .from('cities500')
+      .select('geonameid, name, asciiname, alternatenames, country_code, latitude, longitude, timezone, population')
+      .or(orFilter)
+      .order('population', { ascending: false, nullsFirst: false })
+      .limit(limit);
+
+    if (countryCodes.length === 1) {
+      query = query.eq('country_code', countryCodes[0]);
+    } else if (countryCodes.length > 1) {
+      query = query.in('country_code', countryCodes);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('❌ cities500 search error:', error);
+      return res.status(500).json({ error: 'Failed to search cities', message: error.message });
+    }
+
+    res.json({ data: data || [] });
+  } catch (error) {
+    console.error('❌ cities/search endpoint exception:', error);
+    res.status(500).json({ error: 'Internal server error', message: error.message });
+  }
+});
+
 app.post('/api/onboarding/check-phone', async (req, res) => {
   try {
     const { phone, user_id, user_code } = req.body;
