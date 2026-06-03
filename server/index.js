@@ -151,6 +151,22 @@ function buildMobileAppOAuthRedirect(session) {
   return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
 }
 
+// ---------------------------------------------------------------------------
+// Mobile OAuth flow (Google sign-in from the Expo app)
+// ---------------------------------------------------------------------------
+// The mobile client opens the Supabase OAuth URL inside expo-web-browser and
+// asks Supabase to redirect the one-time code back to this server's
+// `/api/auth/oauth/mobile-callback`. We then exchange the code for a session
+// and deep-link the tokens into the app via `MOBILE_APP_OAUTH_REDIRECT`.
+//
+// IMPORTANT — Supabase Dashboard configuration:
+//   Every backend host that serves `/api/auth/oauth/mobile-callback` MUST be
+//   listed under Authentication → URL Configuration → Redirect URLs in the
+//   Supabase Dashboard. Otherwise Supabase rejects the OAuth request with
+//   `redirect_to is not allowed`. Add the absolute URL for every environment
+//   you deploy, e.g. for production on Cloud Run:
+//     https://newclientsweb-615263253386.me-west1.run.app/api/auth/oauth/mobile-callback
+// ---------------------------------------------------------------------------
 app.get('/api/auth/oauth/mobile-callback', async (req, res) => {
   try {
     const oauthError = req.query.error || req.query.error_description;
@@ -181,6 +197,58 @@ app.get('/api/auth/oauth/mobile-callback', async (req, res) => {
     );
   }
 });
+
+/**
+ * Mobile app calls this to kick off Google sign-in.
+ *
+ * We do NOT redirect from here — the mobile client needs the raw OAuth URL
+ * so it can open it inside `expo-web-browser`'s in-app browser (which keeps
+ * the user's Google session cookie around and supports the deep-link
+ * callback). We bake the absolute URL of THIS server's mobile-callback into
+ * `redirectTo` so Supabase knows where to send the one-time code; the
+ * mobile-callback then exchanges that code for a session and deep-links the
+ * tokens back into the app.
+ *
+ * NOTE: The `redirectTo` value below is what Supabase validates against the
+ * Dashboard's Redirect URLs allow-list — see the comment block above the
+ * mobile-callback route.
+ */
+app.post('/api/auth/oauth/google/start', async (req, res) => {
+  try {
+    // Build the absolute URL of our own mobile-callback. Honors the
+    // standard proxy headers so this works behind Cloud Run / nginx
+    // (which terminates TLS upstream and forwards `x-forwarded-*`).
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').toString().split(',')[0].trim();
+    const host = (req.headers['x-forwarded-host'] || req.get('host') || '').toString().split(',')[0].trim();
+    if (!host) {
+      return res.status(500).json({ error: 'Could not resolve callback host' });
+    }
+    const mobileCallbackUrl = `${proto}://${host}/api/auth/oauth/mobile-callback`;
+
+    const { data, error } = await supabaseAuth.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: mobileCallbackUrl,
+        skipBrowserRedirect: true,
+      },
+    });
+
+    if (error) {
+      console.error('❌ Google OAuth start error:', error.message);
+      return res.status(500).json({ error: error.message || 'Failed to start Google sign-in' });
+    }
+
+    if (!data?.url) {
+      return res.status(500).json({ error: 'Supabase returned no OAuth URL' });
+    }
+
+    res.json({ url: data.url });
+  } catch (error) {
+    console.error('POST /api/auth/oauth/google/start error:', error);
+    res.status(500).json({ error: error.message || 'Failed to start Google sign-in' });
+  }
+});
+
 // Bank of Israel exchange rates proxy (avoids CORS – browser can't call boi.org.il directly)
 const BOI_EXCHANGE_RATES_URL = 'https://boi.org.il/PublicApi/GetExchangeRates?asXml=false';
 app.get('/api/exchange-rates', async (req, res) => {
@@ -7113,53 +7181,6 @@ app.post('/api/auth/create-client', async (req, res) => {
     if (authUserError || !authUserData?.user) {
       return res.status(400).json({ error: 'Invalid user' });
     }
-    
-/**
- * Mobile app calls this to kick off Google sign-in.
- *
- * We do NOT redirect from here — the mobile client needs the raw OAuth
- * URL so it can open it inside `expo-web-browser`'s in-app browser
- * (which keeps the user's Google session cookie around and supports the
- * deep-link callback). We bake the absolute URL of THIS server's
- * mobile-callback into `redirectTo` so Supabase knows where to send the
- * one-time code; the mobile-callback then exchanges that code for a
- * session and deep-links the tokens back into the app.
- */
-app.post('/api/auth/oauth/google/start', async (req, res) => {
-  try {
-    // Build the absolute URL of our own mobile-callback. Honors the
-    // standard proxy headers so this works behind Cloud Run / nginx
-    // (which terminates TLS upstream and forwards `x-forwarded-*`).
-    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').toString().split(',')[0].trim();
-    const host = (req.headers['x-forwarded-host'] || req.get('host') || '').toString().split(',')[0].trim();
-    if (!host) {
-      return res.status(500).json({ error: 'Could not resolve callback host' });
-    }
-    const mobileCallbackUrl = `${proto}://${host}/api/auth/oauth/mobile-callback`;
-
-    const { data, error } = await supabaseAuth.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: mobileCallbackUrl,
-        skipBrowserRedirect: true,
-      },
-    });
-
-    if (error) {
-      console.error('❌ Google OAuth start error:', error.message);
-      return res.status(500).json({ error: error.message || 'Failed to start Google sign-in' });
-    }
-
-    if (!data?.url) {
-      return res.status(500).json({ error: 'Supabase returned no OAuth URL' });
-    }
-
-    res.json({ url: data.url });
-  } catch (error) {
-    console.error('POST /api/auth/oauth/google/start error:', error);
-    res.status(500).json({ error: error.message || 'Failed to start Google sign-in' });
-  }
-});
 
     // Idempotency: if a row already exists for this auth user, return it instead of
     // failing. Bootstrap-from-OAuth-callback may race with the OnboardingModal's own
