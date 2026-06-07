@@ -4833,6 +4833,249 @@ async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
   }
 }
 
+// Hard cap on the free-text food description sent to the text-analysis
+// endpoint. Long enough for a multi-item meal log ("2 fried eggs, a slice of
+// sourdough toast with butter, large flat white with oat milk") but short
+// enough that a malicious / buggy client cannot blow up the prompt or burn
+// tokens. Rejected (not silently truncated) when way over the cap so callers
+// notice something is wrong with their payload.
+const MAX_FOOD_TEXT_LENGTH = 1500;
+
+function sanitizeFoodText(rawText) {
+  if (typeof rawText !== 'string') return '';
+  // Collapse all whitespace (including newlines) to a single space so the
+  // description cannot break out of its prompt block via crafted line breaks.
+  const collapsed = rawText.replace(/\s+/g, ' ').trim();
+  if (!collapsed) return '';
+  return collapsed.length > MAX_FOOD_TEXT_LENGTH
+    ? collapsed.slice(0, MAX_FOOD_TEXT_LENGTH)
+    : collapsed;
+}
+
+function buildFoodTextPrompt(mealLabel, foodText, planMeal) {
+  const planBlock = formatPlanMealForPrompt(planMeal);
+  const hasPlan = !!planBlock;
+
+  const meal = mealLabel ? String(mealLabel) : 'unknown';
+
+  const planStep = hasPlan
+    ? `
+7.  **MEAL-PLAN ADHERENCE SCORE (a plan meal was supplied — produce real numbers):**
+    * Compare the dish described by the user against BOTH the MAIN and the ALTERNATIVE variant above.
+    * Pick whichever variant the description most resembles, and base \`plan_match_score\` on that one only.
+    * The score is the client's adherence to their plan. Judge using:
+        - **Identity / ingredient overlap:** does the description contain the plan variant's core ingredients (or close substitutes)?
+        - **Macro proximity:** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals.
+        - **Portion sanity:** significantly oversized or undersized portions reduce the score.
+    * Scoring guide:
+        - 9–10 = essentially the same dish, on-target macros and portion.
+        - 7–8  = same dish family with small substitutions or modest portion drift.
+        - 4–6  = partial match (right meal slot, but different dish or notably off macros / portion).
+        - 0–3  = unrelated food; neither variant is a real match.
+    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when neither is a real match — in that case keep \`plan_match_score\` ≤ 3).
+    * \`plan_match_reason\`: 1 short sentence, must name which variant you compared against.`
+    : `
+7.  **MEAL-PLAN ADHERENCE SCORE:**
+    * No plan meal was supplied for this entry. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
+
+  return `Act as a Lead Forensic Food Scientist and Nutrition Description Parser. Your objective is to classify the user's text as describing food or not, parse the items, estimate portions from the wording, and rate the meal.
+
+**CONTEXTUAL METADATA:**
+* **User Meal Time:** ${meal}
+* **User Food Description (free text — this is the primary input):** "${foodText}"
+${planBlock}
+**STEP 0 — TEXT GATE (execute first, before anything else):**
+* Does the description clearly refer to one or more foods, beverages, or packaged food products that can be quantified?
+  - If NO (gibberish, non-food topic, empty, just emojis, etc.) → set \`is_food: false\`, fill \`not_food_reason\` with a short explanation, and set EVERY other field (\`food_items\`, \`overall_health_score\`, \`overall_health_score_reason\`, \`plan_match_score\`, \`plan_match_reason\`, \`plan_match_variant\`, etc.) to \`null\`. Skip the rest of the steps.
+  - If YES → set \`is_food: true\`, leave \`not_food_reason\` null, and continue to steps 1–7 below.
+
+**WHEN is_food IS TRUE — text-based food analysis protocol:**
+
+1.  **PARSE FOOD ITEMS:**
+    * Identify each distinct food / beverage mentioned. Group obvious accompaniments where it makes sense ("scrambled eggs with butter" can be one item) but split items with very different macro profiles ("burger and fries" → two items).
+    * Use the user's own wording for \`name\` (lightly cleaned).
+
+2.  **PORTION ESTIMATION FROM WORDING (CRITICAL FOR ACCURACY):**
+    * **Explicit units:** when the user gives grams / ml / oz / lb / kg, use those exactly. Conversions: 1 oz ≈ 28.35g, 1 fl oz ≈ 29.57ml, 1 lb ≈ 454g, 1 kg = 1000g.
+    * **Common household measures (defaults — adjust by description):**
+        - "slice of bread" ≈ 30g (thick slice ≈ 45g)
+        - "cup" ≈ 240ml liquid; ≈ 150g cooked rice / pasta; ≈ 30g cereal
+        - "tablespoon (tbsp)" ≈ 15g/15ml; "teaspoon (tsp)" ≈ 5g/5ml
+        - "glass" / "mug" ≈ 250ml
+        - "can of soda" ≈ 330ml; "bottle of water" ≈ 500ml; "pint of beer" ≈ 470ml
+        - "small / medium / large apple" ≈ 130 / 180 / 250g
+        - "small / medium / large egg" ≈ 45 / 55 / 65g
+        - "scoop of ice cream" ≈ 65g; "scoop of protein powder" ≈ 30g
+        - "handful of nuts" ≈ 30g
+        - Restaurant entrée with no size given ≈ 350g; restaurant side ≈ 150g.
+    * **Quantifier words:** "a/one" → 1 unit; "a couple of" → 2; "a few" → 3; "several" → ~4; bare plural with no number → 2 unless context says otherwise.
+    * **Vague portions:** if the user just names a dish with no quantity, infer a sensible default for the meal slot ("${meal}").
+    * **Final Weight Output:** set \`estimated_weight_g\` for each component.
+    * **Beverage Handling (decides the user-facing unit):**
+        - Set \`is_beverage: true\` ONLY for drinks / pourable liquids that people naturally measure in volume (water, juice, milk, soft drinks, soda, coffee, tea, beer, wine, cocktails, smoothies, milkshakes, drinkable yogurts, broth-as-drink, etc.). Soups eaten with a spoon, ice cream, yogurt in a bowl, sauces, and dressings are NOT beverages.
+        - When \`is_beverage\` is true: fill \`estimated_volume_ml\` from the description and convert to grams using the drink's density (water / most soft drinks ≈ 1.0 g/ml, milk ≈ 1.03 g/ml, whole-milk smoothies ≈ 1.0–1.05 g/ml, beer ≈ 1.01 g/ml, oil ≈ 0.92 g/ml). \`estimated_weight_g\` must STILL be filled (macros math runs in grams).
+        - When \`is_beverage\` is false: set \`estimated_volume_ml: null\`.
+
+3.  **MACRONUTRIENT BASELINES (CRITICAL HANDOFF):**
+    * **DO NOT** calculate the final total macros for the estimated weight.
+    * Provide ONLY the standard USDA / nutritional database baseline values **PER 100 GRAMS** for each component, in \`macros_per_100g\`.
+    * The backend will multiply these baselines by the estimated mass.
+
+4.  **CONFIDENCE & EVIDENCE:**
+    * \`confidence\` (0..1): how clearly the description specified portion + dish identity. Vague text ("some food") → low confidence; precise text ("180g grilled chicken breast") → high.
+    * \`visual_evidence\`: 1–2 sentence justification quoting / paraphrasing the user wording you used to estimate weight (e.g. "user said 'large bowl of pasta' → estimated 250g cooked").
+
+5.  **CONTEXTUAL REASONING:**
+    * **Meal Label Logic:** Cross-reference contents with "${meal}" (e.g., Pancakes at 20:00 is "Breakfast for Dinner", not "Snack").
+
+6.  **OVERALL HEALTH SCORE (always, when is_food is true — independent of any meal plan):**
+    * \`overall_health_score\` (0–10): general nutritional quality of the meal AS DESCRIBED. Judge macro balance, fiber / whole-food content, processing level, added sugar, fried / oily preparation, micronutrient density, and portion sanity.
+        - 0–3 = poor (ultra-processed, fried, sugary, nutritionally empty).
+        - 4–6 = mixed (some redeeming components, some poor ones).
+        - 7–8 = good (balanced, mostly whole foods, reasonable portion).
+        - 9–10 = excellent (clean, balanced, nutrient-dense).
+    * \`overall_health_score_reason\`: 1 short sentence justifying the score.
+    * This score MUST NOT be influenced by the supplied meal plan — it reflects only the described meal itself.
+${planStep}
+
+Keep all string fields short (≤ 1–2 sentences). Numbers must be plain numbers (no units, no ranges). Respond ONLY with a valid JSON object matching the schema. Do not output markdown, explanations, or repetition of steps.`;
+}
+
+// Calls GPT-4o-mini for text-only food analysis. Reuses the same Azure /
+// OpenAI-compatible endpoint + key as the vision model (same DEEPSEEK_ENDPOINT
+// / DEEPSEEK_API_KEY) but routes to a separate deployment configured via
+// DEEPSEEK_TEXT_DEPLOYMENT (falls back to the literal "gpt-4o-mini").
+async function callFoodTextLLM(prompt) {
+  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
+  const apiKey  = process.env.DEEPSEEK_API_KEY;
+  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o-mini';
+
+  if (!apiBase || !apiKey) {
+    throw new Error('Text LLM is not configured on the server (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY).');
+  }
+
+  const url = `${apiBase}/chat/completions`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // Both header styles are accepted by the Azure AI Foundry OpenAI-compatible /openai/v1 path.
+      'api-key': apiKey,
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      // gpt-4o-mini is not a reasoning model, so we deliberately omit
+      // `reasoning_effort` (it would be rejected) and lean on a slightly lower
+      // temperature instead for stable structured-output behavior.
+      max_completion_tokens: 2000,
+      temperature: 0.2,
+      response_format: {
+        type: 'json_schema',
+        json_schema: FOOD_IMAGE_LLM_SCHEMA
+      },
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Text LLM call failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
+  if (!content) {
+    const finishReason = choice?.finish_reason;
+    const usage = data.usage ? JSON.stringify(data.usage) : 'n/a';
+    throw new Error(`Empty content from text LLM (finish_reason=${finishReason}, usage=${usage}).`);
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch (parseError) {
+    throw new Error(`Failed to parse text LLM JSON: ${parseError.message}`);
+  }
+}
+
+// Shared response shaping for /analyze-image and /analyze-text. Both endpoints
+// return the same JSON shape; only the prompt + LLM differ. Pulling the math /
+// clamping / plan_match logic into one place keeps the two endpoints in sync.
+function buildFoodAnalysisResponseBody(llmReport, hasPlan) {
+  // ---- Math runs in code, NOT in the LLM ----
+  const items = (llmReport.food_items || []).map((item) => {
+    const grams = Math.max(0, Number(item.estimated_weight_g) || 0);
+    const per100 = item.macros_per_100g || {};
+    const m = grams / 100;
+
+    const calories  = Math.round((Number(per100.calories_per_100g) || 0) * m);
+    const protein_g = Math.round((Number(per100.protein_per_100g) || 0) * m);
+    const carbs_g   = Math.round((Number(per100.carbs_per_100g)   || 0) * m);
+    const fat_g     = Math.round((Number(per100.fat_per_100g)     || 0) * m);
+
+    // For beverages, report the portion in ml so users see a familiar
+    // serving size ("250ml" of milk instead of "258g"). Macros math still
+    // runs in grams above — only the user-facing label changes.
+    const isBeverage = item.is_beverage === true;
+    const mlNum = Number(item.estimated_volume_ml);
+    const hasMl = isBeverage && Number.isFinite(mlNum) && mlNum > 0;
+    const portion_estimate = hasMl
+      ? `${Math.round(mlNum)}ml`
+      : `${Math.round(grams)}g`;
+
+    return {
+      name: item.name,
+      macros: {
+        fat_g,
+        carbs_g,
+        calories,
+        protein_g
+      },
+      confidence: typeof item.confidence === 'number' ? item.confidence : null,
+      visual_evidence: item.visual_evidence || null,
+      portion_estimate
+    };
+  });
+
+  // Clamp the LLM's scores to [0, 10] with one decimal of precision so the
+  // client always gets a value in range, even if the model misbehaves.
+  const clampScore = (v) => {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+    return Math.max(0, Math.min(10, Math.round(v * 10) / 10));
+  };
+
+  const overall_health_score        = clampScore(llmReport.overall_health_score);
+  const overall_health_score_reason = typeof llmReport.overall_health_score_reason === 'string'
+    ? llmReport.overall_health_score_reason
+    : null;
+
+  let plan_match = null;
+  if (hasPlan) {
+    const variantRaw = typeof llmReport.plan_match_variant === 'string'
+      ? llmReport.plan_match_variant.toLowerCase()
+      : null;
+    const variant = (variantRaw === 'main' || variantRaw === 'alternative' || variantRaw === 'none')
+      ? variantRaw
+      : null;
+    plan_match = {
+      score: clampScore(llmReport.plan_match_score),
+      reason: typeof llmReport.plan_match_reason === 'string' ? llmReport.plan_match_reason : null,
+      variant
+    };
+  }
+
+  return {
+    items,
+    overall_health_score,
+    overall_health_score_reason,
+    plan_match
+  };
+}
+
 // POST /api/food-logs/analyze-image
 // Body: {
 //   imageData:   string  (base64; with or without "data:image/...;base64," prefix)
@@ -4920,78 +5163,72 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
       });
     }
 
-    // ---- Math runs in code, NOT in the LLM ----
-    const items = llmReport.food_items.map((item) => {
-      const grams = Math.max(0, Number(item.estimated_weight_g) || 0);
-      const per100 = item.macros_per_100g || {};
-      const m = grams / 100;
-
-      const calories  = Math.round((Number(per100.calories_per_100g) || 0) * m);
-      const protein_g = Math.round((Number(per100.protein_per_100g) || 0) * m);
-      const carbs_g   = Math.round((Number(per100.carbs_per_100g)   || 0) * m);
-      const fat_g     = Math.round((Number(per100.fat_per_100g)     || 0) * m);
-
-      // For beverages, report the portion in ml so users see a familiar
-      // serving size ("250ml" of milk instead of "258g"). Macros math still
-      // runs in grams above — only the user-facing label changes.
-      const isBeverage = item.is_beverage === true;
-      const mlNum = Number(item.estimated_volume_ml);
-      const hasMl = isBeverage && Number.isFinite(mlNum) && mlNum > 0;
-      const portion_estimate = hasMl
-        ? `${Math.round(mlNum)}ml`
-        : `${Math.round(grams)}g`;
-
-      return {
-        name: item.name,
-        macros: {
-          fat_g,
-          carbs_g,
-          calories,
-          protein_g
-        },
-        confidence: typeof item.confidence === 'number' ? item.confidence : null,
-        visual_evidence: item.visual_evidence || null,
-        portion_estimate
-      };
-    });
-
-    // Clamp the LLM's scores to [0, 10] with one decimal of precision so the
-    // client always gets a value in range, even if the model misbehaves.
-    const clampScore = (v) => {
-      if (typeof v !== 'number' || !Number.isFinite(v)) return null;
-      return Math.max(0, Math.min(10, Math.round(v * 10) / 10));
-    };
-
-    const overall_health_score        = clampScore(llmReport.overall_health_score);
-    const overall_health_score_reason = typeof llmReport.overall_health_score_reason === 'string'
-      ? llmReport.overall_health_score_reason
-      : null;
-
-    let plan_match = null;
-    if (cleanPlanMeal) {
-      const variantRaw = typeof llmReport.plan_match_variant === 'string'
-        ? llmReport.plan_match_variant.toLowerCase()
-        : null;
-      const variant = (variantRaw === 'main' || variantRaw === 'alternative' || variantRaw === 'none')
-        ? variantRaw
-        : null;
-      plan_match = {
-        score: clampScore(llmReport.plan_match_score),
-        reason: typeof llmReport.plan_match_reason === 'string' ? llmReport.plan_match_reason : null,
-        variant
-      };
-    }
-
-    return res.json({
-      items,
-      overall_health_score,
-      overall_health_score_reason,
-      plan_match
-    });
+    return res.json(buildFoodAnalysisResponseBody(llmReport, !!cleanPlanMeal));
   } catch (error) {
     console.error('❌ Error in POST /api/food-logs/analyze-image:', error);
     return res.status(500).json({
       error: 'Failed to analyze food image',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/food-logs/analyze-text
+// Free-text counterpart of /analyze-image. Same response shape, same plan
+// match logic, same per-100g → totals math; the only differences are
+//   (a) input is a free-text food description instead of a base64 image, and
+//   (b) the LLM is GPT-4o-mini (DEEPSEEK_TEXT_DEPLOYMENT, default
+//       "gpt-4o-mini") on the same Azure / OpenAI-compatible endpoint as the
+//       vision model.
+//
+// Body: {
+//   text:        string  (required — the user's free-text meal description,
+//                          e.g. "2 fried eggs, slice of sourdough toast with
+//                          butter, large flat white with oat milk".
+//                          Whitespace is collapsed and the text is truncated
+//                          to MAX_FOOD_TEXT_LENGTH characters before being
+//                          injected into the prompt.)
+//   mealLabel?:  string  (e.g. "breakfast" / "lunch" / "snack")
+//   planMeal?:   object  (optional — ONE entry from the client's meal plan
+//                          `meals[]`, identical shape to /analyze-image.)
+// }
+//
+// Success 200: identical shape to /analyze-image:
+//   { items, overall_health_score, overall_health_score_reason, plan_match }
+//
+// Not-food 422:
+//   { error: 'not_food', message: <reason> }
+app.post('/api/food-logs/analyze-text', async (req, res) => {
+  try {
+    const { text, mealLabel, planMeal } = req.body || {};
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'text (food description string) is required' });
+    }
+
+    const cleanText = sanitizeFoodText(text);
+    if (!cleanText) {
+      return res.status(400).json({ error: 'text is empty after sanitization' });
+    }
+
+    // Bad/empty plan payloads are silently ignored (sanitized → null) so the
+    // LLM behaves as if no plan was sent rather than failing the request.
+    const cleanPlanMeal = sanitizePlanMeal(planMeal);
+
+    const prompt = buildFoodTextPrompt(mealLabel, cleanText, cleanPlanMeal);
+    const llmReport = await callFoodTextLLM(prompt);
+
+    if (!llmReport.is_food || !Array.isArray(llmReport.food_items) || llmReport.food_items.length === 0) {
+      return res.status(422).json({
+        error: 'not_food',
+        message: llmReport.not_food_reason || 'The provided text does not describe food items.'
+      });
+    }
+
+    return res.json(buildFoodAnalysisResponseBody(llmReport, !!cleanPlanMeal));
+  } catch (error) {
+    console.error('❌ Error in POST /api/food-logs/analyze-text:', error);
+    return res.status(500).json({
+      error: 'Failed to analyze food text',
       message: error.message
     });
   }
