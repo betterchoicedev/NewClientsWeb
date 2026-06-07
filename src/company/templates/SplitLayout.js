@@ -4,67 +4,98 @@ import ScarcityWidget from '../../components/ScarcityWidget';
 
 function SplitLayout({ config, manager, campaign, navigate, hash }) {
   const { language } = useLanguage();
-
   const content = config?.content || {};
-  const themeSettings = config?.ui?.themeSettings || {};
+  const colors = config?.ui?.themeSettings?.colors || {};
+
+  const themeStyles = {
+    '--theme-surface': colors.surface || 'rgba(24, 20, 18, 0.85)',
+    '--theme-primary': colors.primary || '#E29578',
+    '--theme-secondary': colors.secondary || '#3E3026',
+    '--theme-accent': colors.accent || '#FFDAB9',
+    '--theme-text': colors.textMain || '#FFFDFB',
+    '--theme-text-muted': colors.textMuted || '#CDBBAA',
+  };
 
   const title = content.heroTitle?.[language] || 'Welcome Member';
   const subtitle = content.heroSubtitle?.[language] || '';
   const paragraph = content.heroParagraph?.[language] || '';
   const ctaText = content.ctaText?.[language] || 'Claim Access';
+  const features = content.features?.[language] || [];
 
   return (
-    <main className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 py-8 md:py-14 flex items-center animate-fadeIn">
-      {/* 🛠️ The custom gradient from the config is explicitly contained inside this central panel layout card */}
-      <div className={`w-full grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12 rounded-3xl p-8 md:p-12 border shadow-2xl transition-all duration-300 ${themeSettings.innerBorder || 'border-white/10'} bg-gradient-to-br ${themeSettings.innerBgGradient || 'from-zinc-950/80 to-zinc-900/90'}`}>
+    <main style={themeStyles} className="flex-1 w-full min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 flex items-center p-4 md:p-8 animate-fadeIn">
+      <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-0 rounded-[2rem] shadow-2xl overflow-hidden bg-[var(--theme-surface)] backdrop-blur-xl border border-[var(--theme-secondary)]">
         
-        {/* Left Column: Presentation Content Stream */}
-        <div className="lg:col-span-7 flex flex-col justify-center space-y-6">
+        {/* Left Column: Presentation */}
+        <div className="lg:col-span-7 p-8 md:p-14 flex flex-col justify-center space-y-8">
           {manager?.name && (
-            <div className="self-start px-3 py-1.5 rounded-full bg-black/30 border border-white/5 text-xs font-semibold text-zinc-300 tracking-wide">
-              👤 {language === 'hebrew' ? 'מנהלת קהילה זמינה עבורך:' : 'Available Community Leader:'} <strong className="text-white font-bold ml-1">{manager.name}</strong>
+            <div className="self-start px-4 py-2 rounded-full bg-[var(--theme-secondary)] border border-[var(--theme-primary)]/10 text-sm font-bold text-[var(--theme-accent)]">
+              ✨ {language === 'hebrew' ? 'מנהלת קהילה זמינה:' : 'Community Leader:'} <span className="text-[var(--theme-primary)]">{manager.name}</span>
             </div>
           )}
 
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white leading-tight drop-shadow-md">
-            {title}
-          </h1>
-
-          {/* Injects the dynamic text color setting matching the client design config (e.g., text-rose-200) */}
-          <p className={`text-lg md:text-2xl font-semibold leading-relaxed drop-shadow-sm ${themeSettings.accentTextColor || 'text-zinc-200'}`}>
-            {subtitle}
-          </p>
-
-          {paragraph && (
-            <p className="text-zinc-300/90 text-sm md:text-base font-normal leading-relaxed max-w-xl">
-              {paragraph}
+          <div className="space-y-4">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-[var(--theme-text)] leading-tight">
+              {title}
+            </h1>
+            <p className="text-xl md:text-2xl font-bold leading-relaxed text-[var(--theme-primary)]">
+              {subtitle}
             </p>
+            {paragraph && (
+              <p className="text-[var(--theme-text-muted)] text-base font-medium leading-relaxed max-w-xl">
+                {paragraph}
+              </p>
+            )}
+          </div>
+
+          {features.length > 0 && (
+            <ul className="space-y-4 pt-2">
+              {features.map((feature, idx) => (
+                <li key={idx} className="flex items-center gap-3 text-[var(--theme-text)] font-semibold">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--theme-primary)] flex items-center justify-center text-stone-900 text-sm font-bold">✓</span>
+                  {feature}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
-        {/* Right Column: Transaction Action Panel Card Container */}
-        <div className="lg:col-span-5 bg-white/[0.03] border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col justify-center shadow-2xl relative overflow-hidden backdrop-blur-md">
-          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        {/* Right Column: Action Panel */}
+        <div className="lg:col-span-5 bg-black/20 p-8 md:p-12 flex flex-col justify-center relative border-l border-[var(--theme-secondary)]">
           
-          <h3 className="text-center font-bold text-zinc-400 text-xs tracking-widest uppercase mb-6">
-            {language === 'hebrew' ? 'הפעלת הרשמה מאובטחת' : 'Secure Account Activation'}
-          </h3>
-          
-          {/* 🛠️ Dynamic CTA configurations matching custom inputs */}
-          <button
-            onClick={() => navigate(`/signup${hash}`)}
-            className={`w-full py-4 rounded-xl text-center shadow-md transform active:scale-[0.99] hover:scale-[1.01] transition-all duration-300 ${themeSettings.ctaButtonClass || 'bg-white text-black font-bold'}`}
-          >
-            {ctaText}
-          </button>
+          <div className="bg-[var(--theme-secondary)]/40 rounded-2xl p-6 shadow-sm border border-[var(--theme-secondary)] text-center mb-8">
+            <h3 className="font-black text-[var(--theme-text)] text-sm uppercase tracking-widest mb-2">
+              {language === 'hebrew' ? 'הפעלת הרשמה מאובטחת' : 'Secure Account Activation'}
+            </h3>
+            <p className="text-xs text-[var(--theme-text-muted)] font-medium mb-6">
+              {language === 'hebrew' ? 'הפרטים שלך נשמרים בסודיות מוחלטת' : 'Your data is strictly confidential.'}
+            </p>
+            
+            <button
+              onClick={() => navigate(`/signup${hash}`)}
+              className="w-full py-5 rounded-xl text-center text-lg shadow-xl shadow-[var(--theme-primary)]/10 transform active:scale-[0.98] hover:-translate-y-1 transition-all duration-300 bg-[var(--theme-primary)] text-stone-900 font-black"
+            >
+              {ctaText}
+            </button>
+          </div>
+
+          <div className="flex flex-col items-center justify-center text-center gap-2">
+             <div className="flex -space-x-2">
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-secondary)] bg-[#D4A373] flex items-center justify-center text-[8px] text-white font-bold">EM</div>
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-secondary)] bg-[#E29578] flex items-center justify-center text-[8px] text-white font-bold">SJ</div>
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-secondary)] bg-[#FFDAB9] flex items-center justify-center text-[8px] text-stone-900 font-bold">L</div>
+             </div>
+             <p className="text-xs font-bold text-[var(--theme-text-muted)]">
+                {language === 'hebrew' ? 'הצטרפי לאלפי אמהות שכבר התחילו' : 'Join thousands of moms already inside.'}
+             </p>
+          </div>
 
           {campaign?.isSmartLink && (
-            <div className="mt-8 border-t border-white/5 pt-6 w-full">
-              <ScarcityWidget campaign={campaign} themeSettings={themeSettings} />
+            <div className="mt-8 border-t border-[var(--theme-secondary)] pt-6 w-full">
+              <ScarcityWidget campaign={campaign} />
             </div>
           )}
         </div>
-
       </div>
     </main>
   );
