@@ -13,7 +13,7 @@ const PrivacyPolicyPage = () => {
   const content = {
     hebrew: {
       title: "מדיניות פרטיות",
-      lastUpdated: "עדכון אחרון: נובמבר 2025",
+      lastUpdated: "עדכון אחרון: יוני 2026",
       sections: [
         {
           title: "1. מבוא",
@@ -26,8 +26,11 @@ const PrivacyPolicyPage = () => {
             "מידע אישי: שם, כתובת אימייל, מספר טלפון, תאריך לידה",
             "מידע בריאותי: משקל, גובה, מטרות תזונתיות, העדפות תזונה, אלרגיות ורגישויות למזון",
             "מידע תשלום: פרטי כרטיס אשראי (מעובדים באופן מאובטח דרך Stripe)",
-            "נתוני שימוש: כיצד אתה משתמש באתר שלנו, עמודים שבהם ביקרת, זמן שהייה",
-            "עוגיות ונתוני מעקב: אנו משתמשים בעוגיות לשיפור חווית המשתמש"
+            "נתוני שימוש: כיצד אתה משתמש באתר ובאפליקציות הנייד שלנו, עמודים ומסכים שבהם ביקרת, זמן שהייה",
+            "עוגיות ונתוני מעקב: אנו משתמשים בעוגיות לשיפור חווית המשתמש",
+            "תמונות באפליקציה לנייד: בעת השימוש בתכונת תמונת ה-AI ביומן הבריאות, תמונת הארוחה שאתה מצלם (או בוחר מספריית התמונות), תווית הארוחה (למשל \"ארוחת בוקר\") וכל כיתוב אופציונלי שתקליד",
+            "נתוני בריאות באפליקציה לנייד: באישורך, ספירת צעדים ונתוני שינה הנקראים מ-Apple Health (iOS) או Health Connect (Android). האפליקציה עשויה גם לכתוב בחזרה ל-Apple Health / Health Connect את הארוחות והמים שאתה מתעד, כרשומות תזונה והידרציה",
+            "הרשאות מכשיר: גישה למצלמה (לסריקת ברקודים ותמונות ארוחה), גישה לספריית התמונות (לבחירת תמונות ארוחה קיימות), ואסימוני התראות (לתזכורות ארוחה שתבחר להפעיל)"
           ]
         },
         {
@@ -47,9 +50,11 @@ const PrivacyPolicyPage = () => {
           content: `אנו לא מוכרים את המידע האישי שלך לצדדים שלישיים. אנו עשויים לשתף מידע עם:`,
           list: [
             "ספקי שירות: כמו Stripe (לעיבוד תשלומים) ו-Supabase (לאחסון נתונים מאובטח)",
+            "Microsoft Azure (Azure OpenAI Service ו-Azure AI Foundry): מארח את מודלי ה-AI המשמשים בתכונות הבינה המלאכותית של האפליקציה. ראה סעיף 8א לפרטים",
             "דיאטנים מוסמכים: רק אם בחרת לעבוד עם דיאטן מומחה דרך השירות שלנו",
             "רשויות משפטיות: אם נדרש על פי חוק או כדי להגן על הזכויות שלנו"
-          ]
+          ],
+          footer: `כל ספקי השירות הצד-שלישי שאנו משתמשים בהם (Stripe, Supabase, Microsoft Azure) מחויבים בהסכמי עיבוד נתונים (DPA) המחייבים אותם חוזית לספק רמת הגנת נתונים השווה או עולה על המתואר במדיניות פרטיות זו, ולא להשתמש בנתונים האישיים שלך למטרות אחרות מלבד אספקת השירות עבורנו.`
         },
         {
           title: "5. אבטחת נתונים",
@@ -77,8 +82,29 @@ const PrivacyPolicyPage = () => {
           list: [
             "Google Analytics: לניתוח שימוש באתר (רק עם הסכמתך)",
             "Stripe: לעיבוד תשלומים מאובטח",
-            "Supabase: לאחסון נתונים מאובטח"
+            "Supabase: לאחסון נתונים מאובטח",
+            "Microsoft Azure AI (Azure OpenAI Service ו-Azure AI Foundry): משמש להפעלת תכונות ה-AI הפנימיות באפליקציה (ניתוח תמונות מזון והמרת מידות מרכיבים). ההסקה רצה במרכזי נתונים של Microsoft באיחוד האירופי תחת הסכם עיבוד נתונים ארגוני של Microsoft. Microsoft אינה משתמשת בנתונים שנשלחו לאימון מודלים, והנתונים אינם נשמרים לאחר החזרת התשובה"
           ]
+        },
+        {
+          title: "8א. אפליקציה לנייד — תכונות AI והסכמה",
+          content: `אפליקציות ה-iOS וה-Android שלנו כוללות תכונות AI אופציונליות השולחות חלק מצומצם של תוכן שנוצר על-ידי המשתמש לספק AI צד-שלישי לעיבוד:`,
+          list: [
+            "מה נשלח: תמונת הארוחה שצילמת או בחרת, תווית הארוחה (למשל \"ארוחת בוקר\"), והכיתוב החופשי האופציונלי שהקלדת. עבור תכונת המרת מידות המרכיבים, רק שם המרכיב, המותג (אם יש), המידה המקורית, והעדפת השפה/אזור שלך",
+            "מה אינו נשלח: שמך, האימייל, מספר הטלפון, הכתובת, מזהה החשבון, הגיל, המין, הגובה, המשקל, היסטוריית המשקל, BMR/TDEE, מאקרו-נוטריינטים, העדפות תזונה, אלרגיות מזון, מגבלות מזון, מצבים רפואיים, מידע תשלום, נתוני Apple Health / Health Connect, רשומות יומן, או כל שדה פרופיל אחר",
+            "מי מקבל את הנתונים: הנתונים מועברים על-ידי שרת ה-Backend שלנו ל-Microsoft Azure (Azure OpenAI Service ו-Azure AI Foundry) הפועל באזור האיחוד האירופי. אנחנו לא שולחים נתונים אלה לאף ספק AI אחר (OpenAI, Anthropic, Google וכו')",
+            "כיצד הנתונים מוגנים: Microsoft מעבדת את הנתונים תחת אותו הסכם עיבוד נתונים ארגוני המחיל את שאר תשתית הענן שלנו. Microsoft אינה משתמשת בנתונים שנשלחו לאימון מודלים, והנתונים אינם נשמרים לאחר הניתוח. אף צד שלישי אחר אינו מקבל נתונים אלה",
+            "ההסכמה שלך: בפעם הראשונה שתשתמש בתכונת AI, האפליקציה תציג מסך הסכמה ייעודי בתוך האפליקציה, המפרט את הנתונים, הנמען (Microsoft Azure AI), והאפשרויות שלך. תכונת ה-AI לא תפעל עד שתאשר באופן פעיל. ניתן לסרב בכל עת ולהמשיך להשתמש בשאר האפליקציה כרגיל. כדי לבטל הסכמה שניתנה בעבר, מחק והתקן מחדש את האפליקציה — פעולה שתנקה את ההרשאה השמורה מקומית"
+          ]
+        },
+        {
+          title: "8ב. אפליקציה לנייד — Apple Health ו-Health Connect",
+          content: `ב-iOS, האפליקציה משתלבת עם Apple HealthKit. ב-Android, האפליקציה משתלבת עם Google Health Connect. באישורך המפורש (הניתן דרך הודעת ההרשאה של המערכת), האפליקציה:`,
+          list: [
+            "קוראת: ספירת צעדים יומית ומשך שינה מ-7 הימים האחרונים, המוצגים במסך הבריאות בתוך האפליקציה",
+            "כותבת: את הארוחות והמים שאתה מתעד ביומן הבריאות, נרשמים כרשומות תזונה והידרציה כדי שהמידע המלא שלך יישאר מאוחד בפלטפורמת הבריאות שלך"
+          ],
+          footer: `נתוני בריאות הנקראים מ-Apple Health / Health Connect או נכתבים אליהם נשארים במכשיר שלך או בחשבון Apple / Google האישי שלך. הם אינם מועברים בשום מקרה לשרתים שלנו, ל-Microsoft Azure AI, או לכל צד שלישי אחר.`
         },
         {
           title: "9. שמירת נתונים",
@@ -103,7 +129,7 @@ const PrivacyPolicyPage = () => {
     },
     english: {
       title: "Privacy Policy",
-      lastUpdated: "Last Updated: November 2025",
+      lastUpdated: "Last Updated: June 2026",
       sections: [
         {
           title: "1. Introduction",
@@ -116,8 +142,11 @@ const PrivacyPolicyPage = () => {
             "Personal Information: Name, email address, phone number, date of birth",
             "Health Information: Weight, height, nutritional goals, dietary preferences, food allergies and sensitivities",
             "Payment Information: Credit card details (processed securely through Stripe)",
-            "Usage Data: How you use our website, pages visited, time spent",
-            "Cookies and Tracking Data: We use cookies to enhance user experience"
+            "Usage Data: How you use our website and mobile apps, pages and screens visited, time spent",
+            "Cookies and Tracking Data: We use cookies to enhance user experience",
+            "Mobile App Photos: When you use the AI Photo feature in the Health Diary, the meal photo you capture (or pick from your library), the meal label (e.g. \"Breakfast\"), and any optional caption you type",
+            "Mobile App Health Data: With your permission, step count and sleep data read from Apple Health (iOS) or Health Connect (Android). The app may also write the meals and water you log back to Apple Health / Health Connect as Nutrition and Hydration entries",
+            "Device Permissions: Camera access (for barcode scanning and meal photos), photo library access (for picking existing meal photos), and notification tokens (for meal-time reminders you opt into)"
           ]
         },
         {
@@ -137,9 +166,11 @@ const PrivacyPolicyPage = () => {
           content: `We do not sell your personal information to third parties. We may share information with:`,
           list: [
             "Service Providers: Such as Stripe (for payment processing) and Supabase (for secure data storage)",
+            "Microsoft Azure (Azure OpenAI Service and Azure AI Foundry): Hosts the AI models used by the app's AI features. See Section 8a for details",
             "Licensed Dietitians: Only if you choose to work with an expert dietitian through our service",
             "Legal Authorities: If required by law or to protect our rights"
-          ]
+          ],
+          footer: `All third-party service providers we use (Stripe, Supabase, Microsoft Azure) are bound by Data Processing Agreements that contractually require them to provide a level of data protection equal to or exceeding what is described in this Privacy Policy, and not to use your personal data for purposes other than providing the service to us.`
         },
         {
           title: "5. Data Security",
@@ -167,8 +198,29 @@ const PrivacyPolicyPage = () => {
           list: [
             "Google Analytics: For website usage analysis (only with your consent)",
             "Stripe: For secure payment processing",
-            "Supabase: For secure data storage"
+            "Supabase: For secure data storage",
+            "Microsoft Azure AI (Azure OpenAI Service and Azure AI Foundry): Used to power the in-app AI features (food-photo analysis and ingredient-measurement conversion). Inference runs in Microsoft data centers in the EU under Microsoft's Enterprise Data Processing Agreement. Microsoft does not use submitted data to train any model, and data is not retained after the response is returned"
           ]
+        },
+        {
+          title: "8a. Mobile App - AI Features and Consent",
+          content: `Our iOS and Android apps include optional AI features that send a limited subset of user-generated content to a third-party AI provider for processing:`,
+          list: [
+            "What is sent: The meal photo you capture or select, the meal label (e.g. \"Breakfast\"), and the optional free-text caption you type. For the ingredient-measurement conversion feature, only the ingredient name, brand (if any), the source measurement, and your language/region preference",
+            "What is not sent: Your name, email, phone number, address, account ID, age, gender, height, weight, weight history, BMR/TDEE, macros, dietary preferences, food allergies, food limitations, medical conditions, payment information, Apple Health / Health Connect data, calendar entries, or any other profile field",
+            "Who receives it: The data is forwarded by our backend server to Microsoft Azure (Azure OpenAI Service and Azure AI Foundry) running in the EU region. We do not send this data to any other AI provider (OpenAI, Anthropic, Google, etc.)",
+            "How it is protected: Microsoft processes the data under the same enterprise Data Processing Agreement that governs the rest of our cloud infrastructure. Microsoft does not use submitted data for model training, and the data is not retained after analysis. No other third party receives this data",
+            "Your consent: The app will show you a dedicated in-app consent screen the first time you use an AI feature, naming the data, the recipient (Microsoft Azure AI), and your options. The AI feature will not run until you actively agree. You can decline at any time and continue using the rest of the app normally. To revoke a previously granted consent, delete and reinstall the app, which clears the locally stored permission"
+          ]
+        },
+        {
+          title: "8b. Mobile App - Apple Health and Health Connect",
+          content: `On iOS, the app integrates with Apple HealthKit. On Android, it integrates with Google Health Connect. With your explicit permission (granted through the system permission prompt), the app:`,
+          list: [
+            "Reads: Daily step count and sleep duration from the last 7 days, displayed in the in-app Health screen",
+            "Writes: The meals and water you log in the Health Diary, recorded as Nutrition and Hydration entries so your full record stays consolidated in your health platform"
+          ],
+          footer: `Health data read from or written to Apple Health / Health Connect stays on your device or in your personal Apple / Google account. It is never transmitted to our servers, to Microsoft Azure AI, or to any other third party.`
         },
         {
           title: "9. Data Retention",
@@ -231,6 +283,12 @@ const PrivacyPolicyPage = () => {
                       <li key={idx} className="leading-relaxed">{item}</li>
                     ))}
                   </ul>
+                )}
+
+                {section.footer && (
+                  <p className={`${themeClasses.textSecondary} mt-3 sm:mt-4 leading-relaxed text-sm sm:text-base`}>
+                    {section.footer}
+                  </p>
                 )}
 
                 {section.contact && (
