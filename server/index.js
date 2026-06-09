@@ -154,12 +154,20 @@ function buildMobileAppOAuthRedirect(session) {
 // ──────────────────────────────────────────────────────────────────────────
 // Sign in with Apple (App Review Guideline 4.8)
 //
-// The iOS app uses `expo-apple-authentication` to show the native Apple
-// sheet, which gives us an Apple-signed `identity_token` (JWT). We forward
-// it here; Supabase verifies the signature against Apple's JWKS and either
-// finds the existing user or provisions a new auth row. The response shape
-// mirrors `/api/auth/login` so the React Native context can persist it
-// identically to email + Google sign-ins.
+// Flow:
+//   1. Decode the Apple identity token to extract the email claim
+//      (signature is intentionally NOT verified here — it's only used to
+//      decide whether the email is registered with us).
+//   2. Look the email up in `clients` / `chat_users`. If not found, we
+//      respond 404 `no_account` IMMEDIATELY, without ever calling
+//      Supabase. This is the key behavioural difference from the previous
+//      version: no Supabase auth row is created for unregistered Apple
+//      users, so no orphans end up in the dashboard.
+//   3. Only if the account exists do we hand the token to
+//      `supabase.auth.signInWithIdToken({ provider: 'apple', token })`.
+//      Supabase verifies the JWT against Apple's JWKS — a forged token
+//      with a stolen email won't produce a session, so the pre-check
+//      can't be abused to log in as anyone.
 //
 // Body:
 //   { identityToken: string, fullName?: { givenName?: string, familyName?: string } }
@@ -167,8 +175,57 @@ function buildMobileAppOAuthRedirect(session) {
 // Returns:
 //   { data: { user, session }, language, error: null }
 //   or 404 { error: 'no_account', email } when the Apple email isn't a
-//   registered BetterChoice client (same semantics as the Google flow).
+//   registered BetterChoice client.
 // ──────────────────────────────────────────────────────────────────────────
+
+/** Best-effort JWT payload decode — only used to read claims, never to
+ *  authenticate. Signature is NOT verified here; that happens later in
+ *  Supabase's `signInWithIdToken`, which is the only thing that can mint
+ *  a real session. Returns {} on any parse failure. */
+function decodeJwtPayloadServer(token) {
+  try {
+    const parts = String(token).split('.');
+    if (parts.length !== 3) return {};
+    let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4 !== 0) b64 += '=';
+    const decoded = Buffer.from(b64, 'base64').toString('utf8');
+    return JSON.parse(decoded) || {};
+  } catch {
+    return {};
+  }
+}
+
+/** Returns true iff `email` (lower-cased) shows up in either the main
+ *  `clients` table or the chat-side `chat_users` table. Used by both the
+ *  Apple verify endpoint and the Google finalize endpoint below to gate
+ *  whether a third-party login should produce a session at all. */
+async function emailHasBetterChoiceAccount(email) {
+  if (!email) return false;
+  try {
+    const { data: clientRow } = await supabase
+      .from('clients')
+      .select('user_id')
+      .eq('email', email)
+      .maybeSingle();
+    if (clientRow?.user_id) return true;
+  } catch (e) {
+    console.warn('emailHasBetterChoiceAccount: clients lookup failed:', e?.message);
+  }
+  if (chatSupabase) {
+    try {
+      const { data: chatRow } = await chatSupabase
+        .from('chat_users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+      if (chatRow?.id) return true;
+    } catch (e) {
+      console.warn('emailHasBetterChoiceAccount: chat_users lookup failed:', e?.message);
+    }
+  }
+  return false;
+}
+
 app.post('/api/auth/oauth/apple/verify', async (req, res) => {
   try {
     const { identityToken, fullName } = req.body || {};
@@ -176,7 +233,26 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
       return res.status(400).json({ error: 'identityToken is required' });
     }
 
-    const { data, error } = await supabaseAuth.auth.signInWithIdToken({
+    // 1) Pre-check: read the email from the Apple JWT WITHOUT calling
+    // Supabase. If the email isn't registered we bail out here so no
+    // Supabase auth row is ever created for this Apple ID.
+    const payload = decodeJwtPayloadServer(identityToken);
+    const claimedEmail = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+    if (!claimedEmail) {
+      return res.status(401).json({ error: 'Apple did not return an email for this account' });
+    }
+
+    const accountExists = await emailHasBetterChoiceAccount(claimedEmail);
+    if (!accountExists) {
+      return res.status(404).json({ error: 'no_account', email: claimedEmail });
+    }
+
+    // 2) Account exists — now actually mint a Supabase session by handing
+    // Apple's identity token to Supabase. This is the step that verifies
+    // the JWT signature against Apple's JWKS, so a forged token would
+    // still fail here even though the pre-check above used the unverified
+    // payload.
+    const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'apple',
       token: identityToken,
     });
@@ -188,47 +264,26 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
       return res.status(401).json({ error: 'Apple sign-in returned no session' });
     }
 
-    const email = (data.user.email || '').trim().toLowerCase();
-    if (!email) {
-      return res.status(401).json({ error: 'Apple did not return an email for this account' });
+    // Belt-and-suspenders: if for any reason Supabase came back with a
+    // different (verified) email than what the JWT pre-check used, AND
+    // that email is also unregistered, scrub the auth row and bail. This
+    // shouldn't happen in practice — Supabase reads the same `email`
+    // claim — but it's cheap insurance against the race where someone
+    // hand-crafted a JWT with mismatched claims.
+    const verifiedEmail = (data.user.email || '').trim().toLowerCase();
+    if (verifiedEmail && verifiedEmail !== claimedEmail) {
+      const verifiedExists = await emailHasBetterChoiceAccount(verifiedEmail);
+      if (!verifiedExists) {
+        try {
+          await supabase.auth.admin.deleteUser(data.user.id);
+        } catch (e) {
+          console.warn('Apple verify: orphan cleanup failed:', e?.message);
+        }
+        return res.status(404).json({ error: 'no_account', email: verifiedEmail });
+      }
     }
 
-    // Mirror the Google flow: only let the user in if there's a matching
-    // BetterChoice client row. This keeps the "no account" UX consistent
-    // across both third-party providers.
-    let exists = false;
-    try {
-      const { data: clientRow } = await supabase
-        .from('clients')
-        .select('user_id')
-        .eq('email', email)
-        .maybeSingle();
-      if (clientRow?.user_id) exists = true;
-    } catch (e) {
-      console.warn('Apple verify: clients lookup failed:', e?.message);
-    }
-    if (!exists && chatSupabase) {
-      try {
-        const { data: chatRow } = await chatSupabase
-          .from('chat_users')
-          .select('id')
-          .eq('email', email)
-          .maybeSingle();
-        if (chatRow?.id) exists = true;
-      } catch (e) {
-        console.warn('Apple verify: chat_users lookup failed:', e?.message);
-      }
-    }
-    if (!exists) {
-      // Sign out the freshly-created Supabase session to keep things tidy
-      // (we don't want orphan auth rows for unregistered Apple users).
-      try {
-        await supabaseAuth.auth.admin.deleteUser(data.user.id);
-      } catch {
-        /* best-effort cleanup */
-      }
-      return res.status(404).json({ error: 'no_account', email });
-    }
+    const finalEmail = verifiedEmail || claimedEmail;
 
     // Best-effort: record the Apple-provided name onto the matching client
     // row the first time the user signs in (Apple only shares this on the
@@ -239,7 +294,7 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
         const patch = {};
         if (fullName.givenName) patch.first_name = fullName.givenName;
         if (fullName.familyName) patch.last_name = fullName.familyName;
-        await supabase.from('clients').update(patch).eq('email', email);
+        await supabase.from('clients').update(patch).eq('email', finalEmail);
       } catch {
         /* best-effort enrichment */
       }
@@ -253,7 +308,7 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
         const { data: lang } = await chatSupabase
           .from('chat_users')
           .select('user_language')
-          .eq('email', email)
+          .eq('email', finalEmail)
           .maybeSingle();
         if (lang) language = lang;
       }
@@ -269,6 +324,95 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
   } catch (error) {
     console.error('POST /api/auth/oauth/apple/verify error:', error);
     res.status(500).json({ error: error.message || 'Apple sign-in failed' });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Google OAuth finalize
+//
+// The Google flow is structurally different from Apple: Supabase's hosted
+// `/auth/v1/authorize` page is what runs the OAuth exchange, and by the
+// time the user lands back in the app a Supabase auth row already exists.
+// We can't pre-check like we do for Apple.
+//
+// Instead, the client calls this endpoint right after parsing the deep
+// link. We:
+//   1. Validate the supplied access token via `supabase.auth.getUser` —
+//      that's the only thing that gives us a *trusted* user id + email.
+//   2. Look the email up in `clients` / `chat_users`.
+//   3. If no match → `supabase.auth.admin.deleteUser(userId)` so no
+//      orphan Google auth row lingers, then respond 404 `no_account`.
+//   4. If match → respond `{ ok: true, language }`.
+//
+// Body: { accessToken: string }
+// ──────────────────────────────────────────────────────────────────────────
+app.post('/api/auth/oauth/google/finalize', async (req, res) => {
+  try {
+    const { accessToken } = req.body || {};
+    if (!accessToken || typeof accessToken !== 'string') {
+      return res.status(400).json({ error: 'accessToken is required' });
+    }
+
+    // 1) Trust step — only the bearer Supabase returned from its own OAuth
+    // flow can resolve back to a real user here. Forged tokens fail this
+    // call with `Invalid JWT`.
+    const { data: userData, error: userError } = await supabaseAuth.auth.getUser(accessToken);
+    if (userError || !userData?.user) {
+      console.warn('Google finalize: getUser failed:', userError?.message);
+      return res.status(401).json({ error: 'Invalid or expired Google session token' });
+    }
+
+    const userId = userData.user.id;
+    const email = (userData.user.email || '').trim().toLowerCase();
+    if (!email) {
+      // Defensive: a Google auth row with no email is malformed. Wipe it
+      // and tell the client to surface the "no account" UX.
+      try {
+        await supabase.auth.admin.deleteUser(userId);
+      } catch (e) {
+        console.warn('Google finalize: cleanup of email-less auth row failed:', e?.message);
+      }
+      return res.status(404).json({ error: 'no_account', email: '' });
+    }
+
+    // 2) Same lookup the Apple endpoint uses.
+    const accountExists = await emailHasBetterChoiceAccount(email);
+
+    // 3) No matching BetterChoice account → delete the orphan auth row
+    // (this is the fix for the "Google sign-in still creates a Supabase
+    // user even when the email isn't a customer" bug) and respond 404.
+    if (!accountExists) {
+      try {
+        const { error: deleteErr } = await supabase.auth.admin.deleteUser(userId);
+        if (deleteErr) {
+          console.error('Google finalize: failed to delete orphan auth user:', deleteErr);
+        }
+      } catch (e) {
+        console.error('Google finalize: failed to delete orphan auth user:', e?.message);
+      }
+      return res.status(404).json({ error: 'no_account', email });
+    }
+
+    // 4) Account exists — return language preference so the client can
+    // seed locale identically to the password / Apple flows.
+    let language = null;
+    try {
+      if (chatSupabase) {
+        const { data: lang } = await chatSupabase
+          .from('chat_users')
+          .select('user_language')
+          .eq('email', email)
+          .maybeSingle();
+        if (lang) language = lang;
+      }
+    } catch {
+      /* language is non-critical */
+    }
+
+    return res.json({ ok: true, exists: true, language });
+  } catch (error) {
+    console.error('POST /api/auth/oauth/google/finalize error:', error);
+    res.status(500).json({ error: error.message || 'Failed to finalize Google sign-in' });
   }
 });
 
