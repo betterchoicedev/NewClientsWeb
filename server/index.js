@@ -151,6 +151,414 @@ function buildMobileAppOAuthRedirect(session) {
   return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Sign in with Apple (App Review Guideline 4.8)
+//
+// The iOS app uses `expo-apple-authentication` to show the native Apple
+// sheet, which gives us an Apple-signed `identity_token` (JWT). We forward
+// it here; Supabase verifies the signature against Apple's JWKS and either
+// finds the existing user or provisions a new auth row. The response shape
+// mirrors `/api/auth/login` so the React Native context can persist it
+// identically to email + Google sign-ins.
+//
+// Body:
+//   { identityToken: string, fullName?: { givenName?: string, familyName?: string } }
+//
+// Returns:
+//   { data: { user, session }, language, error: null }
+//   or 404 { error: 'no_account', email } when the Apple email isn't a
+//   registered BetterChoice client (same semantics as the Google flow).
+// ──────────────────────────────────────────────────────────────────────────
+app.post('/api/auth/oauth/apple/verify', async (req, res) => {
+  try {
+    const { identityToken, fullName } = req.body || {};
+    if (!identityToken || typeof identityToken !== 'string') {
+      return res.status(400).json({ error: 'identityToken is required' });
+    }
+
+    const { data, error } = await supabaseAuth.auth.signInWithIdToken({
+      provider: 'apple',
+      token: identityToken,
+    });
+    if (error) {
+      console.error('❌ Apple signInWithIdToken error:', error);
+      return res.status(401).json({ error: error.message || 'Apple sign-in rejected' });
+    }
+    if (!data?.user || !data?.session) {
+      return res.status(401).json({ error: 'Apple sign-in returned no session' });
+    }
+
+    const email = (data.user.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(401).json({ error: 'Apple did not return an email for this account' });
+    }
+
+    // Mirror the Google flow: only let the user in if there's a matching
+    // BetterChoice client row. This keeps the "no account" UX consistent
+    // across both third-party providers.
+    let exists = false;
+    try {
+      const { data: clientRow } = await supabase
+        .from('clients')
+        .select('user_id')
+        .eq('email', email)
+        .maybeSingle();
+      if (clientRow?.user_id) exists = true;
+    } catch (e) {
+      console.warn('Apple verify: clients lookup failed:', e?.message);
+    }
+    if (!exists && chatSupabase) {
+      try {
+        const { data: chatRow } = await chatSupabase
+          .from('chat_users')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+        if (chatRow?.id) exists = true;
+      } catch (e) {
+        console.warn('Apple verify: chat_users lookup failed:', e?.message);
+      }
+    }
+    if (!exists) {
+      // Sign out the freshly-created Supabase session to keep things tidy
+      // (we don't want orphan auth rows for unregistered Apple users).
+      try {
+        await supabaseAuth.auth.admin.deleteUser(data.user.id);
+      } catch {
+        /* best-effort cleanup */
+      }
+      return res.status(404).json({ error: 'no_account', email });
+    }
+
+    // Best-effort: record the Apple-provided name onto the matching client
+    // row the first time the user signs in (Apple only shares this on the
+    // very first sign-in event). We don't fail the request if it doesn't
+    // stick — the auth session is what actually matters.
+    if (fullName && (fullName.givenName || fullName.familyName)) {
+      try {
+        const patch = {};
+        if (fullName.givenName) patch.first_name = fullName.givenName;
+        if (fullName.familyName) patch.last_name = fullName.familyName;
+        await supabase.from('clients').update(patch).eq('email', email);
+      } catch {
+        /* best-effort enrichment */
+      }
+    }
+
+    // Look up the language preference the same way the password flow does
+    // so the React Native context starts with the right locale.
+    let language = null;
+    try {
+      if (chatSupabase) {
+        const { data: lang } = await chatSupabase
+          .from('chat_users')
+          .select('user_language')
+          .eq('email', email)
+          .maybeSingle();
+        if (lang) language = lang;
+      }
+    } catch {
+      /* language is non-critical */
+    }
+
+    return res.json({
+      data: { user: data.user, session: data.session },
+      language,
+      error: null,
+    });
+  } catch (error) {
+    console.error('POST /api/auth/oauth/apple/verify error:', error);
+    res.status(500).json({ error: error.message || 'Apple sign-in failed' });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Account deletion (App Review Guideline 5.1.1(v))
+//
+// Authenticated DELETE. Uses Supabase's admin API (service-role key) to
+// permanently delete the auth row; FK cascade rules then take care of the
+// `clients` / `chat_users` / food-log / etc. rows that reference the user.
+// We also call `auth.admin.deleteUser` rather than soft-deleting, because
+// Apple explicitly says "only offering to temporarily deactivate or
+// disable an account is insufficient."
+// ──────────────────────────────────────────────────────────────────────────
+app.delete('/api/auth/account', requireAuth, async (req, res) => {
+  try {
+    const authUserId = req.authUser?.id;
+    if (!authUserId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const email = (req.authUser?.email || '').trim().toLowerCase();
+
+    // ── Resolve the user's user_code and chat_users.id ──────────────────
+    // The dietitian-side cleanup is keyed by `user_code`; the chat-side
+    // cleanup is keyed by `chat_users.id`. We resolve both up front so the
+    // rest of this handler mirrors DELETE /api/clients/:id exactly.
+    let userCode = req.userCode || null;
+    if (!userCode && email) {
+      try {
+        const { data: clientRow } = await supabase
+          .from('clients')
+          .select('user_code')
+          .eq('email', email)
+          .maybeSingle();
+        if (clientRow?.user_code) userCode = clientRow.user_code;
+      } catch (e) {
+        console.warn('Account deletion: user_code lookup by email failed:', e?.message);
+      }
+    }
+
+    let chatUserId = null;
+    if (chatSupabase && email) {
+      try {
+        const { data: chatUser } = await chatSupabase
+          .from('chat_users')
+          .select('id, user_code')
+          .eq('email', email)
+          .maybeSingle();
+        if (chatUser?.id) chatUserId = chatUser.id;
+        if (!userCode && chatUser?.user_code) userCode = chatUser.user_code;
+      } catch (e) {
+        console.warn('Account deletion: chat_users lookup by email failed:', e?.message);
+      }
+    }
+
+    // ── 1. Reminder instances / definitions + meal plans (chat project) ──
+    if (chatSupabase && userCode) {
+      // 1a. Meal plan IDs for this user
+      const { data: mealPlans, error: fetchMealPlansError } = await chatSupabase
+        .from('meal_plans_and_schemas')
+        .select('id')
+        .eq('user_code', userCode)
+        .eq('record_type', 'meal_plan');
+
+      if (!fetchMealPlansError && mealPlans && mealPlans.length > 0) {
+        const mealPlanIds = mealPlans.map((p) => p.id);
+        // 1b. Reminder definitions referencing these meal plans
+        const { data: reminderDefs, error: fetchReminderError } = await chatSupabase
+          .from('reminder_definitions')
+          .select('reminder_definition_id')
+          .in('user_plan_id', mealPlanIds);
+
+        if (!fetchReminderError && reminderDefs && reminderDefs.length > 0) {
+          const definitionIds = reminderDefs.map((r) => r.reminder_definition_id);
+          const { error: instancesError } = await chatSupabase
+            .from('reminder_instances')
+            .delete()
+            .in('definition_id', definitionIds);
+          if (instancesError) {
+            console.error('Error deleting reminder instances:', instancesError);
+            return res.status(500).json({ error: `Failed to delete reminder instances: ${instancesError.message}` });
+          }
+        }
+
+        const { error: reminderError } = await chatSupabase
+          .from('reminder_definitions')
+          .delete()
+          .in('user_plan_id', mealPlanIds);
+        if (reminderError) {
+          console.error('Error deleting reminder definitions:', reminderError);
+          return res.status(500).json({ error: `Failed to delete reminder definitions: ${reminderError.message}` });
+        }
+      }
+
+      // 1c. Meal plans themselves
+      const { error: mealPlansError } = await chatSupabase
+        .from('meal_plans_and_schemas')
+        .delete()
+        .eq('user_code', userCode)
+        .eq('record_type', 'meal_plan');
+      if (mealPlansError) {
+        console.error('Error deleting meal plans:', mealPlansError);
+        return res.status(500).json({ error: `Failed to delete meal plans: ${mealPlansError.message}` });
+      }
+    }
+
+    // ── 2-5. Conversations, messages, food logs, chat_users ─────────────
+    if (chatSupabase && chatUserId) {
+      // 2. Conversation IDs
+      const { data: conversations, error: convError } = await chatSupabase
+        .from('chat_conversations')
+        .select('id')
+        .eq('user_id', chatUserId);
+      if (convError) {
+        console.error('Error fetching conversations:', convError);
+        return res.status(500).json({ error: `Failed to fetch conversations: ${convError.message}` });
+      }
+
+      const conversationIds = (conversations || []).map((c) => c.id);
+
+      // 3. Messages for those conversations
+      if (conversationIds.length > 0) {
+        const { error: messagesError } = await chatSupabase
+          .from('chat_messages')
+          .delete()
+          .in('conversation_id', conversationIds);
+        if (messagesError) {
+          console.error('Error deleting messages:', messagesError);
+          return res.status(500).json({ error: `Failed to delete messages: ${messagesError.message}` });
+        }
+      }
+
+      // 4. Conversations
+      const { error: deleteConvError } = await chatSupabase
+        .from('chat_conversations')
+        .delete()
+        .eq('user_id', chatUserId);
+      if (deleteConvError) {
+        console.error('Error deleting conversations:', deleteConvError);
+        return res.status(500).json({ error: `Failed to delete conversations: ${deleteConvError.message}` });
+      }
+
+      // 4.5. Food logs (FK fk_food_logs_user_id -> chat_users.id, no cascade)
+      const { error: foodLogsError } = await chatSupabase
+        .from('food_logs')
+        .delete()
+        .eq('user_id', chatUserId);
+      if (foodLogsError) {
+        console.error('Error deleting food logs:', foodLogsError);
+        return res.status(500).json({ error: `Failed to delete food logs: ${foodLogsError.message}` });
+      }
+
+      // 5. chat_users row
+      const { error: deleteUserError } = await chatSupabase
+        .from('chat_users')
+        .delete()
+        .eq('id', chatUserId);
+      if (deleteUserError) {
+        console.error('Error deleting chat user:', deleteUserError);
+        return res.status(500).json({ error: `Failed to delete chat user: ${deleteUserError.message}` });
+      }
+    }
+
+    // ── 6. Main project cleanup: Stripe, client_meal_plans, stripe_usage_log, clients
+    if (userCode) {
+      try {
+        // 6a2. Cancel any billable Stripe subscription for this user immediately.
+        // Covers active, trialing, past_due, unpaid, paused, incomplete – everything
+        // that isn't already in a terminal state (canceled / incomplete_expired).
+        if (stripe) {
+          const CANCELABLE_STATUSES = new Set([
+            'active',
+            'trialing',
+            'past_due',
+            'unpaid',
+            'paused',
+            'incomplete',
+          ]);
+          try {
+            const customerIds = new Set();
+
+            // Primary source: stripe_subscriptions rows for this auth user.
+            const { data: subs } = await supabase
+              .from('stripe_subscriptions')
+              .select('stripe_customer_id, stripe_subscription_id, status')
+              .eq('user_id', authUserId);
+            for (const s of subs || []) {
+              if (s.stripe_customer_id) customerIds.add(s.stripe_customer_id);
+            }
+
+            // Also try to cancel by stored subscription_id directly, in case the
+            // subscription is detached from the customer rows we have locally.
+            for (const s of subs || []) {
+              if (!s.stripe_subscription_id) continue;
+              if (!CANCELABLE_STATUSES.has(String(s.status || '').toLowerCase()) && s.status) continue;
+              try {
+                await stripe.subscriptions.cancel(s.stripe_subscription_id);
+                console.log('Stripe subscription canceled on account delete (by id):', s.stripe_subscription_id);
+              } catch (cancelErr) {
+                if (cancelErr?.code !== 'resource_missing') {
+                  console.error('Error canceling Stripe subscription', s.stripe_subscription_id, 'on account delete:', cancelErr.message);
+                }
+              }
+            }
+
+            // Sweep each known customer for any remaining non-terminal subs.
+            for (const customerId of customerIds) {
+              const subscriptionList = await stripe.subscriptions.list({
+                customer: customerId,
+                status: 'all',
+                limit: 100,
+              });
+              for (const sub of subscriptionList.data) {
+                if (!CANCELABLE_STATUSES.has(sub.status)) continue;
+                try {
+                  await stripe.subscriptions.cancel(sub.id);
+                  console.log('Stripe subscription canceled on account delete:', sub.id, `(was ${sub.status})`);
+                } catch (cancelErr) {
+                  if (cancelErr?.code !== 'resource_missing') {
+                    console.error('Error canceling Stripe subscription', sub.id, 'on account delete:', cancelErr.message);
+                  }
+                }
+              }
+            }
+          } catch (stripeCancelErr) {
+            console.error('Error canceling Stripe subscriptions on account delete:', stripeCancelErr);
+            // Don't fail the request – auth row removal below is the source of truth
+          }
+        }
+
+        // 6b. client_meal_plans for this user_code
+        const { error: mealPlansError } = await supabase
+          .from('client_meal_plans')
+          .delete()
+          .eq('user_code', userCode);
+        if (mealPlansError) {
+          console.error('Error deleting client_meal_plans:', mealPlansError);
+        }
+
+        // 6c. stripe_usage_log for this user_code
+        const { error: stripeError } = await supabase
+          .from('stripe_usage_log')
+          .delete()
+          .eq('user_code', userCode);
+        if (stripeError) {
+          console.error('Error deleting stripe_usage_log:', stripeError);
+        }
+
+        // 6d. clients rows for this user_code
+        const { error: clientsError } = await supabase
+          .from('clients')
+          .delete()
+          .eq('user_code', userCode);
+        if (clientsError) {
+          console.error('Error deleting clients (by user_code):', clientsError);
+        }
+      } catch (mainProjectErr) {
+        console.error('Error cleaning up main Supabase project on account delete:', mainProjectErr);
+        // Don't fail the request – auth row removal below is the source of truth
+      }
+    }
+
+    // Safety net: drop any clients rows still tied to this auth user / email
+    // even when we couldn't resolve a user_code above.
+    try {
+      await supabase.from('clients').delete().eq('user_id', authUserId);
+      if (email) {
+        await supabase.from('clients').delete().eq('email', email);
+      }
+    } catch (e) {
+      console.warn('Account deletion: residual clients cleanup failed:', e?.message);
+    }
+
+    // ── 7. Finally, delete the auth row (source of truth) ──────────────
+    const { error: deleteAuthError } = await supabaseAuth.auth.admin.deleteUser(authUserId);
+    if (deleteAuthError) {
+      console.error('❌ supabaseAuth.admin.deleteUser failed:', deleteAuthError);
+      return res.status(500).json({
+        error: 'Failed to delete account',
+        details: deleteAuthError.message,
+      });
+    }
+
+    return res.json({ ok: true, success: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('DELETE /api/auth/account error:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete account' });
+  }
+});
+
 /**
  * Mobile app calls this to kick off Google sign-in.
  *
