@@ -543,9 +543,19 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
     }
 
     // ── 7. Finally, delete the auth row (source of truth) ──────────────
-    const { error: deleteAuthError } = await supabaseAuth.auth.admin.deleteUser(authUserId);
+    // NOTE: admin.deleteUser requires the service-role key, so we must use
+    // `supabase` (service role) here — `supabaseAuth` is the anon client and
+    // returns 403 "User not allowed / not_admin".
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('❌ Cannot delete auth user: SUPABASE_SERVICE_ROLE_KEY is not set');
+      return res.status(500).json({
+        error: 'Failed to delete account',
+        details: 'Server is missing SUPABASE_SERVICE_ROLE_KEY required for admin deletion',
+      });
+    }
+    const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(authUserId);
     if (deleteAuthError) {
-      console.error('❌ supabaseAuth.admin.deleteUser failed:', deleteAuthError);
+      console.error('❌ supabase.auth.admin.deleteUser failed:', deleteAuthError);
       return res.status(500).json({
         error: 'Failed to delete account',
         details: deleteAuthError.message,
