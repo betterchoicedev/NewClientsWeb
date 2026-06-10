@@ -5312,6 +5312,12 @@ ${captionBlock}${planBlock}
         - Set \`is_beverage: true\` ONLY for drinks / pourable liquids that people naturally measure in volume (water, juice, milk, soft drinks, soda, coffee, tea, beer, wine, cocktails, smoothies, milkshakes, drinkable yogurts, broth served as a drink, etc.). Soups eaten with a spoon, ice cream, yogurt in a bowl, sauces, and dressings are NOT beverages.
         - When \`is_beverage\` is true: fill \`estimated_volume_ml\` from container geometry (mug ≈ 250ml, standard glass ≈ 250ml, soda can ≈ 330ml, half-litre bottle ≈ 500ml, Starbucks Tall ≈ 350ml / Grande ≈ 470ml / Venti ≈ 590ml) and convert to grams using the drink's density (water / most soft drinks ≈ 1.0 g/ml, milk ≈ 1.03 g/ml, whole-milk smoothies ≈ 1.0–1.05 g/ml, beer ≈ 1.01 g/ml, oil ≈ 0.92 g/ml). \`estimated_weight_g\` must STILL be filled (macros math runs in grams).
         - When \`is_beverage\` is false: set \`estimated_volume_ml: null\`.
+    * **Hidden Calorie & Implicit Ingredient Detection (MANDATORY SEPARATION):**
+        * **Explicit Extraction:** If you detect or infer added fats (oil, butter, dressings) or significant sauces, you MUST create a distinct, separate component for them in your output list. Do not implicitly merge their calories into the main food item.
+        * **Visual Cues (Gloss/Sheen):** If vegetables, pasta, or salads appear shiny, glossy, or have pools of liquid, explicitly add an estimated portion of "Oil", "Butter", or "Dressing".
+        * **Culinary Context (Heuristics):** If the dish traditionally relies on oil or fat (e.g., Hummus, Fried Eggs, Roasted Vegetables, Mediterranean Salads), assume standard culinary preparation and add an appropriate baseline amount of oil/fat.
+        * **Viscosity & Absorption:** For porous items (eggplant, bread, croutons), assume high oil absorption and increase the estimated weight of the hidden fat component if the surface sheen is high.
+
 
 4.  **MACRONUTRIENT BASELINES (CRITICAL HANDOFF):**
     * **DO NOT** calculate the final total macros for the estimated weight.
