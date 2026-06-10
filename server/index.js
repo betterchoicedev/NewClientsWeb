@@ -151,6 +151,31 @@ function buildMobileAppOAuthRedirect(session) {
   return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
 }
 
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refresh_token } = req.body || {};
+    if (!refresh_token || typeof refresh_token !== 'string') {
+      return res.status(400).json({ error: 'refresh_token is required' });
+    }
+
+    const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token });
+    if (error || !data?.session?.access_token) {
+      console.warn('🔁 Refresh failed:', error?.message || 'no session returned');
+      return res.status(401).json({
+        error: error?.message || 'Failed to refresh session',
+      });
+    }
+
+    res.json({
+      session: data.session,
+      user: data.user,
+      error: null,
+    });
+  } catch (error) {
+    console.error('❌ POST /api/auth/refresh error:', error);
+    res.status(401).json({ error: error.message || 'Failed to refresh session' });
+  }
+});
 // ──────────────────────────────────────────────────────────────────────────
 // Sign in with Apple (App Review Guideline 4.8)
 //
