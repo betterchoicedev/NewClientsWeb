@@ -5284,22 +5284,22 @@ function buildFoodImagePrompt(mealLabel, userCaption, planMeal) {
   const planStep = hasPlan
     ? `
 7.  **MEAL-PLAN ADHERENCE SCORE (a plan meal was supplied — produce real numbers):**
-    * Compare the dish in the photo against BOTH the MAIN and the ALTERNATIVE variant above.
-    * Pick whichever variant the photo most resembles, and base \`plan_match_score\` on that one only.
+    * Compare the dish in the photo/description against BOTH the MAIN and the ALTERNATIVE variant above.
+    * Pick whichever variant the nutritional profile most resembles, and base \`plan_match_score\` on that one only.
     * The score is the client's adherence to their plan. Judge using:
-        - **Identity / ingredient overlap:** does the photo contain the plan variant's core ingredients (or close substitutes)?
-        - **Macro proximity:** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals.
-        - **Portion sanity:** significantly oversized or undersized portions reduce the score.
+        - **Macro & Calorie Proximity (PRIMARY FOCUS):** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals. This dictates the score.
+        - **Portion sanity:** significantly oversized or undersized portions ruin the macro targets and heavily reduce the score.
+        - **Identity / ingredient overlap (MINOR NOTE):** acknowledge if they ate the actual planned dish, but DO NOT heavily penalize them if they swapped the meal for something else that still hits the exact same macro and calorie targets.
     * Scoring guide:
-        - 9–10 = essentially the same dish, on-target macros and portion.
-        - 7–8  = same dish family with small substitutions or modest portion drift.
-        - 4–6  = partial match (right meal slot, but different dish or notably off macros / portion).
-        - 0–3  = unrelated food; neither variant is a real match.
-    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when neither is a real match — in that case keep \`plan_match_score\` ≤ 3).
-    * \`plan_match_reason\`: 1 short sentence, must name which variant you compared against.`
+        - 9–10 = Excellent macro and calorie match. The nutritional targets were hit, regardless of whether it's the exact planned dish or a smart substitute.
+        - 7–8  = Good macro match with minor deviations (e.g., slightly higher fat, slightly lower protein, or small portion drift).
+        - 4–6  = Moderate mismatch (e.g., calories are somewhat close, but the macro balance is wrong, like missing the protein target entirely).
+        - 0–3  = Complete macro/calorie mismatch (e.g., vastly different calorie count or entirely wrong nutritional profile compared to the plan).
+    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when the macros are a complete mismatch — in that case keep \`plan_match_score\` ≤ 3).
+    * \`plan_match_reason\`: 1 short sentence. Focus the reasoning primarily on how the macros/calories compared to the target. You may briefly mention the dish identity as secondary context.`
     : `
 7.  **MEAL-PLAN ADHERENCE SCORE:**
-    * No plan meal was supplied for this photo. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
+    * No plan meal was supplied. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
 
   return `Act as a Lead Forensic Food Scientist and Computer Vision Specialist. Your objective is to classify the image as food or not, perform the macro analysis, and rate the meal.
 
@@ -5454,22 +5454,22 @@ function buildFoodTextPrompt(mealLabel, foodText, planMeal) {
   const planStep = hasPlan
     ? `
 7.  **MEAL-PLAN ADHERENCE SCORE (a plan meal was supplied — produce real numbers):**
-    * Compare the dish described by the user against BOTH the MAIN and the ALTERNATIVE variant above.
-    * Pick whichever variant the description most resembles, and base \`plan_match_score\` on that one only.
+    * Compare the dish in the photo/description against BOTH the MAIN and the ALTERNATIVE variant above.
+    * Pick whichever variant the nutritional profile most resembles, and base \`plan_match_score\` on that one only.
     * The score is the client's adherence to their plan. Judge using:
-        - **Identity / ingredient overlap:** does the description contain the plan variant's core ingredients (or close substitutes)?
-        - **Macro proximity:** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals.
-        - **Portion sanity:** significantly oversized or undersized portions reduce the score.
+        - **Macro & Calorie Proximity (PRIMARY FOCUS):** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals. This dictates the score.
+        - **Portion sanity:** significantly oversized or undersized portions ruin the macro targets and heavily reduce the score.
+        - **Identity / ingredient overlap (MINOR NOTE):** acknowledge if they ate the actual planned dish, but DO NOT heavily penalize them if they swapped the meal for something else that still hits the exact same macro and calorie targets.
     * Scoring guide:
-        - 9–10 = essentially the same dish, on-target macros and portion.
-        - 7–8  = same dish family with small substitutions or modest portion drift.
-        - 4–6  = partial match (right meal slot, but different dish or notably off macros / portion).
-        - 0–3  = unrelated food; neither variant is a real match.
-    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when neither is a real match — in that case keep \`plan_match_score\` ≤ 3).
-    * \`plan_match_reason\`: 1 short sentence, must name which variant you compared against.`
+        - 9–10 = Excellent macro and calorie match. The nutritional targets were hit, regardless of whether it's the exact planned dish or a smart substitute.
+        - 7–8  = Good macro match with minor deviations (e.g., slightly higher fat, slightly lower protein, or small portion drift).
+        - 4–6  = Moderate mismatch (e.g., calories are somewhat close, but the macro balance is wrong, like missing the protein target entirely).
+        - 0–3  = Complete macro/calorie mismatch (e.g., vastly different calorie count or entirely wrong nutritional profile compared to the plan).
+    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when the macros are a complete mismatch — in that case keep \`plan_match_score\` ≤ 3).
+    * \`plan_match_reason\`: 1 short sentence. Focus the reasoning primarily on how the macros/calories compared to the target. You may briefly mention the dish identity as secondary context.`
     : `
 7.  **MEAL-PLAN ADHERENCE SCORE:**
-    * No plan meal was supplied for this entry. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
+    * No plan meal was supplied. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
 
   return `Act as a Lead Forensic Food Scientist and Nutrition Description Parser. Your objective is to classify the user's text as describing food or not, parse the items, estimate portions from the wording, and rate the meal.
 
