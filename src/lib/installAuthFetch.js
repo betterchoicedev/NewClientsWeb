@@ -21,6 +21,7 @@ const PUBLIC_API_PATHS = [
   '/api/contact',
   '/api/ingredient-reports',
   '/api/db/registration-links/find',
+  '/api/onboarding/classify-activity',
 ];
 
 function isPublicApiUrl(urlString) {

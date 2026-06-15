@@ -180,6 +180,37 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Mobile OAuth callback (Google sign-in from the Expo app)
+  // -------------------------------------------------------------------------
+  // The mobile client opens the Supabase OAuth URL inside expo-web-browser
+  // and asks Supabase to redirect the OAuth result back to this endpoint.
+  //
+  // We handle BOTH supabase-js flow types here, because the result shape
+  // depends on the `flowType` configured on the `supabaseAuth` client:
+  //
+  //   * PKCE flow      → Supabase returns `?code=<one-time-code>` in the
+  //                      querystring. We exchange it server-side and deep-
+  //                      link the resulting session into the app.
+  //
+  //   * Implicit flow  → Supabase returns the session in the URL fragment
+  //                      (`#access_token=…`). Browsers strip fragments
+  //                      before sending the HTTP request, so the server
+  //                      sees an empty querystring. We can't handle this
+  //                      server-side; instead we serve a tiny HTML bridge
+  //                      page that reads the fragment in the browser and
+  //                      `window.location.replace()`s into the deep link
+  //                      with the fragment intact. The app-side parser
+  //                      already understands `#access_token=…` payloads.
+  //
+  // IMPORTANT — Supabase Dashboard configuration:
+  //   Every backend host that serves `/api/auth/oauth/mobile-callback` MUST
+  //   be listed under Authentication → URL Configuration → Redirect URLs in
+  //   the Supabase Dashboard. Otherwise Supabase rejects the OAuth request
+  //   with `redirect_to is not allowed`. Add the absolute URL for every
+  //   environment you deploy, e.g. for production on Cloud Run:
+  //     https://newclientsweb-615263253386.me-west1.run.app/api/auth/oauth/mobile-callback
+  // -------------------------------------------------------------------------
   app.get('/api/auth/oauth/mobile-callback', async (req, res) => {
     try {
       const oauthError = req.query.error || req.query.error_description;
@@ -192,9 +223,49 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
 
       const code = req.query.code;
       if (!code) {
-        return res.redirect(
-          `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent('oauth_missing_code')}`
-        );
+        // Implicit-flow bridge: payload is in the URL fragment, which never
+        // reached us. Bounce through the browser so it can hand the fragment
+        // off to the deep link. JSON.stringify safely escapes the target URL
+        // for embedding in a JS string literal (handles quotes, backslashes,
+        // U+2028/U+2029, etc.).
+        const safeTarget = JSON.stringify(MOBILE_APP_OAUTH_REDIRECT);
+        const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Signing you in…</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:#e6edf3}
+    .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
+    .spinner{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:#7aa2f7;animation:s .9s linear infinite}
+    @keyframes s{to{transform:rotate(360deg)}}
+    p{margin:0;font-size:14px;opacity:.85}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Signing you in…</p>
+  </div>
+  <script>
+    (function(){
+      try {
+        var target = ${safeTarget};
+        var hash = window.location.hash || '';
+        var search = window.location.search || '';
+        // location.replace so the back button can't drop the user back on
+        // this OAuth page after the deep-link fires.
+        window.location.replace(target + search + hash);
+      } catch (e) {
+        window.location.replace(${safeTarget} + '?error=bridge_failed');
+      }
+    })();
+  </script>
+</body>
+</html>`;
+        res.setHeader('Cache-Control', 'no-store');
+        return res.type('html').send(html);
       }
 
       const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);

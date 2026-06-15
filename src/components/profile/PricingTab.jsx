@@ -447,7 +447,7 @@ const PricingTab = ({ themeClasses, user, language, companyName = '' }) => {
         </div>
       </div>
     ),
-    includes: companyConfig.pricing.showWhatEveryPlanIncludes && (
+    includes: companyConfig?.pricing?.showWhatEveryPlanIncludes && (
       <div className="mb-8 animate-slideInUp" style={{ animationDelay: '0.3s' }}>
         <div className={`${themeClasses.bgCard} border ${themeClasses.borderPrimary} rounded-2xl p-6 md:p-8 shadow-lg`}>
           <h3 className={`${themeClasses.textPrimary} text-xl font-bold mb-4 ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
@@ -531,7 +531,7 @@ const PricingTab = ({ themeClasses, user, language, companyName = '' }) => {
         </div>
       </div>
     ),
-    exchangeRate: companyConfig.pricing.showExchangeRateNote && usdExchangeRate != null && (
+    exchangeRate: companyConfig?.pricing?.showExchangeRateNote && usdExchangeRate != null && (
       <div className={`mb-6 animate-slideInUp ${themeClasses.bgCard} border ${themeClasses.borderPrimary} rounded-xl px-4 py-3 shadow-sm`} style={{ animationDelay: '0.35s' }}>
         <p className={`${themeClasses.textSecondary} text-xs sm:text-sm ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
           {language === 'hebrew'
@@ -567,7 +567,7 @@ const PricingTab = ({ themeClasses, user, language, companyName = '' }) => {
                     hasActiveSubscription={hasActiveSubscription(product.id)}
                     hasAnyActiveSubscription={hasAnyActiveSubscription()}
                     usdExchangeRate={usdExchangeRate}
-                    showNavyDigitalPromo={companyConfig.pricing.enableDigitalPromoCode && product.id === STRIPE_PRODUCTS.DIGITAL_ONLY}
+                    showNavyDigitalPromo={companyConfig?.pricing?.enableDigitalPromoCode && product.id === STRIPE_PRODUCTS.DIGITAL_ONLY}
                     navyPromoCode={navyPromoCode}
                     onNavyPromoCodeChange={(value) => {
                       setNavyPromoCode(value);

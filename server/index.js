@@ -151,6 +151,593 @@ function buildMobileAppOAuthRedirect(session) {
   return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
 }
 
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refresh_token } = req.body || {};
+    if (!refresh_token || typeof refresh_token !== 'string') {
+      return res.status(400).json({ error: 'refresh_token is required' });
+    }
+
+    const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token });
+    if (error || !data?.session?.access_token) {
+      console.warn('🔁 Refresh failed:', error?.message || 'no session returned');
+      return res.status(401).json({
+        error: error?.message || 'Failed to refresh session',
+      });
+    }
+
+    res.json({
+      session: data.session,
+      user: data.user,
+      error: null,
+    });
+  } catch (error) {
+    console.error('❌ POST /api/auth/refresh error:', error);
+    res.status(401).json({ error: error.message || 'Failed to refresh session' });
+  }
+});
+// ──────────────────────────────────────────────────────────────────────────
+// Sign in with Apple (App Review Guideline 4.8)
+//
+// Flow:
+//   1. Decode the Apple identity token to extract the email claim
+//      (signature is intentionally NOT verified here — it's only used to
+//      decide whether the email is registered with us).
+//   2. Look the email up in `clients` / `chat_users`. If not found, we
+//      respond 404 `no_account` IMMEDIATELY, without ever calling
+//      Supabase. This is the key behavioural difference from the previous
+//      version: no Supabase auth row is created for unregistered Apple
+//      users, so no orphans end up in the dashboard.
+//   3. Only if the account exists do we hand the token to
+//      `supabase.auth.signInWithIdToken({ provider: 'apple', token })`.
+//      Supabase verifies the JWT against Apple's JWKS — a forged token
+//      with a stolen email won't produce a session, so the pre-check
+//      can't be abused to log in as anyone.
+//
+// Body:
+//   { identityToken: string, fullName?: { givenName?: string, familyName?: string } }
+//
+// Returns:
+//   { data: { user, session }, language, error: null }
+//   or 404 { error: 'no_account', email } when the Apple email isn't a
+//   registered BetterChoice client.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Best-effort JWT payload decode — only used to read claims, never to
+ *  authenticate. Signature is NOT verified here; that happens later in
+ *  Supabase's `signInWithIdToken`, which is the only thing that can mint
+ *  a real session. Returns {} on any parse failure. */
+function decodeJwtPayloadServer(token) {
+  try {
+    const parts = String(token).split('.');
+    if (parts.length !== 3) return {};
+    let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4 !== 0) b64 += '=';
+    const decoded = Buffer.from(b64, 'base64').toString('utf8');
+    return JSON.parse(decoded) || {};
+  } catch {
+    return {};
+  }
+}
+
+/** Returns true iff `email` (lower-cased) shows up in either the main
+ *  `clients` table or the chat-side `chat_users` table. Used by both the
+ *  Apple verify endpoint and the Google finalize endpoint below to gate
+ *  whether a third-party login should produce a session at all. */
+async function emailHasBetterChoiceAccount(email) {
+  if (!email) return false;
+  try {
+    const { data: clientRow } = await supabase
+      .from('clients')
+      .select('user_id')
+      .eq('email', email)
+      .maybeSingle();
+    if (clientRow?.user_id) return true;
+  } catch (e) {
+    console.warn('emailHasBetterChoiceAccount: clients lookup failed:', e?.message);
+  }
+  if (chatSupabase) {
+    try {
+      const { data: chatRow } = await chatSupabase
+        .from('chat_users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+      if (chatRow?.id) return true;
+    } catch (e) {
+      console.warn('emailHasBetterChoiceAccount: chat_users lookup failed:', e?.message);
+    }
+  }
+  return false;
+}
+
+app.post('/api/auth/oauth/apple/verify', async (req, res) => {
+  try {
+    const { identityToken, fullName } = req.body || {};
+    if (!identityToken || typeof identityToken !== 'string') {
+      return res.status(400).json({ error: 'identityToken is required' });
+    }
+
+    // 1) Pre-check: read the email from the Apple JWT WITHOUT calling
+    // Supabase. If the email isn't registered we bail out here so no
+    // Supabase auth row is ever created for this Apple ID.
+    const payload = decodeJwtPayloadServer(identityToken);
+    const claimedEmail = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+    if (!claimedEmail) {
+      return res.status(401).json({ error: 'Apple did not return an email for this account' });
+    }
+
+    const accountExists = await emailHasBetterChoiceAccount(claimedEmail);
+    if (!accountExists) {
+      return res.status(404).json({ error: 'no_account', email: claimedEmail });
+    }
+
+    // 2) Account exists — now actually mint a Supabase session by handing
+    // Apple's identity token to Supabase. This is the step that verifies
+    // the JWT signature against Apple's JWKS, so a forged token would
+    // still fail here even though the pre-check above used the unverified
+    // payload.
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'apple',
+      token: identityToken,
+    });
+    if (error) {
+      console.error('❌ Apple signInWithIdToken error:', error);
+      return res.status(401).json({ error: error.message || 'Apple sign-in rejected' });
+    }
+    if (!data?.user || !data?.session) {
+      return res.status(401).json({ error: 'Apple sign-in returned no session' });
+    }
+
+    // Belt-and-suspenders: if for any reason Supabase came back with a
+    // different (verified) email than what the JWT pre-check used, AND
+    // that email is also unregistered, scrub the auth row and bail. This
+    // shouldn't happen in practice — Supabase reads the same `email`
+    // claim — but it's cheap insurance against the race where someone
+    // hand-crafted a JWT with mismatched claims.
+    const verifiedEmail = (data.user.email || '').trim().toLowerCase();
+    if (verifiedEmail && verifiedEmail !== claimedEmail) {
+      const verifiedExists = await emailHasBetterChoiceAccount(verifiedEmail);
+      if (!verifiedExists) {
+        try {
+          await supabase.auth.admin.deleteUser(data.user.id);
+        } catch (e) {
+          console.warn('Apple verify: orphan cleanup failed:', e?.message);
+        }
+        return res.status(404).json({ error: 'no_account', email: verifiedEmail });
+      }
+    }
+
+    const finalEmail = verifiedEmail || claimedEmail;
+
+    // Best-effort: record the Apple-provided name onto the matching client
+    // row the first time the user signs in (Apple only shares this on the
+    // very first sign-in event). We don't fail the request if it doesn't
+    // stick — the auth session is what actually matters.
+    if (fullName && (fullName.givenName || fullName.familyName)) {
+      try {
+        const patch = {};
+        if (fullName.givenName) patch.first_name = fullName.givenName;
+        if (fullName.familyName) patch.last_name = fullName.familyName;
+        await supabase.from('clients').update(patch).eq('email', finalEmail);
+      } catch {
+        /* best-effort enrichment */
+      }
+    }
+
+    // Look up the language preference the same way the password flow does
+    // so the React Native context starts with the right locale.
+    let language = null;
+    try {
+      if (chatSupabase) {
+        const { data: lang } = await chatSupabase
+          .from('chat_users')
+          .select('user_language')
+          .eq('email', finalEmail)
+          .maybeSingle();
+        if (lang) language = lang;
+      }
+    } catch {
+      /* language is non-critical */
+    }
+
+    return res.json({
+      data: { user: data.user, session: data.session },
+      language,
+      error: null,
+    });
+  } catch (error) {
+    console.error('POST /api/auth/oauth/apple/verify error:', error);
+    res.status(500).json({ error: error.message || 'Apple sign-in failed' });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Google OAuth finalize
+//
+// The Google flow is structurally different from Apple: Supabase's hosted
+// `/auth/v1/authorize` page is what runs the OAuth exchange, and by the
+// time the user lands back in the app a Supabase auth row already exists.
+// We can't pre-check like we do for Apple.
+//
+// Instead, the client calls this endpoint right after parsing the deep
+// link. We:
+//   1. Validate the supplied access token via `supabase.auth.getUser` —
+//      that's the only thing that gives us a *trusted* user id + email.
+//   2. Look the email up in `clients` / `chat_users`.
+//   3. If no match → `supabase.auth.admin.deleteUser(userId)` so no
+//      orphan Google auth row lingers, then respond 404 `no_account`.
+//   4. If match → respond `{ ok: true, language }`.
+//
+// Body: { accessToken: string }
+// ──────────────────────────────────────────────────────────────────────────
+app.post('/api/auth/oauth/google/finalize', async (req, res) => {
+  try {
+    const { accessToken } = req.body || {};
+    if (!accessToken || typeof accessToken !== 'string') {
+      return res.status(400).json({ error: 'accessToken is required' });
+    }
+
+    // 1) Trust step — only the bearer Supabase returned from its own OAuth
+    // flow can resolve back to a real user here. Forged tokens fail this
+    // call with `Invalid JWT`.
+    const { data: userData, error: userError } = await supabaseAuth.auth.getUser(accessToken);
+    if (userError || !userData?.user) {
+      console.warn('Google finalize: getUser failed:', userError?.message);
+      return res.status(401).json({ error: 'Invalid or expired Google session token' });
+    }
+
+    const userId = userData.user.id;
+    const email = (userData.user.email || '').trim().toLowerCase();
+    if (!email) {
+      // Defensive: a Google auth row with no email is malformed. Wipe it
+      // and tell the client to surface the "no account" UX.
+      try {
+        await supabase.auth.admin.deleteUser(userId);
+      } catch (e) {
+        console.warn('Google finalize: cleanup of email-less auth row failed:', e?.message);
+      }
+      return res.status(404).json({ error: 'no_account', email: '' });
+    }
+
+    // 2) Same lookup the Apple endpoint uses.
+    const accountExists = await emailHasBetterChoiceAccount(email);
+
+    // 3) No matching BetterChoice account → delete the orphan auth row
+    // (this is the fix for the "Google sign-in still creates a Supabase
+    // user even when the email isn't a customer" bug) and respond 404.
+    if (!accountExists) {
+      try {
+        const { error: deleteErr } = await supabase.auth.admin.deleteUser(userId);
+        if (deleteErr) {
+          console.error('Google finalize: failed to delete orphan auth user:', deleteErr);
+        }
+      } catch (e) {
+        console.error('Google finalize: failed to delete orphan auth user:', e?.message);
+      }
+      return res.status(404).json({ error: 'no_account', email });
+    }
+
+    // 4) Account exists — return language preference so the client can
+    // seed locale identically to the password / Apple flows.
+    let language = null;
+    try {
+      if (chatSupabase) {
+        const { data: lang } = await chatSupabase
+          .from('chat_users')
+          .select('user_language')
+          .eq('email', email)
+          .maybeSingle();
+        if (lang) language = lang;
+      }
+    } catch {
+      /* language is non-critical */
+    }
+
+    return res.json({ ok: true, exists: true, language });
+  } catch (error) {
+    console.error('POST /api/auth/oauth/google/finalize error:', error);
+    res.status(500).json({ error: error.message || 'Failed to finalize Google sign-in' });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Account deletion (App Review Guideline 5.1.1(v))
+//
+// Authenticated DELETE. Uses Supabase's admin API (service-role key) to
+// permanently delete the auth row; FK cascade rules then take care of the
+// `clients` / `chat_users` / food-log / etc. rows that reference the user.
+// We also call `auth.admin.deleteUser` rather than soft-deleting, because
+// Apple explicitly says "only offering to temporarily deactivate or
+// disable an account is insufficient."
+// ──────────────────────────────────────────────────────────────────────────
+app.delete('/api/auth/account', requireAuth, async (req, res) => {
+  try {
+    const authUserId = req.authUser?.id;
+    if (!authUserId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const email = (req.authUser?.email || '').trim().toLowerCase();
+
+    // ── Resolve the user's user_code and chat_users.id ──────────────────
+    // The dietitian-side cleanup is keyed by `user_code`; the chat-side
+    // cleanup is keyed by `chat_users.id`. We resolve both up front so the
+    // rest of this handler mirrors DELETE /api/clients/:id exactly.
+    let userCode = req.userCode || null;
+    if (!userCode && email) {
+      try {
+        const { data: clientRow } = await supabase
+          .from('clients')
+          .select('user_code')
+          .eq('email', email)
+          .maybeSingle();
+        if (clientRow?.user_code) userCode = clientRow.user_code;
+      } catch (e) {
+        console.warn('Account deletion: user_code lookup by email failed:', e?.message);
+      }
+    }
+
+    let chatUserId = null;
+    if (chatSupabase && email) {
+      try {
+        const { data: chatUser } = await chatSupabase
+          .from('chat_users')
+          .select('id, user_code')
+          .eq('email', email)
+          .maybeSingle();
+        if (chatUser?.id) chatUserId = chatUser.id;
+        if (!userCode && chatUser?.user_code) userCode = chatUser.user_code;
+      } catch (e) {
+        console.warn('Account deletion: chat_users lookup by email failed:', e?.message);
+      }
+    }
+
+    // ── 1. Reminder instances / definitions + meal plans (chat project) ──
+    if (chatSupabase && userCode) {
+      // 1a. Meal plan IDs for this user
+      const { data: mealPlans, error: fetchMealPlansError } = await chatSupabase
+        .from('meal_plans_and_schemas')
+        .select('id')
+        .eq('user_code', userCode)
+        .eq('record_type', 'meal_plan');
+
+      if (!fetchMealPlansError && mealPlans && mealPlans.length > 0) {
+        const mealPlanIds = mealPlans.map((p) => p.id);
+        // 1b. Reminder definitions referencing these meal plans
+        const { data: reminderDefs, error: fetchReminderError } = await chatSupabase
+          .from('reminder_definitions')
+          .select('reminder_definition_id')
+          .in('user_plan_id', mealPlanIds);
+
+        if (!fetchReminderError && reminderDefs && reminderDefs.length > 0) {
+          const definitionIds = reminderDefs.map((r) => r.reminder_definition_id);
+          const { error: instancesError } = await chatSupabase
+            .from('reminder_instances')
+            .delete()
+            .in('definition_id', definitionIds);
+          if (instancesError) {
+            console.error('Error deleting reminder instances:', instancesError);
+            return res.status(500).json({ error: `Failed to delete reminder instances: ${instancesError.message}` });
+          }
+        }
+
+        const { error: reminderError } = await chatSupabase
+          .from('reminder_definitions')
+          .delete()
+          .in('user_plan_id', mealPlanIds);
+        if (reminderError) {
+          console.error('Error deleting reminder definitions:', reminderError);
+          return res.status(500).json({ error: `Failed to delete reminder definitions: ${reminderError.message}` });
+        }
+      }
+
+      // 1c. Meal plans themselves
+      const { error: mealPlansError } = await chatSupabase
+        .from('meal_plans_and_schemas')
+        .delete()
+        .eq('user_code', userCode)
+        .eq('record_type', 'meal_plan');
+      if (mealPlansError) {
+        console.error('Error deleting meal plans:', mealPlansError);
+        return res.status(500).json({ error: `Failed to delete meal plans: ${mealPlansError.message}` });
+      }
+    }
+
+    // ── 2-5. Conversations, messages, food logs, chat_users ─────────────
+    if (chatSupabase && chatUserId) {
+      // 2. Conversation IDs
+      const { data: conversations, error: convError } = await chatSupabase
+        .from('chat_conversations')
+        .select('id')
+        .eq('user_id', chatUserId);
+      if (convError) {
+        console.error('Error fetching conversations:', convError);
+        return res.status(500).json({ error: `Failed to fetch conversations: ${convError.message}` });
+      }
+
+      const conversationIds = (conversations || []).map((c) => c.id);
+
+      // 3. Messages for those conversations
+      if (conversationIds.length > 0) {
+        const { error: messagesError } = await chatSupabase
+          .from('chat_messages')
+          .delete()
+          .in('conversation_id', conversationIds);
+        if (messagesError) {
+          console.error('Error deleting messages:', messagesError);
+          return res.status(500).json({ error: `Failed to delete messages: ${messagesError.message}` });
+        }
+      }
+
+      // 4. Conversations
+      const { error: deleteConvError } = await chatSupabase
+        .from('chat_conversations')
+        .delete()
+        .eq('user_id', chatUserId);
+      if (deleteConvError) {
+        console.error('Error deleting conversations:', deleteConvError);
+        return res.status(500).json({ error: `Failed to delete conversations: ${deleteConvError.message}` });
+      }
+
+      // 4.5. Food logs (FK fk_food_logs_user_id -> chat_users.id, no cascade)
+      const { error: foodLogsError } = await chatSupabase
+        .from('food_logs')
+        .delete()
+        .eq('user_id', chatUserId);
+      if (foodLogsError) {
+        console.error('Error deleting food logs:', foodLogsError);
+        return res.status(500).json({ error: `Failed to delete food logs: ${foodLogsError.message}` });
+      }
+
+      // 5. chat_users row
+      const { error: deleteUserError } = await chatSupabase
+        .from('chat_users')
+        .delete()
+        .eq('id', chatUserId);
+      if (deleteUserError) {
+        console.error('Error deleting chat user:', deleteUserError);
+        return res.status(500).json({ error: `Failed to delete chat user: ${deleteUserError.message}` });
+      }
+    }
+
+    // ── 6. Main project cleanup: Stripe, client_meal_plans, stripe_usage_log, clients
+    if (userCode) {
+      try {
+        // 6a2. Cancel any billable Stripe subscription for this user immediately.
+        // Covers active, trialing, past_due, unpaid, paused, incomplete – everything
+        // that isn't already in a terminal state (canceled / incomplete_expired).
+        if (stripe) {
+          const CANCELABLE_STATUSES = new Set([
+            'active',
+            'trialing',
+            'past_due',
+            'unpaid',
+            'paused',
+            'incomplete',
+          ]);
+          try {
+            const customerIds = new Set();
+
+            // Primary source: stripe_subscriptions rows for this auth user.
+            const { data: subs } = await supabase
+              .from('stripe_subscriptions')
+              .select('stripe_customer_id, stripe_subscription_id, status')
+              .eq('user_id', authUserId);
+            for (const s of subs || []) {
+              if (s.stripe_customer_id) customerIds.add(s.stripe_customer_id);
+            }
+
+            // Also try to cancel by stored subscription_id directly, in case the
+            // subscription is detached from the customer rows we have locally.
+            for (const s of subs || []) {
+              if (!s.stripe_subscription_id) continue;
+              if (!CANCELABLE_STATUSES.has(String(s.status || '').toLowerCase()) && s.status) continue;
+              try {
+                await stripe.subscriptions.cancel(s.stripe_subscription_id);
+                console.log('Stripe subscription canceled on account delete (by id):', s.stripe_subscription_id);
+              } catch (cancelErr) {
+                if (cancelErr?.code !== 'resource_missing') {
+                  console.error('Error canceling Stripe subscription', s.stripe_subscription_id, 'on account delete:', cancelErr.message);
+                }
+              }
+            }
+
+            // Sweep each known customer for any remaining non-terminal subs.
+            for (const customerId of customerIds) {
+              const subscriptionList = await stripe.subscriptions.list({
+                customer: customerId,
+                status: 'all',
+                limit: 100,
+              });
+              for (const sub of subscriptionList.data) {
+                if (!CANCELABLE_STATUSES.has(sub.status)) continue;
+                try {
+                  await stripe.subscriptions.cancel(sub.id);
+                  console.log('Stripe subscription canceled on account delete:', sub.id, `(was ${sub.status})`);
+                } catch (cancelErr) {
+                  if (cancelErr?.code !== 'resource_missing') {
+                    console.error('Error canceling Stripe subscription', sub.id, 'on account delete:', cancelErr.message);
+                  }
+                }
+              }
+            }
+          } catch (stripeCancelErr) {
+            console.error('Error canceling Stripe subscriptions on account delete:', stripeCancelErr);
+            // Don't fail the request – auth row removal below is the source of truth
+          }
+        }
+
+        // 6b. client_meal_plans for this user_code
+        const { error: mealPlansError } = await supabase
+          .from('client_meal_plans')
+          .delete()
+          .eq('user_code', userCode);
+        if (mealPlansError) {
+          console.error('Error deleting client_meal_plans:', mealPlansError);
+        }
+
+        // 6c. stripe_usage_log for this user_code
+        const { error: stripeError } = await supabase
+          .from('stripe_usage_log')
+          .delete()
+          .eq('user_code', userCode);
+        if (stripeError) {
+          console.error('Error deleting stripe_usage_log:', stripeError);
+        }
+
+        // 6d. clients rows for this user_code
+        const { error: clientsError } = await supabase
+          .from('clients')
+          .delete()
+          .eq('user_code', userCode);
+        if (clientsError) {
+          console.error('Error deleting clients (by user_code):', clientsError);
+        }
+      } catch (mainProjectErr) {
+        console.error('Error cleaning up main Supabase project on account delete:', mainProjectErr);
+        // Don't fail the request – auth row removal below is the source of truth
+      }
+    }
+
+    // Safety net: drop any clients rows still tied to this auth user / email
+    // even when we couldn't resolve a user_code above.
+    try {
+      await supabase.from('clients').delete().eq('user_id', authUserId);
+      if (email) {
+        await supabase.from('clients').delete().eq('email', email);
+      }
+    } catch (e) {
+      console.warn('Account deletion: residual clients cleanup failed:', e?.message);
+    }
+
+    // ── 7. Finally, delete the auth row (source of truth) ──────────────
+    // NOTE: admin.deleteUser requires the service-role key, so we must use
+    // `supabase` (service role) here — `supabaseAuth` is the anon client and
+    // returns 403 "User not allowed / not_admin".
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('❌ Cannot delete auth user: SUPABASE_SERVICE_ROLE_KEY is not set');
+      return res.status(500).json({
+        error: 'Failed to delete account',
+        details: 'Server is missing SUPABASE_SERVICE_ROLE_KEY required for admin deletion',
+      });
+    }
+    const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(authUserId);
+    if (deleteAuthError) {
+      console.error('❌ supabase.auth.admin.deleteUser failed:', deleteAuthError);
+      return res.status(500).json({
+        error: 'Failed to delete account',
+        details: deleteAuthError.message,
+      });
+    }
+
+    return res.json({ ok: true, success: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('DELETE /api/auth/account error:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete account' });
+  }
+});
+
 /**
  * Mobile app calls this to kick off Google sign-in.
  *
@@ -4596,22 +5183,22 @@ function buildFoodImagePrompt(mealLabel, userCaption, planMeal) {
   const planStep = hasPlan
     ? `
 7.  **MEAL-PLAN ADHERENCE SCORE (a plan meal was supplied — produce real numbers):**
-    * Compare the dish in the photo against BOTH the MAIN and the ALTERNATIVE variant above.
-    * Pick whichever variant the photo most resembles, and base \`plan_match_score\` on that one only.
+    * Compare the dish in the photo/description against BOTH the MAIN and the ALTERNATIVE variant above.
+    * Pick whichever variant the nutritional profile most resembles, and base \`plan_match_score\` on that one only.
     * The score is the client's adherence to their plan. Judge using:
-        - **Identity / ingredient overlap:** does the photo contain the plan variant's core ingredients (or close substitutes)?
-        - **Macro proximity:** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals.
-        - **Portion sanity:** significantly oversized or undersized portions reduce the score.
+        - **Macro & Calorie Proximity (PRIMARY FOCUS):** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals. This dictates the score.
+        - **Portion sanity:** significantly oversized or undersized portions ruin the macro targets and heavily reduce the score.
+        - **Identity / ingredient overlap (MINOR NOTE):** acknowledge if they ate the actual planned dish, but DO NOT heavily penalize them if they swapped the meal for something else that still hits the exact same macro and calorie targets.
     * Scoring guide:
-        - 9–10 = essentially the same dish, on-target macros and portion.
-        - 7–8  = same dish family with small substitutions or modest portion drift.
-        - 4–6  = partial match (right meal slot, but different dish or notably off macros / portion).
-        - 0–3  = unrelated food; neither variant is a real match.
-    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when neither is a real match — in that case keep \`plan_match_score\` ≤ 3).
-    * \`plan_match_reason\`: 1 short sentence, must name which variant you compared against.`
+        - 9–10 = Excellent macro and calorie match. The nutritional targets were hit, regardless of whether it's the exact planned dish or a smart substitute.
+        - 7–8  = Good macro match with minor deviations (e.g., slightly higher fat, slightly lower protein, or small portion drift).
+        - 4–6  = Moderate mismatch (e.g., calories are somewhat close, but the macro balance is wrong, like missing the protein target entirely).
+        - 0–3  = Complete macro/calorie mismatch (e.g., vastly different calorie count or entirely wrong nutritional profile compared to the plan).
+    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when the macros are a complete mismatch — in that case keep \`plan_match_score\` ≤ 3).
+    * \`plan_match_reason\`: 1 short sentence. Focus the reasoning primarily on how the macros/calories compared to the target. You may briefly mention the dish identity as secondary context.`
     : `
 7.  **MEAL-PLAN ADHERENCE SCORE:**
-    * No plan meal was supplied for this photo. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
+    * No plan meal was supplied. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
 
   return `Act as a Lead Forensic Food Scientist and Computer Vision Specialist. Your objective is to classify the image as food or not, perform the macro analysis, and rate the meal.
 
@@ -4649,6 +5236,12 @@ ${captionBlock}${planBlock}
         - Set \`is_beverage: true\` ONLY for drinks / pourable liquids that people naturally measure in volume (water, juice, milk, soft drinks, soda, coffee, tea, beer, wine, cocktails, smoothies, milkshakes, drinkable yogurts, broth served as a drink, etc.). Soups eaten with a spoon, ice cream, yogurt in a bowl, sauces, and dressings are NOT beverages.
         - When \`is_beverage\` is true: fill \`estimated_volume_ml\` from container geometry (mug ≈ 250ml, standard glass ≈ 250ml, soda can ≈ 330ml, half-litre bottle ≈ 500ml, Starbucks Tall ≈ 350ml / Grande ≈ 470ml / Venti ≈ 590ml) and convert to grams using the drink's density (water / most soft drinks ≈ 1.0 g/ml, milk ≈ 1.03 g/ml, whole-milk smoothies ≈ 1.0–1.05 g/ml, beer ≈ 1.01 g/ml, oil ≈ 0.92 g/ml). \`estimated_weight_g\` must STILL be filled (macros math runs in grams).
         - When \`is_beverage\` is false: set \`estimated_volume_ml: null\`.
+    * **Hidden Calorie & Implicit Ingredient Detection (MANDATORY SEPARATION):**
+        * **Explicit Extraction:** If you detect or infer added fats (oil, butter, dressings) or significant sauces, you MUST create a distinct, separate component for them in your output list. Do not implicitly merge their calories into the main food item.
+        * **Visual Cues (Gloss/Sheen):** If vegetables, pasta, or salads appear shiny, glossy, or have pools of liquid, explicitly add an estimated portion of "Oil", "Butter", or "Dressing".
+        * **Culinary Context (Heuristics):** If the dish traditionally relies on oil or fat (e.g., Hummus, Fried Eggs, Roasted Vegetables, Mediterranean Salads), assume standard culinary preparation and add an appropriate baseline amount of oil/fat.
+        * **Viscosity & Absorption:** For porous items (eggplant, bread, croutons), assume high oil absorption and increase the estimated weight of the hidden fat component if the surface sheen is high.
+
 
 4.  **MACRONUTRIENT BASELINES (CRITICAL HANDOFF):**
     * **DO NOT** calculate the final total macros for the estimated weight.
@@ -4730,6 +5323,249 @@ async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
   } catch (parseError) {
     throw new Error(`Failed to parse vision LLM JSON: ${parseError.message}`);
   }
+}
+
+// Hard cap on the free-text food description sent to the text-analysis
+// endpoint. Long enough for a multi-item meal log ("2 fried eggs, a slice of
+// sourdough toast with butter, large flat white with oat milk") but short
+// enough that a malicious / buggy client cannot blow up the prompt or burn
+// tokens. Rejected (not silently truncated) when way over the cap so callers
+// notice something is wrong with their payload.
+const MAX_FOOD_TEXT_LENGTH = 1500;
+
+function sanitizeFoodText(rawText) {
+  if (typeof rawText !== 'string') return '';
+  // Collapse all whitespace (including newlines) to a single space so the
+  // description cannot break out of its prompt block via crafted line breaks.
+  const collapsed = rawText.replace(/\s+/g, ' ').trim();
+  if (!collapsed) return '';
+  return collapsed.length > MAX_FOOD_TEXT_LENGTH
+    ? collapsed.slice(0, MAX_FOOD_TEXT_LENGTH)
+    : collapsed;
+}
+
+function buildFoodTextPrompt(mealLabel, foodText, planMeal) {
+  const planBlock = formatPlanMealForPrompt(planMeal);
+  const hasPlan = !!planBlock;
+
+  const meal = mealLabel ? String(mealLabel) : 'unknown';
+
+  const planStep = hasPlan
+    ? `
+7.  **MEAL-PLAN ADHERENCE SCORE (a plan meal was supplied — produce real numbers):**
+    * Compare the dish in the photo/description against BOTH the MAIN and the ALTERNATIVE variant above.
+    * Pick whichever variant the nutritional profile most resembles, and base \`plan_match_score\` on that one only.
+    * The score is the client's adherence to their plan. Judge using:
+        - **Macro & Calorie Proximity (PRIMARY FOCUS):** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals. This dictates the score.
+        - **Portion sanity:** significantly oversized or undersized portions ruin the macro targets and heavily reduce the score.
+        - **Identity / ingredient overlap (MINOR NOTE):** acknowledge if they ate the actual planned dish, but DO NOT heavily penalize them if they swapped the meal for something else that still hits the exact same macro and calorie targets.
+    * Scoring guide:
+        - 9–10 = Excellent macro and calorie match. The nutritional targets were hit, regardless of whether it's the exact planned dish or a smart substitute.
+        - 7–8  = Good macro match with minor deviations (e.g., slightly higher fat, slightly lower protein, or small portion drift).
+        - 4–6  = Moderate mismatch (e.g., calories are somewhat close, but the macro balance is wrong, like missing the protein target entirely).
+        - 0–3  = Complete macro/calorie mismatch (e.g., vastly different calorie count or entirely wrong nutritional profile compared to the plan).
+    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when the macros are a complete mismatch — in that case keep \`plan_match_score\` ≤ 3).
+    * \`plan_match_reason\`: 1 short sentence. Focus the reasoning primarily on how the macros/calories compared to the target. You may briefly mention the dish identity as secondary context.`
+    : `
+7.  **MEAL-PLAN ADHERENCE SCORE:**
+    * No plan meal was supplied. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
+
+  return `Act as a Lead Forensic Food Scientist and Nutrition Description Parser. Your objective is to classify the user's text as describing food or not, parse the items, estimate portions from the wording, and rate the meal.
+
+**CONTEXTUAL METADATA:**
+* **User Meal Time:** ${meal}
+* **User Food Description (free text — this is the primary input):** "${foodText}"
+${planBlock}
+**STEP 0 — TEXT GATE (execute first, before anything else):**
+* Does the description clearly refer to one or more foods, beverages, or packaged food products that can be quantified?
+  - If NO (gibberish, non-food topic, empty, just emojis, etc.) → set \`is_food: false\`, fill \`not_food_reason\` with a short explanation, and set EVERY other field (\`food_items\`, \`overall_health_score\`, \`overall_health_score_reason\`, \`plan_match_score\`, \`plan_match_reason\`, \`plan_match_variant\`, etc.) to \`null\`. Skip the rest of the steps.
+  - If YES → set \`is_food: true\`, leave \`not_food_reason\` null, and continue to steps 1–7 below.
+
+**WHEN is_food IS TRUE — text-based food analysis protocol:**
+
+1.  **PARSE FOOD ITEMS:**
+    * Identify each distinct food / beverage mentioned. Group obvious accompaniments where it makes sense ("scrambled eggs with butter" can be one item) but split items with very different macro profiles ("burger and fries" → two items).
+    * Use the user's own wording for \`name\` (lightly cleaned).
+
+2.  **PORTION ESTIMATION FROM WORDING (CRITICAL FOR ACCURACY):**
+    * **Explicit units:** when the user gives grams / ml / oz / lb / kg, use those exactly. Conversions: 1 oz ≈ 28.35g, 1 fl oz ≈ 29.57ml, 1 lb ≈ 454g, 1 kg = 1000g.
+    * **Common household measures (defaults — adjust by description):**
+        - "slice of bread" ≈ 30g (thick slice ≈ 45g)
+        - "cup" ≈ 240ml liquid; ≈ 150g cooked rice / pasta; ≈ 30g cereal
+        - "tablespoon (tbsp)" ≈ 15g/15ml; "teaspoon (tsp)" ≈ 5g/5ml
+        - "glass" / "mug" ≈ 250ml
+        - "can of soda" ≈ 330ml; "bottle of water" ≈ 500ml; "pint of beer" ≈ 470ml
+        - "small / medium / large apple" ≈ 130 / 180 / 250g
+        - "small / medium / large egg" ≈ 45 / 55 / 65g
+        - "scoop of ice cream" ≈ 65g; "scoop of protein powder" ≈ 30g
+        - "handful of nuts" ≈ 30g
+        - Restaurant entrée with no size given ≈ 350g; restaurant side ≈ 150g.
+    * **Quantifier words:** "a/one" → 1 unit; "a couple of" → 2; "a few" → 3; "several" → ~4; bare plural with no number → 2 unless context says otherwise.
+    * **Vague portions:** if the user just names a dish with no quantity, infer a sensible default for the meal slot ("${meal}").
+    * **Final Weight Output:** set \`estimated_weight_g\` for each component.
+    * **Beverage Handling (decides the user-facing unit):**
+        - Set \`is_beverage: true\` ONLY for drinks / pourable liquids that people naturally measure in volume (water, juice, milk, soft drinks, soda, coffee, tea, beer, wine, cocktails, smoothies, milkshakes, drinkable yogurts, broth-as-drink, etc.). Soups eaten with a spoon, ice cream, yogurt in a bowl, sauces, and dressings are NOT beverages.
+        - When \`is_beverage\` is true: fill \`estimated_volume_ml\` from the description and convert to grams using the drink's density (water / most soft drinks ≈ 1.0 g/ml, milk ≈ 1.03 g/ml, whole-milk smoothies ≈ 1.0–1.05 g/ml, beer ≈ 1.01 g/ml, oil ≈ 0.92 g/ml). \`estimated_weight_g\` must STILL be filled (macros math runs in grams).
+        - When \`is_beverage\` is false: set \`estimated_volume_ml: null\`.
+
+3.  **MACRONUTRIENT BASELINES (CRITICAL HANDOFF):**
+    * **DO NOT** calculate the final total macros for the estimated weight.
+    * Provide ONLY the standard USDA / nutritional database baseline values **PER 100 GRAMS** for each component, in \`macros_per_100g\`.
+    * The backend will multiply these baselines by the estimated mass.
+
+4.  **CONFIDENCE & EVIDENCE:**
+    * \`confidence\` (0..1): how clearly the description specified portion + dish identity. Vague text ("some food") → low confidence; precise text ("180g grilled chicken breast") → high.
+    * \`visual_evidence\`: 1–2 sentence justification quoting / paraphrasing the user wording you used to estimate weight (e.g. "user said 'large bowl of pasta' → estimated 250g cooked").
+
+5.  **CONTEXTUAL REASONING:**
+    * **Meal Label Logic:** Cross-reference contents with "${meal}" (e.g., Pancakes at 20:00 is "Breakfast for Dinner", not "Snack").
+
+6.  **OVERALL HEALTH SCORE (always, when is_food is true — independent of any meal plan):**
+    * \`overall_health_score\` (0–10): general nutritional quality of the meal AS DESCRIBED. Judge macro balance, fiber / whole-food content, processing level, added sugar, fried / oily preparation, micronutrient density, and portion sanity.
+        - 0–3 = poor (ultra-processed, fried, sugary, nutritionally empty).
+        - 4–6 = mixed (some redeeming components, some poor ones).
+        - 7–8 = good (balanced, mostly whole foods, reasonable portion).
+        - 9–10 = excellent (clean, balanced, nutrient-dense).
+    * \`overall_health_score_reason\`: 1 short sentence justifying the score.
+    * This score MUST NOT be influenced by the supplied meal plan — it reflects only the described meal itself.
+${planStep}
+
+Keep all string fields short (≤ 1–2 sentences). Numbers must be plain numbers (no units, no ranges). Respond ONLY with a valid JSON object matching the schema. Do not output markdown, explanations, or repetition of steps.`;
+}
+
+// Calls GPT-4o-mini for text-only food analysis. Reuses the same Azure /
+// OpenAI-compatible endpoint + key as the vision model (same DEEPSEEK_ENDPOINT
+// / DEEPSEEK_API_KEY) but routes to a separate deployment configured via
+// DEEPSEEK_TEXT_DEPLOYMENT (falls back to the literal "gpt-4o-mini").
+async function callFoodTextLLM(prompt) {
+  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
+  const apiKey  = process.env.DEEPSEEK_API_KEY;
+  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o-mini';
+
+  if (!apiBase || !apiKey) {
+    throw new Error('Text LLM is not configured on the server (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY).');
+  }
+
+  const url = `${apiBase}/chat/completions`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // Both header styles are accepted by the Azure AI Foundry OpenAI-compatible /openai/v1 path.
+      'api-key': apiKey,
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      // gpt-4o-mini is not a reasoning model, so we deliberately omit
+      // `reasoning_effort` (it would be rejected) and lean on a slightly lower
+      // temperature instead for stable structured-output behavior.
+      max_completion_tokens: 2000,
+      temperature: 0.2,
+      response_format: {
+        type: 'json_schema',
+        json_schema: FOOD_IMAGE_LLM_SCHEMA
+      },
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Text LLM call failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
+  if (!content) {
+    const finishReason = choice?.finish_reason;
+    const usage = data.usage ? JSON.stringify(data.usage) : 'n/a';
+    throw new Error(`Empty content from text LLM (finish_reason=${finishReason}, usage=${usage}).`);
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch (parseError) {
+    throw new Error(`Failed to parse text LLM JSON: ${parseError.message}`);
+  }
+}
+
+// Shared response shaping for /analyze-image and /analyze-text. Both endpoints
+// return the same JSON shape; only the prompt + LLM differ. Pulling the math /
+// clamping / plan_match logic into one place keeps the two endpoints in sync.
+function buildFoodAnalysisResponseBody(llmReport, hasPlan) {
+  // ---- Math runs in code, NOT in the LLM ----
+  const items = (llmReport.food_items || []).map((item) => {
+    const grams = Math.max(0, Number(item.estimated_weight_g) || 0);
+    const per100 = item.macros_per_100g || {};
+    const m = grams / 100;
+
+    const calories  = Math.round((Number(per100.calories_per_100g) || 0) * m);
+    const protein_g = Math.round((Number(per100.protein_per_100g) || 0) * m);
+    const carbs_g   = Math.round((Number(per100.carbs_per_100g)   || 0) * m);
+    const fat_g     = Math.round((Number(per100.fat_per_100g)     || 0) * m);
+
+    // For beverages, report the portion in ml so users see a familiar
+    // serving size ("250ml" of milk instead of "258g"). Macros math still
+    // runs in grams above — only the user-facing label changes.
+    const isBeverage = item.is_beverage === true;
+    const mlNum = Number(item.estimated_volume_ml);
+    const hasMl = isBeverage && Number.isFinite(mlNum) && mlNum > 0;
+    const portion_estimate = hasMl
+      ? `${Math.round(mlNum)}ml`
+      : `${Math.round(grams)}g`;
+
+    return {
+      name: item.name,
+      macros: {
+        fat_g,
+        carbs_g,
+        calories,
+        protein_g
+      },
+      confidence: typeof item.confidence === 'number' ? item.confidence : null,
+      visual_evidence: item.visual_evidence || null,
+      portion_estimate
+    };
+  });
+
+  // Clamp the LLM's scores to [0, 10] with one decimal of precision so the
+  // client always gets a value in range, even if the model misbehaves.
+  const clampScore = (v) => {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+    return Math.max(0, Math.min(10, Math.round(v * 10) / 10));
+  };
+
+  const overall_health_score        = clampScore(llmReport.overall_health_score);
+  const overall_health_score_reason = typeof llmReport.overall_health_score_reason === 'string'
+    ? llmReport.overall_health_score_reason
+    : null;
+
+  let plan_match = null;
+  if (hasPlan) {
+    const variantRaw = typeof llmReport.plan_match_variant === 'string'
+      ? llmReport.plan_match_variant.toLowerCase()
+      : null;
+    const variant = (variantRaw === 'main' || variantRaw === 'alternative' || variantRaw === 'none')
+      ? variantRaw
+      : null;
+    plan_match = {
+      score: clampScore(llmReport.plan_match_score),
+      reason: typeof llmReport.plan_match_reason === 'string' ? llmReport.plan_match_reason : null,
+      variant
+    };
+  }
+
+  return {
+    items,
+    overall_health_score,
+    overall_health_score_reason,
+    plan_match
+  };
 }
 
 // POST /api/food-logs/analyze-image
@@ -4819,78 +5655,72 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
       });
     }
 
-    // ---- Math runs in code, NOT in the LLM ----
-    const items = llmReport.food_items.map((item) => {
-      const grams = Math.max(0, Number(item.estimated_weight_g) || 0);
-      const per100 = item.macros_per_100g || {};
-      const m = grams / 100;
-
-      const calories  = Math.round((Number(per100.calories_per_100g) || 0) * m);
-      const protein_g = Math.round((Number(per100.protein_per_100g) || 0) * m);
-      const carbs_g   = Math.round((Number(per100.carbs_per_100g)   || 0) * m);
-      const fat_g     = Math.round((Number(per100.fat_per_100g)     || 0) * m);
-
-      // For beverages, report the portion in ml so users see a familiar
-      // serving size ("250ml" of milk instead of "258g"). Macros math still
-      // runs in grams above — only the user-facing label changes.
-      const isBeverage = item.is_beverage === true;
-      const mlNum = Number(item.estimated_volume_ml);
-      const hasMl = isBeverage && Number.isFinite(mlNum) && mlNum > 0;
-      const portion_estimate = hasMl
-        ? `${Math.round(mlNum)}ml`
-        : `${Math.round(grams)}g`;
-
-      return {
-        name: item.name,
-        macros: {
-          fat_g,
-          carbs_g,
-          calories,
-          protein_g
-        },
-        confidence: typeof item.confidence === 'number' ? item.confidence : null,
-        visual_evidence: item.visual_evidence || null,
-        portion_estimate
-      };
-    });
-
-    // Clamp the LLM's scores to [0, 10] with one decimal of precision so the
-    // client always gets a value in range, even if the model misbehaves.
-    const clampScore = (v) => {
-      if (typeof v !== 'number' || !Number.isFinite(v)) return null;
-      return Math.max(0, Math.min(10, Math.round(v * 10) / 10));
-    };
-
-    const overall_health_score        = clampScore(llmReport.overall_health_score);
-    const overall_health_score_reason = typeof llmReport.overall_health_score_reason === 'string'
-      ? llmReport.overall_health_score_reason
-      : null;
-
-    let plan_match = null;
-    if (cleanPlanMeal) {
-      const variantRaw = typeof llmReport.plan_match_variant === 'string'
-        ? llmReport.plan_match_variant.toLowerCase()
-        : null;
-      const variant = (variantRaw === 'main' || variantRaw === 'alternative' || variantRaw === 'none')
-        ? variantRaw
-        : null;
-      plan_match = {
-        score: clampScore(llmReport.plan_match_score),
-        reason: typeof llmReport.plan_match_reason === 'string' ? llmReport.plan_match_reason : null,
-        variant
-      };
-    }
-
-    return res.json({
-      items,
-      overall_health_score,
-      overall_health_score_reason,
-      plan_match
-    });
+    return res.json(buildFoodAnalysisResponseBody(llmReport, !!cleanPlanMeal));
   } catch (error) {
     console.error('❌ Error in POST /api/food-logs/analyze-image:', error);
     return res.status(500).json({
       error: 'Failed to analyze food image',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/food-logs/analyze-text
+// Free-text counterpart of /analyze-image. Same response shape, same plan
+// match logic, same per-100g → totals math; the only differences are
+//   (a) input is a free-text food description instead of a base64 image, and
+//   (b) the LLM is GPT-4o-mini (DEEPSEEK_TEXT_DEPLOYMENT, default
+//       "gpt-4o-mini") on the same Azure / OpenAI-compatible endpoint as the
+//       vision model.
+//
+// Body: {
+//   text:        string  (required — the user's free-text meal description,
+//                          e.g. "2 fried eggs, slice of sourdough toast with
+//                          butter, large flat white with oat milk".
+//                          Whitespace is collapsed and the text is truncated
+//                          to MAX_FOOD_TEXT_LENGTH characters before being
+//                          injected into the prompt.)
+//   mealLabel?:  string  (e.g. "breakfast" / "lunch" / "snack")
+//   planMeal?:   object  (optional — ONE entry from the client's meal plan
+//                          `meals[]`, identical shape to /analyze-image.)
+// }
+//
+// Success 200: identical shape to /analyze-image:
+//   { items, overall_health_score, overall_health_score_reason, plan_match }
+//
+// Not-food 422:
+//   { error: 'not_food', message: <reason> }
+app.post('/api/food-logs/analyze-text', async (req, res) => {
+  try {
+    const { text, mealLabel, planMeal } = req.body || {};
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'text (food description string) is required' });
+    }
+
+    const cleanText = sanitizeFoodText(text);
+    if (!cleanText) {
+      return res.status(400).json({ error: 'text is empty after sanitization' });
+    }
+
+    // Bad/empty plan payloads are silently ignored (sanitized → null) so the
+    // LLM behaves as if no plan was sent rather than failing the request.
+    const cleanPlanMeal = sanitizePlanMeal(planMeal);
+
+    const prompt = buildFoodTextPrompt(mealLabel, cleanText, cleanPlanMeal);
+    const llmReport = await callFoodTextLLM(prompt);
+
+    if (!llmReport.is_food || !Array.isArray(llmReport.food_items) || llmReport.food_items.length === 0) {
+      return res.status(422).json({
+        error: 'not_food',
+        message: llmReport.not_food_reason || 'The provided text does not describe food items.'
+      });
+    }
+
+    return res.json(buildFoodAnalysisResponseBody(llmReport, !!cleanPlanMeal));
+  } catch (error) {
+    console.error('❌ Error in POST /api/food-logs/analyze-text:', error);
+    return res.status(500).json({
+      error: 'Failed to analyze food text',
       message: error.message
     });
   }
