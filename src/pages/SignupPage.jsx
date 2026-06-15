@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { landingApiPath } from '../config/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { checkEmailExists, signInWithGoogle, signUp } from '../supabase/auth';
@@ -31,11 +32,19 @@ function SignupPage() {
   const decodeRegistrationHash = (base64Token) => {
     try {
       if (!base64Token) return null;
-      const decoded = atob(base64Token);
+      // Convert corrupted spaces back to valid base64 '+' signs
+      const sanitizedToken = base64Token.replace(/ /g, '+');
+      const decoded = atob(sanitizedToken);
       try {
         const obj = JSON.parse(decoded);
         if (obj && obj.link_id) {
-          return { link_id: obj.link_id, manager_id: obj.manager_id || null, isLimited: true };
+          return { 
+            link_id: obj.link_id, 
+            manager_id: obj.manager_id || null, 
+            isLimited: true,
+            max_clients: obj.max_clients || obj.max_slots || null,
+            expiry_date: obj.expiry_date || obj.expires_at || null
+          };
         }
         if (obj && obj.manager_id) {
           return { manager_id: obj.manager_id, isLimited: false };
@@ -92,10 +101,9 @@ function SignupPage() {
         if (token) sessionStorage.setItem('invitation_token', token);
         let md = null;
         try { const raw = sessionStorage.getItem('manager_link_data'); if (raw) md = JSON.parse(raw); } catch (_) {}
-        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
         try {
           if (md?.link_id) {
-            const r = await fetch(`${apiUrl}/api/db/registration-links/find`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link_id: md.link_id }) });
+            const r = await fetch(landingApiPath('/db/registration-links/find'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ link_id: md.link_id }) });
             const row = await r.json().catch(() => ({}));
             if (!r.ok || !row.manager_id) { setError(language === 'hebrew' ? 'קישור ההרשמה לא נמצא או לא תקף' : (row?.error || 'Registration link not found or invalid')); setHasInvitationToken(false); }
             else if (row.expires_at && new Date(row.expires_at) < new Date()) { setError(language === 'hebrew' ? 'קישור ההרשמה פג תוקף' : 'This registration link has expired'); setHasInvitationToken(false); }

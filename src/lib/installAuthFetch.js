@@ -20,6 +20,7 @@ const PUBLIC_API_PATHS = [
   '/api/waiting-list/',
   '/api/contact',
   '/api/ingredient-reports',
+  '/api/db/registration-links/find',
 ];
 
 function isPublicApiUrl(urlString) {
@@ -59,7 +60,10 @@ window.fetch = async (input, init = {}) => {
   }
 
   if (url.startsWith('/api/') && !url.startsWith('http')) {
-    return originalFetch(`${getApiUrl()}${url}`, init);
+    const base = getApiUrl();
+    const sameOrigin =
+      typeof window !== 'undefined' && base === window.location.origin;
+    return originalFetch(sameOrigin ? url : `${base}${url}`, init);
   }
 
   return originalFetch(input, init);

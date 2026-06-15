@@ -6,6 +6,8 @@ import Navigation from '../components/Navigation';
 
 // Import our highly scalable Template Factory
 import { getTemplate } from '../company/templates';
+import { normalizeLandingConfig } from '../company/normalizeLandingConfig';
+import { landingApiPath } from '../config/api';
 
 export default function LandingPage() {
   const location = useLocation();
@@ -26,15 +28,14 @@ export default function LandingPage() {
         setIsValidating(true);
         setErrorMessage(null);
 
-        const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
-        let rawHashToken = hashParams.get('d');
-        
+        const hashMatch = location.hash.match(/[#&]d=([^&]*)/);
+        let rawHashToken = hashMatch?.[1] ?? null;
+
         if (!rawHashToken) {
           throw new Error('INVALID_TOKEN_STRUCTURE');
         }
 
-        // 🛠️ FIX BUG 1: Convert corrupted spaces back to valid base64 '+' signs
-        const sanitizedHashToken = rawHashToken.replace(/ /g, '+');
+        const sanitizedHashToken = decodeURIComponent(rawHashToken).replace(/ /g, '+');
 
         let manager_id = null;
         let link_id = null;
@@ -52,8 +53,8 @@ export default function LandingPage() {
             const decodedPayload = JSON.parse(decodedString);
             manager_id = decodedPayload.manager_id;
             link_id = decodedPayload.link_id;
-            max_clients = decodedPayload.max_clients;
-            expiry_date = decodedPayload.expiry_date;
+            max_clients = decodedPayload.max_clients || decodedPayload.max_slots;
+            expiry_date = decodedPayload.expiry_date || decodedPayload.expires_at;
           } else {
             manager_id = decodedString;
           }
@@ -72,14 +73,34 @@ export default function LandingPage() {
           throw err;
         }
 
-        const apiUrl = process.env.REACT_APP_API_URL || '';
-        const response = await fetch(`${apiUrl}/api/landing/validate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ managerId: manager_id, linkId: link_id })
-        });
+        const validateUrl = landingApiPath('/landing/validate');
+        const validateBody = { managerId: manager_id, linkId: link_id || null };
 
-        const resData = await response.json();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+        let response;
+        try {
+          response = await fetch(validateUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            signal: controller.signal,
+            body: JSON.stringify(validateBody),
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        const responseText = await response.text();
+        let resData = {};
+        try {
+          resData = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          const gatewayErr = new Error('GATEWAY_ERROR');
+          gatewayErr.status = response.status;
+          throw gatewayErr;
+        }
 
         if (!response.ok) {
           const err = new Error(resData.error || 'Validation failure');
@@ -96,48 +117,49 @@ export default function LandingPage() {
           throw errorInstance;
         }
 
-        // 🛠️ FIX BUG 2: Map structural fallbacks to handle both nested or flat DB configuration profiles
         const rawCompanyConfig = resData.company.config || {};
-        const safeConfig = {
-          ui: {
-            layout: rawCompanyConfig.ui?.layout || rawCompanyConfig.layout || 'centered',
-            themeSettings: rawCompanyConfig.ui?.themeSettings || rawCompanyConfig.themeSettings || {
-              colors: {
-                surface: "#ffffff",
-                primary: "#10b981",
-                secondary: "#a7f3d0",
-                accent: "#34d399",
-                textMain: "#064e3b",
-                textMuted: "#4b5563"
-              }
-            }
-          },
-          content: rawCompanyConfig.content || {
-            heroTitle: { english: 'Welcome', hebrew: 'ברוכים הבאים' },
-            heroSubtitle: { english: '', hebrew: '' },
-            ctaText: { english: 'Continue', hebrew: 'המשך' }
-          }
-        };
+        const safeConfig = normalizeLandingConfig(rawCompanyConfig);
 
         setCompanySlug(resData.company.slug);
         setManagerData(resData.manager);
         setDbConfig(safeConfig);
         
+        const isLimitedLink = Boolean(link_id);
+        const slotsRemaining =
+          resData.campaign?.slotsRemaining ??
+          (isLimitedLink && serverMaxSlots != null
+            ? Math.max(0, serverMaxSlots - serverCurrentCount)
+            : null);
+
         setCampaignData({
-          isSmartLink: !!resData.campaign?.isSmartLink,
+          isSmartLink: isLimitedLink || !!resData.campaign?.isSmartLink,
           maxSlots: serverMaxSlots,
-          slotsRemaining: resData.campaign?.slotsRemaining,
-          expiresAt: expiry_date || resData.campaign?.expiresAt
+          slotsRemaining,
+          expiresAt: expiry_date || resData.campaign?.expiresAt,
         });
 
       } catch (err) {
         console.error('Landing Page Exception Caught:', err);
-        if (err.message === 'INVALID_TOKEN_STRUCTURE') {
+        if (err.name === 'AbortError') {
+          setErrorMessage(
+            language === 'hebrew'
+              ? 'תם הזמן — שרת האימות לא הגיב. נסה שוב מאוחר יותר.'
+              : 'Validation timed out. Please try again later.'
+          );
+        } else if (err.message === 'INVALID_TOKEN_STRUCTURE') {
           setErrorMessage(language === 'hebrew' ? 'מבנה קישור לא חוקי' : 'Invalid link structure.');
         } else if (err.status === 410 || err.message === 'CAMPAIGN_EXPIRED') {
           setErrorMessage(language === 'hebrew' ? 'פג תוקף הקמפיין' : 'Campaign expired.');
         } else if (err.status === 403 || err.message === 'REGISTRATION_LIMIT_REACHED') {
           setErrorMessage(language === 'hebrew' ? 'מכסת ההרשמה מלאה' : 'Registration full.');
+        } else if (err.status === 404) {
+          setErrorMessage(language === 'hebrew' ? 'קישור ההרשמה לא נמצא או לא תקף' : 'Registration link not found or invalid.');
+        } else if (err.status === 504 || err.status === 502 || err.message === 'GATEWAY_ERROR') {
+          setErrorMessage(
+            language === 'hebrew'
+              ? 'שרת האימות לא זמין. נסה שוב מאוחר יותר.'
+              : 'Validation service unavailable. Please try again later.'
+          );
         } else {
           setErrorMessage(language === 'hebrew' ? 'שגיאת אימות נתונים' : 'Database verification failure.');
         }

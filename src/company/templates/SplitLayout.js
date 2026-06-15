@@ -14,6 +14,8 @@ function SplitLayout({ config, manager, campaign, navigate, hash }) {
     '--theme-accent': colors.accent || '#FFDAB9',
     '--theme-text': colors.textMain || '#FFFDFB',
     '--theme-text-muted': colors.textMuted || '#CDBBAA',
+    '--theme-text-on-primary': colors.textOnPrimary || '#FFFFFF',
+    '--theme-text-on-secondary': colors.textOnSecondary || '#FFFFFF',
   };
 
   const title = content.heroTitle?.[language] || 'Welcome Member';
@@ -29,8 +31,8 @@ function SplitLayout({ config, manager, campaign, navigate, hash }) {
         {/* Left Column: Presentation */}
         <div className="lg:col-span-7 p-8 md:p-14 flex flex-col justify-center space-y-8">
           {manager?.name && (
-            <div className="self-start px-4 py-2 rounded-full bg-[var(--theme-secondary)] border border-[var(--theme-primary)]/10 text-sm font-bold text-[var(--theme-accent)]">
-              ✨ {language === 'hebrew' ? 'מנהלת קהילה זמינה:' : 'Community Leader:'} <span className="text-[var(--theme-primary)]">{manager.name}</span>
+            <div className="self-start px-4 py-2 rounded-full bg-[var(--theme-secondary)] border border-[var(--theme-primary)]/10 text-sm font-bold text-[var(--theme-text-on-secondary)]">
+              ✨ {language === 'hebrew' ? 'ליווי מקצועי ע"י:' : 'Professional Guide:'} <span className="text-[var(--theme-accent)] ml-1 mr-1">{manager.name}</span>
             </div>
           )}
 
@@ -52,7 +54,7 @@ function SplitLayout({ config, manager, campaign, navigate, hash }) {
             <ul className="space-y-4 pt-2">
               {features.map((feature, idx) => (
                 <li key={idx} className="flex items-center gap-3 text-[var(--theme-text)] font-semibold">
-                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--theme-primary)] flex items-center justify-center text-stone-900 text-sm font-bold">✓</span>
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--theme-primary)] flex items-center justify-center text-[var(--theme-text-on-primary)] text-sm font-bold">✓</span>
                   {feature}
                 </li>
               ))}
@@ -73,7 +75,7 @@ function SplitLayout({ config, manager, campaign, navigate, hash }) {
             
             <button
               onClick={() => navigate(`/signup${hash}`)}
-              className="w-full py-5 rounded-xl text-center text-lg shadow-xl shadow-[var(--theme-primary)]/10 transform active:scale-[0.98] hover:-translate-y-1 transition-all duration-300 bg-[var(--theme-primary)] text-stone-900 font-black"
+              className="w-full py-5 rounded-xl text-center text-lg shadow-xl shadow-[var(--theme-primary)]/10 transform active:scale-[0.98] hover:-translate-y-1 transition-all duration-300 bg-[var(--theme-primary)] text-[var(--theme-text-on-primary)] font-black"
             >
               {ctaText}
             </button>
@@ -81,16 +83,16 @@ function SplitLayout({ config, manager, campaign, navigate, hash }) {
 
           <div className="flex flex-col items-center justify-center text-center gap-2">
              <div className="flex -space-x-2">
-                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-secondary)] bg-[#D4A373] flex items-center justify-center text-[8px] text-white font-bold">EM</div>
-                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-secondary)] bg-[#E29578] flex items-center justify-center text-[8px] text-white font-bold">SJ</div>
-                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-secondary)] bg-[#FFDAB9] flex items-center justify-center text-[8px] text-stone-900 font-bold">L</div>
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-surface)] bg-[var(--theme-secondary)] flex items-center justify-center text-[8px] text-[var(--theme-text-on-secondary)] font-bold">JD</div>
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-surface)] bg-[var(--theme-primary)] flex items-center justify-center text-[8px] text-[var(--theme-text-on-primary)] font-bold">AM</div>
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-surface)] bg-[var(--theme-accent)] flex items-center justify-center text-[8px] text-stone-900 font-bold">SL</div>
              </div>
              <p className="text-xs font-bold text-[var(--theme-text-muted)]">
-                {language === 'hebrew' ? 'הצטרפי לאלפי אמהות שכבר התחילו' : 'Join thousands of moms already inside.'}
+                {language === 'hebrew' ? 'הצטרפו לקהילת הלקוחות המצליחים שלנו.' : 'Join a growing community of successful clients.'}
              </p>
           </div>
 
-          {campaign?.isSmartLink && (
+          {(campaign?.isSmartLink || campaign?.slotsRemaining != null || campaign?.expiresAt) && (
             <div className="mt-8 border-t border-[var(--theme-secondary)] pt-6 w-full">
               <ScarcityWidget campaign={campaign} />
             </div>

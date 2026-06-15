@@ -3,10 +3,11 @@
  * No Supabase keys or clients in the browser.
  */
 
+import { API_BASE_URL } from '../config/api';
+
 const SESSION_KEY = 'bc_auth_session';
 
-export const getApiUrl = () =>
-  process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+export const getApiUrl = () => API_BASE_URL;
 
 export function getStoredSession() {
   try {

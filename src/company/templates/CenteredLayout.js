@@ -14,6 +14,8 @@ function CenteredLayout({ config, manager, campaign, navigate, hash }) {
     '--theme-accent': colors.accent || '#FFDAB9',
     '--theme-text': colors.textMain || '#FFFDFB',
     '--theme-text-muted': colors.textMuted || '#CDBBAA',
+    '--theme-text-on-primary': colors.textOnPrimary || '#FFFFFF',
+    '--theme-text-on-secondary': colors.textOnSecondary || '#FFFFFF',
   };
 
   const title = content.heroTitle?.[language] || 'BetterChoice Portal';
@@ -61,7 +63,7 @@ function CenteredLayout({ config, manager, campaign, navigate, hash }) {
           <div className="flex flex-col items-center gap-3 mb-10 max-w-md mx-auto">
             {features.map((feature, idx) => (
               <div key={idx} className="flex items-center gap-3 w-full bg-[var(--theme-secondary)]/50 px-4 py-3 rounded-xl border border-[var(--theme-secondary)]">
-                <div className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-[var(--theme-primary)] text-stone-900 font-bold text-sm">
+                <div className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-[var(--theme-primary)] text-[var(--theme-text-on-primary)] font-bold text-sm">
                   ✓
                 </div>
                 <span className="text-[var(--theme-text)] font-semibold text-sm md:text-base">{feature}</span>
@@ -73,7 +75,7 @@ function CenteredLayout({ config, manager, campaign, navigate, hash }) {
         <div className="pt-2 flex flex-col items-center">
           <button
             onClick={() => navigate(`/signup${hash}`)}
-            className="w-full sm:w-4/5 px-10 py-5 rounded-2xl text-xl font-black transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 shadow-xl shadow-[var(--theme-primary)]/10 bg-[var(--theme-primary)] text-stone-900 hover:opacity-90"
+            className="w-full sm:w-4/5 px-10 py-5 rounded-2xl text-xl font-black transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 shadow-xl shadow-[var(--theme-primary)]/10 bg-[var(--theme-primary)] text-[var(--theme-text-on-primary)] hover:opacity-90"
           >
             {ctaText}
           </button>
@@ -83,7 +85,7 @@ function CenteredLayout({ config, manager, campaign, navigate, hash }) {
           </span>
         </div>
 
-        {campaign?.isSmartLink && (
+        {(campaign?.isSmartLink || campaign?.slotsRemaining != null || campaign?.expiresAt) && (
           <div className="mt-10 border-t border-[var(--theme-secondary)] pt-8 w-full">
             <ScarcityWidget campaign={campaign} />
           </div>

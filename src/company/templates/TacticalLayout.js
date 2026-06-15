@@ -14,6 +14,7 @@ function TacticalLayout({ config, manager, campaign, navigate, hash }) {
     '--theme-accent': colors.accent || '#FFDAB9',
     '--theme-text': colors.textMain || '#FFFDFB',
     '--theme-text-muted': colors.textMuted || '#CDBBAA',
+    '--theme-text-on-primary': colors.textOnPrimary || '#FFFFFF',
   };
 
   const title = content.heroTitle?.[language] || 'Tactical Portal';
@@ -69,13 +70,13 @@ function TacticalLayout({ config, manager, campaign, navigate, hash }) {
         <div className="mt-12">
           <button
             onClick={() => navigate(`/signup${hash}`)}
-            className="w-full py-5 text-center font-black tracking-widest uppercase text-lg border-4 border-[var(--theme-primary)] bg-[var(--theme-primary)] text-stone-900 hover:bg-transparent hover:text-[var(--theme-primary)] transition-colors duration-200"
+            className="w-full py-5 text-center font-black tracking-widest uppercase text-lg border-4 border-[var(--theme-primary)] bg-[var(--theme-primary)] text-[var(--theme-text-on-primary)] hover:bg-transparent hover:text-[var(--theme-primary)] transition-colors duration-200"
           >
             {ctaText}
           </button>
         </div>
 
-        {campaign?.isSmartLink && (
+        {(campaign?.isSmartLink || campaign?.slotsRemaining != null || campaign?.expiresAt) && (
           <div className="mt-8 pt-6 border-t-2 border-[var(--theme-primary)] border-dashed w-full">
             <ScarcityWidget campaign={campaign} />
           </div>
