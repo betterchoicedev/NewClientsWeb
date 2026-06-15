@@ -6,29 +6,29 @@ const { createClient } = require('@supabase/supabase-js');
 const sharp = require('sharp');
 const { randomUUID } = require('crypto');
 
-// Initialize Supabase client for main project (Stripe, clients, etc.)
-const supabase = createClient(
+// Initialize ClientDB (main project: Stripe, clients, etc.)
+const clientDB = createClient(
   process.env.REACT_APP_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY
 );
 
-// Initialize Supabase client for authentication (uses anon key for user sign-in)
+// ClientDB anon client used only for authentication (sign-in / token verification)
 const supabaseAuth = createClient(
   process.env.REACT_APP_SUPABASE_URL,
   process.env.REACT_APP_SUPABASE_ANON_KEY
 );
 
-// Initialize Supabase client for chat project (chat_users table)
-// Make sure to configure CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY
-const chatSupabaseUrl = process.env.CHAT_SUPABASE_URL;
-const chatSupabaseServiceRoleKey = process.env.CHAT_SUPABASE_SERVICE_ROLE_KEY;
+// Initialize AdminDB (chat/admin project: chat_users, meal_plans_and_schemas, etc.)
+// Configure CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY
+const adminDBUrl = process.env.CHAT_SUPABASE_URL;
+const adminDBServiceRoleKey = process.env.CHAT_SUPABASE_SERVICE_ROLE_KEY;
 
-const chatSupabase = chatSupabaseUrl && chatSupabaseServiceRoleKey
-  ? createClient(chatSupabaseUrl, chatSupabaseServiceRoleKey)
+const adminDB = adminDBUrl && adminDBServiceRoleKey
+  ? createClient(adminDBUrl, adminDBServiceRoleKey)
   : null;
 
-console.log('Supabase connection:', process.env.REACT_APP_SUPABASE_URL ? 'Configured' : 'Missing URL');
-console.log('Chat/Secondary Supabase (registration_rules):', chatSupabase ? 'Configured' : 'Not configured – set CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY');
+console.log('ClientDB connection:', process.env.REACT_APP_SUPABASE_URL ? 'Configured' : 'Missing URL');
+console.log('AdminDB connection:', adminDB ? 'Configured' : 'Not configured – set CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY');
 
 const { createAuthMiddleware } = require('./middleware/auth');
 const { registerAuthSessionRoutes } = require('./routes/authSession');
@@ -38,7 +38,7 @@ const {
   verifyFoodLogOwnership,
   verifyCalendarEventOwnership,
   apiAuthGuard,
-} = createAuthMiddleware(supabaseAuth, supabase, chatSupabase);
+} = createAuthMiddleware(supabaseAuth, clientDB, adminDB);
 
 const app = express();
 function normalizePort(value) {
@@ -121,7 +121,7 @@ registerAuthSessionRoutes(app, {
   supabaseAuth,
   supabaseUrl: process.env.REACT_APP_SUPABASE_URL,
   supabaseAnonKey: process.env.REACT_APP_SUPABASE_ANON_KEY,
-  supabaseDb: supabase,
+  supabaseDb: clientDB,
 });
 
 // Require Bearer JWT on protected /api/* routes
@@ -189,7 +189,7 @@ app.post('/api/auth/refresh', async (req, res) => {
 //      version: no Supabase auth row is created for unregistered Apple
 //      users, so no orphans end up in the dashboard.
 //   3. Only if the account exists do we hand the token to
-//      `supabase.auth.signInWithIdToken({ provider: 'apple', token })`.
+//      `clientDB.auth.signInWithIdToken({ provider: 'apple', token })`.
 //      Supabase verifies the JWT against Apple's JWKS — a forged token
 //      with a stolen email won't produce a session, so the pre-check
 //      can't be abused to log in as anyone.
@@ -227,7 +227,7 @@ function decodeJwtPayloadServer(token) {
 async function emailHasBetterChoiceAccount(email) {
   if (!email) return false;
   try {
-    const { data: clientRow } = await supabase
+    const { data: clientRow } = await clientDB
       .from('clients')
       .select('user_id')
       .eq('email', email)
@@ -236,9 +236,9 @@ async function emailHasBetterChoiceAccount(email) {
   } catch (e) {
     console.warn('emailHasBetterChoiceAccount: clients lookup failed:', e?.message);
   }
-  if (chatSupabase) {
+  if (adminDB) {
     try {
-      const { data: chatRow } = await chatSupabase
+      const { data: chatRow } = await adminDB
         .from('chat_users')
         .select('id')
         .eq('email', email)
@@ -277,7 +277,7 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
     // the JWT signature against Apple's JWKS, so a forged token would
     // still fail here even though the pre-check above used the unverified
     // payload.
-    const { data, error } = await supabase.auth.signInWithIdToken({
+    const { data, error } = await clientDB.auth.signInWithIdToken({
       provider: 'apple',
       token: identityToken,
     });
@@ -300,7 +300,7 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
       const verifiedExists = await emailHasBetterChoiceAccount(verifiedEmail);
       if (!verifiedExists) {
         try {
-          await supabase.auth.admin.deleteUser(data.user.id);
+          await clientDB.auth.admin.deleteUser(data.user.id);
         } catch (e) {
           console.warn('Apple verify: orphan cleanup failed:', e?.message);
         }
@@ -319,7 +319,7 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
         const patch = {};
         if (fullName.givenName) patch.first_name = fullName.givenName;
         if (fullName.familyName) patch.last_name = fullName.familyName;
-        await supabase.from('clients').update(patch).eq('email', finalEmail);
+        await clientDB.from('clients').update(patch).eq('email', finalEmail);
       } catch {
         /* best-effort enrichment */
       }
@@ -329,8 +329,8 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
     // so the React Native context starts with the right locale.
     let language = null;
     try {
-      if (chatSupabase) {
-        const { data: lang } = await chatSupabase
+      if (adminDB) {
+        const { data: lang } = await adminDB
           .from('chat_users')
           .select('user_language')
           .eq('email', finalEmail)
@@ -362,10 +362,10 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
 //
 // Instead, the client calls this endpoint right after parsing the deep
 // link. We:
-//   1. Validate the supplied access token via `supabase.auth.getUser` —
+//   1. Validate the supplied access token via `clientDB.auth.getUser` —
 //      that's the only thing that gives us a *trusted* user id + email.
 //   2. Look the email up in `clients` / `chat_users`.
-//   3. If no match → `supabase.auth.admin.deleteUser(userId)` so no
+//   3. If no match → `clientDB.auth.admin.deleteUser(userId)` so no
 //      orphan Google auth row lingers, then respond 404 `no_account`.
 //   4. If match → respond `{ ok: true, language }`.
 //
@@ -393,7 +393,7 @@ app.post('/api/auth/oauth/google/finalize', async (req, res) => {
       // Defensive: a Google auth row with no email is malformed. Wipe it
       // and tell the client to surface the "no account" UX.
       try {
-        await supabase.auth.admin.deleteUser(userId);
+        await clientDB.auth.admin.deleteUser(userId);
       } catch (e) {
         console.warn('Google finalize: cleanup of email-less auth row failed:', e?.message);
       }
@@ -408,7 +408,7 @@ app.post('/api/auth/oauth/google/finalize', async (req, res) => {
     // user even when the email isn't a customer" bug) and respond 404.
     if (!accountExists) {
       try {
-        const { error: deleteErr } = await supabase.auth.admin.deleteUser(userId);
+        const { error: deleteErr } = await clientDB.auth.admin.deleteUser(userId);
         if (deleteErr) {
           console.error('Google finalize: failed to delete orphan auth user:', deleteErr);
         }
@@ -422,8 +422,8 @@ app.post('/api/auth/oauth/google/finalize', async (req, res) => {
     // seed locale identically to the password / Apple flows.
     let language = null;
     try {
-      if (chatSupabase) {
-        const { data: lang } = await chatSupabase
+      if (adminDB) {
+        const { data: lang } = await adminDB
           .from('chat_users')
           .select('user_language')
           .eq('email', email)
@@ -467,7 +467,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
     let userCode = req.userCode || null;
     if (!userCode && email) {
       try {
-        const { data: clientRow } = await supabase
+        const { data: clientRow } = await clientDB
           .from('clients')
           .select('user_code')
           .eq('email', email)
@@ -479,9 +479,9 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
     }
 
     let chatUserId = null;
-    if (chatSupabase && email) {
+    if (adminDB && email) {
       try {
-        const { data: chatUser } = await chatSupabase
+        const { data: chatUser } = await adminDB
           .from('chat_users')
           .select('id, user_code')
           .eq('email', email)
@@ -494,9 +494,9 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
     }
 
     // ── 1. Reminder instances / definitions + meal plans (chat project) ──
-    if (chatSupabase && userCode) {
+    if (adminDB && userCode) {
       // 1a. Meal plan IDs for this user
-      const { data: mealPlans, error: fetchMealPlansError } = await chatSupabase
+      const { data: mealPlans, error: fetchMealPlansError } = await adminDB
         .from('meal_plans_and_schemas')
         .select('id')
         .eq('user_code', userCode)
@@ -505,14 +505,14 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
       if (!fetchMealPlansError && mealPlans && mealPlans.length > 0) {
         const mealPlanIds = mealPlans.map((p) => p.id);
         // 1b. Reminder definitions referencing these meal plans
-        const { data: reminderDefs, error: fetchReminderError } = await chatSupabase
+        const { data: reminderDefs, error: fetchReminderError } = await adminDB
           .from('reminder_definitions')
           .select('reminder_definition_id')
           .in('user_plan_id', mealPlanIds);
 
         if (!fetchReminderError && reminderDefs && reminderDefs.length > 0) {
           const definitionIds = reminderDefs.map((r) => r.reminder_definition_id);
-          const { error: instancesError } = await chatSupabase
+          const { error: instancesError } = await adminDB
             .from('reminder_instances')
             .delete()
             .in('definition_id', definitionIds);
@@ -522,7 +522,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
           }
         }
 
-        const { error: reminderError } = await chatSupabase
+        const { error: reminderError } = await adminDB
           .from('reminder_definitions')
           .delete()
           .in('user_plan_id', mealPlanIds);
@@ -533,7 +533,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
       }
 
       // 1c. Meal plans themselves
-      const { error: mealPlansError } = await chatSupabase
+      const { error: mealPlansError } = await adminDB
         .from('meal_plans_and_schemas')
         .delete()
         .eq('user_code', userCode)
@@ -545,9 +545,9 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
     }
 
     // ── 2-5. Conversations, messages, food logs, chat_users ─────────────
-    if (chatSupabase && chatUserId) {
+    if (adminDB && chatUserId) {
       // 2. Conversation IDs
-      const { data: conversations, error: convError } = await chatSupabase
+      const { data: conversations, error: convError } = await adminDB
         .from('chat_conversations')
         .select('id')
         .eq('user_id', chatUserId);
@@ -560,7 +560,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
 
       // 3. Messages for those conversations
       if (conversationIds.length > 0) {
-        const { error: messagesError } = await chatSupabase
+        const { error: messagesError } = await adminDB
           .from('chat_messages')
           .delete()
           .in('conversation_id', conversationIds);
@@ -571,7 +571,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
       }
 
       // 4. Conversations
-      const { error: deleteConvError } = await chatSupabase
+      const { error: deleteConvError } = await adminDB
         .from('chat_conversations')
         .delete()
         .eq('user_id', chatUserId);
@@ -581,7 +581,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
       }
 
       // 4.5. Food logs (FK fk_food_logs_user_id -> chat_users.id, no cascade)
-      const { error: foodLogsError } = await chatSupabase
+      const { error: foodLogsError } = await adminDB
         .from('food_logs')
         .delete()
         .eq('user_id', chatUserId);
@@ -591,7 +591,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
       }
 
       // 5. chat_users row
-      const { error: deleteUserError } = await chatSupabase
+      const { error: deleteUserError } = await adminDB
         .from('chat_users')
         .delete()
         .eq('id', chatUserId);
@@ -620,7 +620,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
             const customerIds = new Set();
 
             // Primary source: stripe_subscriptions rows for this auth user.
-            const { data: subs } = await supabase
+            const { data: subs } = await clientDB
               .from('stripe_subscriptions')
               .select('stripe_customer_id, stripe_subscription_id, status')
               .eq('user_id', authUserId);
@@ -669,7 +669,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
         }
 
         // 6b. client_meal_plans for this user_code
-        const { error: mealPlansError } = await supabase
+        const { error: mealPlansError } = await clientDB
           .from('client_meal_plans')
           .delete()
           .eq('user_code', userCode);
@@ -678,7 +678,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
         }
 
         // 6c. stripe_usage_log for this user_code
-        const { error: stripeError } = await supabase
+        const { error: stripeError } = await clientDB
           .from('stripe_usage_log')
           .delete()
           .eq('user_code', userCode);
@@ -687,7 +687,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
         }
 
         // 6d. clients rows for this user_code
-        const { error: clientsError } = await supabase
+        const { error: clientsError } = await clientDB
           .from('clients')
           .delete()
           .eq('user_code', userCode);
@@ -703,9 +703,9 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
     // Safety net: drop any clients rows still tied to this auth user / email
     // even when we couldn't resolve a user_code above.
     try {
-      await supabase.from('clients').delete().eq('user_id', authUserId);
+      await clientDB.from('clients').delete().eq('user_id', authUserId);
       if (email) {
-        await supabase.from('clients').delete().eq('email', email);
+        await clientDB.from('clients').delete().eq('email', email);
       }
     } catch (e) {
       console.warn('Account deletion: residual clients cleanup failed:', e?.message);
@@ -713,7 +713,7 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
 
     // ── 7. Finally, delete the auth row (source of truth) ──────────────
     // NOTE: admin.deleteUser requires the service-role key, so we must use
-    // `supabase` (service role) here — `supabaseAuth` is the anon client and
+    // `clientDB` (service role) here — `supabaseAuth` is the anon client and
     // returns 403 "User not allowed / not_admin".
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.error('❌ Cannot delete auth user: SUPABASE_SERVICE_ROLE_KEY is not set');
@@ -722,9 +722,9 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
         details: 'Server is missing SUPABASE_SERVICE_ROLE_KEY required for admin deletion',
       });
     }
-    const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(authUserId);
+    const { error: deleteAuthError } = await clientDB.auth.admin.deleteUser(authUserId);
     if (deleteAuthError) {
-      console.error('❌ supabase.auth.admin.deleteUser failed:', deleteAuthError);
+      console.error('❌ clientDB.auth.admin.deleteUser failed:', deleteAuthError);
       return res.status(500).json({
         error: 'Failed to delete account',
         details: deleteAuthError.message,
@@ -853,7 +853,7 @@ app.post('/api/stripe/check-commitment-periods', async (req, res) => {
     console.log('🔍 Checking subscriptions past their commitment period...');
     
     // Get all active subscriptions with commitment periods
-    const { data: subscriptions, error: fetchError } = await supabase
+    const { data: subscriptions, error: fetchError } = await clientDB
       .from('stripe_subscriptions')
       .select('*')
       .eq('status', 'active')
@@ -882,7 +882,7 @@ app.post('/api/stripe/check-commitment-periods', async (req, res) => {
           });
           
           // Update database
-          const { error: updateError } = await supabase
+          const { error: updateError } = await clientDB
             .from('stripe_subscriptions')
             .update({ 
               cancel_at_period_end: true,
@@ -1037,7 +1037,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
         };
         
         // Insert or update subscription
-        const { error: subscriptionError } = await supabase
+        const { error: subscriptionError } = await clientDB
           .from('stripe_subscriptions')
           .upsert([subscriptionData], { 
             onConflict: 'stripe_subscription_id',
@@ -1071,7 +1071,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
             created_at: new Date(session.created * 1000).toISOString()
           };
           
-          const { error: paymentError } = await supabase
+          const { error: paymentError } = await clientDB
             .from('stripe_payments')
             .upsert([paymentData], { 
               onConflict: 'stripe_checkout_session_id',
@@ -1083,7 +1083,7 @@ app.post('/api/stripe/sync-to-database', async (req, res) => {
             if (paymentError.code === '23503' && paymentData.user_id) {
               console.warn('⚠️ Foreign key constraint error. Retrying sync with null user_id...');
               paymentData.user_id = null;
-              const { error: retryError } = await supabase
+              const { error: retryError } = await clientDB
                 .from('stripe_payments')
                 .upsert([paymentData], { 
                   onConflict: 'stripe_checkout_session_id',
@@ -1352,7 +1352,7 @@ app.post(['/api/subscription/validate-access-code', '/api/pricing/validate-acces
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ valid: false, error: 'Code is required' });
     }
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ valid: false, error: 'Chat database not configured' });
     }
 
@@ -1362,7 +1362,7 @@ app.post(['/api/subscription/validate-access-code', '/api/pricing/validate-acces
     }
 
     const nowIso = new Date().toISOString();
-    const { data: accessCode, error: codeError } = await chatSupabase
+    const { data: accessCode, error: codeError } = await adminDB
       .from('onboarding_access_codes')
       .select('*')
       .eq('code', normalizedCode)
@@ -1401,7 +1401,7 @@ app.post(['/api/subscription/validate-access-code', '/api/pricing/validate-acces
     // Store the internal chat_users.id (chat project), not auth user id
     let resolvedUserCode = user_code || null;
     if (!resolvedUserCode && user_id) {
-      const { data: clientData } = await supabase
+      const { data: clientData } = await clientDB
         .from('clients')
         .select('user_code')
         .eq('user_id', user_id)
@@ -1409,7 +1409,7 @@ app.post(['/api/subscription/validate-access-code', '/api/pricing/validate-acces
       resolvedUserCode = clientData?.user_code || null;
     }
     if (resolvedUserCode) {
-      const { data: chatUserData } = await chatSupabase
+      const { data: chatUserData } = await adminDB
         .from('chat_users')
         .select('id')
         .eq('user_code', resolvedUserCode)
@@ -1419,7 +1419,7 @@ app.post(['/api/subscription/validate-access-code', '/api/pricing/validate-acces
       }
     }
 
-    const { error: updateError } = await chatSupabase
+    const { error: updateError } = await adminDB
       .from('onboarding_access_codes')
       .update(updates)
       .eq('id', accessCode.id);
@@ -1500,14 +1500,14 @@ app.get('/api/stripe/subscriptions', async (req, res) => {
 async function removeUserFromStripeUsageLog(userId) {
   if (!userId) return;
   try {
-    const { data: client } = await supabase
+    const { data: client } = await clientDB
       .from('clients')
       .select('user_code')
       .eq('user_id', userId)
       .maybeSingle();
     const userCode = client?.user_code;
     if (!userCode) return;
-    const { error } = await supabase
+    const { error } = await clientDB
       .from('stripe_usage_log')
       .delete()
       .eq('user_code', userCode);
@@ -1543,7 +1543,7 @@ app.post('/api/stripe/subscriptions/:subscriptionId/cancel', async (req, res) =>
     // Remove from stripe_usage_log so usage-based tracking stops
     const userId = subscription.metadata?.user_id;
     if (!userId) {
-      const { data: row } = await supabase.from('stripe_subscriptions').select('user_id').eq('stripe_subscription_id', subscriptionId).maybeSingle();
+      const { data: row } = await clientDB.from('stripe_subscriptions').select('user_id').eq('stripe_subscription_id', subscriptionId).maybeSingle();
       if (row?.user_id) await removeUserFromStripeUsageLog(row.user_id);
     } else {
       await removeUserFromStripeUsageLog(userId);
@@ -1763,7 +1763,7 @@ async function updateClientsSubscription(customerEmail, subscriptionStatus, subs
 
   try {
     // Find client by email
-    const { data: client, error: findError } = await supabase
+    const { data: client, error: findError } = await clientDB
       .from('clients')
       .select('id')
       .eq('email', customerEmail)
@@ -1780,7 +1780,7 @@ async function updateClientsSubscription(customerEmail, subscriptionStatus, subs
     }
 
     // Update client by id
-    const { error: updateError } = await supabase
+    const { error: updateError } = await clientDB
       .from('clients')
       .update({
         subscription_status: subscriptionStatus || 'none',
@@ -1802,16 +1802,16 @@ async function updateClientsSubscription(customerEmail, subscriptionStatus, subs
 
 // Helper function to update chat_users subscription info by email
 async function updateChatUserSubscription(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt) {
-  if (!chatSupabase || !customerEmail) {
-    if (!chatSupabase) {
-      console.warn('⚠️ chatSupabase client not configured, skipping chat_users update');
+  if (!adminDB || !customerEmail) {
+    if (!adminDB) {
+      console.warn('⚠️ adminDB client not configured, skipping chat_users update');
     }
     return;
   }
 
   try {
     // Find chat_user by email
-    const { data: chatUser, error: findError } = await chatSupabase
+    const { data: chatUser, error: findError } = await adminDB
       .from('chat_users')
       .select('id')
       .eq('email', customerEmail)
@@ -1823,7 +1823,7 @@ async function updateChatUserSubscription(customerEmail, subscriptionStatus, sub
     }
 
     // Update chat_user by id
-    const { error: updateError } = await chatSupabase
+    const { error: updateError } = await adminDB
       .from('chat_users')
       .update({
         subscription_status: subscriptionStatus,
@@ -2021,7 +2021,7 @@ Update the CURRENT MEAL PLAN to accommodate the USER MODIFICATION REQUEST. Ensur
 
 async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode = null) {
   try {
-    if (!chatSupabase) {
+    if (!adminDB) {
       console.warn('⚠️ Skipping async meal plan generation: chat database is not configured');
       return;
     }
@@ -2030,7 +2030,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode =
     let clientName = 'Client';
 
     if (userId) {
-      const { data: clientRecord, error: clientError } = await supabase
+      const { data: clientRecord, error: clientError } = await clientDB
         .from('clients')
         .select('user_code, full_name, first_name, last_name')
         .eq('user_id', userId)
@@ -2053,7 +2053,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode =
       return;
     }
 
-    const { data: chatUserData, error: chatUserError } = await chatSupabase
+    const { data: chatUserData, error: chatUserError } = await adminDB
       .from('chat_users')
       .select('daily_target_total_calories, macros, user_language, language, full_name')
       .eq('user_code', resolvedUserCode)
@@ -2077,7 +2077,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode =
     }
 
     // Avoid duplicate plans if Stripe retries webhook events.
-    const { data: existingPlans, error: existingPlansError } = await supabase
+    const { data: existingPlans, error: existingPlansError } = await clientDB
       .from('client_meal_plans')
       .select('id')
       .eq('user_code', resolvedUserCode)
@@ -2132,7 +2132,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode =
     const now = new Date().toISOString();
     const mealPlanName = `${clientName || 'Client'}'s Meal Plan`;
 
-    const { error: secondaryError } = await chatSupabase
+    const { error: secondaryError } = await adminDB
       .from('meal_plans_and_schemas')
       .insert({
         id: planId,
@@ -2151,7 +2151,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode =
 
     if (secondaryError) throw secondaryError;
 
-    const { error: mainError } = await supabase
+    const { error: mainError } = await clientDB
       .from('client_meal_plans')
       .insert({
         id: planId,
@@ -2167,7 +2167,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode =
       });
 
     if (mainError) {
-      await chatSupabase
+      await adminDB
         .from('meal_plans_and_schemas')
         .delete()
         .eq('id', planId);
@@ -2193,7 +2193,7 @@ async function handleCheckoutCompleted(session) {
     // If no userId but we have email, try to find user in clients table
     if (!userId && customerEmail) {
       console.log('🔍 No user_id found, searching for client by email:', customerEmail);
-      const { data: clientData } = await supabase
+      const { data: clientData } = await clientDB
         .from('clients')
         .select('user_id')
         .eq('email', customerEmail)
@@ -2222,7 +2222,7 @@ async function handleCheckoutCompleted(session) {
     
     console.log('💾 Saving payment to Supabase:', paymentData);
     
-    const { data, error: paymentError } = await supabase
+    const { data, error: paymentError } = await clientDB
       .from('stripe_payments')
       .insert([paymentData])
       .select();
@@ -2363,7 +2363,7 @@ async function handleSubscriptionCreated(subscription) {
     
     console.log('💾 Saving subscription to Supabase...');
     
-    const { data: insertedData, error: subscriptionError } = await supabase
+    const { data: insertedData, error: subscriptionError } = await clientDB
       .from('stripe_subscriptions')
       .insert([subscriptionData])
       .select();
@@ -2432,7 +2432,7 @@ async function handleSubscriptionUpdated(subscription) {
     console.log('Updating subscription for user:', userId);
     
     // Get existing subscription from database to get original start date
-    const { data: existingSubscription } = await supabase
+    const { data: existingSubscription } = await clientDB
       .from('stripe_subscriptions')
       .select('*')
       .eq('stripe_subscription_id', subscription.id)
@@ -2520,7 +2520,7 @@ async function handleSubscriptionUpdated(subscription) {
       updated_at: new Date().toISOString()
     };
     
-    const { error: updateError } = await supabase
+    const { error: updateError } = await clientDB
       .from('stripe_subscriptions')
       .update(updateData)
       .eq('stripe_subscription_id', subscription.id);
@@ -2608,7 +2608,7 @@ async function handleSubscriptionDeleted(subscription) {
     }
     
     // Update subscription status to cancelled
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await clientDB
       .from('stripe_subscriptions')
       .update({ 
         status: 'cancelled',
@@ -2624,7 +2624,7 @@ async function handleSubscriptionDeleted(subscription) {
       // Remove from stripe_usage_log so usage-based tracking is cleared
       let uid = subscription.metadata?.user_id;
       if (!uid) {
-        const { data: subRow } = await supabase.from('stripe_subscriptions').select('user_id').eq('stripe_subscription_id', subscription.id).maybeSingle();
+        const { data: subRow } = await clientDB.from('stripe_subscriptions').select('user_id').eq('stripe_subscription_id', subscription.id).maybeSingle();
         uid = subRow?.user_id;
       }
       if (uid) await removeUserFromStripeUsageLog(uid);
@@ -2679,7 +2679,7 @@ async function handlePaymentSucceeded(invoice) {
           created_at: new Date(invoice.created * 1000).toISOString()
         };
         
-        const { error: paymentError } = await supabase
+        const { error: paymentError } = await clientDB
           .from('stripe_payments')
           .insert([paymentData]);
         
@@ -2688,7 +2688,7 @@ async function handlePaymentSucceeded(invoice) {
           if (paymentError.code === '23503') {
             console.warn('⚠️ Foreign key constraint error. Retrying payment with null user_id...');
             paymentData.user_id = null;
-            const { error: retryError } = await supabase
+            const { error: retryError } = await clientDB
               .from('stripe_payments')
               .insert([paymentData]);
             
@@ -2705,7 +2705,7 @@ async function handlePaymentSucceeded(invoice) {
         }
         
         // Update subscription status to active if it was past_due
-        const { error: updateError } = await supabase
+        const { error: updateError } = await clientDB
           .from('stripe_subscriptions')
           .update({ 
             status: 'active',
@@ -2747,7 +2747,7 @@ async function handlePaymentFailed(invoice) {
           created_at: new Date(invoice.created * 1000).toISOString()
         };
         
-        const { error: paymentError } = await supabase
+        const { error: paymentError } = await clientDB
           .from('stripe_payments')
           .insert([paymentData]);
         
@@ -2756,7 +2756,7 @@ async function handlePaymentFailed(invoice) {
           if (paymentError.code === '23503') {
             console.warn('⚠️ Foreign key constraint error. Retrying failed payment with null user_id...');
             paymentData.user_id = null;
-            const { error: retryError } = await supabase
+            const { error: retryError } = await clientDB
               .from('stripe_payments')
               .insert([paymentData]);
             
@@ -2773,7 +2773,7 @@ async function handlePaymentFailed(invoice) {
         }
         
         // Update subscription status to past_due
-        const { error: updateError } = await supabase
+        const { error: updateError } = await clientDB
           .from('stripe_subscriptions')
           .update({ 
             status: 'past_due',
@@ -2808,7 +2808,7 @@ app.get('/api/user/user-code', async (req, res) => {
 
     console.log('🔍 Fetching user_code for email:', email);
 
-    const { data: clientData, error } = await supabase
+    const { data: clientData, error } = await clientDB
       .from('clients')
       .select('user_code')
       .eq('email', email)
@@ -2846,7 +2846,7 @@ app.get('/api/user/language', async (req, res) => {
 
     console.log('🌐 Fetching user language for user_id:', user_id);
 
-    const { data: clientData, error: clientError } = await supabase
+    const { data: clientData, error: clientError } = await clientDB
       .from('clients')
       .select('user_language')
       .eq('user_id', user_id)
@@ -2885,7 +2885,7 @@ app.get('/api/user/settings', async (req, res) => {
 
     console.log('⚙️ Fetching settings for user_code:', user_code);
 
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('clients')
       .select('show_calories, show_macros, portion_display, measurement_system, weight_unit, decimal_places')
       .eq('user_code', user_code)
@@ -2927,7 +2927,7 @@ app.post('/api/user/settings', async (req, res) => {
 
     console.log('💾 Updating settings for user_code:', user_code);
 
-    const { error } = await supabase
+    const { error } = await clientDB
       .from('clients')
       .update(settings)
       .eq('user_code', user_code);
@@ -2965,7 +2965,7 @@ app.get('/api/onboarding/client-data', async (req, res) => {
 
     console.log('📋 Fetching client data for user_id:', user_id);
 
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('clients')
       .select('*')
       .eq('user_id', user_id)
@@ -3002,13 +3002,13 @@ app.get('/api/onboarding/chat-user-meal-data', async (req, res) => {
       return res.status(400).json({ error: 'user_code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     console.log('📋 Fetching chat user meal data for user_code:', user_code);
 
-    const { data: chatData, error: chatError } = await chatSupabase
+    const { data: chatData, error: chatError } = await adminDB
       .from('chat_users')
       .select('number_of_meals, meal_plan_structure, first_meal_time, last_meal_time, client_preference')
       .eq('user_code', user_code)
@@ -3037,15 +3037,15 @@ app.get('/api/onboarding/chat-user-meal-data', async (req, res) => {
 });
 
 // Check if phone number exists
-// City search powered by GeoNames cities500 table living in chatSupabase.
+// City search powered by GeoNames cities500 table living in adminDB.
 // Returns a few candidates ordered by population so big cities win.
 // Hebrew/local names are matched via the comma-separated `alternatenames` column.
 app.get('/api/cities/search', async (req, res) => {
   try {
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(503).json({
         error: 'City search is unavailable',
-        message: 'chatSupabase is not configured on this server (CHAT_SUPABASE_URL / CHAT_SUPABASE_SERVICE_ROLE_KEY missing)'
+        message: 'adminDB is not configured on this server (CHAT_SUPABASE_URL / CHAT_SUPABASE_SERVICE_ROLE_KEY missing)'
       });
     }
 
@@ -3078,7 +3078,7 @@ app.get('/api/cities/search', async (req, res) => {
       `alternatenames.ilike.%${safe}%`
     ].join(',');
 
-    let query = chatSupabase
+    let query = adminDB
       .from('cities500')
       .select('geonameid, name, asciiname, alternatenames, country_code, latitude, longitude, timezone, population')
       .or(orFilter)
@@ -3116,7 +3116,7 @@ app.post('/api/onboarding/check-phone', async (req, res) => {
     console.log('📞 Checking phone existence:', phone);
 
     // Check in clients table
-    const { data: clientData, error: clientError } = await supabase
+    const { data: clientData, error: clientError } = await clientDB
       .from('clients')
       .select('phone, user_id')
       .eq('phone', phone)
@@ -3128,16 +3128,16 @@ app.post('/api/onboarding/check-phone', async (req, res) => {
     }
 
     // Check in chat_users table (if secondary DB is available)
-    if (chatSupabase) {
+    if (adminDB) {
       // Check phone_number column
-      const { data: chatUserDataByPhone } = await chatSupabase
+      const { data: chatUserDataByPhone } = await adminDB
         .from('chat_users')
         .select('phone_number, whatsapp_number, user_code')
         .eq('phone_number', phone)
         .maybeSingle();
 
       // Check whatsapp_number column
-      const { data: chatUserDataByWhatsApp } = await chatSupabase
+      const { data: chatUserDataByWhatsApp } = await adminDB
         .from('chat_users')
         .select('phone_number, whatsapp_number, user_code')
         .eq('whatsapp_number', phone)
@@ -3183,7 +3183,7 @@ app.post('/api/onboarding/update-client', async (req, res) => {
 
     console.log('💾 Updating client data for user_id:', user_id);
 
-    const { data: updateData, error: profileError } = await supabase
+    const { data: updateData, error: profileError } = await clientDB
       .from('clients')
       .update(clientData)
       .eq('user_id', user_id)
@@ -3220,14 +3220,14 @@ app.post('/api/onboarding/update-chat-user', async (req, res) => {
       return res.status(400).json({ error: 'chatUserData is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     console.log('💾 Updating chat user data for user_code:', user_code);
 
     // Find chat user by user_code
-    const { data: chatUser, error: chatUserError } = await chatSupabase
+    const { data: chatUser, error: chatUserError } = await adminDB
       .from('chat_users')
       .select('id')
       .eq('user_code', user_code)
@@ -3242,7 +3242,7 @@ app.post('/api/onboarding/update-chat-user', async (req, res) => {
     }
 
     // Update chat user
-    const { error: chatUpdateError } = await chatSupabase
+    const { error: chatUpdateError } = await adminDB
       .from('chat_users')
       .update(chatUserData)
       .eq('id', chatUser.id);
@@ -3471,7 +3471,7 @@ app.post('/api/whatsapp/send-welcome-message', async (req, res) => {
 
 // Shared: send WhatsApp welcome by user_id. Returns { success } or { success: false, status?, message? }.
 async function sendWhatsAppWelcomeByUserId(userId) {
-  const { data: client, error } = await supabase
+  const { data: client, error } = await clientDB
     .from('clients')
     .select('phone, user_language')
     .eq('user_id', userId)
@@ -3575,7 +3575,7 @@ app.get('/api/profile/meal-plan', async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('client_meal_plans')
       .select('*')
       .eq('user_code', userCode)
@@ -3602,7 +3602,7 @@ app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
       return res.status(400).json({ error: 'Plan ID is required' });
     }
 
-    const { data: planData, error: planFetchError } = await supabase
+    const { data: planData, error: planFetchError } = await clientDB
       .from('client_meal_plans')
       .select('id, user_code, meal_plan_name')
       .eq('id', planId)
@@ -3612,7 +3612,7 @@ app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
       return res.status(404).json({ error: 'Plan not found' });
     }
 
-    const { error } = await supabase
+    const { error } = await clientDB
       .from('client_meal_plans')
       .update({
         client_edited_meal_plan: null,
@@ -3622,11 +3622,11 @@ app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
 
     if (error) throw error;
 
-    if (chatSupabase) {
+    if (adminDB) {
       const now = new Date().toISOString();
       const selectedDayNumber = Number.isInteger(selectedDay) ? selectedDay : Number(selectedDay);
 
-      const { data: activePlans, error: activePlansError } = await chatSupabase
+      const { data: activePlans, error: activePlansError } = await adminDB
         .from('meal_plans_and_schemas')
         .select('id, active_days, created_at')
         .eq('user_code', planData.user_code)
@@ -3650,7 +3650,7 @@ app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
         : null;
 
       if (planToDelete?.id) {
-        const { error: deleteError } = await chatSupabase
+        const { error: deleteError } = await adminDB
           .from('meal_plans_and_schemas')
           .delete()
           .eq('id', planToDelete.id);
@@ -3658,7 +3658,7 @@ app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
         if (deleteError) throw deleteError;
       }
 
-      const { data: previousPlan, error: previousPlanError } = await chatSupabase
+      const { data: previousPlan, error: previousPlanError } = await adminDB
         .from('meal_plans_and_schemas')
         .select('id')
         .eq('user_code', planData.user_code)
@@ -3672,7 +3672,7 @@ app.post('/api/profile/meal-plan/clear-edited', async (req, res) => {
       if (previousPlanError) throw previousPlanError;
 
       if (previousPlan?.id) {
-        const { error: activateError } = await chatSupabase
+        const { error: activateError } = await adminDB
           .from('meal_plans_and_schemas')
           .update({
             status: 'active',
@@ -3704,7 +3704,7 @@ app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
     const today = new Date().toISOString();
     
     // 1. Update client_meal_plans table
-    const { data: planData, error: planError } = await supabase
+    const { data: planData, error: planError } = await clientDB
       .from('client_meal_plans')
       .select('user_code, dietitian_meal_plan, client_edited_meal_plan')
       .eq('id', planId)
@@ -3712,7 +3712,7 @@ app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
 
     if (planError) throw planError;
 
-    const { error: clientMealPlanError } = await supabase
+    const { error: clientMealPlanError } = await clientDB
       .from('client_meal_plans')
       .update({
         client_edited_meal_plan: mealPlan,
@@ -3723,11 +3723,11 @@ app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
     if (clientMealPlanError) throw clientMealPlanError;
 
     // 2. Update meal_plans_and_schemas table
-    if (chatSupabase && planData) {
+    if (adminDB && planData) {
       const userCodeToUse = userCode || planData.user_code;
       
       // Find the meal plan in meal_plans_and_schemas
-      const { data: schemaPlan, error: schemaFindError } = await chatSupabase
+      const { data: schemaPlan, error: schemaFindError } = await adminDB
         .from('meal_plans_and_schemas')
         .select('id, dietitian_meal_plan, client_edited_meal_plan')
         .eq('user_code', userCodeToUse)
@@ -3741,7 +3741,7 @@ app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
         // Determine which field to update (dietitian_meal_plan or client_edited_meal_plan)
         const updateField = schemaPlan.client_edited_meal_plan ? 'client_edited_meal_plan' : 'dietitian_meal_plan';
         
-        const { error: schemaUpdateError } = await chatSupabase
+        const { error: schemaUpdateError } = await adminDB
           .from('meal_plans_and_schemas')
           .update({
             [updateField]: mealPlan,
@@ -3756,10 +3756,10 @@ app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
     }
 
     // 3. Update chat_users table
-    if (chatSupabase && planData) {
+    if (adminDB && planData) {
       const userCodeToUse = userCode || planData.user_code;
       
-      const { data: chatUser, error: chatUserFindError } = await chatSupabase
+      const { data: chatUser, error: chatUserFindError } = await adminDB
         .from('chat_users')
         .select('id, meal_plan')
         .eq('user_code', userCodeToUse)
@@ -3767,7 +3767,7 @@ app.post('/api/profile/meal-plan/save-edited', async (req, res) => {
 
       if (!chatUserFindError && chatUser) {
         // Update meal_plan column in chat_users
-        const { error: chatUserUpdateError } = await chatSupabase
+        const { error: chatUserUpdateError } = await adminDB
           .from('chat_users')
           .update({
             meal_plan: mealPlan,
@@ -3796,11 +3796,11 @@ app.post('/api/profile/meal-plan/ai-update', async (req, res) => {
       return res.status(400).json({ error: 'planId and requestText are required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data: planData, error: planError } = await supabase
+    const { data: planData, error: planError } = await clientDB
       .from('client_meal_plans')
       .select('id, user_code, meal_plan_name, dietitian_id, daily_total_calories, macros_target, active_days, dietitian_meal_plan, client_edited_meal_plan, ai_plan_change_used, ai_plan_change_used_at')
       .eq('id', planId)
@@ -3832,12 +3832,12 @@ app.post('/api/profile/meal-plan/ai-update', async (req, res) => {
     }
 
     const [{ data: clientProfile }, { data: chatProfile }] = await Promise.all([
-      supabase
+      clientDB
         .from('clients')
         .select('food_allergies, dietary_preferences, medical_conditions, food_limitations, first_name, last_name, full_name')
         .eq('user_code', resolvedUserCode)
         .maybeSingle(),
-      chatSupabase
+      adminDB
         .from('chat_users')
         .select('food_allergies, recommendations, food_limitations, medical_conditions, nursing_status, client_preference, language, user_language, full_name')
         .eq('user_code', resolvedUserCode)
@@ -3865,7 +3865,7 @@ app.post('/api/profile/meal-plan/ai-update', async (req, res) => {
 
     const now = new Date().toISOString();
 
-    const { error: saveMainError } = await supabase
+    const { error: saveMainError } = await clientDB
       .from('client_meal_plans')
       .update({
         client_edited_meal_plan: updatedMealPlan,
@@ -3878,7 +3878,7 @@ app.post('/api/profile/meal-plan/ai-update', async (req, res) => {
 
     if (saveMainError) throw saveMainError;
 
-    const { data: activePlans, error: activePlanError } = await chatSupabase
+    const { data: activePlans, error: activePlanError } = await adminDB
       .from('meal_plans_and_schemas')
       .select('id, schema, active_days')
       .eq('user_code', resolvedUserCode)
@@ -3905,7 +3905,7 @@ app.post('/api/profile/meal-plan/ai-update', async (req, res) => {
       : null;
 
     if (planToExpire?.id) {
-      const { error: deactivateError } = await chatSupabase
+      const { error: deactivateError } = await adminDB
         .from('meal_plans_and_schemas')
         .update({
           status: 'expired',
@@ -3918,7 +3918,7 @@ app.post('/api/profile/meal-plan/ai-update', async (req, res) => {
     }
 
     const newMealPlanId = randomUUID();
-    const { error: createActiveError } = await chatSupabase
+    const { error: createActiveError } = await adminDB
       .from('meal_plans_and_schemas')
       .insert({
         id: newMealPlanId,
@@ -3954,7 +3954,7 @@ app.get('/api/profile/client', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('clients')
       .select('*')
       .eq('user_id', userId)
@@ -3979,7 +3979,7 @@ app.get('/api/profile/load', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('clients')
       .select('*')
       .eq('user_id', userId)
@@ -4004,11 +4004,11 @@ app.get('/api/profile/chat-user', async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('chat_users')
       .select('medical_conditions, client_preference, food_allergies, full_name, email, phone_number, region, city, timezone, age, gender, date_of_birth, language, subscription_status, subscription_type, subscription_expires_at, is_blocked, user_code, Activity_level, base_daily_total_calories, daily_target_total_calories, macros, height_cm, weight_kg')
       .eq('user_code', userCode)
@@ -4030,7 +4030,7 @@ app.get('/api/profile/chat-user', async (req, res) => {
 // linked clients row, so no query/body params are needed.
 app.get('/api/profile/chat-user/me', async (req, res) => {
   try {
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -4039,7 +4039,7 @@ app.get('/api/profile/chat-user/me', async (req, res) => {
       return res.status(404).json({ error: 'No user_code linked to this account' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('chat_users')
       .select('*')
       .eq('user_code', userCode)
@@ -4094,11 +4094,11 @@ app.get('/api/profile/meal-window', async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('chat_users')
       .select('first_meal_time, last_meal_time')
       .eq('user_code', userCode)
@@ -4137,7 +4137,7 @@ app.post('/api/profile/save', async (req, res) => {
     }
 
     // Check if record exists
-    const { data: existingData, error: checkError } = await supabase
+    const { data: existingData, error: checkError } = await clientDB
       .from('clients')
       .select('id')
       .eq('user_id', userId)
@@ -4146,13 +4146,13 @@ app.post('/api/profile/save', async (req, res) => {
     let result;
     if (!existingData) {
       // Insert new record
-      result = await supabase
+      result = await clientDB
         .from('clients')
         .insert(profileData)
         .select();
     } else {
       // Update existing record
-      result = await supabase
+      result = await clientDB
         .from('clients')
         .update(profileData)
         .eq('user_id', userId)
@@ -4177,12 +4177,12 @@ app.post('/api/profile/sync-chat-user', async (req, res) => {
       return res.status(400).json({ error: 'User code and chat user data are required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     // Get chat_users id
-    const { data: chatUser, error: chatUserError } = await chatSupabase
+    const { data: chatUser, error: chatUserError } = await adminDB
       .from('chat_users')
       .select('id')
       .eq('user_code', userCode)
@@ -4194,7 +4194,7 @@ app.post('/api/profile/sync-chat-user', async (req, res) => {
     }
 
     // Update chat_users
-    const { error } = await chatSupabase
+    const { error } = await adminDB
       .from('chat_users')
       .update(chatUserData)
       .eq('id', chatUser.id);
@@ -4216,7 +4216,7 @@ app.post('/api/profile/save-nutritional', async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -4242,7 +4242,7 @@ app.post('/api/profile/save-nutritional', async (req, res) => {
       return res.status(400).json({ error: 'No data to update' });
     }
 
-    const { error } = await chatSupabase
+    const { error } = await adminDB
       .from('chat_users')
       .update(updatePayload)
       .eq('user_code', userCode);
@@ -4273,7 +4273,7 @@ app.post('/api/profile/save-personal', async (req, res) => {
     }
 
     // Update clients table
-    const { error: clientError } = await supabase
+    const { error: clientError } = await clientDB
       .from('clients')
       .update(clientPayload)
       .eq('user_id', userId);
@@ -4281,13 +4281,13 @@ app.post('/api/profile/save-personal', async (req, res) => {
     if (clientError) throw clientError;
 
     // Sync to chat_users if userCode provided
-    if (userCode && chatSupabase) {
+    if (userCode && adminDB) {
       const chatPayload = {};
       if (region !== undefined) chatPayload.region = region || null;
       if (city !== undefined) chatPayload.city = city || null;
       if (timezone !== undefined) chatPayload.timezone = timezone || null;
 
-      const { error: chatError } = await chatSupabase
+      const { error: chatError } = await adminDB
         .from('chat_users')
         .update(chatPayload)
         .eq('user_code', userCode);
@@ -4321,7 +4321,7 @@ app.post('/api/profile/save-health', async (req, res) => {
     }
 
     // Update clients table
-    const { error: clientError } = await supabase
+    const { error: clientError } = await clientDB
       .from('clients')
       .update(clientPayload)
       .eq('user_id', userId);
@@ -4329,14 +4329,14 @@ app.post('/api/profile/save-health', async (req, res) => {
     if (clientError) throw clientError;
 
     // Sync to chat_users if userCode provided
-    if (userCode && chatSupabase) {
+    if (userCode && adminDB) {
       const chatPayload = {};
       if (dietaryPreferences !== undefined) chatPayload.client_preference = dietaryPreferences || null;
       if (foodAllergies !== undefined) chatPayload.food_allergies = foodAllergies || null;
       if (foodLimitations !== undefined) chatPayload.food_limitations = foodLimitations || null;
       if (medicalConditions !== undefined) chatPayload.medical_conditions = medicalConditions || null;
 
-      const { error: chatError } = await chatSupabase
+      const { error: chatError } = await adminDB
         .from('chat_users')
         .update(chatPayload)
         .eq('user_code', userCode);
@@ -4360,7 +4360,7 @@ app.post('/api/profile/save-image-url', async (req, res) => {
     }
 
     // Check if record exists
-    const { data: existingData, error: checkError } = await supabase
+    const { data: existingData, error: checkError } = await clientDB
       .from('clients')
       .select('id')
       .eq('user_id', userId)
@@ -4368,7 +4368,7 @@ app.post('/api/profile/save-image-url', async (req, res) => {
 
     if (!existingData) {
       // Insert new record with minimal data
-      const { error: insertError } = await supabase
+      const { error: insertError } = await clientDB
         .from('clients')
         .insert({
           user_id: userId,
@@ -4379,7 +4379,7 @@ app.post('/api/profile/save-image-url', async (req, res) => {
       if (insertError) throw insertError;
     } else {
       // Update existing record
-      const { error: updateError } = await supabase
+      const { error: updateError } = await clientDB
         .from('clients')
         .update({
           profile_image_url: imageUrl,
@@ -4405,7 +4405,7 @@ app.get('/api/profile/user-code', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('clients')
       .select('user_code')
       .eq('user_id', userId)
@@ -4435,7 +4435,7 @@ app.post('/api/profile/upload-image', async (req, res) => {
     }
 
     // Get user_code
-    const { data: clientData, error: clientError } = await supabase
+    const { data: clientData, error: clientError } = await clientDB
       .from('clients')
       .select('user_code')
       .eq('user_id', userId)
@@ -4460,7 +4460,7 @@ app.post('/api/profile/upload-image', async (req, res) => {
 
     // Upload to Supabase Storage
     const bucket = bucketName || process.env.REACT_APP_SUPABASE_STORAGE_BUCKET_NAME || 'profile-pictures';
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await clientDB.storage
       .from(bucket)
       .upload(filename, buffer, {
         contentType: 'image/jpeg',
@@ -4476,7 +4476,7 @@ app.post('/api/profile/upload-image', async (req, res) => {
     if (uploadError) throw uploadError;
 
     // Get public URL
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = clientDB.storage
       .from(bucket)
       .getPublicUrl(uploadData.path);
 
@@ -4495,12 +4495,12 @@ app.get('/api/profile/client-data-full', async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     // Load from chat_users
-    const { data: chatData, error: chatError } = await chatSupabase
+    const { data: chatData, error: chatError } = await adminDB
       .from('chat_users')
       .select('*')
       .eq('user_code', userCode)
@@ -4511,7 +4511,7 @@ app.get('/api/profile/client-data-full', async (req, res) => {
     }
 
     // Load from clients
-    const { data: clientsData, error: clientsError } = await supabase
+    const { data: clientsData, error: clientsError } = await clientDB
       .from('clients')
       .select('onboarding_completed')
       .eq('user_code', userCode)
@@ -4545,11 +4545,11 @@ app.post('/api/profile/meal-plan/create', async (req, res) => {
     const now = new Date().toISOString();
 
     // Save to meal_plans_and_schemas (secondary database)
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { error: secondaryError } = await chatSupabase
+    const { error: secondaryError } = await adminDB
       .from('meal_plans_and_schemas')
       .insert({
         id: planId,
@@ -4569,7 +4569,7 @@ app.post('/api/profile/meal-plan/create', async (req, res) => {
     if (secondaryError) throw secondaryError;
 
     // Save to client_meal_plans (main database)
-    const { error: mainError } = await supabase
+    const { error: mainError } = await clientDB
       .from('client_meal_plans')
       .insert({
         id: planId,
@@ -4586,7 +4586,7 @@ app.post('/api/profile/meal-plan/create', async (req, res) => {
 
     if (mainError) {
       // Rollback secondary save
-      await chatSupabase
+      await adminDB
         .from('meal_plans_and_schemas')
         .delete()
         .eq('id', planId);
@@ -4608,11 +4608,11 @@ app.get('/api/profile/provider', async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('chat_users')
       .select('provider_id')
       .eq('user_code', userCode)
@@ -4637,11 +4637,11 @@ app.get('/api/profile/system-message-exists', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    let query = chatSupabase
+    let query = adminDB
       .from('system_messages')
       .select('id')
       .eq('directed_to', providerId)
@@ -4669,7 +4669,7 @@ app.get('/api/profile/system-message-exists', async (req, res) => {
 
     // Backward compatibility: if checking by user_id found nothing, also check legacy messages by user_code in content.
     if ((!data || data.length === 0) && userId && userCode) {
-      let fallbackQuery = chatSupabase
+      let fallbackQuery = adminDB
         .from('system_messages')
         .select('id')
         .eq('directed_to', providerId)
@@ -4713,11 +4713,11 @@ app.post('/api/profile/system-message', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('system_messages')
       .insert({
         title,
@@ -4747,7 +4747,7 @@ app.post('/api/profile/update-language', async (req, res) => {
       return res.status(400).json({ error: 'User code and language are required' });
     }
 
-    const { error } = await supabase
+    const { error } = await clientDB
       .from('clients')
       .update({ user_language: language })
       .eq('user_code', userCode);
@@ -4778,7 +4778,7 @@ app.post('/api/landing/validate', async (req, res) => {
 
   try {
     // 1. Fetch from profiles + join companies (Explicitly requesting the new config JSONB column)
-    const { data: profile, error: profileErr } = await chatSupabase
+    const { data: profile, error: profileErr } = await adminDB
       .from('profiles')
       .select('name, role, company_id, companies(name, config)')
       .eq('id', managerId)
@@ -4803,7 +4803,7 @@ app.post('/api/landing/validate', async (req, res) => {
 
     // 2. Fetch campaign metrics using the exact registration_rules mapping columns
     if (linkId) {
-      const { data: rule, error: ruleErr } = await chatSupabase
+      const { data: rule, error: ruleErr } = await adminDB
         .from('registration_rules')
         .select('max_slots, current_count, expires_at, is_active')
         .eq('link_id', linkId) // Matching your schema constraint unique (link_id)
@@ -4873,12 +4873,12 @@ app.get('/api/food-logs', assertOwnUserCode(), async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     // Get user_id from chat_users
-    const { data: userData, error: userError } = await chatSupabase
+    const { data: userData, error: userError } = await adminDB
       .from('chat_users')
       .select('id')
       .eq('user_code', userCode)
@@ -4889,7 +4889,7 @@ app.get('/api/food-logs', assertOwnUserCode(), async (req, res) => {
     }
 
     // Get food logs (ordered by log_date then created_at so display is by log date)
-    let query = chatSupabase
+    let query = adminDB
       .from('food_logs')
       .select('*')
       .eq('user_id', userData.id)
@@ -4918,12 +4918,12 @@ app.post('/api/food-logs', assertOwnUserCode(), async (req, res) => {
       return res.status(400).json({ error: 'User code and food log data are required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     // Get user_id from chat_users
-    const { data: userData, error: userError } = await chatSupabase
+    const { data: userData, error: userError } = await adminDB
       .from('chat_users')
       .select('id')
       .eq('user_code', userCode)
@@ -4946,7 +4946,7 @@ app.post('/api/food-logs', assertOwnUserCode(), async (req, res) => {
     if (foodLogData.total_carbs_g !== undefined) insertData.total_carbs_g = foodLogData.total_carbs_g;
     if (foodLogData.total_fat_g !== undefined) insertData.total_fat_g = foodLogData.total_fat_g;
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('food_logs')
       .insert([insertData])
       .select();
@@ -4969,7 +4969,7 @@ app.put('/api/food-logs/:id', async (req, res) => {
       return res.status(400).json({ error: 'Food log data is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -4992,7 +4992,7 @@ app.put('/api/food-logs/:id', async (req, res) => {
     if (foodLogData.created_at !== undefined) updateData.created_at = foodLogData.created_at;
     if (foodLogData.updated_at !== undefined) updateData.updated_at = foodLogData.updated_at;
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('food_logs')
       .update(updateData)
       .eq('id', id)
@@ -5011,7 +5011,7 @@ app.delete('/api/food-logs/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -5019,7 +5019,7 @@ app.delete('/api/food-logs/:id', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('food_logs')
       .delete()
       .eq('id', id)
@@ -5872,12 +5872,12 @@ app.post('/api/calendar-events', assertOwnUserCode(), async (req, res) => {
       return res.status(400).json({ error: 'event.event_date must be a valid ISO-8601 date string' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     // Resolve chat_users.id from user_code; same pattern used by /api/food-logs.
-    const { data: userData, error: userError } = await chatSupabase
+    const { data: userData, error: userError } = await adminDB
       .from('chat_users')
       .select('id, user_code')
       .eq('user_code', userCode)
@@ -5904,7 +5904,7 @@ app.post('/api/calendar-events', assertOwnUserCode(), async (req, res) => {
       insertData.description = String(event.description);
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('calendar_events')
       .insert([insertData])
       .select()
@@ -5939,7 +5939,7 @@ app.put('/api/calendar-events/:id', async (req, res) => {
       return res.status(400).json({ error: 'event payload is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -5977,7 +5977,7 @@ app.put('/api/calendar-events/:id', async (req, res) => {
       return res.status(400).json({ error: 'No editable fields provided' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('calendar_events')
       .update(updateData)
       .eq('event_id', id)
@@ -6005,7 +6005,7 @@ app.delete('/api/calendar-events/:id', async (req, res) => {
     if (!id) {
       return res.status(400).json({ error: 'Calendar event id is required' });
     }
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -6013,7 +6013,7 @@ app.delete('/api/calendar-events/:id', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('calendar_events')
       .delete()
       .eq('event_id', id)
@@ -6037,10 +6037,10 @@ app.get('/api/daily-xp/today', assertOwnUserCode(), async (req, res) => {
     if (!userCode) {
       return res.status(400).json({ error: 'User code is required' });
     }
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
-    const { data: userData, error: userError } = await chatSupabase
+    const { data: userData, error: userError } = await adminDB
       .from('chat_users')
       .select('id')
       .eq('user_code', userCode)
@@ -6049,7 +6049,7 @@ app.get('/api/daily-xp/today', assertOwnUserCode(), async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('view_user_daily_xp')
       .select('total_xp, rank_title, actual_cals, target_cals')
       .eq('user_id', userData.id)
@@ -6073,10 +6073,10 @@ app.get('/api/daily-xp/weekly', assertOwnUserCode(), async (req, res) => {
     if (!userCode) {
       return res.status(400).json({ error: 'User code is required' });
     }
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
-    const { data: userData, error: userError } = await chatSupabase
+    const { data: userData, error: userError } = await adminDB
       .from('chat_users')
       .select('id')
       .eq('user_code', userCode)
@@ -6084,7 +6084,7 @@ app.get('/api/daily-xp/weekly', assertOwnUserCode(), async (req, res) => {
     if (userError || !userData) {
       return res.status(404).json({ error: 'User not found' });
     }
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('view_user_daily_xp')
       .select('log_date, total_xp, rank_title')
       .eq('user_id', userData.id)
@@ -6106,12 +6106,12 @@ app.get('/api/chat-messages', assertOwnUserCode(), async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     // Get user_id from chat_users
-    const { data: userData, error: userError } = await chatSupabase
+    const { data: userData, error: userError } = await adminDB
       .from('chat_users')
       .select('id')
       .eq('user_code', userCode)
@@ -6122,7 +6122,7 @@ app.get('/api/chat-messages', assertOwnUserCode(), async (req, res) => {
     }
 
     // Get conversations
-    const { data: conversations, error: conversationsError } = await chatSupabase
+    const { data: conversations, error: conversationsError } = await adminDB
       .from('chat_conversations')
       .select('id')
       .eq('user_id', userData.id)
@@ -6136,7 +6136,7 @@ app.get('/api/chat-messages', assertOwnUserCode(), async (req, res) => {
 
     const conversationIds = conversations.map(conv => conv.id);
     
-    let query = chatSupabase
+    let query = adminDB
       .from('chat_messages')
       .select('*')
       .in('conversation_id', conversationIds);
@@ -6165,12 +6165,12 @@ app.post('/api/chat-messages', assertOwnUserCode(), async (req, res) => {
       return res.status(400).json({ error: 'User code and message data are required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     // Get user_id from chat_users
-    const { data: userData, error: userError } = await chatSupabase
+    const { data: userData, error: userError } = await adminDB
       .from('chat_users')
       .select('id')
       .eq('user_code', userCode)
@@ -6181,7 +6181,7 @@ app.post('/api/chat-messages', assertOwnUserCode(), async (req, res) => {
     }
 
     // Get or create conversation
-    let { data: conversation, error: conversationError } = await chatSupabase
+    let { data: conversation, error: conversationError } = await adminDB
       .from('chat_conversations')
       .select('id')
       .eq('user_id', userData.id)
@@ -6190,7 +6190,7 @@ app.post('/api/chat-messages', assertOwnUserCode(), async (req, res) => {
       .maybeSingle();
 
     if (!conversation) {
-      const { data: newConversation, error: createError } = await chatSupabase
+      const { data: newConversation, error: createError } = await adminDB
         .from('chat_conversations')
         .insert([{
           user_id: userData.id,
@@ -6219,7 +6219,7 @@ app.post('/api/chat-messages', assertOwnUserCode(), async (req, res) => {
       messageInsert.content = messageData.content;
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('chat_messages')
       .insert([messageInsert])
       .select();
@@ -6240,11 +6240,11 @@ app.get('/api/weight-logs', assertOwnUserCode(), async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('weight_logs')
       .select('*')
       .eq('user_code', userCode)
@@ -6266,7 +6266,7 @@ app.post('/api/weight-logs', assertOwnUserCode(), async (req, res) => {
       return res.status(400).json({ error: 'User code and weight log data are required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -6301,7 +6301,7 @@ app.post('/api/weight-logs', assertOwnUserCode(), async (req, res) => {
       insertData.height_cm = parseFloat(weightLogData.height_cm);
     }
     
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('weight_logs')
       .insert([insertData])
       .select();
@@ -6322,7 +6322,7 @@ app.get('/api/foods/search', async (req, res) => {
       return res.status(400).json({ error: 'Valid search query is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -6340,7 +6340,7 @@ app.get('/api/foods/search', async (req, res) => {
 
     // 3. Build the Database Query
     // We select specific columns to reduce payload size
-    let dbQuery = chatSupabase
+    let dbQuery = adminDB
       .from('ingridientsroee')
       .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g');
 
@@ -6421,7 +6421,7 @@ app.get('/api/foods/search', async (req, res) => {
 //       return res.status(400).json({ error: 'Search query is required' });
 //     }
 
-//     if (!chatSupabase) {
+//     if (!adminDB) {
 //       return res.status(500).json({ error: 'Chat database not configured' });
 //     }
 
@@ -6435,7 +6435,7 @@ app.get('/api/foods/search', async (req, res) => {
 //       const containsPattern = `%${word}%`;
 //       const searchColumn = isHebrewQuery ? 'name' : 'english_name';
       
-//       const { data: startsWithData } = await chatSupabase
+//       const { data: startsWithData } = await adminDB
 //         .from('ingridientsroee')
 //         .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
 //         .ilike(searchColumn, startsWithPattern)
@@ -6446,7 +6446,7 @@ app.get('/api/foods/search', async (req, res) => {
 //       }
       
 //       if (allData.length < 20) {
-//         const { data: containsData } = await chatSupabase
+//         const { data: containsData } = await adminDB
 //           .from('ingridientsroee')
 //           .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
 //           .ilike(searchColumn, containsPattern)
@@ -6464,7 +6464,7 @@ app.get('/api/foods/search', async (req, res) => {
 //         `${searchColumn}.ilike.%${word}%`
 //       );
       
-//       const { data: wordsData } = await chatSupabase
+//       const { data: wordsData } = await adminDB
 //         .from('ingridientsroee')
 //         .select('id, name, english_name, calories_energy, protein_g, fat_g, carbohydrates_g')
 //         .or(wordsConditions.join(','))
@@ -6509,11 +6509,11 @@ app.get('/api/foods/search', async (req, res) => {
 // Get companies with managers
 app.get('/api/companies', async (req, res) => {
   try {
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('companies')
       .select('id, name, config, managers:profiles!profiles_company_id_fkey(id, name, role)')
       .order('name', { ascending: true });
@@ -6536,18 +6536,18 @@ app.get('/api/companies', async (req, res) => {
 
 // Get client company assignment
 app.get('/api/client-company-assignment', async (req, res) => {
-  console.log("Supabase Key Used:", chatSupabaseServiceRoleKey ? "Key exists" : "Key missing");
+  console.log("AdminDB Key Used:", adminDBServiceRoleKey ? "Key exists" : "Key missing");
   try {
     const { userCode } = req.query;
     if (!userCode) {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data: chatUserData, error: chatUserError } = await chatSupabase
+    const { data: chatUserData, error: chatUserError } = await adminDB
       .from('chat_users')
       .select('provider_id')
       .eq('user_code', userCode)
@@ -6566,7 +6566,7 @@ app.get('/api/client-company-assignment', async (req, res) => {
       });
     }
 
-    const { data: providerData, error: providerError } = await chatSupabase
+    const { data: providerData, error: providerError } = await adminDB
       .from('profiles')
       .select('id, name, company_id')
       .eq('id', providerId)
@@ -6576,7 +6576,7 @@ app.get('/api/client-company-assignment', async (req, res) => {
 
     let companyData = null;
     if (providerData?.company_id) {
-      const { data: companyRow, error: companyError } = await chatSupabase
+      const { data: companyRow, error: companyError } = await adminDB
         .from('companies')
         .select('id, name, config')
         .eq('id', providerData.company_id)
@@ -6607,14 +6607,14 @@ app.post('/api/assign-client-company', async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     let managerId = null;
 
     if (companyId) {
-      const { data: manager, error: managerError } = await chatSupabase
+      const { data: manager, error: managerError } = await adminDB
         .from('profiles')
         .select('id')
         .eq('company_id', companyId)
@@ -6632,7 +6632,7 @@ app.post('/api/assign-client-company', async (req, res) => {
       managerId = manager.id;
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('chat_users')
       .update({ provider_id: managerId })
       .eq('user_code', userCode)
@@ -6655,11 +6655,11 @@ app.get('/api/training-plan', async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('training_plans')
       .select('*')
       .eq('user_code', userCode)
@@ -6684,11 +6684,11 @@ app.get('/api/meal-plan', assertOwnUserCode(), async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('meal_plans_and_schemas')
       .select('*')
       .eq('user_code', userCode)
@@ -6707,11 +6707,11 @@ app.get('/api/meal-plan', assertOwnUserCode(), async (req, res) => {
 // Get meal plan schemas
 app.get('/api/meal-plan-schemas', async (req, res) => {
   try {
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('meal_plans_and_schemas')
       .select('*')
       .eq('record_type', 'schema')
@@ -6733,11 +6733,11 @@ app.post('/api/meal-plan', async (req, res) => {
       return res.status(400).json({ error: 'User code and meal plan data are required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('meal_plans_and_schemas')
       .insert([{
         record_type: 'meal_plan',
@@ -6775,11 +6775,11 @@ app.put('/api/meal-plan/:id', async (req, res) => {
       return res.status(400).json({ error: 'Meal plan data is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('meal_plans_and_schemas')
       .update({
         meal_plan_name: mealPlanData.meal_plan_name,
@@ -6812,11 +6812,11 @@ app.get('/api/meal-plan-history', assertOwnUserCode(), async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('meal_plans_and_schemas')
       .select('*')
       .eq('user_code', userCode)
@@ -6839,11 +6839,11 @@ app.get('/api/messages', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('messages')
       .select('*')
       .eq('user_id', userId)
@@ -6865,11 +6865,11 @@ app.post('/api/messages', async (req, res) => {
       return res.status(400).json({ error: 'User ID and message data are required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('messages')
       .insert([{
         user_id: userId,
@@ -6891,11 +6891,11 @@ app.put('/api/messages/:id/read', async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('messages')
       .update({ read_at: new Date().toISOString() })
       .eq('id', id)
@@ -6914,11 +6914,11 @@ app.get('/api/foods/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('ingridientsroee')
       .select('*')
       .eq('id', id)
@@ -6940,17 +6940,17 @@ app.get('/api/debug/meal-plans', async (req, res) => {
       return res.status(400).json({ error: 'User code is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
-    const { data: allPlans, error: allError } = await chatSupabase
+    const { data: allPlans, error: allError } = await adminDB
       .from('meal_plans_and_schemas')
       .select('*')
       .eq('user_code', userCode)
       .eq('record_type', 'meal_plan');
 
-    const { data: allPlansInDb, error: allDbError } = await chatSupabase
+    const { data: allPlansInDb, error: allDbError } = await adminDB
       .from('meal_plans_and_schemas')
       .select('user_code, status, record_type, meal_plan_name')
       .eq('record_type', 'meal_plan')
@@ -6975,10 +6975,10 @@ app.post('/api/db/registration-links/find', async (req, res) => {
       return res.status(400).json({ error: 'Either link_id or manager_id is required' });
     }
     // registration_rules lives in the secondary (chat) Supabase project
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(503).json({ error: 'Registration links require CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
     }
-    const regDb = chatSupabase;
+    const regDb = adminDB;
     let row = null;
     if (link_id) {
       const { data, error } = await regDb
@@ -7013,10 +7013,10 @@ app.get('/api/db/registration-links/find', async (req, res) => {
     if (!link_id && !manager_id) {
       return res.status(400).json({ error: 'Either link_id or manager_id is required (query: ?link_id= or ?manager_id=)' });
     }
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(503).json({ error: 'Registration links require CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
     }
-    const regDb = chatSupabase;
+    const regDb = adminDB;
     let row = null;
     if (link_id) {
       const { data, error } = await regDb.from('registration_rules')
@@ -7041,10 +7041,10 @@ app.post('/api/db/registration-links/:idOrLinkId/increment', async (req, res) =>
   try {
     const { idOrLinkId } = req.params;
     if (!idOrLinkId) return res.status(400).json({ error: 'idOrLinkId is required' });
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(503).json({ error: 'Registration links require CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY' });
     }
-    const regDb = chatSupabase;
+    const regDb = adminDB;
     const isNumericId = /^\d+$/.test(String(idOrLinkId));
     let q = regDb.from('registration_rules').select('id, current_count');
     if (isNumericId) q = q.eq('id', parseInt(idOrLinkId, 10));
@@ -7124,8 +7124,8 @@ function validateHealthEvent(raw, idx) {
 }
 app.post('/api/health/ingest', async (req, res) => {
   try {
-    if (!chatSupabase) {
-      console.error('[health/ingest] chatSupabase not configured');
+    if (!adminDB) {
+      console.error('[health/ingest] adminDB not configured');
       return res.status(503).json({ error: 'Health storage not configured' });
     }
 
@@ -7164,7 +7164,7 @@ app.post('/api/health/ingest', async (req, res) => {
       payload: e.payload,
     }));
 
-    const { error: insertErr } = await chatSupabase
+    const { error: insertErr } = await adminDB
       .from('user_health_events')
       .upsert(eventRows, {
         onConflict: 'user_id,metric_type,start_time,end_time',
@@ -7200,7 +7200,7 @@ app.post('/api/health/ingest', async (req, res) => {
     }
 
     const summaryRows = Array.from(summaryMap.values());
-    const { error: summaryErr } = await chatSupabase
+    const { error: summaryErr } = await adminDB
       .from('user_health_daily_summary')
       .upsert(summaryRows, { onConflict: 'user_id,date,metric_type' });
 
@@ -7226,7 +7226,7 @@ app.post('/api/health/ingest', async (req, res) => {
 // ===================================================================
 app.get('/api/health/summary', async (req, res) => {
   try {
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(503).json({ error: 'Health storage not configured' });
     }
 
@@ -7242,7 +7242,7 @@ app.get('/api/health/summary', async (req, res) => {
       return res.status(400).json({ error: 'start_date / end_date must be YYYY-MM-DD' });
     }
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('user_health_daily_summary')
       .select('date, metric_type, total_value, unit, sample_count, user_code')
       .eq('user_id', userId)
@@ -7284,7 +7284,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
     // Check if email already exists
     const normalizedEmail = email.toLowerCase().trim();
-    const { data: existingClient } = await supabase
+    const { data: existingClient } = await clientDB
       .from('clients')
       .select('email')
       .eq('email', normalizedEmail)
@@ -7299,7 +7299,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
     // Resolve registration link: #d=base64(JSON{link_id,manager_id,...}) or #d=base64(manager_id) or legacy integer id.
     // registration_rules is in the secondary (chat) Supabase project only.
-    const regDb = chatSupabase;
+    const regDb = adminDB;
     let managerId = null;
     let registrationRule = null;
     let linkIdFromToken = null;
@@ -7348,8 +7348,8 @@ app.post('/api/auth/signup', async (req, res) => {
           if (!row.is_active) return res.status(400).json({ error: 'This registration link is no longer active', code: 400 });
           if (row.expires_at && new Date(row.expires_at) < new Date()) return res.status(400).json({ error: 'This registration link has expired', code: 400 });
           if (row.max_slots != null && (row.current_count || 0) >= row.max_slots) return res.status(400).json({ error: `This registration link has reached the maximum number of slots (${row.max_slots})`, code: 400 });
-          if (chatSupabase) {
-            const { data: managerExists, error: me } = await chatSupabase.from('profiles').select('id').eq('id', row.manager_id).maybeSingle();
+          if (adminDB) {
+            const { data: managerExists, error: me } = await adminDB.from('profiles').select('id').eq('id', row.manager_id).maybeSingle();
             if (me || !managerExists) return res.status(400).json({ error: 'Invalid manager ID in registration link', code: 400 });
           }
           registrationRule = row;
@@ -7372,7 +7372,7 @@ app.post('/api/auth/signup', async (req, res) => {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         
         if (uuidRegex.test(decodedToken)) {
-          const { data: invitationData } = await supabase
+          const { data: invitationData } = await adminDB
             .from('waiting_list')
             .select('id, email, invitation_used_at')
             .eq('invitation_token', decodedToken)
@@ -7475,7 +7475,7 @@ app.post('/api/auth/signup', async (req, res) => {
         code += letters.charAt(Math.floor(Math.random() * letters.length));
       }
 
-      const { data: codeCheck } = await supabase
+      const { data: codeCheck } = await clientDB
         .from('clients')
         .select('user_code')
         .eq('user_code', code)
@@ -7510,9 +7510,9 @@ app.post('/api/auth/signup', async (req, res) => {
       console.log('✅ Using provided provider ID:', finalProviderId);
     } else {
       // Get default provider
-      if (chatSupabase) {
+      if (adminDB) {
         const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
-        const { data: defaultManagerData } = await chatSupabase
+        const { data: defaultManagerData } = await adminDB
           .from('profiles')
           .select('id')
           .eq('company_id', betterChoiceCompanyId)
@@ -7545,7 +7545,7 @@ app.post('/api/auth/signup', async (req, res) => {
       status: 'active'
     };
 
-    const { data: clientData, error: clientError } = await supabase
+    const { data: clientData, error: clientError } = await clientDB
       .from('clients')
       .insert([clientInsertData])
       .select();
@@ -7562,7 +7562,7 @@ app.post('/api/auth/signup', async (req, res) => {
     let chatUserCreated = false;
     let chatUserDataResult = null;
 
-    if (chatSupabase && clientData && clientData[0]) {
+    if (adminDB && clientData && clientData[0]) {
       try {
         const chatUserData = {
           user_code: userCode,
@@ -7578,7 +7578,7 @@ app.post('/api/auth/signup', async (req, res) => {
           created_at: new Date().toISOString()
         };
 
-        const { data: chatUserResult, error: chatUserError } = await chatSupabase
+        const { data: chatUserResult, error: chatUserError } = await adminDB
           .from('chat_users')
           .insert([chatUserData])
           .select();
@@ -7600,7 +7600,7 @@ app.post('/api/auth/signup', async (req, res) => {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         
         if (uuidRegex.test(decodedToken)) {
-          await supabase
+          await adminDB
             .from('waiting_list')
             .update({ 
               invitation_used_at: new Date().toISOString()
@@ -7672,7 +7672,7 @@ app.post('/api/auth/login', async (req, res) => {
     // Fetch user's language preference directly from database
     let languageData = null;
     try {
-      const { data: clientData, error: clientError } = await supabase
+      const { data: clientData, error: clientError } = await clientDB
         .from('clients')
         .select('user_language')
         .eq('user_id', data.user.id)
@@ -7716,7 +7716,7 @@ app.post('/api/auth/check-email', async (req, res) => {
     const normalizedEmail = email.toLowerCase();
     
     // Check PRIMARY database (clients table)
-    const { data: primaryData, error: primaryError } = await supabase
+    const { data: primaryData, error: primaryError } = await clientDB
       .from('clients')
       .select('email')
       .eq('email', normalizedEmail)
@@ -7731,8 +7731,8 @@ app.post('/api/auth/check-email', async (req, res) => {
     }
 
     // Check SECONDARY database (chat_users table)
-    if (chatSupabase) {
-      const { data: secondaryData, error: secondaryError } = await chatSupabase
+    if (adminDB) {
+      const { data: secondaryData, error: secondaryError } = await adminDB
         .from('chat_users')
         .select('email')
         .eq('email', normalizedEmail)
@@ -7763,7 +7763,7 @@ app.post('/api/auth/check-phone', async (req, res) => {
     }
 
     // Check PRIMARY database (clients table)
-    const { data: primaryData, error: primaryError } = await supabase
+    const { data: primaryData, error: primaryError } = await clientDB
       .from('clients')
       .select('phone')
       .eq('phone', phone)
@@ -7778,8 +7778,8 @@ app.post('/api/auth/check-phone', async (req, res) => {
     }
 
     // Check SECONDARY database (chat_users table)
-    if (chatSupabase) {
-      const { data: secondaryDataByPhone, error: secondaryError1 } = await chatSupabase
+    if (adminDB) {
+      const { data: secondaryDataByPhone, error: secondaryError1 } = await adminDB
         .from('chat_users')
         .select('phone_number, whatsapp_number')
         .eq('phone_number', phone)
@@ -7793,7 +7793,7 @@ app.post('/api/auth/check-phone', async (req, res) => {
         return res.json({ exists: true });
       }
 
-      const { data: secondaryDataByWhatsApp, error: secondaryError2 } = await chatSupabase
+      const { data: secondaryDataByWhatsApp, error: secondaryError2 } = await adminDB
         .from('chat_users')
         .select('phone_number, whatsapp_number')
         .eq('whatsapp_number', phone)
@@ -7824,7 +7824,7 @@ app.post('/api/auth/check-user-code', async (req, res) => {
     }
 
     // Check PRIMARY database
-    const { data: primaryData, error: primaryError } = await supabase
+    const { data: primaryData, error: primaryError } = await clientDB
       .from('clients')
       .select('user_code')
       .eq('user_code', userCode)
@@ -7839,8 +7839,8 @@ app.post('/api/auth/check-user-code', async (req, res) => {
     }
 
     // Check SECONDARY database
-    if (chatSupabase) {
-      const { data: secondaryData, error: secondaryError } = await chatSupabase
+    if (adminDB) {
+      const { data: secondaryData, error: secondaryError } = await adminDB
         .from('chat_users')
         .select('user_code')
         .eq('user_code', userCode)
@@ -7871,7 +7871,7 @@ app.get('/api/auth/check-registration-rule', async (req, res) => {
       return res.status(400).json({ error: 'Token is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -7884,7 +7884,7 @@ app.get('/api/auth/check-registration-rule', async (req, res) => {
       
       if (!isNaN(integerId) && integerId > 0) {
         // Look up by ID
-        const { data, error } = await chatSupabase
+        const { data, error } = await adminDB
           .from('registration_rules')
           .select('id, manager_id, max_slots, current_count, expires_at, is_active')
           .eq('id', integerId)
@@ -7895,7 +7895,7 @@ app.get('/api/auth/check-registration-rule', async (req, res) => {
         }
       } else {
         // Look up by manager_id (VARCHAR)
-        const { data, error } = await chatSupabase
+        const { data, error } = await adminDB
           .from('registration_rules')
           .select('id, manager_id, max_slots, current_count, expires_at, is_active')
           .eq('manager_id', decodedToken)
@@ -7967,13 +7967,13 @@ app.get('/api/auth/check-registration-rule', async (req, res) => {
 // Get default provider (company manager)
 app.get('/api/auth/default-provider', async (req, res) => {
   try {
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
     
-    const { data: managerData, error: managerError } = await chatSupabase
+    const { data: managerData, error: managerError } = await adminDB
       .from('profiles')
       .select('id')
       .eq('company_id', betterChoiceCompanyId)
@@ -8005,7 +8005,7 @@ app.post('/api/auth/create-client', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const { data: authUserData, error: authUserError } = await supabase.auth.admin.getUserById(userId);
+    const { data: authUserData, error: authUserError } = await clientDB.auth.admin.getUserById(userId);
     if (authUserError || !authUserData?.user) {
       return res.status(400).json({ error: 'Invalid user' });
     }
@@ -8013,7 +8013,7 @@ app.post('/api/auth/create-client', async (req, res) => {
     // Idempotency: if a row already exists for this auth user, return it instead of
     // failing. Bootstrap-from-OAuth-callback may race with the OnboardingModal's own
     // create path, and the client expects a 2xx with the existing row in that case.
-    const { data: existingClient } = await supabase
+    const { data: existingClient } = await clientDB
       .from('clients')
       .select('*')
       .eq('user_id', userId)
@@ -8037,7 +8037,7 @@ app.post('/api/auth/create-client', async (req, res) => {
       status: 'active'
     };
 
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('clients')
       .insert([clientInsertData])
       .select();
@@ -8046,7 +8046,7 @@ app.post('/api/auth/create-client', async (req, res) => {
 
     // Resolve registration link from invitationToken/managerLinkData (OAuth e.g. Google signup) and increment current_count.
     // registration_rules is in the secondary (chat) Supabase project only.
-    const regDb = chatSupabase;
+    const regDb = adminDB;
     let registrationRule = null;
     let linkIdFromToken = null;
     let managerIdFromToken = null;
@@ -8112,7 +8112,7 @@ app.post('/api/auth/create-client', async (req, res) => {
     let chatUserCreated = false;
     let chatUserDataResult = null;
     
-    if (chatSupabase && data && data[0]) {
+    if (adminDB && data && data[0]) {
       try {
         const chatUserData = {
           user_code: userCode,
@@ -8128,7 +8128,7 @@ app.post('/api/auth/create-client', async (req, res) => {
           created_at: new Date().toISOString()
         };
 
-        const { data: chatUserResult, error: chatUserError } = await chatSupabase
+        const { data: chatUserResult, error: chatUserError } = await adminDB
           .from('chat_users')
           .insert([chatUserData])
           .select();
@@ -8162,7 +8162,7 @@ app.get('/api/auth/client/:userId', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('clients')
       .select('*')
       .eq('user_id', userId)
@@ -8190,7 +8190,7 @@ app.put('/api/auth/client/:userId', async (req, res) => {
       return res.status(400).json({ error: 'Updates are required' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('clients')
       .update(updates)
       .eq('user_id', userId)
@@ -8199,9 +8199,9 @@ app.put('/api/auth/client/:userId', async (req, res) => {
     if (error) throw error;
 
     // If secondary DB is available and we have user_code, also update chat_users
-    if (chatSupabase && data && data[0] && data[0].user_code) {
+    if (adminDB && data && data[0] && data[0].user_code) {
       try {
-        const { data: chatUser, error: chatUserError } = await chatSupabase
+        const { data: chatUser, error: chatUserError } = await adminDB
           .from('chat_users')
           .select('id')
           .eq('user_code', data[0].user_code)
@@ -8226,7 +8226,7 @@ app.put('/api/auth/client/:userId', async (req, res) => {
           if (updates.updated_at) chatUpdates.updated_at = updates.updated_at;
 
           if (Object.keys(chatUpdates).length > 0) {
-            await chatSupabase
+            await adminDB
               .from('chat_users')
               .update(chatUpdates)
               .eq('id', chatUser.id);
@@ -8273,7 +8273,7 @@ app.post('/api/waiting-list/submit', async (req, res) => {
     const normalizedEmail = email.toLowerCase();
 
     // Check if email already exists in waiting list
-    const { data: existingEntry, error: checkError } = await supabase
+    const { data: existingEntry, error: checkError } = await adminDB
       .from('waiting_list')
       .select('id')
       .eq('email', normalizedEmail)
@@ -8291,7 +8291,7 @@ app.post('/api/waiting-list/submit', async (req, res) => {
     }
 
     // Save to Supabase
-    const { data, error } = await supabase
+    const { data, error } = await adminDB
       .from('waiting_list')
       .insert([
         {
@@ -8357,7 +8357,7 @@ app.get('/api/waiting-list/validate-token', async (req, res) => {
 
     // Check if token exists in waiting_list table
     // The token should match the invitation_token field (stored as UUID string)
-    const { data, error } = await supabase
+    const { data, error } = await adminDB
       .from('waiting_list')
       .select('id, email, first_name, last_name, invitation_sent_at, invitation_used_at')
       .eq('invitation_token', decodedToken)
@@ -8430,7 +8430,7 @@ app.post('/api/waiting-list/mark-used', async (req, res) => {
     }
 
     // Update the waiting_list entry to mark invitation as used
-    const { data, error } = await supabase
+    const { data, error } = await adminDB
       .from('waiting_list')
       .update({ 
         invitation_used_at: new Date().toISOString()
@@ -8490,7 +8490,7 @@ app.post('/api/contact', async (req, res) => {
     const userAgent = req.headers['user-agent'] || 'unknown';
 
     // Save to Supabase
-    const { data, error } = await supabase
+    const { data, error } = await clientDB
       .from('contact_messages')
       .insert([
         {
@@ -8556,7 +8556,7 @@ app.post('/api/ingredient-reports', async (req, res) => {
       });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(503).json({ error: 'Database not configured for ingredient reports' });
     }
 
@@ -8573,7 +8573,7 @@ app.post('/api/ingredient-reports', async (req, res) => {
       user_agent: userAgent
     };
 
-    const { data, error } = await chatSupabase
+    const { data, error } = await adminDB
       .from('ingredient_reports')
       .insert([row])
       .select('id, created_at');
@@ -8606,7 +8606,7 @@ app.get('/api/weekly-macro-summary-svg', async (req, res) => {
       return res.status(400).json({ error: 'Either user_code or phone_number is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
@@ -8629,7 +8629,7 @@ app.get('/api/weekly-macro-summary-svg', async (req, res) => {
     const dateStrEnd = endDate.toISOString().split('T')[0];
 
     // 2. Find user
-    let userQuery = chatSupabase
+    let userQuery = adminDB
       .from('chat_users')
       .select('id, user_code, language')
       .limit(1);
@@ -8649,14 +8649,14 @@ app.get('/api/weekly-macro-summary-svg', async (req, res) => {
     const isHe = userLanguage === 'he';
 
     // 3. Get food logs & active meal plans
-    const { data: foodLogs } = await chatSupabase
+    const { data: foodLogs } = await adminDB
       .from('food_logs')
       .select('*')
       .eq('user_id', userId)
       .gte('log_date', dateStrStart)
       .lte('log_date', dateStrEnd);
 
-    const { data: activeMealPlans } = await chatSupabase
+    const { data: activeMealPlans } = await adminDB
       .from('meal_plans_and_schemas')
       .select('*')
       .eq('user_code', userCode)
@@ -9151,14 +9151,14 @@ app.get('/api/macro-summary-svg', async (req, res) => {
       return res.status(400).json({ error: 'Either user_code or phone_number is required' });
     }
 
-    if (!chatSupabase) {
+    if (!adminDB) {
       return res.status(500).json({ error: 'Chat database not configured' });
     }
 
     console.log('📊 Generating macro summary SVG for:', { user_code, phone_number, date });
 
     // Find user in chat_users table
-    let userQuery = chatSupabase
+    let userQuery = adminDB
       .from('chat_users')
       .select('id, user_code, language')
       .limit(1);
@@ -9181,7 +9181,7 @@ app.get('/api/macro-summary-svg', async (req, res) => {
     const userLanguage = userData.language || 'en';
 
     // Get food logs for the date
-    const { data: foodLogs, error: logsError } = await chatSupabase
+    const { data: foodLogs, error: logsError } = await adminDB
       .from('food_logs')
       .select('*')
       .eq('user_id', userId)
@@ -9261,7 +9261,7 @@ app.get('/api/macro-summary-svg', async (req, res) => {
       return d.getDay(); // 0 Sunday .. 6 Saturday
     })();
 
-    const { data: activeMealPlans, error: mealPlansError } = await chatSupabase
+    const { data: activeMealPlans, error: mealPlansError } = await adminDB
       .from('meal_plans_and_schemas')
       .select('*')
       .eq('user_code', userCode)

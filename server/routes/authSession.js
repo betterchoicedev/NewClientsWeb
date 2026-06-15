@@ -209,7 +209,7 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
   //   the Supabase Dashboard. Otherwise Supabase rejects the OAuth request
   //   with `redirect_to is not allowed`. Add the absolute URL for every
   //   environment you deploy, e.g. for production on Cloud Run:
-  //     https://newclientsweb-615263253386.me-west1.run.app/api/auth/oauth/mobile-callback
+  //     http://localhost:3001/api/auth/oauth/mobile-callback
   // -------------------------------------------------------------------------
   app.get('/api/auth/oauth/mobile-callback', async (req, res) => {
     try {

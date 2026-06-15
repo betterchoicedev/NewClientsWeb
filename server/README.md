@@ -36,7 +36,7 @@ NODE_ENV=development
 
 2. **Webhook Secret**:
    - Go to [Stripe Dashboard → Developers → Webhooks](https://dashboard.stripe.com/webhooks)
-   - Create a new webhook endpoint: `https://newclientsweb-615263253386.me-west1.run.app/api/webhooks/stripe`
+   - Create a new webhook endpoint: `http://localhost:3001/api/webhooks/stripe`
    - Select these events:
      - `checkout.session.completed`
      - `customer.subscription.created`
@@ -85,7 +85,7 @@ npm run dev
 npm start
 ```
 
-The server will run on `https://newclientsweb-615263253386.me-west1.run.app` by default.
+The server will run on `http://localhost:3001` by default.
 
 ## API Endpoints
 
