@@ -5541,7 +5541,7 @@ Keep all string fields short (≤ 1–2 sentences). Numbers must be plain number
 async function callFoodTextLLM(prompt) {
   const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
   const apiKey  = process.env.DEEPSEEK_API_KEY;
-  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o-mini';
+  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o';
 
   if (!apiBase || !apiKey) {
     throw new Error('Text LLM is not configured on the server (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY).');

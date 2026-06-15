@@ -276,6 +276,145 @@ const hasAnyPersistedOnboardingAnswer = (clientRow, chatRow) => {
   return false;
 };
 
+/**
+ * Calorie / macro split per meal, keyed by total number of meals.
+ * Each value is a fraction of the daily target and the values in a row sum to 1.
+ *
+ * Slot key convention:
+ *   - "breakfast", "lunch", "dinner" are the main meals.
+ *   - "snack_1", "snack_2", ... are snacks in chronological order.
+ *
+ * These ratios are applied to both calories and macros so each meal entry carries
+ * a self-contained target.
+ */
+const MEAL_SPLIT_RATIOS = {
+  // Intermittent fasting or simple layout
+  2: { breakfast: 0.45, dinner: 0.55 },
+
+  // The standard diets
+  3: { breakfast: 0.30, lunch: 0.35, dinner: 0.35 },
+  4: { breakfast: 0.25, lunch: 0.30, snack_1: 0.15, dinner: 0.30 },
+  5: { breakfast: 0.20, lunch: 0.25, snack_1: 0.15, snack_2: 0.10, dinner: 0.30 },
+
+  // High-frequency eating (bodybuilders / athletes)
+  6: { breakfast: 0.20, lunch: 0.20, snack_1: 0.10, snack_2: 0.10, dinner: 0.30, snack_3: 0.10 },
+  7: { breakfast: 0.15, lunch: 0.20, snack_1: 0.10, snack_2: 0.10, dinner: 0.25, snack_3: 0.10, snack_4: 0.10 }
+};
+
+/**
+ * Classify an English meal-slot name into the kind used by MEAL_SPLIT_RATIOS:
+ *   - "main" with a preferred key of "breakfast" | "lunch" | "dinner"
+ *   - "snack" with no preferred key (snacks are assigned snack_1, snack_2, ... in order)
+ */
+const classifyMealSlot = (slot) => {
+  const s = (slot || '').toLowerCase().trim();
+  if (s.includes('breakfast') || s.includes('brunch')) {
+    return { kind: 'main', preferredKey: 'breakfast' };
+  }
+  if (s.includes('lunch')) {
+    return { kind: 'main', preferredKey: 'lunch' };
+  }
+  // "Late Dinner" and "Post-Workout Meal" are also treated as dinner-like main meals
+  if (s.includes('dinner') || s.includes('post-workout') || s.includes('post workout')) {
+    return { kind: 'main', preferredKey: 'dinner' };
+  }
+  return { kind: 'snack', preferredKey: null };
+};
+
+/**
+ * Given the total number of meals and the ordered list of (English) meal slot names
+ * chosen by the user, return an array of fractional ratios (one per meal) that sum to ~1.
+ *
+ * Strategy:
+ *  1. Main meals get their preferred key (breakfast/lunch/dinner) if it's still free.
+ *  2. Snacks are assigned snack_1, snack_2, ... in the order they appear.
+ *  3. Anything still unassigned (e.g. duplicate mains, or snack overflow) gets any
+ *     remaining keys from the ratio row, in their declaration order.
+ *  4. Falls back to an equal split if numMeals is outside the supported range.
+ */
+const computeMealRatios = (numMeals, mealSlots) => {
+  const ratiosForCount = MEAL_SPLIT_RATIOS[numMeals];
+  const safeSlots = Array.from({ length: numMeals }, (_, i) => mealSlots[i] || '');
+
+  if (!ratiosForCount) {
+    return safeSlots.map(() => 1 / numMeals);
+  }
+
+  const assigned = new Array(numMeals).fill(null);
+  const usedKeys = new Set();
+
+  safeSlots.forEach((slot, i) => {
+    const { kind, preferredKey } = classifyMealSlot(slot);
+    if (
+      kind === 'main' &&
+      preferredKey &&
+      ratiosForCount[preferredKey] !== undefined &&
+      !usedKeys.has(preferredKey)
+    ) {
+      assigned[i] = ratiosForCount[preferredKey];
+      usedKeys.add(preferredKey);
+    }
+  });
+
+  const snackKeys = Object.keys(ratiosForCount)
+    .filter((k) => k.startsWith('snack_'))
+    .sort();
+  let snackCursor = 0;
+  safeSlots.forEach((slot, i) => {
+    if (assigned[i] !== null) return;
+    const { kind } = classifyMealSlot(slot);
+    if (kind !== 'snack') return;
+    while (snackCursor < snackKeys.length && usedKeys.has(snackKeys[snackCursor])) {
+      snackCursor += 1;
+    }
+    if (snackCursor < snackKeys.length) {
+      const key = snackKeys[snackCursor];
+      assigned[i] = ratiosForCount[key];
+      usedKeys.add(key);
+      snackCursor += 1;
+    }
+  });
+
+  const leftoverKeys = Object.keys(ratiosForCount).filter((k) => !usedKeys.has(k));
+  let leftoverCursor = 0;
+  safeSlots.forEach((slot, i) => {
+    if (assigned[i] !== null) return;
+    if (leftoverCursor < leftoverKeys.length) {
+      const key = leftoverKeys[leftoverCursor];
+      assigned[i] = ratiosForCount[key];
+      usedKeys.add(key);
+      leftoverCursor += 1;
+    } else {
+      assigned[i] = 1 / numMeals;
+    }
+  });
+
+  return assigned;
+};
+
+/**
+ * Apply a list of ratios to a total amount and return integer parts whose sum
+ * exactly equals Math.round(total). This avoids 1-2 unit drift caused by
+ * rounding each part independently.
+ */
+const distributeIntegerByRatios = (total, ratios) => {
+  if (!total || total <= 0 || !ratios || ratios.length === 0) {
+    return ratios.map(() => 0);
+  }
+  const raw = ratios.map((r) => total * r);
+  const floors = raw.map((v) => Math.floor(v));
+  let remainder = Math.round(total) - floors.reduce((a, b) => a + b, 0);
+  // Distribute the rounding remainder to the meals with the largest fractional part.
+  const fractionalOrder = raw
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < fractionalOrder.length && remainder > 0; k += 1) {
+    floors[fractionalOrder[k].i] += 1;
+    remainder -= 1;
+  }
+  return floors;
+};
+
 const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, companyConfig }) => {
   const { language, t, direction, toggleLanguage, setLanguage, setDirection } = useLanguage();
   const { isDarkMode, themeClasses } = useTheme();
@@ -1537,11 +1676,13 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
 
       // Pre-fill form with existing data
       if (data) {
+        // Support both the new structure ({ mealSlot, mealName, targetCalories, targetMacros })
+        // and the legacy structure ({ meal, description, calories, calories_pct }) for backward compatibility.
         const mealDescriptions = chatUserMealData?.meal_plan_structure 
-          ? chatUserMealData.meal_plan_structure.map(m => m.description || '')
+          ? chatUserMealData.meal_plan_structure.map(m => m.mealName || m.description || '')
           : [];
         const mealNames = chatUserMealData?.meal_plan_structure
-          ? chatUserMealData.meal_plan_structure.map(m => m.meal || '')
+          ? chatUserMealData.meal_plan_structure.map(m => m.mealSlot || m.meal || '')
           : [];
         
         const birthDate = data.birth_date || '';
@@ -3159,21 +3300,33 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
       // Create meal plan structure
       if (allOnboardingFields.includes('number_of_meals') && formData.number_of_meals) {
         const numMeals = parseInt(formData.number_of_meals);
-        const caloriesPerMeal = dailyCalories ? Math.round(dailyCalories / numMeals) : 0;
-        const pctPerMeal = parseFloat((100 / numMeals).toFixed(1));
-        
-        mealPlanStructure = formData.meal_descriptions.slice(0, numMeals).map((description, index) => {
-          // Use the selected meal name, or fallback to default (always in English for defaults)
-          const selectedMealNameRaw = formData.meal_names[index] || getMealName(numMeals, index, false);
-          // Convert to English if it's in Hebrew (always save in English)
-          const selectedMealName = convertMealNameToEnglish(selectedMealNameRaw);
-          return {
-            meal: selectedMealName,
-            calories: caloriesPerMeal,
-            description: description || '',
-            calories_pct: pctPerMeal
-          };
+
+        // Resolve the chosen meal slot names in chronological order (always English on disk).
+        const slotNames = Array.from({ length: numMeals }, (_, index) => {
+          const raw = formData.meal_names[index] || getMealName(numMeals, index, false);
+          return convertMealNameToEnglish(raw);
         });
+
+        // Compute per-meal ratios via the global split table (see MEAL_SPLIT_RATIOS).
+        const ratios = computeMealRatios(numMeals, slotNames);
+
+        // Use distributeIntegerByRatios so the per-meal totals add up exactly to the daily targets.
+        const dailyMacrosForSplit = getCurrentMacros();
+        const caloriesPerMeal = distributeIntegerByRatios(dailyCalories || 0, ratios);
+        const proteinPerMeal = distributeIntegerByRatios(dailyMacrosForSplit?.protein || 0, ratios);
+        const carbsPerMeal = distributeIntegerByRatios(dailyMacrosForSplit?.carbs || 0, ratios);
+        const fatsPerMeal = distributeIntegerByRatios(dailyMacrosForSplit?.fat || 0, ratios);
+
+        mealPlanStructure = formData.meal_descriptions.slice(0, numMeals).map((description, index) => ({
+          mealSlot: slotNames[index],
+          mealName: description || '',
+          targetCalories: caloriesPerMeal[index] || 0,
+          targetMacros: {
+            protein: proteinPerMeal[index] || 0,
+            carbs: carbsPerMeal[index] || 0,
+            fats: fatsPerMeal[index] || 0
+          }
+        }));
       }
       
       console.log('📝 Fields shown in onboarding:', allOnboardingFields);
