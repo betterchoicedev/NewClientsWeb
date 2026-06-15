@@ -20,6 +20,7 @@ const PUBLIC_API_PATHS = [
   '/api/waiting-list/',
   '/api/contact',
   '/api/ingredient-reports',
+  '/api/onboarding/classify-activity',
 ];
 
 function isPublicApiUrl(urlString) {

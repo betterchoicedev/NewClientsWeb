@@ -107,8 +107,13 @@ const PrivacyPolicyPage = () => {
           footer: `נתוני בריאות הנקראים מ-Apple Health / Health Connect או נכתבים אליהם נשארים במכשיר שלך או בחשבון Apple / Google האישי שלך. הם אינם מועברים בשום מקרה לשרתים שלנו, ל-Microsoft Azure AI, או לכל צד שלישי אחר.`
         },
         {
-          title: "9. שמירת נתונים",
-          content: `אנו שומרים על הנתונים האישיים שלך כל עוד החשבון שלך פעיל או כפי שנדרש לספק לך שירותים. אם תבקש למחוק את החשבון שלך, נמחק את הנתונים שלך תוך 30 יום.`
+          title: "8ג. אפליקציה לנייד — כניסה עם Apple",
+          content: `אם תיכנס באמצעות Apple, אנו מקבלים רק את השם וכתובת האימייל שתבחר לשתף. אם תשתמש בשירות "Hide My Email" של Apple, נראה רק את כתובת הרילי (relay) ולעולם לא את כתובת האימייל האמיתית שלך.`
+        },
+        {
+          title: "9. שמירת נתונים ומחיקת חשבון",
+          content: `אנו שומרים על הנתונים האישיים שלך כל עוד החשבון שלך פעיל או כפי שנדרש לספק לך שירותים. אם תבקש למחוק את החשבון שלך, נמחק את הנתונים שלך תוך 30 יום.`,
+          footer: `ניתן למחוק לצמיתות את חשבון BetterChoice שלך ואת כל הנתונים המשויכים אליו בכל עת מתוך האפליקציה: פתח את התפריט הצדדי ← מחק חשבון.`
         },
         {
           title: "10. פרטיות ילדים",
@@ -223,8 +228,13 @@ const PrivacyPolicyPage = () => {
           footer: `Health data read from or written to Apple Health / Health Connect stays on your device or in your personal Apple / Google account. It is never transmitted to our servers, to Microsoft Azure AI, or to any other third party.`
         },
         {
-          title: "9. Data Retention",
-          content: `We retain your personal data for as long as your account is active or as needed to provide you services. If you request to delete your account, we will delete your data within 30 days.`
+          title: "8c. Mobile App - Sign in with Apple",
+          content: `If you sign in using Apple, we receive only the name and email address you choose to share. If you use Apple's "Hide My Email" relay, we will only ever see the relay address and never your real email address.`
+        },
+        {
+          title: "9. Data Retention and Account Deletion",
+          content: `We retain your personal data for as long as your account is active or as needed to provide you services. If you request to delete your account, we will delete your data within 30 days.`,
+          footer: `You can permanently delete your BetterChoice account and all associated data at any time from within the app: open the side menu → Delete account.`
         },
         {
           title: "10. Children's Privacy",
