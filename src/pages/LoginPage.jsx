@@ -1,20 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { signInWithGoogle, resetPassword, signIn } from '../supabase/auth';
 
+// --- Framer Motion Variants ---
+const fadeUpVariant = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
+};
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } }
+};
+
+const modalBackdropVariant = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.3 } },
+  exit: { opacity: 0, transition: { duration: 0.3 } }
+};
+
+const modalContentVariant = {
+  hidden: { opacity: 0, scale: 0.95, y: 20 },
+  visible: { opacity: 1, scale: 1, y: 0, transition: { type: "spring", damping: 25, stiffness: 300 } },
+  exit: { opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }
+};
+
 function LoginPage() {
-  const { language, direction, t, isTransitioning, toggleLanguage } = useLanguage();
+  const { language, direction, t, toggleLanguage } = useLanguage();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { isDarkMode, toggleTheme, themeClasses } = useTheme();
+  
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     rememberMe: false
   });
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [socialLoading, setSocialLoading] = useState(false);
@@ -52,7 +78,6 @@ function LoginPage() {
           : 'Error signing in with Google. Please try again.');
         setSocialLoading(false);
       }
-      // If successful, user will be redirected by OAuth
     } catch (err) {
       console.error('Google sign in error:', err);
       setError(language === 'hebrew' 
@@ -62,11 +87,10 @@ function LoginPage() {
     }
   };
 
-
   const handleForgotPasswordClick = (e) => {
     e.preventDefault();
     setShowForgotPassword(true);
-    setResetEmail(formData.email); // Pre-fill with login email if available
+    setResetEmail(formData.email); 
     setResetSuccess(false);
     setResetError('');
   };
@@ -98,9 +122,12 @@ function LoginPage() {
 
   const closeForgotPasswordModal = () => {
     setShowForgotPassword(false);
-    setResetEmail('');
-    setResetSuccess(false);
-    setResetError('');
+    // Slight delay to allow unmount animation to finish before clearing state
+    setTimeout(() => {
+      setResetEmail('');
+      setResetSuccess(false);
+      setResetError('');
+    }, 300);
   };
 
   const handleSubmit = async (e) => {
@@ -138,13 +165,11 @@ function LoginPage() {
         };
         const webLanguage = languageMap[result.language.user_language.toLowerCase()] || 'english';
         
-        // Only change if different from current language
         if (language !== webLanguage) {
           toggleLanguage();
         }
       }
 
-      // Navigate to profile page
       navigate('/profile');
     } catch (err) {
       console.error('Login error:', err);
@@ -154,164 +179,202 @@ function LoginPage() {
     }
   };
 
+  // Base styling dynamically reacting to theme context
+  const glassCardClasses = isDarkMode 
+    ? 'bg-slate-900/60 border-slate-700/50 backdrop-blur-xl shadow-2xl shadow-emerald-900/20' 
+    : 'bg-white/70 border-white/60 backdrop-blur-xl shadow-2xl shadow-emerald-500/10';
+
+  const glassInputClasses = isDarkMode
+    ? 'bg-slate-800/50 border-slate-700 text-white focus:border-emerald-500 focus:bg-slate-800 focus:ring-emerald-500/20'
+    : 'bg-white/50 border-gray-200 text-gray-900 focus:border-emerald-500 focus:bg-white focus:ring-emerald-500/20';
+
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition language-text-transition`} dir={direction}>
+    <div className={`relative min-h-screen flex flex-col ${isDarkMode ? 'bg-slate-950' : 'bg-[#f4f9f5]'} language-transition language-text-transition overflow-hidden`} dir={direction}>
+      
+      {/* Ambient Animated Background Orbs */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-green-500/10 rounded-full blur-[120px]" />
+      </div>
+
       {/* Header */}
-      <header className={`${isDarkMode ? 'bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-r from-emerald-50 via-green-50 to-amber-50'} shadow-md border-b ${isDarkMode ? 'border-emerald-900/50' : 'border-emerald-100/50'} backdrop-blur-md`}>
+      <motion.header 
+        initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
+        className={`relative z-10 ${isDarkMode ? 'bg-slate-900/50' : 'bg-white/50'} shadow-sm border-b ${isDarkMode ? 'border-slate-800/50' : 'border-emerald-100/50'} backdrop-blur-md`}
+      >
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4 sm:py-6">
-            <div className="flex items-center">
-              <img src="/favicon.ico" alt="BetterChoice Logo" className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 mr-2 sm:mr-4 rounded-lg shadow-md" />
+          <div className="flex justify-between items-center py-4 sm:py-5">
+            <Link to="/" className="flex items-center group cursor-pointer">
+              <img src="/favicon.ico" alt="BetterChoice Logo" className="w-10 h-10 sm:w-12 sm:h-12 mr-3 rounded-xl shadow-md group-hover:shadow-emerald-500/20 transition-all duration-300" />
               <div className="flex flex-col">
-                <h1 className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold ${isDarkMode ? 'text-emerald-200' : 'text-emerald-700'} leading-tight`}>BetterChoice</h1>
-                <p className={`${isDarkMode ? 'text-emerald-300/80' : 'text-emerald-600/80'} text-xs sm:text-sm font-medium hidden sm:block`}>{t.tagline}</p>
+                <h1 className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'} leading-tight tracking-tight`}>BetterChoice</h1>
               </div>
-            </div>
-            <div className="flex gap-2 sm:gap-4">
-              <button 
+            </Link>
+            <div className="flex gap-3">
+              <motion.button 
+                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                 onClick={toggleTheme}
-                className={`${isDarkMode ? 'bg-slate-800/80 text-yellow-400 hover:bg-slate-700/80' : 'bg-white/80 text-gray-600 hover:bg-white'} px-3 sm:px-4 py-2 rounded-full font-medium transition-all duration-300 text-xs sm:text-sm shadow-sm backdrop-blur-md border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'}`}
-                title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                className={`w-10 h-10 flex items-center justify-center rounded-full font-medium transition-colors shadow-sm backdrop-blur-md border ${isDarkMode ? 'bg-slate-800/80 text-yellow-400 hover:bg-slate-700 border-slate-700' : 'bg-white/80 text-gray-600 hover:bg-white border-emerald-100'}`}
               >
                 {isDarkMode ? '☀️' : '🌙'}
-              </button>
-              <button 
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                 onClick={toggleLanguage}
-                className={`${isDarkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-600'} text-white px-3 sm:px-4 py-2 rounded-full font-medium transition-all duration-300 text-xs sm:text-sm shadow-md`}
-                title={language === 'hebrew' ? 'Switch to English' : 'עבור לעברית'}
+                className={`w-10 h-10 flex items-center justify-center rounded-full font-bold transition-colors shadow-sm ${isDarkMode ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}
               >
                 {language === 'hebrew' ? 'EN' : 'עב'}
-              </button>
-              <Link 
-                to="/" 
-                className={`${isDarkMode ? 'bg-slate-800/80 text-emerald-200 hover:bg-slate-700/80' : 'bg-white/80 text-emerald-700 hover:bg-white'} px-3 sm:px-4 md:px-6 py-2 rounded-full font-medium transition-colors duration-300 text-xs sm:text-sm shadow-sm backdrop-blur-md border ${isDarkMode ? 'border-emerald-800/30' : 'border-emerald-200/50'}`}
-              >
-                {language === 'hebrew' ? 'חזרה לבית' : 'Back to Home'}
-              </Link>
+              </motion.button>
             </div>
           </div>
         </nav>
-      </header>
+      </motion.header>
 
-      {/* Main Content */}
-      <main className={`flex-1 flex items-center justify-center py-6 sm:py-8 md:py-12 px-4 sm:px-6 lg:px-8 ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'}`}>
-        <div className="max-w-md w-full space-y-6 sm:space-y-8">
-          <div className="text-center">
-            <h2 className={`text-2xl sm:text-3xl font-bold ${themeClasses.textPrimary} mb-2`}>
-              {language === 'hebrew' ? 'התחבר לחשבון שלך' : 'Sign in to your account'}
+      {/* Main Form Content */}
+      <main className="relative z-10 flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <motion.div 
+          initial="hidden" animate="visible" variants={staggerContainer}
+          className="max-w-md w-full"
+        >
+          <motion.div variants={fadeUpVariant} className="text-center mb-8">
+            <h2 className={`text-3xl sm:text-4xl font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'} mb-3 tracking-tight`}>
+              {language === 'hebrew' ? 'ברוכים הבאים' : 'Welcome back'}
             </h2>
-            <p className={`${themeClasses.textSecondary} text-sm sm:text-base`}>
-              {language === 'hebrew' ? 'ברוכים הבאים חזרה!' : 'Welcome back!'}
+            <p className={`text-base font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              {language === 'hebrew' ? 'התחבר כדי להמשיך לחשבון שלך' : 'Sign in to continue to your account'}
             </p>
-          </div>
+          </motion.div>
 
-          <form className="mt-6 sm:mt-8 space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
-            <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-4 sm:p-6 md:p-8`}>
-              <div className="space-y-6">
-                {/* Error Message */}
+          <motion.form 
+            variants={fadeUpVariant} 
+            onSubmit={handleSubmit}
+            className={`${glassCardClasses} rounded-[2rem] border p-6 sm:p-8 md:p-10`}
+          >
+            <div className="space-y-6">
+              
+              {/* Animated Error Banner */}
+              <AnimatePresence>
                 {error && (
-                  <div className={`${themeClasses.errorBg} px-4 py-3 rounded-lg`}>
-                    {error}
-                  </div>
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0, y: -10 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0, x: [-5, 5, -5, 5, 0] }}
+                    exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                    transition={{ duration: 0.3 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl text-sm font-medium flex items-center mb-6">
+                      <svg className="w-5 h-5 mr-2 rtl:ml-2 rtl:mr-0 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      {error}
+                    </div>
+                  </motion.div>
                 )}
-                <div>
-                  <label htmlFor="email" className={`block text-sm font-medium ${themeClasses.textPrimary} mb-2`}>
-                    {t.contact.form.email}
-                  </label>
+              </AnimatePresence>
+
+              {/* Email Input */}
+              <div className="space-y-2 group">
+                <label htmlFor="email" className={`block text-sm font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  {t.contact.form.email}
+                </label>
+                <div className="relative">
                   <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    className={`w-full px-4 py-3 ${themeClasses.inputBg} rounded-lg ${themeClasses.inputFocus} transition-colors duration-300`}
-                    placeholder={language === 'hebrew' ? 'הכנס את כתובת האימייל שלך' : 'Enter your email address'}
+                    id="email" name="email" type="email" autoComplete="email" required
+                    className={`w-full px-4 py-3.5 border rounded-xl outline-none focus:ring-4 transition-all duration-300 ${glassInputClasses}`}
+                    placeholder={language === 'hebrew' ? 'name@example.com' : 'name@example.com'}
                     value={formData.email}
                     onChange={handleInputChange}
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label htmlFor="password" className={`block text-sm font-medium ${themeClasses.textPrimary} mb-2`}>
+              {/* Password Input */}
+              <div className="space-y-2 group">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className={`block text-sm font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                     {language === 'hebrew' ? 'סיסמה' : 'Password'}
                   </label>
+                  <button 
+                    type="button" onClick={handleForgotPasswordClick}
+                    className="text-sm font-bold text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors"
+                  >
+                    {language === 'hebrew' ? 'שכחת סיסמה?' : 'Forgot password?'}
+                  </button>
+                </div>
+                <div className="relative">
                   <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    className={`w-full px-4 py-3 ${themeClasses.inputBg} rounded-lg ${themeClasses.inputFocus} transition-colors duration-300`}
-                    placeholder={language === 'hebrew' ? 'הכנס את הסיסמה שלך' : 'Enter your password'}
+                    id="password" name="password" type="password" autoComplete="current-password" required
+                    className={`w-full px-4 py-3.5 border rounded-xl outline-none focus:ring-4 transition-all duration-300 ${glassInputClasses}`}
+                    placeholder="••••••••"
                     value={formData.password}
                     onChange={handleInputChange}
                   />
                 </div>
+              </div>
 
-                <div className="text-right">
-                  <div className="text-sm">
-                    <button 
-                      type="button"
-                      onClick={handleForgotPasswordClick}
-                      className="font-medium text-emerald-600 hover:text-emerald-500 transition-colors duration-300"
-                    >
-                      {language === 'hebrew' ? 'שכחת סיסמה?' : 'Forgot password?'}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className={`w-full ${themeClasses.btnPrimary} text-white py-3 px-4 rounded-lg font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-300 transform hover:-translate-y-1 ${themeClasses.shadowCard} ${themeClasses.shadowHover} disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
-                  >
-                    {loading ? (
-                      language === 'hebrew' ? 'מתחבר...' : 'Signing in...'
-                    ) : (
-                      t.buttons.login
-                    )}
-                  </button>
-                </div>
-
-                <div className="text-center">
-                  <span className={themeClasses.textSecondary}>
-                    {language === 'hebrew' ? 'אין לך חשבון?' : "Don't have an account?"}
+              {/* Primary Submit Button */}
+              <motion.button
+                whileHover={{ scale: 1.015 }}
+                whileTap={{ scale: 0.985 }}
+                type="submit"
+                disabled={loading}
+                className="w-full relative group overflow-hidden bg-gradient-to-r from-emerald-500 to-green-600 text-white py-4 px-4 rounded-xl font-bold shadow-lg shadow-emerald-500/25 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+                {loading ? (
+                   <span className="flex items-center justify-center">
+                    <svg className="animate-spin h-5 w-5 mr-3 rtl:ml-3 rtl:mr-0 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {language === 'hebrew' ? 'מתחבר...' : 'Signing in...'}
                   </span>
-                  <Link 
-                    to="/signup" 
-                    className={`font-medium text-emerald-600 hover:text-emerald-500 transition-colors duration-300 ${direction === 'rtl' ? 'mr-2' : 'ml-2'}`}
-                  >
-                    {t.buttons.signup}
-                  </Link>
-                </div>
+                ) : (
+                  t.buttons.login
+                )}
+              </motion.button>
+
+              <div className="text-center pt-2">
+                <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {language === 'hebrew' ? 'אין לך חשבון?' : "Don't have an account?"}
+                </span>
+                <Link 
+                  to="/signup" 
+                  className={`text-sm font-bold text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors ${direction === 'rtl' ? 'mr-2' : 'ml-2'}`}
+                >
+                  {t.buttons.signup}
+                </Link>
               </div>
             </div>
-          </form>
 
-          {/* Social Login */}
-          <div className="mt-4 sm:mt-6">
-            <div className="relative">
+            {/* Social Login Divider */}
+            <div className="mt-8 relative">
               <div className="absolute inset-0 flex items-center">
-                <div className={`w-full border-t ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`} />
+                <div className={`w-full border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`} />
               </div>
-              <div className="relative flex justify-center text-xs sm:text-sm">
-                <span className={`px-3 ${themeClasses.bgCard} ${themeClasses.textSecondary}`}>
+              <div className="relative flex justify-center text-sm">
+                <span className={`px-4 font-medium ${isDarkMode ? 'bg-slate-900 text-slate-400' : 'bg-white text-slate-500'} rounded-full border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
                   {language === 'hebrew' ? 'או התחבר באמצעות' : 'Or continue with'}
                 </span>
               </div>
             </div>
 
-            <div className="mt-4 sm:mt-6">
-              <button
+            {/* Google OAuth Button */}
+            <div className="mt-8">
+              <motion.button
+                whileHover={{ scale: 1.015 }}
+                whileTap={{ scale: 0.985 }}
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={socialLoading}
-                className={`w-full inline-flex items-center justify-center gap-2 py-3 px-4 border ${isDarkMode ? 'border-gray-600 bg-gray-700 text-white hover:bg-gray-600' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'} rounded-lg shadow-sm text-sm font-medium transition-all duration-300 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
-                aria-label="Sign in with Google"
+                className={`w-full flex items-center justify-center gap-3 py-3.5 px-4 border rounded-xl font-bold transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:opacity-70 disabled:cursor-not-allowed ${
+                  isDarkMode 
+                    ? 'border-slate-700 bg-slate-800 text-white hover:bg-slate-700 hover:border-slate-600' 
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+                }`}
               >
                 {socialLoading ? (
-                  <svg className="animate-spin h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
@@ -326,171 +389,160 @@ function LoginPage() {
                     <span>Google</span>
                   </>
                 )}
-              </button>
+              </motion.button>
             </div>
-          </div>
-        </div>
+          </motion.form>
+        </motion.div>
       </main>
 
       {/* Footer */}
-      <footer className={`${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'} py-6 sm:py-8`}>
+      <footer className={`relative z-10 py-6 border-t ${isDarkMode ? 'border-slate-800/50 bg-slate-900/30' : 'border-emerald-100/50 bg-white/30'} backdrop-blur-sm`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 md:gap-8 mb-2 md:mb-0 text-center">
-              <a 
-                href="#privacy" 
-                className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm`}
-              >
-                {t.footer.privacy}
-              </a>
-              <a 
-                href="#terms" 
-                className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm`}
-              >
-                {t.footer.terms}
-              </a>
+            <div className="flex gap-6 text-sm font-medium">
+              <a href="#privacy" className={`${isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'} transition-colors`}>{t.footer.privacy}</a>
+              <a href="#terms" className={`${isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'} transition-colors`}>{t.footer.terms}</a>
             </div>
-            <div className={`${isDarkMode ? 'text-gray-400' : 'text-emerald-600/80'} text-center`}>
-              <p className="text-xs sm:text-sm">{t.footer.copyright}</p>
-            </div>
+            <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+              {t.footer.copyright}
+            </p>
           </div>
         </div>
       </footer>
 
-      {/* Forgot Password Modal */}
-      {showForgotPassword && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            {/* Background overlay */}
-            <div 
-              className="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity backdrop-blur-sm" 
-              aria-hidden="true"
+      {/* Forgot Password Modal (AnimatePresence) */}
+      <AnimatePresence>
+        {showForgotPassword && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+            {/* Modal Backdrop */}
+            <motion.div 
+              variants={modalBackdropVariant} initial="hidden" animate="visible" exit="exit"
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
               onClick={closeForgotPasswordModal}
-            ></div>
+            />
 
-            {/* Center modal */}
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            {/* Modal Body */}
+            <motion.div 
+              variants={modalContentVariant} initial="hidden" animate="visible" exit="exit"
+              className={`relative w-full max-w-lg overflow-hidden rounded-[2rem] border shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-white'}`}
+            >
+              <div className="relative px-6 py-8 sm:px-10 sm:py-10">
+                
+                {/* Close Button */}
+                <button 
+                  onClick={closeForgotPasswordModal}
+                  className="absolute top-6 right-6 rtl:left-6 rtl:right-auto text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
 
-            {/* Modal panel */}
-            <div className={`inline-block align-bottom ${themeClasses.bgCard} rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
-              {/* Header with Gradient */}
-              <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-8 text-center">
-                <div className="text-5xl mb-3">🔐</div>
-                <h3 className="text-2xl font-bold text-white mb-2" id="modal-title">
-                  {language === 'hebrew' ? 'שכחת סיסמה?' : 'Forgot Password?'}
-                </h3>
-                <p className="text-purple-100 text-sm">
-                  {language === 'hebrew' 
-                    ? 'אל דאגה! נשלח לך קישור לאיפוס הסיסמה' 
-                    : "No worries! We'll send you a reset link"}
-                </p>
-              </div>
-
-              {/* Modal Content */}
-              <div className="px-6 py-6">
-                {!resetSuccess ? (
-                  <form onSubmit={handleResetPassword}>
-                    <div className="mb-6">
-                      <label htmlFor="reset-email" className={`block text-sm font-semibold ${themeClasses.textPrimary} mb-2`}>
-                        {language === 'hebrew' ? 'כתובת אימייל' : 'Email Address'}
-                      </label>
-                      <input
-                        id="reset-email"
-                        name="reset-email"
-                        type="email"
-                        required
-                        className={`w-full px-4 py-3 ${themeClasses.inputBg} border-2 rounded-xl ${themeClasses.inputFocus} transition-all duration-300`}
-                        placeholder={language === 'hebrew' ? 'הכנס את האימייל שלך' : 'Enter your email'}
-                        value={resetEmail}
-                        onChange={(e) => setResetEmail(e.target.value)}
-                      />
-                    </div>
-
-                    {/* Error Message */}
-                    {resetError && (
-                      <div className="mb-4 px-4 py-3 bg-gradient-to-r from-red-50 to-pink-50 border-l-4 border-red-500 rounded-lg">
-                        <p className="text-red-700 text-sm font-medium">{resetError}</p>
-                      </div>
-                    )}
-
-                    {/* Info Box */}
-                    <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-l-4 border-purple-500">
-                      <p className={`text-sm ${isDarkMode ? 'text-purple-900' : 'text-purple-900'}`}>
-                        <strong>💡 {language === 'hebrew' ? 'טיפ:' : 'Tip:'}</strong>{' '}
-                        {language === 'hebrew' 
-                          ? 'תקבל אימייל עם קישור לאיפוס הסיסמה. הקישור תקף לשעה אחת.' 
-                          : "You'll receive an email with a password reset link. The link expires in 1 hour."}
-                      </p>
-                    </div>
-
-                    {/* Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <button
-                        type="submit"
-                        disabled={resetLoading}
-                        className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 px-6 rounded-xl font-bold hover:from-purple-600 hover:to-pink-600 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg"
-                      >
-                        {resetLoading ? (
-                          <span className="flex items-center justify-center">
-                            <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            {language === 'hebrew' ? 'שולח...' : 'Sending...'}
-                          </span>
-                        ) : (
-                          <>
-                            {language === 'hebrew' ? '✨ שלח קישור לאיפוס' : '✨ Send Reset Link'}
-                          </>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={closeForgotPasswordModal}
-                        className={`flex-1 ${themeClasses.btnSecondary} py-3 px-6 rounded-xl font-semibold transition-all duration-300 hover:scale-105`}
-                      >
-                        {language === 'hebrew' ? 'ביטול' : 'Cancel'}
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="text-center">
-                    {/* Success State */}
-                    <div className="mb-6">
-                      <div className="w-20 h-20 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
-                        <span className="text-4xl">✓</span>
-                      </div>
-                      <h4 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-3`}>
-                        {language === 'hebrew' ? 'נשלח בהצלחה!' : 'Email Sent Successfully!'}
-                      </h4>
-                      <p className={`${themeClasses.textSecondary} mb-4`}>
-                        {language === 'hebrew' 
-                          ? 'שלחנו לך אימייל עם הוראות לאיפוס הסיסמה.' 
-                          : "We've sent you an email with password reset instructions."}
-                      </p>
-                      <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border-l-4 border-yellow-500 mb-6 text-left">
-                        <p className={`text-sm ${isDarkMode ? 'text-yellow-900' : 'text-yellow-900'}`}>
-                          <strong>📧 {language === 'hebrew' ? 'לא רואה את האימייל?' : "Don't see the email?"}</strong><br />
+                <AnimatePresence mode="wait">
+                  {!resetSuccess ? (
+                    <motion.form 
+                      key="reset-form"
+                      initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}
+                      onSubmit={handleResetPassword}
+                    >
+                      <div className="mb-8">
+                        <div className="w-16 h-16 bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/50 dark:to-green-900/50 rounded-2xl flex items-center justify-center mb-6">
+                           <span className="text-3xl">🔐</span>
+                        </div>
+                        <h3 className={`text-2xl font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'} mb-2`}>
+                          {language === 'hebrew' ? 'איפוס סיסמה' : 'Reset Password'}
+                        </h3>
+                        <p className={`text-base ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                           {language === 'hebrew' 
-                            ? 'בדוק את תיקיית הספאם או הזבל שלך.' 
-                            : 'Check your spam or junk folder.'}
+                            ? 'הכנס את כתובת האימייל שלך ונשלח לך קישור מאובטח לאיפוס הסיסמה.' 
+                            : "Enter your email address and we'll send you a secure link to reset your password."}
                         </p>
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={closeForgotPasswordModal}
-                      className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 px-6 rounded-xl font-bold hover:from-green-600 hover:to-emerald-600 focus:outline-none focus:ring-4 focus:ring-green-300 transition-all duration-300 transform hover:scale-105 shadow-lg"
+
+                      <div className="mb-6 space-y-2">
+                        <label htmlFor="reset-email" className={`block text-sm font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                          {language === 'hebrew' ? 'כתובת אימייל' : 'Email Address'}
+                        </label>
+                        <input
+                          id="reset-email" name="reset-email" type="email" required
+                          className={`w-full px-4 py-3.5 border rounded-xl outline-none focus:ring-4 transition-all duration-300 ${glassInputClasses}`}
+                          placeholder={language === 'hebrew' ? 'הכנס את האימייל שלך' : 'Enter your email'}
+                          value={resetEmail}
+                          onChange={(e) => setResetEmail(e.target.value)}
+                        />
+                      </div>
+
+                      <AnimatePresence>
+                        {resetError && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                            className="mb-6 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl text-sm font-medium"
+                          >
+                            {resetError}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="flex gap-4">
+                        <motion.button
+                          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                          type="submit" disabled={resetLoading}
+                          className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white py-3.5 px-6 rounded-xl font-bold shadow-lg shadow-emerald-500/25 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                          {resetLoading ? (
+                            <span className="flex items-center justify-center">
+                              <svg className="animate-spin h-5 w-5 mr-2 rtl:ml-2 rtl:mr-0 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              {language === 'hebrew' ? 'שולח...' : 'Sending...'}
+                            </span>
+                          ) : (
+                            language === 'hebrew' ? 'שלח קישור' : 'Send Link'
+                          )}
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                          type="button" onClick={closeForgotPasswordModal}
+                          className={`flex-1 py-3.5 px-6 rounded-xl font-bold border transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'}`}
+                        >
+                          {language === 'hebrew' ? 'ביטול' : 'Cancel'}
+                        </motion.button>
+                      </div>
+                    </motion.form>
+                  ) : (
+                    <motion.div 
+                      key="success-state"
+                      initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", damping: 20, stiffness: 300 }}
+                      className="text-center py-6"
                     >
-                      {language === 'hebrew' ? '✨ מעולה!' : '✨ Got it!'}
-                    </button>
-                  </div>
-                )}
+                      <motion.div 
+                        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", bounce: 0.5, delay: 0.2 }}
+                        className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-green-500/30"
+                      >
+                        <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      </motion.div>
+                      <h4 className={`text-2xl font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'} mb-3`}>
+                        {language === 'hebrew' ? 'נשלח בהצלחה!' : 'Email Sent Successfully!'}
+                      </h4>
+                      <p className={`text-base ${isDarkMode ? 'text-slate-400' : 'text-slate-600'} mb-8 max-w-sm mx-auto`}>
+                        {language === 'hebrew' 
+                          ? 'בדוק את תיבת המייל שלך (ואת תיקיית הספאם). קישור האיפוס יפוג בעוד שעה.' 
+                          : "Check your inbox (and spam folder). The reset link will expire in 1 hour."}
+                      </p>
+                      <motion.button
+                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        type="button" onClick={closeForgotPasswordModal}
+                        className="w-full bg-gradient-to-r from-emerald-500 to-green-600 text-white py-3.5 px-6 rounded-xl font-bold shadow-lg shadow-emerald-500/25 focus:outline-none transition-all"
+                      >
+                        {language === 'hebrew' ? 'הבנתי, תודה!' : 'Got it, thanks!'}
+                      </motion.button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }
