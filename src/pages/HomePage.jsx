@@ -292,7 +292,7 @@ function HomePage() {
             <motion.p variants={fadeUpVariant} className={`text-lg sm:text-xl md:text-2xl ${isDarkMode ? 'text-slate-400' : 'text-slate-600'} mb-6 leading-relaxed max-w-4xl mx-auto px-2`}>
               {language === 'hebrew' 
                 ? 'דמיינו שאתם קמים בבוקר בתחושת קלילות, ביטחון, ושליטה אמיתית. לא עוד "דיאטה" - פשוט בחירות טובות יותר שנשארות לאורך זמן.'
-                : 'Imagine waking up feeling light, confident, and finally in control. No more "diets"—just better choices that actually last.'}
+                : 'Imagine waking up feeling light, confident, and finally in control. No more "diets"-just better choices that actually last.'}
             </motion.p>
 
             <motion.p variants={fadeUpVariant} className={`text-base sm:text-lg ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} mb-10 leading-relaxed max-w-3xl mx-auto px-2 italic`}>
