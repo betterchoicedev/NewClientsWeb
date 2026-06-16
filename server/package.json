@@ -1,0 +1,34 @@
+{
+  "name": "betterchoice-stripe-server",
+  "version": "1.0.0",
+  "description": "Stripe API server for BetterChoice application",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"Skipping tests (none defined)\""
+  },
+  "keywords": [
+    "stripe",
+    "payments",
+    "subscriptions",
+    "express",
+    "api"
+  ],
+  "author": "BetterChoice Team",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "sharp": "^0.33.5",
+    "stripe": "^13.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "extends": ["react-app", "react-app/jest"],
+  "rules": {
+    "no-unused-vars": "off",
+    "react-hooks/exhaustive-deps": "off",
+    "jsx-a11y/anchor-is-valid": "off",
+    "jsx-a11y/img-redundant-alt": "off",
+    "no-use-before-define": "off"
+  }
+}

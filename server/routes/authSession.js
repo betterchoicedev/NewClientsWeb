@@ -1,0 +1,357 @@
+/**
+ * Session & OAuth routes (browser never touches Supabase directly).
+ */
+
+const MOBILE_APP_OAUTH_REDIRECT = (
+  process.env.MOBILE_OAUTH_REDIRECT || 'betterchoicemobile://auth/callback'
+).trim();
+
+function getFrontendOrigin() {
+  return (
+    process.env.FRONTEND_URL ||
+    process.env.REACT_APP_FRONTEND_URL ||
+    'http://localhost:3000'
+  ).replace(/\/$/, '');
+}
+
+function getApiPublicOrigin(req) {
+  if (process.env.API_PUBLIC_URL) {
+    return process.env.API_PUBLIC_URL.replace(/\/$/, '');
+  }
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+  const host = req.get('x-forwarded-host') || req.get('host');
+  return `${proto}://${host}`;
+}
+
+function buildMobileAppOAuthRedirect(session) {
+  const fragment = new URLSearchParams({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: String(session.expires_at ?? ''),
+    expires_in: String(session.expires_in ?? ''),
+    token_type: session.token_type || 'bearer',
+  }).toString();
+  const joiner = MOBILE_APP_OAUTH_REDIRECT.includes('#') ? '&' : '#';
+  return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
+}
+
+function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAnonKey, supabaseDb }) {
+  app.get('/api/auth/me', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Authorization required' });
+      }
+      const token = authHeader.slice(7).trim();
+      const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
+      if (error || !user) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+      res.json({ user, error: null });
+    } catch (error) {
+      console.error('GET /api/auth/me error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/auth/refresh', async (req, res) => {
+    try {
+      const { refresh_token } = req.body;
+      if (!refresh_token) {
+        return res.status(400).json({ error: 'refresh_token is required' });
+      }
+      const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token });
+      if (error) throw error;
+      res.json({ session: data.session, user: data.user, error: null });
+    } catch (error) {
+      console.error('POST /api/auth/refresh error:', error);
+      res.status(401).json({ error: error.message || 'Failed to refresh session' });
+    }
+  });
+
+  app.post('/api/auth/logout', async (_req, res) => {
+    res.json({ error: null });
+  });
+
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+      const redirectTo = `${getFrontendOrigin()}/reset-password`;
+      const { error } = await supabaseAuth.auth.resetPasswordForEmail(
+        email.toLowerCase().trim(),
+        { redirectTo }
+      );
+      if (error) throw error;
+      res.json({ error: null });
+    } catch (error) {
+      console.error('POST /api/auth/reset-password error:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/auth/recovery/session', async (req, res) => {
+    try {
+      const { access_token, refresh_token } = req.body;
+      if (!access_token || !refresh_token) {
+        return res.status(400).json({ error: 'Tokens are required' });
+      }
+      const { data, error } = await supabaseAuth.auth.setSession({
+        access_token,
+        refresh_token,
+      });
+      if (error) throw error;
+      res.json({
+        session: data.session,
+        user: data.user,
+        error: null,
+      });
+    } catch (error) {
+      console.error('POST /api/auth/recovery/session error:', error);
+      res.status(401).json({ error: error.message || 'Invalid recovery session' });
+    }
+  });
+
+  app.post('/api/auth/update-password', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Authorization required' });
+      }
+      const token = authHeader.slice(7).trim();
+      const { password } = req.body;
+      if (!password || password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      }
+
+      // Verify the access token (could be a recovery token) and get the user id.
+      // supabase-js auth.updateUser() reads its session from the client's internal
+      // state, not from global headers, so we can't just attach a Bearer header to
+      // a fresh anon client. Instead, identify the user from the token and update
+      // the password via the service-role admin client.
+      const { data: userData, error: userError } = await supabaseAuth.auth.getUser(token);
+      if (userError || !userData?.user?.id) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+
+      if (!supabaseDb?.auth?.admin?.updateUserById) {
+        return res
+          .status(503)
+          .json({ error: 'Server missing SUPABASE_SERVICE_ROLE_KEY for password updates' });
+      }
+
+      const { data, error } = await supabaseDb.auth.admin.updateUserById(
+        userData.user.id,
+        { password }
+      );
+      if (error) throw error;
+      res.json({ data, error: null });
+    } catch (error) {
+      console.error('POST /api/auth/update-password error:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get('/api/auth/google', async (req, res) => {
+    try {
+      // Redirect straight to the SPA callback (must be whitelisted in Supabase Auth → URL config).
+      const redirectTo =
+        req.query.redirectTo || `${getFrontendOrigin()}/auth/callback`;
+
+      const { data, error } = await supabaseAuth.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      res.redirect(data.url);
+    } catch (error) {
+      console.error('GET /api/auth/google error:', error);
+      res.status(500).json({ error: error.message || 'Failed to start Google sign-in' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Mobile OAuth callback (Google sign-in from the Expo app)
+  // -------------------------------------------------------------------------
+  // The mobile client opens the Supabase OAuth URL inside expo-web-browser
+  // and asks Supabase to redirect the OAuth result back to this endpoint.
+  //
+  // We handle BOTH supabase-js flow types here, because the result shape
+  // depends on the `flowType` configured on the `supabaseAuth` client:
+  //
+  //   * PKCE flow      → Supabase returns `?code=<one-time-code>` in the
+  //                      querystring. We exchange it server-side and deep-
+  //                      link the resulting session into the app.
+  //
+  //   * Implicit flow  → Supabase returns the session in the URL fragment
+  //                      (`#access_token=…`). Browsers strip fragments
+  //                      before sending the HTTP request, so the server
+  //                      sees an empty querystring. We can't handle this
+  //                      server-side; instead we serve a tiny HTML bridge
+  //                      page that reads the fragment in the browser and
+  //                      `window.location.replace()`s into the deep link
+  //                      with the fragment intact. The app-side parser
+  //                      already understands `#access_token=…` payloads.
+  //
+  // IMPORTANT — Supabase Dashboard configuration:
+  //   Every backend host that serves `/api/auth/oauth/mobile-callback` MUST
+  //   be listed under Authentication → URL Configuration → Redirect URLs in
+  //   the Supabase Dashboard. Otherwise Supabase rejects the OAuth request
+  //   with `redirect_to is not allowed`. Add the absolute URL for every
+  //   environment you deploy, e.g. for production on Cloud Run:
+  //     http://localhost:3001/api/auth/oauth/mobile-callback
+  // -------------------------------------------------------------------------
+  app.get('/api/auth/oauth/mobile-callback', async (req, res) => {
+    try {
+      const oauthError = req.query.error || req.query.error_description;
+      if (oauthError) {
+        const msg = typeof oauthError === 'string' ? oauthError : 'oauth_failed';
+        return res.redirect(
+          `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent(msg)}`
+        );
+      }
+
+      const code = req.query.code;
+      if (!code) {
+        // Implicit-flow bridge: payload is in the URL fragment, which never
+        // reached us. Bounce through the browser so it can hand the fragment
+        // off to the deep link. JSON.stringify safely escapes the target URL
+        // for embedding in a JS string literal (handles quotes, backslashes,
+        // U+2028/U+2029, etc.).
+        const safeTarget = JSON.stringify(MOBILE_APP_OAUTH_REDIRECT);
+        const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Signing you in…</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:#e6edf3}
+    .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
+    .spinner{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:#7aa2f7;animation:s .9s linear infinite}
+    @keyframes s{to{transform:rotate(360deg)}}
+    p{margin:0;font-size:14px;opacity:.85}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Signing you in…</p>
+  </div>
+  <script>
+    (function(){
+      try {
+        var target = ${safeTarget};
+        var hash = window.location.hash || '';
+        var search = window.location.search || '';
+        // location.replace so the back button can't drop the user back on
+        // this OAuth page after the deep-link fires.
+        window.location.replace(target + search + hash);
+      } catch (e) {
+        window.location.replace(${safeTarget} + '?error=bridge_failed');
+      }
+    })();
+  </script>
+</body>
+</html>`;
+        res.setHeader('Cache-Control', 'no-store');
+        return res.type('html').send(html);
+      }
+
+      const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+
+      res.redirect(buildMobileAppOAuthRedirect(data.session));
+    } catch (error) {
+      console.error('GET /api/auth/oauth/mobile-callback error:', error);
+      res.redirect(
+        `${MOBILE_APP_OAUTH_REDIRECT}?error=${encodeURIComponent(
+          error.message || 'oauth_failed'
+        )}`
+      );
+    }
+  });
+
+  app.get('/api/auth/oauth/callback', async (req, res) => {
+    try {
+      const code = req.query.code;
+      if (!code) {
+        return res.redirect(`${getFrontendOrigin()}/login?error=oauth_missing_code`);
+      }
+
+      const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+
+      const nextPath = req.query.next || `${getFrontendOrigin()}/auth/callback`;
+
+      const session = data.session;
+      const fragment = new URLSearchParams({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: String(session.expires_at ?? ''),
+        expires_in: String(session.expires_in ?? ''),
+        token_type: session.token_type || 'bearer',
+      }).toString();
+
+      const redirectBase = nextPath.includes('://') ? nextPath : `${getFrontendOrigin()}${nextPath.startsWith('/') ? '' : '/'}${nextPath}`;
+      const joiner = redirectBase.includes('#') ? '&' : '#';
+      res.redirect(`${redirectBase}${joiner}${fragment}`);
+    } catch (error) {
+      console.error('GET /api/auth/oauth/callback error:', error);
+      res.redirect(`${getFrontendOrigin()}/login?error=oauth_failed`);
+    }
+  });
+
+  /** Exchange OAuth PKCE code for session (mobile app after browser redirect). */
+  app.post('/api/auth/oauth/exchange', async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code) {
+        return res.status(400).json({ error: 'code is required' });
+      }
+
+      const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+
+      let languageData = null;
+      if (supabaseDb && data.user?.id) {
+        try {
+          const { data: clientData, error: clientError } = await supabaseDb
+            .from('clients')
+            .select('user_language')
+            .eq('user_id', data.user.id)
+            .maybeSingle();
+          if (!clientError && clientData) {
+            languageData = clientData;
+          }
+        } catch (langError) {
+          console.error('⚠️ Error fetching language (non-critical):', langError);
+        }
+      }
+
+      res.json({
+        data: {
+          user: data.user,
+          session: data.session,
+        },
+        language: languageData,
+        error: null,
+      });
+    } catch (error) {
+      console.error('POST /api/auth/oauth/exchange error:', error);
+      res.status(401).json({ error: error.message || 'Failed to complete Google sign-in' });
+    }
+  });
+}
+
+module.exports = { registerAuthSessionRoutes };

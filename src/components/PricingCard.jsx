@@ -1,0 +1,522 @@
+import React, { useState } from 'react';
+import { useStripe } from '../context/StripeContext';
+import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
+
+const PricingCard = ({
+  product,
+  selectedPriceId,
+  onPriceSelect,
+  className = '',
+  hasActiveSubscription = false,
+  hasAnyActiveSubscription = false,
+  usdExchangeRate = null,
+  showNavyDigitalPromo = false,
+  navyPromoCode = '',
+  onNavyPromoCodeChange = null,
+  onNavyPromoValidate = null,
+  navyPromoLoading = false,
+  navyPromoError = '',
+  navyPromoAppliedCode = '',
+  animatedDigitalPrice = 48
+}) => {
+  const { createCheckoutSession, loading, error } = useStripe();
+  const { user, isAuthenticated } = useAuth();
+  const { language } = useLanguage();
+  const { themeClasses } = useTheme();
+  
+  // Get 6-month price ID for default selection, or first price if no 6-month option
+  const getDefaultPriceId = () => {
+    if (selectedPriceId) return selectedPriceId;
+    const sixMonthPrice = product.prices?.find(p => p.commitment === 6);
+    return sixMonthPrice?.id || product.prices?.[0]?.id;
+  };
+  
+  const [selectedPrice, setSelectedPrice] = useState(getDefaultPriceId());
+  // USD-priced products (e.g. Digital Only) show dollars first; ILS-priced show shekels first
+  const isUsdPrimary = product.prices?.[0]?.currency === 'USD';
+  const [showUSD, setShowUSD] = useState(isUsdPrimary);
+  
+  // Check if this is a consultation product (can always be purchased)
+  const isConsultation = product.name.toLowerCase().includes('consultation') || 
+                         product.nameHebrew?.includes('יעוץ');
+  
+  // Determine if this product should be blocked
+  const isBlocked = hasAnyActiveSubscription && !isConsultation;
+
+  const handlePriceSelect = (priceId) => {
+    setSelectedPrice(priceId);
+    if (onPriceSelect) {
+      onPriceSelect(priceId, product);
+    }
+  };
+
+  const handlePurchase = async () => {
+    if (!isAuthenticated) {
+      alert(language === 'hebrew' ? 'יש להתחבר תחילה' : 'Please log in first');
+      return;
+    }
+
+    // Check if user should be blocked from purchasing (has any active subscription and this is not a consultation)
+    if (isBlocked) {
+      alert(language === 'hebrew' ? 
+        'יש לך כבר מנוי פעיל. ניתן לרכוש רק יעוץ אישי.' : 
+        'You already have an active subscription. You can only purchase consultations.');
+      return;
+    }
+
+    if (!selectedPrice) {
+      alert(language === 'hebrew' ? 'אנא בחר תוכנית מחיר' : 'Please select a pricing option');
+      return;
+    }
+
+    try {
+      await createCheckoutSession(selectedPrice, {
+        customerId: user?.id,
+        customerEmail: user?.email,
+        promoCode: showNavyDigitalPromo && navyPromoAppliedCode ? navyPromoAppliedCode : undefined,
+        metadata: showNavyDigitalPromo && navyPromoAppliedCode
+          ? { navy_access_code: navyPromoAppliedCode }
+          : undefined
+      });
+    } catch (error) {
+      console.error('Purchase error:', error);
+      alert(error.message || (language === 'hebrew' ? 'שגיאה בתהליך התשלום' : 'Payment error occurred'));
+    }
+  };
+
+  const formatPrice = (priceObj) => {
+    if (!priceObj) return 'Contact for pricing';
+
+    const isPriceUsd = priceObj.currency === 'USD';
+
+    if (isPriceUsd) {
+      // Price is stored in USD (cents)
+      const usdCents = priceObj.amount ?? priceObj.amountUSD;
+      if (usdCents == null) return 'Contact for pricing';
+      const usdValue = usdCents / 100;
+      if (showUSD) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: usdValue % 1 === 0 ? 0 : 2
+        }).format(usdValue);
+      }
+      // Show shekels using /api/exchange-rates (ILS per 1 USD)
+      if (usdExchangeRate != null && usdExchangeRate > 0) {
+        const ilsValue = usdValue * usdExchangeRate;
+        return `₪${ilsValue.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+      }
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: usdValue % 1 === 0 ? 0 : 2
+      }).format(usdValue);
+    }
+
+    if (!showUSD) {
+      // ILS: amount is in agorot
+      const amount = priceObj.amount;
+      if (!amount) return 'Contact for pricing';
+      const price = amount / 100;
+      return `₪${price.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    }
+
+    // ILS price, show USD: use Bank of Israel rate if available (ILS per 1 USD → USD = ILS / rate)
+    if (usdExchangeRate != null && usdExchangeRate > 0 && priceObj.amount != null) {
+      const ilsValue = priceObj.amount / 100;
+      const usdValue = ilsValue / usdExchangeRate;
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: usdValue % 1 === 0 ? 0 : 2
+      }).format(usdValue);
+    }
+    const amountUSD = priceObj.amountUSD;
+    if (!amountUSD) return 'Contact for pricing';
+    const price = amountUSD / 100;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: price % 1 === 0 ? 0 : 2
+    }).format(price);
+  };
+
+  const getPopularBadge = () => (
+    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
+      <span className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 py-1 rounded-full text-sm font-medium shadow-lg">
+        {language === 'hebrew' ? 'פופולרי' : 'Popular'}
+      </span>
+    </div>
+  );
+
+
+  // Find if any price is marked as popular
+  const hasPopularPrice = product.prices?.some(price => price.popular);
+  const selectedPriceObj = product.prices?.find(price => price.id === selectedPrice);
+
+  // Show "Approx." when displaying converted currency (ILS→USD for most products, USD→ILS for Digital Only)
+  const isApproximate = (priceObj) => {
+    if (!priceObj) return false;
+    if (priceObj.currency === 'USD') return !showUSD && (usdExchangeRate != null && usdExchangeRate > 0); // Digital Only: showing ILS
+    return showUSD; // ILS-priced: showing USD
+  };
+  const approxLabel = language === 'hebrew' ? 'בערך ' : 'Approx. ';
+
+  // Calculate savings for 6-month plan (supports BOI USD conversion)
+  const calculateSavings = () => {
+    if (!product.prices || product.prices.length < 2) return null;
+    
+    const threeMonthPrice = product.prices.find(p => p.commitment === 3);
+    const sixMonthPrice = product.prices.find(p => p.commitment === 6);
+    
+    if (!threeMonthPrice || !sixMonthPrice) return null;
+    
+    let totalThreeMonth, totalSixMonth, currency;
+    if (showUSD && usdExchangeRate != null && usdExchangeRate > 0) {
+      const threeIls = (threeMonthPrice.amount || 0) / 100;
+      const sixIls = (sixMonthPrice.amount || 0) / 100;
+      totalThreeMonth = (threeIls / usdExchangeRate) * 6;
+      totalSixMonth = (sixIls / usdExchangeRate) * 6;
+      currency = 'USD';
+    } else if (showUSD) {
+      totalThreeMonth = ((threeMonthPrice.amountUSD || 0) / 100) * 6;
+      totalSixMonth = ((sixMonthPrice.amountUSD || 0) / 100) * 6;
+      currency = 'USD';
+    } else {
+      totalThreeMonth = ((threeMonthPrice.amount || 0) / 100) * 6;
+      totalSixMonth = ((sixMonthPrice.amount || 0) / 100) * 6;
+      currency = 'ILS';
+    }
+    const savings = totalThreeMonth - totalSixMonth;
+    
+    if (savings <= 0) return null;
+    
+    return { savings, currency };
+  };
+
+  const savings = calculateSavings();
+  const isPromoAnimating = showNavyDigitalPromo && !!navyPromoAppliedCode && animatedDigitalPrice > 0;
+  const isPromoFinished = showNavyDigitalPromo && !!navyPromoAppliedCode && animatedDigitalPrice <= 0;
+  const isNavyPromoLocked = hasAnyActiveSubscription || hasActiveSubscription || isBlocked;
+
+  return (
+    <div className={`relative flex flex-col ${themeClasses.bgCard} rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border ${themeClasses.borderPrimary} ${className}`}>
+      {hasPopularPrice && selectedPriceObj?.popular && getPopularBadge()}
+
+      <div className="p-6 flex flex-col flex-1 min-h-0">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <h3 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
+            {language === 'hebrew' ? (product.nameHebrew || product.name) : product.name}
+          </h3>
+          <p className={`${themeClasses.textSecondary} text-sm`}>
+            {language === 'hebrew' ? (product.descriptionHebrew || product.description) : product.description}
+          </p>
+        </div>
+
+        {/* Price Options */}
+        {isBlocked ? (
+          // Blocked due to existing subscription message
+          <div className="mb-6 text-center p-4 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600">
+            <div className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">
+              🚫 {language === 'hebrew' ? 'לא זמין' : 'Not Available'}
+            </div>
+            <div className="text-sm text-slate-600 dark:text-slate-400">
+              {language === 'hebrew' ? 
+                'יש לך כבר מנוי פעיל. ניתן לרכוש רק יעוץ אישי.' : 
+                'You have an active subscription. Only consultations available.'
+              }
+            </div>
+          </div>
+        ) : hasActiveSubscription ? (
+          // Already have this specific product
+          <div className="mb-6 text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+            <div className={`text-lg font-semibold ${themeClasses.textPrimary} mb-2`}>
+              ✅ {language === 'hebrew' ? 'מנוי פעיל' : 'Active Subscription'}
+            </div>
+            <div className={`text-sm ${themeClasses.textSecondary}`}>
+              {language === 'hebrew' ? 
+                'יש לך כבר מנוי פעיל לתוכנית זו' : 
+                'You already have an active subscription for this plan'
+              }
+            </div>
+          </div>
+        ) : product.prices && product.prices.length > 1 ? (
+          <div className="mb-6">
+            <label className={`block text-sm font-medium ${themeClasses.textSecondary} mb-3`}>
+              {language === 'hebrew' ? 'בחר תוכנית:' : 'Choose Plan:'}
+            </label>
+            <div className="space-y-2">
+              {/* Sort prices: 6-month first, then 3-month */}
+              {[...product.prices].sort((a, b) => {
+                const aCommitment = a.commitment || 0;
+                const bCommitment = b.commitment || 0;
+                return bCommitment - aCommitment; // 6-month (6) comes before 3-month (3)
+              }).map((price, priceIndex) => (
+                <label
+                  key={price.id}
+                  className={`
+                    flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors
+                    ${selectedPrice === price.id 
+                      ? `border-blue-500 ${themeClasses.bgSecondary} ring-2 ring-blue-200 dark:ring-blue-800` 
+                      : `${themeClasses.borderPrimary} hover:${themeClasses.bgSecondary}`
+                    }
+                  `}
+                >
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      name={`price-${product.id}`}
+                      value={price.id}
+                      checked={selectedPrice === price.id}
+                      onChange={() => handlePriceSelect(price.id)}
+                      className="mr-3 text-blue-600"
+                    />
+                    <div>
+                      {price.commitment && (
+                        <div className={`font-medium ${themeClasses.textPrimary}`}>
+                          {price.commitment} {language === 'hebrew' ? 'חודשי מחויבות' : 'month commitment'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right flex flex-col items-end">
+                    <div className="flex items-center justify-end gap-2">
+                      <div className={`font-bold ${themeClasses.textPrimary}`}>
+                        {isApproximate(price) && <span className={`text-xs font-normal ${themeClasses.textMuted}`}>{approxLabel}</span>}
+                        {formatPrice(price)}
+                        {price.interval && (
+                          <span className={`text-sm ${themeClasses.textMuted}`}>
+                            /{language === 'hebrew' ? (price.interval === 'month' ? 'חודש' : price.interval) : price.interval}
+                          </span>
+                        )}
+                      </div>
+                      {priceIndex === 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setShowUSD(!showUSD); }}
+                          className={`flex-shrink-0 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                            showUSD 
+                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
+                              : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
+                          } hover:scale-105`}
+                        >
+                          {showUSD ? '₪' : '$'}
+                        </button>
+                      )}
+                    </div>
+                    {price.commitment === 6 && savings && (
+                      <div className={`text-xs text-green-600 dark:text-green-400 font-medium mt-1`}>
+                        {language === 'hebrew' ? 'חיסכון של: ' : 'Saves: '}
+                        {savings.currency === 'ILS' 
+                          ? `₪${Math.round(savings.savings).toLocaleString('he-IL')}`
+                          : `$${Math.round(savings.savings).toLocaleString('en-US')}`
+                        }
+                      </div>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : (
+          // Single price display
+          <div className="text-center mb-6">
+            {product.prices?.[0] && (
+              <>
+                {showNavyDigitalPromo ? (
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <div className="relative text-xl font-semibold text-slate-400">
+                      $48
+                      <div className={`absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 bg-red-500 origin-left ${navyPromoAppliedCode ? 'animate-strike' : 'scale-x-0'}`} />
+                    </div>
+                    <div
+                      className={`inline-flex items-center gap-1 transition-all duration-200 ${
+                        isPromoAnimating ? 'blur-[2px] scale-90 text-indigo-500' : ''
+                      } ${isPromoFinished ? 'text-emerald-500 animate-bouncePop' : `${themeClasses.textPrimary}`}`}
+                    >
+                      <span className="text-2xl font-bold">$</span>
+                      <span className="text-4xl font-black tabular-nums">
+                        {isPromoFinished ? '0' : animatedDigitalPrice}
+                      </span>
+                      <span className={`${themeClasses.textSecondary} text-sm`}>
+                        /{language === 'hebrew' ? 'חודש' : 'month'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowUSD(!showUSD)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                        showUSD
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
+                          : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
+                      } hover:scale-105`}
+                    >
+                      {showUSD ? '₪' : '$'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="inline-flex flex-wrap items-center justify-center gap-2">
+                    {isApproximate(product.prices[0]) && <span className={`text-sm font-normal ${themeClasses.textMuted}`}>{approxLabel}</span>}
+                    <span className={`text-3xl font-bold ${themeClasses.textPrimary}`}>
+                      {formatPrice(product.prices[0])}
+                    </span>
+                    {product.prices[0].interval && (
+                      <span className={`${themeClasses.textSecondary}`}>
+                        /{language === 'hebrew' ? (product.prices[0].interval === 'month' ? 'חודש' : product.prices[0].interval) : product.prices[0].interval}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowUSD(!showUSD)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                        showUSD 
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
+                          : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
+                      } hover:scale-105`}
+                    >
+                      {showUSD ? '₪' : '$'}
+                    </button>
+                    {product.prices[0].commitment && (
+                      <div className={`text-sm ${themeClasses.textMuted} mt-2 w-full basis-full`}>
+                        {product.prices[0].commitment} {language === 'hebrew' ? 'חודשי מחויבות' : 'month commitment'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Features */}
+        {product.features && (
+          <ul className="space-y-3 mb-6 text-sm">
+            {(language === 'hebrew' ? (product.featuresHebrew || product.features) : product.features).map((feature, index) => (
+              <li key={index} className={`flex items-center ${themeClasses.textSecondary}`}>
+                <svg className="w-4 h-4 text-green-500 dark:text-green-400 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                {feature}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {showNavyDigitalPromo && (
+          <div className="mb-6 rounded-xl border border-blue-500/30 p-3 bg-blue-500/5">
+            <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+              {language === 'hebrew' ? 'קוד קופון (Navy)' : 'Promo code (Navy)'}
+            </label>
+            <input
+              type="text"
+              value={navyPromoCode}
+              onChange={(e) => onNavyPromoCodeChange && onNavyPromoCodeChange(e.target.value)}
+              placeholder={language === 'hebrew' ? 'הזינו קוד קופון' : 'Enter promo code'}
+              disabled={isNavyPromoLocked}
+              className={`w-full px-3 py-2 rounded-lg border ${themeClasses.borderPrimary} ${themeClasses.bgSecondary} ${themeClasses.textPrimary}`}
+            />
+            <button
+              type="button"
+              onClick={() => onNavyPromoValidate && onNavyPromoValidate()}
+              disabled={navyPromoLoading || isNavyPromoLocked}
+              className="w-full mt-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold disabled:opacity-60"
+            >
+              {navyPromoLoading
+                ? (language === 'hebrew' ? 'מאמת...' : 'Validating...')
+                : (language === 'hebrew' ? 'אימות קוד' : 'Validate code')}
+            </button>
+            {isNavyPromoLocked && (
+              <p className="text-amber-500 text-xs mt-2">
+                {language === 'hebrew'
+                  ? 'קוד קופון נחסם למשתמש עם מנוי פעיל.'
+                  : 'Promo code is locked while you have an active subscription.'}
+              </p>
+            )}
+            {navyPromoError && <p className="text-red-500 text-xs mt-2">{navyPromoError}</p>}
+            {navyPromoAppliedCode && (
+              <div className="mt-2 text-xs rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-2">
+                <p className={`${themeClasses.textPrimary} font-medium`}>
+                  {language === 'hebrew'
+                    ? `הקוד ${navyPromoAppliedCode} אושר. המחיר הוא $0.`
+                    : `Code ${navyPromoAppliedCode} approved. Price is $0.`}
+                </p>
+                <p className={`${themeClasses.textSecondary} mt-1`}>
+                  {language === 'hebrew'
+                    ? `אנימציה: $${animatedDigitalPrice}/mo -> $0/mo`
+                    : `Animation: $${animatedDigitalPrice}/mo -> $0/mo`}
+                </p>
+                <p className="text-amber-500 mt-1">
+                  {language === 'hebrew'
+                    ? `יש להזין את אותו קוד גם ב-Stripe Checkout.`
+                    : `Enter this exact code in Stripe Checkout too.`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CTA Button - mt-auto keeps it at bottom when card stretches */}
+        <div className="mt-auto pt-4">
+        <button
+          onClick={handlePurchase}
+          disabled={loading || !selectedPrice || isBlocked}
+          className={`
+            w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 transform hover:scale-105
+            ${isBlocked
+              ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+              : hasActiveSubscription
+                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                : selectedPriceObj?.popular || hasPopularPrice
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg'
+                  : 'bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900'
+            }
+            disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
+          `}
+        >
+          {loading ? (
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+              {language === 'hebrew' ? 'טוען...' : 'Loading...'}
+            </div>
+          ) : isBlocked ? (
+            language === 'hebrew' ? 'לא זמין' : 'Not Available'
+          ) : hasActiveSubscription ? (
+            language === 'hebrew' ? 'מנוי פעיל' : 'Active Subscription'
+          ) : (
+            <>
+              {product.category === 'consultation' 
+                ? (language === 'hebrew' ? 'קבע יעוץ' : 'Book Consultation')
+                : (language === 'hebrew' ? 'התחל עכשיו' : 'Get Started')
+              }
+            </>
+          )}
+        </button>
+        </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-600 dark:text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Additional Info */}
+        {product.category === 'consultation' && (
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              {language === 'hebrew' 
+                ? '💡 יועץ התזונה שלנו יחזור אליך תוך 24 שעות לתיאום הפגישה'
+                : '💡 Our nutrition expert will contact you within 24 hours to schedule your session'
+              }
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default PricingCard;
