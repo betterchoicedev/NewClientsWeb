@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import Navigation from '../components/Navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Import our highly scalable Template Factory
 import { getTemplate } from '../company/templates';
@@ -149,68 +150,136 @@ export default function LandingPage() {
     validateCampaign();
   }, [location.hash, language]);
 
-  if (isValidating) {
-    return (
-      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 border-t-emerald-400 animate-spin" />
-          <p className="text-emerald-400 font-mono tracking-widest text-xs uppercase safe animate-pulse">
-            SECURE_HANDSHAKE_INIT // VALIDATING
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (errorMessage) {
-    return (
-      <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900" dir={direction}>
-        <Navigation />
-        <main className="flex-1 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-stone-950/60 backdrop-blur-xl border border-rose-500/20 rounded-[2rem] p-8 md:p-12 shadow-2xl text-center transition-all duration-300">
-            <div className="w-16 h-16 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-6 animate-pulse">
-              ⚠️
-            </div>
-            <h2 className="text-2xl font-black text-white mb-3 tracking-tight">
-              {language === 'hebrew' ? 'גישה מוגבלת' : 'Access Restricted'}
-            </h2>
-            <p className="text-stone-300 font-medium text-sm leading-relaxed mb-8 px-2">
-              {errorMessage}
-            </p>
-            <button 
-              onClick={() => navigate('/')} 
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold text-sm tracking-wide shadow-lg hover:from-emerald-600 hover:to-green-700 transition-all duration-300 transform active:scale-95"
-            >
-              {language === 'hebrew' ? 'חזרה לדף הבית' : 'Return to Safe Base'}
-            </button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  const SelectedTemplate = getTemplate(dbConfig?.ui?.layout);
+  // Safely retrieve template only if we have configurations to prevent factory execution errors during load
+  const SelectedTemplate = (!isValidating && !errorMessage) ? getTemplate(dbConfig?.ui?.layout) : null;
 
   return (
     <div 
-      className="min-h-screen language-transition language-text-transition flex flex-col" 
+      className={`min-h-screen language-transition language-text-transition flex flex-col ${
+        isDarkMode 
+          ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' 
+          : 'bg-gradient-to-br from-emerald-50 via-teal-50 to-slate-100'
+      }`} 
       dir={direction} 
       style={{ height: '100vh', overflow: 'hidden' }}
     >
-      <Navigation />
+      <AnimatePresence>
+        {!isValidating && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="z-50 shrink-0"
+          >
+            <Navigation />
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       <main 
-        className="flex-1 overflow-y-auto custom-scrollbar flex flex-col bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900" 
+        className="flex-1 overflow-y-auto custom-scrollbar flex flex-col relative z-10" 
         style={{ minHeight: 0 }}
       >
-        <SelectedTemplate 
-          config={dbConfig}
-          campaign={campaignData}
-          manager={managerData}
-          companySlug={companySlug}
-          navigate={navigate}
-          hash={location.hash}
-        />
+        <AnimatePresence mode="wait">
+          {isValidating ? (
+            <motion.div 
+              key="validating"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, filter: 'blur(10px)', scale: 1.05 }}
+              transition={{ duration: 0.5, ease: 'easeInOut' }}
+              className="flex-1 flex items-center justify-center w-full h-full"
+            >
+              <div className="flex flex-col items-center gap-6">
+                <motion.div 
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                  className={`w-14 h-14 rounded-full border-4 ${
+                    isDarkMode ? 'border-emerald-500/20 border-t-emerald-400' : 'border-emerald-600/20 border-t-emerald-600'
+                  } shadow-[0_0_15px_rgba(52,211,153,0.3)]`} 
+                />
+                <motion.p 
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  className={`font-mono tracking-[0.2em] text-xs uppercase font-semibold ${
+                    isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
+                  }`}
+                >
+                  SECURE_HANDSHAKE_INIT // VALIDATING
+                </motion.p>
+              </div>
+            </motion.div>
+          ) : errorMessage ? (
+            <motion.div 
+              key="error"
+              initial={{ opacity: 0, scale: 0.95, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -20 }}
+              transition={{ duration: 0.6, type: 'spring', bounce: 0.4 }}
+              className="flex-1 flex items-center justify-center p-4 w-full h-full"
+            >
+              <div className={`max-w-md w-full backdrop-blur-xl border rounded-[2rem] p-8 md:p-12 shadow-[0_0_40px_rgba(225,29,72,0.15)] text-center transition-all duration-300 relative overflow-hidden ${
+                isDarkMode 
+                  ? 'bg-slate-900/60 border-rose-500/30' 
+                  : 'bg-white/80 border-rose-400/40'
+              }`}>
+                {/* Soft glowing ambient orb for premium depth */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-rose-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 pointer-events-none" />
+
+                <motion.div 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1, rotate: [0, 8, -8, 0] }}
+                  transition={{ duration: 0.6, type: 'spring', bounce: 0.6, delay: 0.1 }}
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6 shadow-inner border ${
+                    isDarkMode 
+                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
+                      : 'bg-rose-100 text-rose-600 border-rose-200'
+                  }`}
+                >
+                  ⚠️
+                </motion.div>
+                
+                <h2 className={`text-2xl font-black mb-3 tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                  {language === 'hebrew' ? 'גישה מוגבלת' : 'Access Restricted'}
+                </h2>
+                
+                <p className={`font-medium text-sm leading-relaxed mb-8 px-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                  {errorMessage}
+                </p>
+                
+                <motion.button 
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => navigate('/')} 
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm tracking-wide shadow-lg hover:shadow-emerald-500/25 transition-all duration-300 relative overflow-hidden group"
+                >
+                  <span className="relative z-10">{language === 'hebrew' ? 'חזרה לדף הבית' : 'Return to Safe Base'}</span>
+                  <div className="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                </motion.button>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="template"
+              initial={{ opacity: 0, scale: 0.98, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: -20 }}
+              transition={{ duration: 0.6, type: 'spring', bounce: 0.2 }}
+              className="flex-1 flex flex-col w-full min-h-full"
+            >
+              {SelectedTemplate && (
+                <SelectedTemplate 
+                  config={dbConfig}
+                  campaign={campaignData}
+                  manager={managerData}
+                  companySlug={companySlug}
+                  navigate={navigate}
+                  hash={location.hash}
+                />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );
