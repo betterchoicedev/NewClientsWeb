@@ -8307,6 +8307,87 @@ app.post('/api/auth/create-client', async (req, res) => {
   }
 });
 
+
+// ──────────────────────────────────────────────────────────────────────────
+// Apple OAuth exchange (signup)
+//
+// Signup needs a Supabase UUID + session before create-client runs.
+// Apple's identity-token `sub` is NOT a UUID — signInWithIdToken mints
+// the real Supabase user. Login uses /oauth/apple/verify instead.
+//
+// Body: { identityToken: string, fullName?: { givenName?, familyName? } }
+// Returns: { userId, accessToken, refreshToken, expiresAt?, expiresIn?, email }
+// ──────────────────────────────────────────────────────────────────────────
+app.post('/api/auth/oauth/apple/exchange', async (req, res) => {
+  try {
+    const { identityToken, fullName } = req.body || {};
+    if (!identityToken || typeof identityToken !== 'string') {
+      return res.status(400).json({ error: 'identityToken is required' });
+    }
+
+    const payload = decodeJwtPayloadServer(identityToken);
+    const claimedEmail =
+      typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+
+    if (claimedEmail && (await emailHasBetterChoiceAccount(claimedEmail))) {
+      return res.status(409).json({ error: 'account_exists', email: claimedEmail });
+    }
+
+    const { data, error } = await clientDB.auth.signInWithIdToken({
+      provider: 'apple',
+      token: identityToken,
+    });
+
+    if (error) {
+      console.error('❌ Apple signup signInWithIdToken error:', error);
+      return res.status(401).json({ error: error.message || 'Apple sign-in rejected' });
+    }
+
+    if (!data?.user || !data?.session) {
+      return res.status(401).json({ error: 'Apple sign-in returned no session' });
+    }
+
+    const verifiedEmail = (data.user.email || claimedEmail || '').trim().toLowerCase();
+    if (
+      verifiedEmail &&
+      verifiedEmail !== claimedEmail &&
+      (await emailHasBetterChoiceAccount(verifiedEmail))
+    ) {
+      try {
+        await clientDB.auth.admin.deleteUser(data.user.id);
+      } catch (e) {
+        console.warn('Apple exchange: orphan cleanup failed:', e?.message);
+      }
+      return res.status(409).json({ error: 'account_exists', email: verifiedEmail });
+    }
+
+    if (fullName && (fullName.givenName || fullName.familyName)) {
+      try {
+        const patch = {};
+        if (fullName.givenName) patch.first_name = fullName.givenName;
+        if (fullName.familyName) patch.last_name = fullName.familyName;
+        await clientDB.auth.admin.updateUserById(data.user.id, {
+          user_metadata: patch,
+        });
+      } catch {
+        /* best-effort — Apple only shares the name on first sign-in */
+      }
+    }
+
+    return res.json({
+      userId: data.user.id,
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      expiresAt: data.session.expires_at ?? undefined,
+      expiresIn: data.session.expires_in ?? undefined,
+      email: data.user.email || claimedEmail || '',
+    });
+  } catch (error) {
+    console.error('POST /api/auth/oauth/apple/exchange error:', error);
+    res.status(500).json({ error: error.message || 'Apple sign-up failed' });
+  }
+});
+
 // Get client record
 app.get('/api/auth/client/:userId', async (req, res) => {
   try {

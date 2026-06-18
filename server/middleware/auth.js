@@ -115,6 +115,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
 
   const PUBLIC_API_PREFIXES = [
     '/api/auth/login',
+    '/api/auth/oauth/apple/exchange',
     '/api/auth/signup',
     '/api/auth/check-email',
     '/api/auth/check-phone',
