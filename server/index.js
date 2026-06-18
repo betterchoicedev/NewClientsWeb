@@ -8071,9 +8071,17 @@ app.get('/api/auth/default-provider', async (req, res) => {
 // Create client record (used after OAuth signup, e.g. Google; also by WhatsAppRegisterPage, OnboardingModal)
 app.post('/api/auth/create-client', async (req, res) => {
   try {
-    const { userId, userData, userCode, providerId, invitationToken, managerLinkData } = req.body;
-    if (!userId || !userData || !userCode) {
-      return res.status(400).json({ error: 'User ID, user data, and user code are required' });
+    const {
+      userId,
+      userData,
+      userCode: requestedUserCode,
+      providerId,
+      invitationToken,
+      managerLinkData,
+      providerToken,
+    } = req.body;
+    if (!userId || !userData) {
+      return res.status(400).json({ error: 'User ID and user data are required' });
     }
 
     if (req.userId && userId !== req.userId) {
@@ -8095,12 +8103,46 @@ app.post('/api/auth/create-client', async (req, res) => {
       .maybeSingle();
 
     if (existingClient) {
+      const accessToken = providerToken?.accessToken || null;
+      const refreshToken = providerToken?.refreshToken || null;
       return res.json({
-        data: [existingClient],
+        data: {
+          user: { id: userId, email: existingClient.email || userData.email || '' },
+          session: {
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            expires_at: providerToken?.expiresAt ?? undefined,
+            expires_in: providerToken?.expiresIn ?? undefined,
+            token_type: 'bearer',
+          },
+        },
+        language: null,
+        error: null,
         alreadyExisted: true,
-        chatUserCreated: false,
-        chatUserData: null,
       });
+    }
+
+    // Auto-generate userCode when the mobile OAuth signup flow doesn't send one.
+    let userCode = requestedUserCode || null;
+    if (!userCode) {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      let attempts = 0;
+      while (attempts < 100 && !userCode) {
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+          code += letters.charAt(Math.floor(Math.random() * letters.length));
+        }
+        const { data: codeCheck } = await clientDB
+          .from('clients')
+          .select('user_code')
+          .eq('user_code', code)
+          .maybeSingle();
+        if (!codeCheck) userCode = code;
+        attempts++;
+      }
+      if (!userCode) {
+        return res.status(500).json({ error: 'Failed to generate unique user code' });
+      }
     }
 
     const clientInsertData = {
@@ -8217,10 +8259,24 @@ app.post('/api/auth/create-client', async (req, res) => {
       }
     }
 
-    res.json({ 
-      data, 
+    const accessToken = providerToken?.accessToken || null;
+    const refreshToken = providerToken?.refreshToken || null;
+    const clientRow = data && data[0];
+    res.json({
+      data: {
+        user: { id: userId, email: clientRow?.email || userData.email || '' },
+        session: {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_at: providerToken?.expiresAt ?? undefined,
+          expires_in: providerToken?.expiresIn ?? undefined,
+          token_type: 'bearer',
+        },
+      },
+      language: null,
+      error: null,
       chatUserCreated,
-      chatUserData: chatUserDataResult
+      chatUserData: chatUserDataResult,
     });
   } catch (error) {
     console.error('Error creating client record:', error);
