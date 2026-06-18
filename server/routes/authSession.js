@@ -24,15 +24,15 @@ function getApiPublicOrigin(req) {
 }
 
 function buildMobileAppOAuthRedirect(session) {
-  const query = new URLSearchParams({
+  const fragment = new URLSearchParams({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
     expires_at: String(session.expires_at ?? ''),
     expires_in: String(session.expires_in ?? ''),
     token_type: session.token_type || 'bearer',
   }).toString();
-  const joiner = MOBILE_APP_OAUTH_REDIRECT.includes('?') ? '&' : '?';
-  return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${query}`;
+  const joiner = MOBILE_APP_OAUTH_REDIRECT.includes('#') ? '&' : '#';
+  return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
 }
 
 function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAnonKey, supabaseDb }) {
@@ -196,10 +196,12 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
   //   * Implicit flow  → Supabase returns the session in the URL fragment
   //                      (`#access_token=…`). Browsers strip fragments
   //                      before sending the HTTP request, so the server
-  //                      sees an empty querystring. We serve a tiny HTML
-  //                      bridge that reads the fragment and forwards tokens
-  //                      as **query** params on the deep link (the mobile
-  //                      app reads `?access_token=…`, not `#`).
+  //                      sees an empty querystring. We can't handle this
+  //                      server-side; instead we serve a tiny HTML bridge
+  //                      page that reads the fragment in the browser and
+  //                      `window.location.replace()`s into the deep link
+  //                      with the fragment intact. The app-side parser
+  //                      already understands `#access_token=…` payloads.
   //
   // IMPORTANT — Supabase Dashboard configuration:
   //   Every backend host that serves `/api/auth/oauth/mobile-callback` MUST
@@ -222,7 +224,10 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
       const code = req.query.code;
       if (!code) {
         // Implicit-flow bridge: payload is in the URL fragment, which never
-        // reached us. Flatten search + hash into query params on the deep link.
+        // reached us. Bounce through the browser so it can hand the fragment
+        // off to the deep link. JSON.stringify safely escapes the target URL
+        // for embedding in a JS string literal (handles quotes, backslashes,
+        // U+2028/U+2029, etc.).
         const safeTarget = JSON.stringify(MOBILE_APP_OAUTH_REDIRECT);
         const html = `<!doctype html>
 <html lang="en">
@@ -247,17 +252,11 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
     (function(){
       try {
         var target = ${safeTarget};
-        var search = window.location.search || '';
         var hash = window.location.hash || '';
-        if (hash.charAt(0) === '#') hash = hash.slice(1);
-        var url = target;
-        if (search) {
-          url += search.charAt(0) === '?' ? search : '?' + search;
-        }
-        if (hash) {
-          url += (url.indexOf('?') >= 0 ? '&' : '?') + hash;
-        }
-        window.location.replace(url);
+        var search = window.location.search || '';
+        // location.replace so the back button can't drop the user back on
+        // this OAuth page after the deep-link fires.
+        window.location.replace(target + search + hash);
       } catch (e) {
         window.location.replace(${safeTarget} + '?error=bridge_failed');
       }
