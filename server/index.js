@@ -135,22 +135,6 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV || 'development'
   });
 });
-const MOBILE_APP_OAUTH_REDIRECT = (
-  process.env.MOBILE_OAUTH_REDIRECT || 'betterchoicemobile://auth/callback'
-).trim();
-
-function buildMobileAppOAuthRedirect(session) {
-  const fragment = new URLSearchParams({
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-    expires_at: String(session.expires_at ?? ''),
-    expires_in: String(session.expires_in ?? ''),
-    token_type: session.token_type || 'bearer',
-  }).toString();
-  const joiner = MOBILE_APP_OAUTH_REDIRECT.includes('#') ? '&' : '#';
-  return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
-}
-
 app.post('/api/auth/refresh', async (req, res) => {
   try {
     const { refresh_token } = req.body || {};
@@ -250,7 +234,83 @@ async function emailHasBetterChoiceAccount(email) {
   }
   return false;
 }
+async function ensureClientLinkedToAuthUser(authUserId, email) {
+  if (!authUserId || !email) return;
 
+  const normalizedEmail = email.trim().toLowerCase();
+  try {
+    const { data: byUserId } = await clientDB
+      .from('clients')
+      .select('id, user_code')
+      .eq('user_id', authUserId)
+      .maybeSingle();
+
+    if (byUserId?.user_code) return;
+
+    const { data: byEmail } = await clientDB
+      .from('clients')
+      .select('id, user_id, user_code')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (!byEmail?.user_code) return;
+
+    if (byEmail.user_id !== authUserId) {
+      const { error } = await clientDB
+        .from('clients')
+        .update({ user_id: authUserId, updated_at: new Date().toISOString() })
+        .eq('id', byEmail.id);
+
+      if (error) {
+        console.warn('ensureClientLinkedToAuthUser: link failed for', normalizedEmail, error.message);
+      } else {
+        console.log('✅ Linked clients.user_id for', normalizedEmail, '→', authUserId);
+      }
+    }
+  } catch (e) {
+    console.warn('ensureClientLinkedToAuthUser failed:', e?.message);
+  }
+}
+
+async function resolveUserCodeForAuthUser(authUserId, email) {
+  if (!authUserId) return null;
+
+  const { data: byUserId, error } = await clientDB
+    .from('clients')
+    .select('id, user_code, user_id, email')
+    .eq('user_id', authUserId)
+    .maybeSingle();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  if (byUserId?.user_code) return byUserId.user_code;
+
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const { data: byEmail, error: emailErr } = await clientDB
+    .from('clients')
+    .select('id, user_code, user_id, email')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (emailErr && emailErr.code !== 'PGRST116') throw emailErr;
+  if (!byEmail?.user_code) return null;
+
+  if (byEmail.user_id !== authUserId) {
+    const { error: linkErr } = await clientDB
+      .from('clients')
+      .update({ user_id: authUserId, updated_at: new Date().toISOString() })
+      .eq('id', byEmail.id);
+
+    if (linkErr) {
+      console.warn('resolveUserCodeForAuthUser: link failed for', normalizedEmail, linkErr.message);
+    } else {
+      console.log('✅ Linked clients.user_id via user-code lookup for', normalizedEmail);
+    }
+  }
+
+  return byEmail.user_code;
+}
 app.post('/api/auth/oauth/apple/verify', async (req, res) => {
   try {
     const { identityToken, fullName } = req.body || {};
@@ -309,7 +369,7 @@ app.post('/api/auth/oauth/apple/verify', async (req, res) => {
     }
 
     const finalEmail = verifiedEmail || claimedEmail;
-
+    await ensureClientLinkedToAuthUser(data.user.id, finalEmail);
     // Best-effort: record the Apple-provided name onto the matching client
     // row the first time the user signs in (Apple only shares this on the
     // very first sign-in event). We don't fail the request if it doesn't
@@ -738,66 +798,9 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * Mobile app calls this to kick off Google sign-in.
- *
- * IMPORTANT — we intentionally bypass our own `/api/auth/oauth/mobile-callback`
- * and tell Supabase to redirect **straight to the app's deep link**
- * (`betterchoicemobile://auth/callback`). Why:
- *
- *   • Our `supabaseAuth` client is created without a `flowType` option, so
- *     `auth.signInWithOAuth()` defaults to the **implicit** OAuth flow.
- *     Implicit-flow tokens come back in the URL **fragment**
- *     (`#access_token=…`) which browsers never send to servers — so our
- *     server callback can never read them and would always end up
- *     redirecting with `?error=oauth_missing_code`.
- *
- *   • The PKCE alternative requires server-side persistence of a
- *     `code_verifier` between the start request and the callback. On
- *     Cloud Run that's brittle (any new instance kills the verifier
- *     because the Supabase JS client stores it in memory by default).
- *
- *   • Supabase's documented mobile pattern is exactly this: 302 the user
- *     straight from Supabase into the app via its custom URL scheme,
- *     with tokens in the fragment, and let the app parse them.
- *
- * Prerequisite: the deep link below MUST be present in the Supabase
- * dashboard → Authentication → URL Configuration → Redirect URLs (an
- * exact match or a wildcard like `betterchoicemobile://*` both work).
- */
-app.post('/api/auth/oauth/google/start', async (req, res) => {
-  try {
-    const supabaseUrl = (process.env.REACT_APP_SUPABASE_URL || '').trim();
-    if (!supabaseUrl) {
-      return res.status(500).json({ error: 'SUPABASE_URL is not configured' });
-    }
-
-    // Build the Supabase `/auth/v1/authorize` URL by hand. We do NOT
-    // include a `code_challenge`, so Supabase serves the implicit flow
-    // and returns tokens in the redirect's URL fragment. We also do NOT
-    // call `supabaseAuth.auth.signInWithOAuth(...)` because newer
-    // versions of @supabase/supabase-js silently switch to PKCE when
-    // available, which would round-trip back through our server (and we
-    // don't want that — see comment above).
-    const params = new URLSearchParams({
-      provider: 'google',
-      redirect_to: MOBILE_APP_OAUTH_REDIRECT,
-    });
-
-    const url = `${supabaseUrl.replace(/\/$/, '')}/auth/v1/authorize?${params.toString()}`;
-    res.json({ url });
-  } catch (error) {
-    console.error('POST /api/auth/oauth/google/start error:', error);
-    res.status(500).json({ error: error.message || 'Failed to start Google sign-in' });
-  }
-});
-
-// NOTE: `GET /api/auth/oauth/mobile-callback` is intentionally NOT defined
-// here — the live implementation lives in `server/routes/authSession.js`
-// (registered above via `registerAuthSessionRoutes`). Keeping a duplicate
-// here used to mask which one was active; if you need to change behavior,
-// edit the one in `authSession.js`.
-
+// Mobile Google OAuth start — redirects through /api/auth/oauth/mobile-callback
+// (see server/routes/authSession.js). Prerequisite: whitelist that callback URL
+// and betterchoicemobile://auth/callback in Supabase Auth → Redirect URLs.
 app.post('/api/auth/oauth/google/start', async (req, res) => {
   try {
     // Build the absolute URL of our own mobile-callback. Honors the
@@ -4405,17 +4408,14 @@ app.get('/api/profile/user-code', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    const { data, error } = await clientDB
-      .from('clients')
-      .select('user_code')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error && error.code !== 'PGRST116') {
-      throw error;
+    if (req.userId && userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
     }
 
-    res.json({ user_code: data?.user_code || null });
+    const email = req.authUser?.email || null;
+    const userCode = await resolveUserCodeForAuthUser(userId, email);
+
+    res.json({ user_code: userCode || null });
   } catch (error) {
     console.error('Error fetching user_code:', error);
     res.status(500).json({ error: error.message });
@@ -7668,6 +7668,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     console.log('✅ Login successful for user:', data.user.id);
+    await ensureClientLinkedToAuthUser(data.user.id, data.user.email);
 
     // Fetch user's language preference directly from database
     let languageData = null;
@@ -7993,12 +7994,37 @@ app.get('/api/auth/default-provider', async (req, res) => {
   }
 });
 
+async function generateUniqueClientUserCode(db) {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (let attempts = 0; attempts < 100; attempts++) {
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    const { data: codeCheck } = await db
+      .from('clients')
+      .select('user_code')
+      .eq('user_code', code)
+      .maybeSingle();
+    if (!codeCheck) return code;
+  }
+  return null;
+}
+
 // Create client record (used after OAuth signup, e.g. Google; also by WhatsAppRegisterPage, OnboardingModal)
 app.post('/api/auth/create-client', async (req, res) => {
   try {
-    const { userId, userData, userCode, providerId, invitationToken, managerLinkData } = req.body;
-    if (!userId || !userData || !userCode) {
-      return res.status(400).json({ error: 'User ID, user data, and user code are required' });
+    const { userId, userData, userCode: userCodeFromBody, providerId, invitationToken, managerLinkData } = req.body;
+    if (!userId || !userData) {
+      return res.status(400).json({ error: 'User ID and user data are required' });
+    }
+
+    let userCode = userCodeFromBody;
+    if (!userCode) {
+      userCode = await generateUniqueClientUserCode(clientDB);
+      if (!userCode) {
+        return res.status(500).json({ error: 'Failed to generate unique user code' });
+      }
     }
 
     if (req.userId && userId !== req.userId) {

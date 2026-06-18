@@ -26,6 +26,60 @@ function SignupPage() {
   const [dietitianId, setDietitianId] = useState(null);
   const [invitationToken, setInvitationToken] = useState(null);
   const [hasInvitationToken, setHasInvitationToken] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
+  const [dismissMobileAppBridge, setDismissMobileAppBridge] = useState(false);
+
+  const APP_STORE_URL = 'https://apps.apple.com/il/app/betterchoice-ai-co/id6770512379';
+  const APPLE_APP_ID = '6770512379';
+
+  const getActiveInvitationToken = () =>
+    invitationToken || window.location.hash.match(/[#&]d=([^&]*)/)?.[1] || null;
+
+  // iOS-only for now; extend with `|| isAndroid` when the Android app is available
+  const showMobileAppBridge = isIOS && hasInvitationToken && !dismissMobileAppBridge;
+
+  const detectPlatform = () => {
+    const userAgent = (navigator.userAgent || navigator.vendor || window.opera || '').toLowerCase();
+    const isAndroidDevice = /android/i.test(userAgent);
+    const isIOSDevice =
+      /iphone|ipad|ipod/i.test(userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return { isIOSDevice, isAndroidDevice };
+  };
+
+  useEffect(() => {
+    const updatePlatformState = () => {
+      const { isIOSDevice, isAndroidDevice } = detectPlatform();
+      setIsIOS(isIOSDevice);
+      setIsAndroid(isAndroidDevice);
+    };
+
+    updatePlatformState();
+    window.addEventListener('resize', updatePlatformState);
+
+    return () => window.removeEventListener('resize', updatePlatformState);
+  }, []);
+
+  useEffect(() => {
+    if (!isIOS || !hasInvitationToken) return undefined;
+
+    const token = getActiveInvitationToken();
+    if (!token) return undefined;
+
+    const metaContent = `app-id=${APPLE_APP_ID}, app-argument=https://betterchoice.one/signup#d=${token}`;
+    let meta = document.querySelector('meta[name="apple-itunes-app"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'apple-itunes-app');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', metaContent);
+
+    return () => {
+      meta.remove();
+    };
+  }, [isIOS, hasInvitationToken, invitationToken]);
 
   // Decode #d= value: new limited #d=base64(JSON{link_id,manager_id,max_clients?,expiry_date?}) or old simple #d=base64(manager_id).
   // Returns { link_id?, manager_id, isLimited } or null.
@@ -58,6 +112,7 @@ function SignupPage() {
       if (!match || !match[1]) return false;
       const base64Token = match[1];
       setInvitationToken(base64Token);
+      localStorage.setItem('deferred_invitation_token', base64Token);
       const linkData = decodeRegistrationHash(base64Token);
       if (!linkData) return false;
       sessionStorage.setItem('manager_link_data', JSON.stringify({ link_id: linkData.link_id || undefined, manager_id: linkData.manager_id }));
@@ -440,6 +495,55 @@ function SignupPage() {
                     {language === 'hebrew' ? 'הצטרף לרשימת ההמתנה' : 'Join Waiting List'}
                   </Link>
                 </motion.div>
+              </motion.div>
+            ) : showMobileAppBridge ? (
+              <motion.div
+                key="mobile-app-bridge"
+                variants={containerVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className={`${isDarkMode ? 'bg-slate-900/80 border-slate-700/50' : 'bg-white/80 border-white/50'} backdrop-blur-xl border rounded-3xl shadow-2xl p-8 sm:p-10 text-center relative overflow-hidden`}
+              >
+                <motion.div variants={itemVariants} className="mb-6 flex justify-center">
+                  <div className={`p-4 rounded-full ${isDarkMode ? 'bg-emerald-500/10' : 'bg-emerald-100'} shadow-inner`}>
+                    <img src="/favicon.ico" alt="BetterChoice AI" className="h-12 w-12 rounded-xl" />
+                  </div>
+                </motion.div>
+                <motion.h2 variants={itemVariants} className={`text-2xl sm:text-3xl font-extrabold ${themeClasses.textPrimary} mb-4 tracking-tight`}>
+                  {language === 'hebrew' ? 'הוזמנת להצטרף!' : 'You have been invited!'}
+                </motion.h2>
+                <motion.p variants={itemVariants} className={`${themeClasses.textSecondary} mb-8 leading-relaxed`}>
+                  {language === 'hebrew'
+                    ? 'לחוויה הטובה ביותר, המשך את ההרשמה באפליקציית BetterChoice AI.'
+                    : 'For the best experience, continue your registration in the BetterChoice AI app.'}
+                </motion.p>
+                <motion.div variants={itemVariants} className="space-y-3">
+                  <motion.a
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    href={`betterchoicemobile://signup#d=${getActiveInvitationToken()}`}
+                    className="block w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3.5 px-6 rounded-xl font-bold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all duration-300"
+                  >
+                    {language === 'hebrew' ? 'יש לי את האפליקציה - פתח עכשיו' : 'I have the App - Open Now'}
+                  </motion.a>
+                  <motion.a
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    href={APP_STORE_URL}
+                    className={`block w-full py-3.5 px-6 rounded-xl font-bold border-2 transition-all duration-300 ${isDarkMode ? 'border-slate-600 bg-slate-800 text-white hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'}`}
+                  >
+                    {language === 'hebrew' ? 'הורד ל-iOS' : 'Download for iOS'}
+                  </motion.a>
+                </motion.div>
+                <motion.button
+                  variants={itemVariants}
+                  type="button"
+                  onClick={() => setDismissMobileAppBridge(true)}
+                  className={`mt-8 text-sm font-medium underline underline-offset-4 transition-colors duration-300 ${isDarkMode ? 'text-slate-400 hover:text-emerald-400' : 'text-gray-500 hover:text-emerald-600'}`}
+                >
+                  {language === 'hebrew' ? 'המשך בדפדפן בכל זאת' : 'Continue in browser anyway'}
+                </motion.button>
               </motion.div>
             ) : (
               <motion.div 

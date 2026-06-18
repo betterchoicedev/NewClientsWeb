@@ -1129,12 +1129,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
   };
 
   // Canonical meal order (chronological) - used to enforce order when selecting multiple meals
-  const MEAL_ORDER_EN = ['Meal', 'Breakfast', 'Morning Snack', 'Brunch', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack', 'Late Dinner', 'Post-Workout Meal', 'Midnight Snack'];
+  const MEAL_ORDER_EN = ['Breakfast', 'Morning Snack', 'Brunch', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack', 'Late Dinner', 'Post-Workout Meal', 'Midnight Snack'];
 
   // Get all available meal names
   const getAllMealNames = (isHebrew = false) => {
-    const mealNamesEn = ['Meal', 'Breakfast', 'Morning Snack', 'Brunch', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack', 'Late Dinner', 'Post-Workout Meal', 'Midnight Snack'];
-    const mealNamesHe = ['ארוחה', 'ארוחת בוקר', 'חטיף בוקר', 'בראנץ\'', 'ארוחת צהריים', 'חטיף צהריים', 'ארוחת ערב', 'חטיף ערב', 'ארוחת ערב מאוחרת', 'ארוחה לאחר אימון', 'חטיף לילה'];
+    const mealNamesEn = ['Breakfast', 'Morning Snack', 'Brunch', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack', 'Late Dinner', 'Post-Workout Meal', 'Midnight Snack'];
+    const mealNamesHe = ['ארוחת בוקר', 'חטיף בוקר', 'בראנץ\'', 'ארוחת צהריים', 'חטיף צהריים', 'ארוחת ערב', 'חטיף ערב', 'ארוחת ערב מאוחרת', 'ארוחה לאחר אימון', 'חטיף לילה'];
     return isHebrew ? mealNamesHe : mealNamesEn;
   };
 

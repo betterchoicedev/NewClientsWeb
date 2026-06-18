@@ -122,6 +122,8 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/auth/check-registration-rule',
     '/api/auth/default-provider',
     '/api/auth/google',
+    '/api/auth/oauth/google/start',
+    '/api/auth/oauth/google/finalize',
     '/api/auth/oauth/callback',
     '/api/auth/oauth/mobile-callback',
     '/api/auth/oauth/exchange',
