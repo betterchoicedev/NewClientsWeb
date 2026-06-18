@@ -8068,8 +8068,50 @@ app.get('/api/auth/default-provider', async (req, res) => {
   }
 });
 
-// Create client record (used after OAuth signup, e.g. Google; also by WhatsAppRegisterPage, OnboardingModal)
+// Create client record (used after OAuth signup, e.g. Google; also by WhatsAppRegisterPage, OnboardingModal, mobile)
 app.post('/api/auth/create-client', async (req, res) => {
+  const buildCreateClientResponse = ({
+    userId,
+    userData,
+    clientRows,
+    providerToken,
+    alreadyExisted,
+    chatUserCreated,
+    chatUserData,
+  }) => {
+    const clientRow = clientRows?.[0] ?? null;
+    const email = clientRow?.email || userData?.email || '';
+
+    // Mobile OAuth sends providerToken and expects { data: { user, session } }.
+    // Web callers omit providerToken and expect { data: [clientRow], chatUserCreated, ... }.
+    if (providerToken) {
+      return {
+        data: {
+          user: { id: userId, email },
+          session: {
+            access_token: providerToken.accessToken || null,
+            refresh_token: providerToken.refreshToken || null,
+            expires_at: providerToken.expiresAt ?? undefined,
+            expires_in: providerToken.expiresIn ?? undefined,
+            token_type: 'bearer',
+          },
+        },
+        language: null,
+        error: null,
+        ...(alreadyExisted ? { alreadyExisted: true } : {}),
+        chatUserCreated: chatUserCreated ?? false,
+        chatUserData: chatUserData ?? null,
+      };
+    }
+
+    return {
+      data: clientRows ?? [],
+      ...(alreadyExisted ? { alreadyExisted: true } : {}),
+      chatUserCreated: chatUserCreated ?? false,
+      chatUserData: chatUserData ?? null,
+    };
+  };
+
   try {
     const {
       userId,
@@ -8103,23 +8145,15 @@ app.post('/api/auth/create-client', async (req, res) => {
       .maybeSingle();
 
     if (existingClient) {
-      const accessToken = providerToken?.accessToken || null;
-      const refreshToken = providerToken?.refreshToken || null;
-      return res.json({
-        data: {
-          user: { id: userId, email: existingClient.email || userData.email || '' },
-          session: {
-            access_token: accessToken,
-            refresh_token: refreshToken,
-            expires_at: providerToken?.expiresAt ?? undefined,
-            expires_in: providerToken?.expiresIn ?? undefined,
-            token_type: 'bearer',
-          },
-        },
-        language: null,
-        error: null,
+      return res.json(buildCreateClientResponse({
+        userId,
+        userData,
+        clientRows: [existingClient],
+        providerToken,
         alreadyExisted: true,
-      });
+        chatUserCreated: false,
+        chatUserData: null,
+      }));
     }
 
     // Auto-generate userCode when the mobile OAuth signup flow doesn't send one.
@@ -8259,25 +8293,14 @@ app.post('/api/auth/create-client', async (req, res) => {
       }
     }
 
-    const accessToken = providerToken?.accessToken || null;
-    const refreshToken = providerToken?.refreshToken || null;
-    const clientRow = data && data[0];
-    res.json({
-      data: {
-        user: { id: userId, email: clientRow?.email || userData.email || '' },
-        session: {
-          access_token: accessToken,
-          refresh_token: refreshToken,
-          expires_at: providerToken?.expiresAt ?? undefined,
-          expires_in: providerToken?.expiresIn ?? undefined,
-          token_type: 'bearer',
-        },
-      },
-      language: null,
-      error: null,
+    res.json(buildCreateClientResponse({
+      userId,
+      userData,
+      clientRows: data,
+      providerToken,
       chatUserCreated,
       chatUserData: chatUserDataResult,
-    });
+    }));
   } catch (error) {
     console.error('Error creating client record:', error);
     res.status(500).json({ error: error.message });
