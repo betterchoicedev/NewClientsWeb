@@ -7037,6 +7037,116 @@ app.get('/api/debug/meal-plans', async (req, res) => {
   }
 });
 
+// ─── Onboarding resume status ────────────────────────────────────────────
+// Auth-protected. Returns the onboarding completion flag, the step the user
+// should resume from, and enough pre-filled data to seed the wizard.
+//
+// GET /api/onboarding/status
+// Returns: { completed: bool, step: 0-6, resumeData: object }
+// ─────────────────────────────────────────────────────────────────────────
+app.get('/api/onboarding/status', async (req, res) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { data: client, error: clientErr } = await clientDB
+      .from('clients')
+      .select(
+        'first_name, last_name, phone, user_language, region, city, timezone, birth_date, gender, height, current_weight, target_weight, goal, measurement_system, medical_conditions, activity_level, food_allergies, food_limitations, onboarding_completed, user_code',
+      )
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (clientErr && clientErr.code !== 'PGRST116') {
+      console.error('onboarding/status: clients query error:', clientErr.message);
+      return res.status(500).json({ error: clientErr.message });
+    }
+
+    if (!client) {
+      return res.json({ completed: false, step: 0, resumeData: {} });
+    }
+
+    let chatUser = null;
+    if (client.user_code && adminDB) {
+      const { data: cu } = await adminDB
+        .from('chat_users')
+        .select(
+          'user_language, Activity_level, medical_conditions, user_context, first_meal_time, last_meal_time, base_daily_total_calories, macros, onboarding_done, nursing_status, date_of_birth',
+        )
+        .eq('user_code', client.user_code)
+        .maybeSingle();
+      chatUser = cu;
+    }
+
+    const completed = Boolean(client.onboarding_completed || chatUser?.onboarding_done);
+    if (completed) {
+      return res.json({ completed: true, step: 6, resumeData: {} });
+    }
+
+    const foodAllergies = typeof client.food_allergies === 'string'
+      ? client.food_allergies.split(',').map((s) => s.trim()).filter(Boolean)
+      : Array.isArray(client.food_allergies) ? client.food_allergies : [];
+
+    const foodLimitations = Array.isArray(client.food_limitations)
+      ? client.food_limitations
+      : typeof client.food_limitations === 'string'
+        ? client.food_limitations.split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
+
+    let protein = null;
+    let carbs = null;
+    let fat = null;
+    if (chatUser?.macros && typeof chatUser.macros === 'object') {
+      const m = chatUser.macros;
+      protein = typeof m.protein === 'number' ? m.protein : null;
+      carbs   = typeof m.carbs   === 'number' ? m.carbs   : null;
+      fat     = typeof m.fat     === 'number' ? m.fat     : null;
+    }
+
+    const resumeData = {
+      language:             client.user_language || chatUser?.user_language || 'en',
+      firstName:            client.first_name || '',
+      lastName:             client.last_name  || '',
+      region:               client.region     || '',
+      city:                 client.city       || '',
+      timezone:             client.timezone   || '',
+      dateOfBirth:          client.birth_date || chatUser?.date_of_birth || '',
+      gender:               client.gender     || 'other',
+      physiologicalState:   chatUser?.nursing_status || 'none',
+      unitSystem:           client.measurement_system || 'metric',
+      heightCm:             client.height         ?? null,
+      weightKg:             client.current_weight ?? null,
+      targetWeightKg:       client.target_weight  ?? null,
+      goal:                 client.goal           ?? null,
+      medicalConditions:    client.medical_conditions || chatUser?.medical_conditions || '',
+      activityLevel:        client.activity_level  || chatUser?.Activity_level || null,
+      activityDescription:  chatUser?.user_context || '',
+      foodAllergies,
+      foodLimitations,
+      eatingWindowStart:    chatUser?.first_meal_time || '07:00',
+      eatingWindowEnd:      chatUser?.last_meal_time  || '21:00',
+      dailyCalories:        chatUser?.base_daily_total_calories ?? null,
+      protein,
+      carbs,
+      fat,
+    };
+
+    // First incomplete step (0 = Basics … 6 = Plan)
+    let step = 0;
+    if (resumeData.firstName) step = 1;
+    if (step >= 1 && resumeData.region && resumeData.dateOfBirth) step = 2;
+    if (step >= 2 && resumeData.heightCm != null && resumeData.weightKg != null && resumeData.goal) step = 3;
+    if (step >= 3 && resumeData.activityDescription) step = 4;
+    if (step >= 4 && resumeData.activityLevel) step = 5;
+    if (step >= 5 && resumeData.dailyCalories != null) step = 6;
+
+    return res.json({ completed: false, step, resumeData });
+  } catch (error) {
+    console.error('GET /api/onboarding/status error:', error);
+    res.status(500).json({ error: error.message || 'Failed to load onboarding status' });
+  }
+});
+
 // ====================================
 // REGISTRATION LINKS API (find + increment)
 // Used by SignupPage for #d=base64(JSON{link_id,manager_id,...}) and #d=base64(manager_id).
