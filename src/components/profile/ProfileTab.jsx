@@ -1,6 +1,8 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createWeightLog } from '../../supabase/secondaryClient';
 import { apiFetch } from '../../lib/apiClient';
+import { signOut } from '../../supabase/auth';
 import { useSettings } from '../../context/SettingsContext';
 
 const CM_PER_IN = 2.54;
@@ -198,6 +200,7 @@ const serializeMultiSelectField = (selected, otherText, knownValueSet) => {
 };
 
 const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, errorMessage, themeClasses, t, companyOptions, isLoadingCompanies, companyError, language, onboardingCompleted = false, user, onSaveProfileImageUrl }) => {
+  const navigate = useNavigate();
   const { settings } = useSettings();
   const displayMeasurementSystem = !settings.loading ? (settings.measurementSystem || 'metric') : (profileData.measurementSystem || 'metric');
   const heightIsImperial = String(displayMeasurementSystem).toLowerCase() === 'imperial';
@@ -254,6 +257,11 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
   const [healthInfoDirty, setHealthInfoDirty]           = useState(false);
   const [isSavingHealthInfo, setIsSavingHealthInfo]     = useState(false);
   const [healthInfoSaveStatus, setHealthInfoSaveStatus] = useState('');
+
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState('');
 
   const [nutritionDirty, setNutritionDirty]             = useState(false);
 
@@ -872,6 +880,31 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
       setHealthInfoSaveStatus('error');
     } finally {
       setIsSavingHealthInfo(false);
+    }
+  };
+
+  const closeDeleteAccountModal = () => {
+    if (isDeletingAccount) return;
+    setShowDeleteAccountModal(false);
+    setDeleteConfirmText('');
+    setDeleteAccountError('');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
+    setIsDeletingAccount(true);
+    setDeleteAccountError('');
+    try {
+      await apiFetch('/api/auth/account', { method: 'DELETE' });
+      await signOut();
+      navigate('/');
+    } catch (err) {
+      console.error('Delete account error:', err);
+      setDeleteAccountError(
+        err.message || (isHebrew ? 'מחיקת החשבון נכשלה. אנא נסה שוב.' : 'Failed to delete account. Please try again.')
+      );
+    } finally {
+      setIsDeletingAccount(false);
     }
   };
 
@@ -2025,7 +2058,136 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
           )}
         </div>
 
+        {/* Delete Account */}
+        <div className={`${themeClasses.bgCard} border border-red-500/30 rounded-2xl p-5 sm:p-6 shadow-lg shadow-red-500/5`}>
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-red-500/25">
+              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className={`${themeClasses.textPrimary} text-base sm:text-lg font-semibold mb-2`}>
+                {isHebrew ? 'מחיקת חשבון' : 'Delete Account'}
+              </h3>
+              <p className={`${themeClasses.textSecondary} text-sm leading-relaxed mb-4`}>
+                {isHebrew
+                  ? 'מחיקת החשבון תסיר לצמיתות את כל הנתונים שלך, כולל פרופיל, תוכניות תזונה, יומן מזון והודעות. פעולה זו אינה ניתנת לביטול.'
+                  : 'Deleting your account will permanently remove all your data, including your profile, meal plans, food logs, and messages. This action cannot be undone.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmText('');
+                  setDeleteAccountError('');
+                  setShowDeleteAccountModal(true);
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white shadow-md hover:shadow-lg active:scale-[0.98]"
+              >
+                {isHebrew ? 'מחק חשבון' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
+
+      {showDeleteAccountModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => !isDeletingAccount && closeDeleteAccountModal()}
+        >
+          <div
+            className={`${themeClasses.bgCard} rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-red-500/20`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className={`${themeClasses.textPrimary} text-xl font-bold mb-2`}>
+                  {isHebrew ? 'לאשר מחיקת חשבון?' : 'Confirm Account Deletion'}
+                </h3>
+                <p className={`${themeClasses.textSecondary} text-sm leading-relaxed`}>
+                  {isHebrew
+                    ? 'פעולה זו תמחק לצמיתות את חשבון BetterChoice AI שלך ואת כל הנתונים המשויכים, כולל מנוי Stripe פעיל אם קיים.'
+                    : 'This will permanently delete your BetterChoice AI account and all associated data, including any active Stripe subscription.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeDeleteAccountModal}
+                disabled={isDeletingAccount}
+                className={`${themeClasses.textSecondary} hover:opacity-80 transition-opacity disabled:opacity-50`}
+                aria-label={isHebrew ? 'סגור' : 'Close'}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3">
+              <p className="text-sm font-medium text-red-600 dark:text-red-400">
+                {isHebrew
+                  ? 'הקלד DELETE (באותיות גדולות) כדי לאשר.'
+                  : 'Type DELETE in capital letters to confirm.'}
+              </p>
+            </div>
+
+            <label htmlFor="delete-account-confirm" className={`${themeClasses.textSecondary} block text-sm font-semibold mb-2`}>
+              {isHebrew ? 'אישור מחיקה' : 'Confirmation'}
+            </label>
+            <input
+              id="delete-account-confirm"
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              autoComplete="off"
+              disabled={isDeletingAccount}
+              placeholder="DELETE"
+              className={`w-full px-4 py-3 rounded-lg border-2 transition-all mb-4 ${themeClasses.inputBg} ${themeClasses.inputFocus} ${themeClasses.textPrimary} focus:border-red-500 focus:ring-2 focus:ring-red-200 dark:focus:ring-red-800 disabled:opacity-60`}
+            />
+
+            {deleteAccountError && (
+              <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl text-sm font-medium">
+                {deleteAccountError}
+              </div>
+            )}
+
+            <div className="flex flex-col-reverse sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={closeDeleteAccountModal}
+                disabled={isDeletingAccount}
+                className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${themeClasses.bgSecondary} ${themeClasses.textPrimary} hover:opacity-80 disabled:opacity-50`}
+              >
+                {isHebrew ? 'ביטול' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount || deleteConfirmText !== 'DELETE'}
+                className={`flex-1 px-4 py-3 rounded-lg font-bold transition-all duration-300 ${
+                  isDeletingAccount || deleteConfirmText !== 'DELETE'
+                    ? 'bg-gray-400/50 cursor-not-allowed text-gray-500'
+                    : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white shadow-md hover:shadow-lg'
+                }`}
+              >
+                {isDeletingAccount ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    {isHebrew ? 'מוחק...' : 'Deleting...'}
+                  </span>
+                ) : (
+                  isHebrew ? 'מחק את החשבון שלי לצמיתות' : 'Permanently Delete My Account'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
