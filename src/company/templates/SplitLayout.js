@@ -25,14 +25,14 @@ function SplitLayout({ config, manager, campaign, navigate, hash }) {
   const features = content.features?.[language] || [];
 
   return (
-    <main style={themeStyles} className="flex-1 w-full min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 flex items-center p-4 md:p-8 animate-fadeIn">
+    <main dir={language === 'hebrew' ? 'rtl' : 'ltr'} style={themeStyles} className="flex-1 w-full min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 flex items-center p-4 md:p-8 animate-fadeIn">
       <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-0 rounded-[2rem] shadow-2xl overflow-hidden bg-[var(--theme-surface)] backdrop-blur-xl border border-[var(--theme-secondary)]">
         
         {/* Left Column: Presentation */}
         <div className="lg:col-span-7 p-8 md:p-14 flex flex-col justify-center space-y-8">
           {manager?.name && (
             <div className="self-start px-4 py-2 rounded-full bg-[var(--theme-secondary)] border border-[var(--theme-primary)]/10 text-sm font-bold text-[var(--theme-text-on-secondary)]">
-              ✨ {language === 'hebrew' ? 'ליווי מקצועי ע"י:' : 'Professional Guide:'} <span className="text-[var(--theme-accent)] ml-1 mr-1">{manager.name}</span>
+              ✨ {language === 'hebrew' ? 'ליווי מקצועי ע"י:' : 'Professional Guide:'} <span className="text-[var(--theme-accent)] mx-1">{manager.name}</span>
             </div>
           )}
 
@@ -62,8 +62,8 @@ function SplitLayout({ config, manager, campaign, navigate, hash }) {
           )}
         </div>
 
-        {/* Right Column: Action Panel */}
-        <div className="lg:col-span-5 bg-black/20 p-8 md:p-12 flex flex-col justify-center relative border-l border-[var(--theme-secondary)]">
+        {/* Action Panel — border-s flips to the correct side in RTL */}
+        <div className="lg:col-span-5 bg-black/20 p-8 md:p-12 flex flex-col justify-center relative border-s border-[var(--theme-secondary)]">
           
           <div className="bg-[var(--theme-secondary)]/40 rounded-2xl p-6 shadow-sm border border-[var(--theme-secondary)] text-center mb-8">
             <h3 className="font-black text-[var(--theme-text)] text-sm uppercase tracking-widest mb-2">

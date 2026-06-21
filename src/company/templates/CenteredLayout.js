@@ -25,7 +25,7 @@ function CenteredLayout({ config, manager, campaign, navigate, hash }) {
   const features = content.features?.[language] || [];
 
   return (
-    <main style={themeStyles} className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 w-full min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 animate-fadeIn">
+    <main dir={language === 'hebrew' ? 'rtl' : 'ltr'} style={themeStyles} className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 w-full min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 animate-fadeIn">
       <div className="w-full max-w-3xl mx-auto bg-[var(--theme-surface)] backdrop-blur-xl rounded-[2rem] p-8 md:p-14 shadow-2xl border border-[var(--theme-secondary)] relative overflow-hidden transition-all duration-300">
         
         <div className="flex justify-center mb-6">

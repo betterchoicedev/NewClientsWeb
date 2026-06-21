@@ -24,10 +24,10 @@ function TacticalLayout({ config, manager, campaign, navigate, hash }) {
   const features = content.features?.[language] || [];
 
   return (
-    <main style={themeStyles} className="flex-1 flex items-center justify-center p-4 md:p-8 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 min-h-screen select-none font-mono">
+    <main dir={language === 'hebrew' ? 'rtl' : 'ltr'} style={themeStyles} className="flex-1 flex items-center justify-center p-4 md:p-8 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 min-h-screen select-none font-mono">
       <div className="max-w-3xl w-full bg-[var(--theme-surface)] backdrop-blur-xl border-4 border-[var(--theme-primary)] p-8 md:p-12 relative transition-all duration-500 shadow-[12px_12px_0px_0px_var(--theme-primary)]">
         
-        <div className="absolute top-0 right-0 p-4 text-xs font-bold text-[var(--theme-primary)]">
+        <div className="absolute top-0 end-0 p-4 text-xs font-bold text-[var(--theme-primary)]">
           STATUS: <span className="text-[var(--theme-accent)]">AWAITING_INPUT</span>
         </div>
 
@@ -46,11 +46,11 @@ function TacticalLayout({ config, manager, campaign, navigate, hash }) {
           </h1>
 
           <h2 className="text-base md:text-xl font-bold leading-relaxed text-stone-900 bg-[var(--theme-primary)] p-3 inline-block">
-            // {subtitle}
+            {'// '}{subtitle}
           </h2>
 
           {paragraph && (
-            <p className="text-[var(--theme-text)] font-sans text-base leading-relaxed border-l-4 pl-4 py-2 border-[var(--theme-primary)] font-medium bg-[var(--theme-secondary)]/50">
+            <p className="text-[var(--theme-text)] font-sans text-base leading-relaxed border-s-4 ps-4 py-2 border-[var(--theme-primary)] font-medium bg-[var(--theme-secondary)]/50">
               {paragraph}
             </p>
           )}
