@@ -73,7 +73,7 @@ export default function LandingPage() {
           throw err;
         }
 
-        const apiUrl = process.env.REACT_APP_API_URL || '';
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
         const response = await fetch(`${apiUrl}/api/landing/validate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -99,36 +99,51 @@ export default function LandingPage() {
 
         // 🛠️ FIX BUG 2: Map structural fallbacks to handle both nested or flat DB configuration profiles
         const rawCompanyConfig = resData.company.config || {};
+        const rawColors =
+          rawCompanyConfig.ui?.themeSettings?.colors ||
+          rawCompanyConfig.themeSettings?.colors ||
+          {};
         const safeConfig = {
           ui: {
             layout: rawCompanyConfig.ui?.layout || rawCompanyConfig.layout || 'centered',
-            themeSettings: rawCompanyConfig.ui?.themeSettings || rawCompanyConfig.themeSettings || {
+            themeSettings: {
               colors: {
-                surface: "#ffffff",
-                primary: "#10b981",
-                secondary: "#a7f3d0",
-                accent: "#34d399",
-                textMain: "#064e3b",
-                textMuted: "#4b5563"
-              }
-            }
+                surface: rawColors.surface || 'rgba(24, 20, 18, 0.85)',
+                primary: rawColors.primary || '#E29578',
+                textOnPrimary: rawColors.textOnPrimary || '#FFFFFF',
+                secondary: rawColors.secondary || '#3E3026',
+                textOnSecondary: rawColors.textOnSecondary || '#FFFFFF',
+                accent: rawColors.accent || '#FFDAB9',
+                textMain: rawColors.textMain || '#FFFDFB',
+                textMuted: rawColors.textMuted || '#CDBBAA',
+              },
+            },
           },
           content: rawCompanyConfig.content || {
             heroTitle: { english: 'Welcome', hebrew: 'ברוכים הבאים' },
             heroSubtitle: { english: '', hebrew: '' },
-            ctaText: { english: 'Continue', hebrew: 'המשך' }
-          }
+            heroParagraph: { english: '', hebrew: '' },
+            ctaText: { english: 'Continue', hebrew: 'המשך' },
+            features: { english: [], hebrew: [] },
+          },
         };
 
         setCompanySlug(resData.company.slug);
         setManagerData(resData.manager);
         setDbConfig(safeConfig);
         
+        const tokenLimitedLink = !!(link_id && (max_clients != null || expiry_date));
+        const resolvedMaxSlots = serverMaxSlots ?? (max_clients != null ? Number(max_clients) : null);
+        const resolvedCurrentCount = resData.campaign?.currentCount ?? 0;
+        const resolvedSlotsRemaining =
+          resData.campaign?.slotsRemaining ??
+          (resolvedMaxSlots != null ? Math.max(0, resolvedMaxSlots - resolvedCurrentCount) : null);
+
         setCampaignData({
-          isSmartLink: !!resData.campaign?.isSmartLink,
-          maxSlots: serverMaxSlots,
-          slotsRemaining: resData.campaign?.slotsRemaining,
-          expiresAt: expiry_date || resData.campaign?.expiresAt
+          isSmartLink: !!resData.campaign?.isSmartLink || tokenLimitedLink,
+          maxSlots: resolvedMaxSlots,
+          slotsRemaining: resolvedSlotsRemaining,
+          expiresAt: expiry_date || resData.campaign?.expiresAt,
         });
 
       } catch (err) {

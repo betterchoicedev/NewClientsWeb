@@ -23,9 +23,8 @@ function TacticalLayout({ config, manager, campaign, navigate, hash }) {
   const features = content.features?.[language] || [];
 
   return (
-    <main style={themeStyles} className="flex-1 flex items-center justify-center p-4 md:p-8 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 min-h-screen select-none font-mono">
+    <main style={themeStyles} className="flex-1 flex items-center justify-center p-4 md:p-8 min-h-screen w-full bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 select-none font-mono">
       <div className="max-w-3xl w-full bg-[var(--theme-surface)] backdrop-blur-xl border-4 border-[var(--theme-primary)] p-8 md:p-12 relative transition-all duration-500 shadow-[12px_12px_0px_0px_var(--theme-primary)]">
-        
         <div className="absolute top-0 right-0 p-4 text-xs font-bold text-[var(--theme-primary)]">
           STATUS: <span className="text-[var(--theme-accent)]">AWAITING_INPUT</span>
         </div>
@@ -68,6 +67,7 @@ function TacticalLayout({ config, manager, campaign, navigate, hash }) {
 
         <div className="mt-12">
           <button
+            type="button"
             onClick={() => navigate(`/signup${hash}`)}
             className="w-full py-5 text-center font-black tracking-widest uppercase text-lg border-4 border-[var(--theme-primary)] bg-[var(--theme-primary)] text-stone-900 hover:bg-transparent hover:text-[var(--theme-primary)] transition-colors duration-200"
           >

@@ -4880,8 +4880,8 @@ app.post('/api/landing/validate', async (req, res) => {
       const { data: rule, error: ruleErr } = await adminDB
         .from('registration_rules')
         .select('max_slots, current_count, expires_at, is_active')
-        .eq('link_id', linkId) // Matching your schema constraint unique (link_id)
-        .single();
+        .eq('link_id', linkId)
+        .maybeSingle();
 
       if (ruleErr) {
         console.error('[-] Error fetching live campaign metrics:', ruleErr);
@@ -4896,7 +4896,7 @@ app.post('/api/landing/validate', async (req, res) => {
           return res.status(410).json({ error: 'Campaign tracking parameters have expired on the server clock' });
         }
 
-        maxSlots = rule.max_slots ?? 30; // Matches your DDL default 30 limit
+        maxSlots = rule.max_slots ?? 30;
         currentCount = rule.current_count ?? 0;
         slotsRemaining = Math.max(0, maxSlots - currentCount);
         expiresAt = rule.expires_at;
@@ -4904,6 +4904,23 @@ app.post('/api/landing/validate', async (req, res) => {
 
         if (slotsRemaining <= 0) {
           return res.status(403).json({ error: 'Registration thresholds reached. No remaining available slots' });
+        }
+      } else {
+        console.warn(`[-] No registration_rules row for link_id=${linkId}; using token fallback if provided`);
+        const tokenMax = maxClients != null ? Number(maxClients) : null;
+        const tokenExpiry = expiryDate ? new Date(expiryDate) : null;
+        if (tokenExpiry && !Number.isNaN(tokenExpiry.getTime()) && tokenExpiry < new Date()) {
+          return res.status(410).json({ error: 'Campaign tracking parameters have expired on the server clock' });
+        }
+        if (tokenMax != null && !Number.isNaN(tokenMax)) {
+          maxSlots = tokenMax;
+          currentCount = 0;
+          slotsRemaining = tokenMax;
+          isSmartLinkActive = true;
+        }
+        if (tokenExpiry && !Number.isNaN(tokenExpiry.getTime())) {
+          expiresAt = tokenExpiry.toISOString();
+          isSmartLinkActive = true;
         }
       }
     }
