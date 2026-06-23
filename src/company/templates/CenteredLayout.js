@@ -23,9 +23,8 @@ function CenteredLayout({ config, manager, campaign, navigate, hash }) {
   const features = content.features?.[language] || [];
 
   return (
-    <main style={themeStyles} className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 w-full min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 animate-fadeIn">
-      <div className="w-full max-w-3xl mx-auto bg-[var(--theme-surface)] backdrop-blur-xl rounded-[2rem] p-8 md:p-14 shadow-2xl border border-[var(--theme-secondary)] relative overflow-hidden transition-all duration-300">
-        
+    <main style={themeStyles} className="flex-1 flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 p-4 md:p-8 w-full animate-fadeIn select-none">
+      <div className="w-full max-w-3xl mx-auto bg-[var(--theme-surface)] backdrop-blur-xl rounded-[2rem] p-8 md:p-14 shadow-2xl border border-[var(--theme-secondary)] relative transition-all duration-300">
         <div className="flex justify-center mb-6">
           <span className="px-4 py-1.5 rounded-full bg-[var(--theme-secondary)] text-[var(--theme-accent)] text-xs font-bold tracking-widest uppercase border border-[var(--theme-primary)]/20">
             {language === 'hebrew' ? 'שלב 1 מתוך 3: הפעלה' : 'Step 1 of 3: Activation'}
@@ -45,7 +44,7 @@ function CenteredLayout({ config, manager, campaign, navigate, hash }) {
           <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-4 text-[var(--theme-text)] leading-tight">
             {title}
           </h1>
-          
+
           <p className="text-xl md:text-2xl font-bold mb-4 max-w-xl mx-auto leading-snug text-[var(--theme-accent)]">
             {subtitle}
           </p>
@@ -72,12 +71,13 @@ function CenteredLayout({ config, manager, campaign, navigate, hash }) {
 
         <div className="pt-2 flex flex-col items-center">
           <button
+            type="button"
             onClick={() => navigate(`/signup${hash}`)}
             className="w-full sm:w-4/5 px-10 py-5 rounded-2xl text-xl font-black transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 shadow-xl shadow-[var(--theme-primary)]/10 bg-[var(--theme-primary)] text-stone-900 hover:opacity-90"
           >
             {ctaText}
           </button>
-          
+
           <span className="mt-4 text-[var(--theme-text-muted)] text-xs font-semibold uppercase tracking-wider flex items-center gap-1">
             🔒 {language === 'hebrew' ? 'חיבור מאובטח ומוצפן' : 'Secure & Encrypted Connection'}
           </span>

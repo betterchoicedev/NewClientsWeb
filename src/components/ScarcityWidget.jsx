@@ -1,7 +1,7 @@
 import React from 'react';
-import { useLanguage } from '../context/LanguageContext'; 
+import { useLanguage } from '../context/LanguageContext';
 
-export default function ScarcityWidget({ campaign, themeSettings }) {
+export default function ScarcityWidget({ campaign }) {
   const { language } = useLanguage();
 
   if (!campaign || (campaign.slotsRemaining == null && !campaign.expiresAt)) {
@@ -12,7 +12,7 @@ export default function ScarcityWidget({ campaign, themeSettings }) {
     if (!expiryTimestamp) return null;
     const differenceInMs = new Date(expiryTimestamp) - new Date();
     if (differenceInMs <= 0) return language === 'hebrew' ? 'הסתיים' : 'Expired';
-    
+
     const totalHours = Math.floor(differenceInMs / (1000 * 60 * 60));
     const totalDays = Math.floor(totalHours / 24);
 
@@ -30,17 +30,16 @@ export default function ScarcityWidget({ campaign, themeSettings }) {
   };
 
   return (
-    <div className={`flex flex-col sm:flex-row items-center justify-center gap-6 p-4 rounded-xl bg-black/20 backdrop-blur-sm border ${themeSettings?.innerBorder || 'border-zinc-800'}`}>
-      
+    <div className="flex flex-col sm:flex-row items-center justify-center gap-6 p-4 rounded-xl bg-black/20 backdrop-blur-sm border border-[var(--theme-secondary)]">
       {campaign.slotsRemaining !== null && (
         <div className="flex items-center gap-3">
           <span className="text-xl animate-pulse drop-shadow-lg">🔥</span>
           <div className={language === 'hebrew' ? 'text-right' : 'text-left'}>
-            <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+            <p className="text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">
               {language === 'hebrew' ? 'מקומות נותרו' : 'Slots Available'}
             </p>
-            <p className={`text-sm md:text-base font-bold ${themeSettings?.accentTextColor || 'text-white'}`}>
-              {language === 'hebrew' 
+            <p className="text-sm md:text-base font-bold text-[var(--theme-accent)]">
+              {language === 'hebrew'
                 ? `נותרו רק עוד ${campaign.slotsRemaining} מקומות`
                 : `Only ${campaign.slotsRemaining} slots left`}
             </p>
@@ -49,17 +48,17 @@ export default function ScarcityWidget({ campaign, themeSettings }) {
       )}
 
       {campaign.slotsRemaining !== null && campaign.expiresAt && (
-        <div className={`hidden sm:block w-px h-8 border-l ${themeSettings?.innerBorder || 'border-zinc-800'}`}></div>
+        <div className="hidden sm:block w-px h-8 bg-[var(--theme-secondary)]" />
       )}
 
       {campaign.expiresAt && (
         <div className="flex items-center gap-3">
           <span className="text-xl drop-shadow-lg">⏳</span>
           <div className={language === 'hebrew' ? 'text-right' : 'text-left'}>
-            <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
+            <p className="text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest font-bold">
               {language === 'hebrew' ? 'זמן מוגבל' : 'Limited Offer'}
             </p>
-            <p className="text-sm md:text-base font-bold text-zinc-300">
+            <p className="text-sm md:text-base font-bold text-[var(--theme-text)]">
               {getRemainingTimeText(campaign.expiresAt)}
             </p>
           </div>
