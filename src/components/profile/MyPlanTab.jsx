@@ -6,6 +6,7 @@ import AddIngredientModal from '../AddIngredientModal';
 import IngredientPortionModal from '../IngredientPortionModal';
 import TrainingPlanTab from './TrainingPlanTab';
 import { translateMenu } from '../../services/translateService';
+import { getAuthHeaders } from '../../lib/apiClient';
 import {
   CREATE_MEAL_PLAN_API_URL,
   getTrainingPlan,
@@ -366,7 +367,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       if (!userCode) return;
       
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+        const apiUrl = PRODUCTION_API_URL;
         const response = await fetch(`${apiUrl}/api/profile/client-data-full?userCode=${encodeURIComponent(userCode)}`);
         const result = await response.json();
         
@@ -507,7 +508,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       const mealPlanName = `${clientName}'s Meal Plan`;
 
       // Save to both databases via API
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const apiUrl = PRODUCTION_API_URL;
       const saveResponse = await fetch(`${apiUrl}/api/profile/meal-plan/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1074,10 +1075,10 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       };
 
       // Save via API
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const apiUrl = PRODUCTION_API_URL;
       const response = await fetch(`${apiUrl}/api/profile/meal-plan/save-edited`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           planId: updatedPlanData.id,
           mealPlan: mealPlanToSave,
@@ -1121,7 +1122,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           ? 'מעבד את הבקשה שלך. זה יכול לקחת עד 30 שניות...'
           : 'Processing your request. This may take up to 30 seconds...'
       );
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const apiUrl = PRODUCTION_API_URL;
       const body = {
         planId: planData.id,
         userCode,
@@ -1489,7 +1490,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 
     try {
       // Clear the edited plan from database via API
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const apiUrl = PRODUCTION_API_URL;
       const response = await fetch(`${apiUrl}/api/profile/meal-plan/clear-edited`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1533,9 +1534,8 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     try {
       setIsContactingDietitian(true);
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const apiUrl = PRODUCTION_API_URL;
 
-      // Get provider_id from chat_users table
       const providerResponse = await fetch(`${apiUrl}/api/profile/provider?userCode=${encodeURIComponent(userCode)}`);
       const providerResult = await providerResponse.json();
 
@@ -1563,7 +1563,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         : 'Request for Personalized Meal Plan';
       
       const checkResponse = await fetch(
-        `${apiUrl}/api/profile/system-message-exists?` + 
+        `${apiUrl}/api/profile/system-message-exists?` +
         `providerId=${encodeURIComponent(providerId)}&` +
         `userCode=${encodeURIComponent(userCode)}&` +
         `userId=${encodeURIComponent(user?.id || '')}&` +
@@ -2472,6 +2472,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                           </div>
                         </div>
                       ))}
+
                     </div>
                   )}
                 </div>
