@@ -1,22 +1,16 @@
 import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import ScarcityWidget from '../../components/ScarcityWidget';
+import { buildLayoutThemeStyles, getLayoutPageBackgroundClass } from './layoutTheme';
 
 function SplitLayout({ config, manager, campaign, navigate, hash }) {
   const { language } = useLanguage();
+  const { isDarkMode } = useTheme();
   const content = config?.content || {};
   const colors = config?.ui?.themeSettings?.colors || {};
-
-  const themeStyles = {
-    '--theme-surface': colors.surface || 'rgba(24, 20, 18, 0.85)',
-    '--theme-primary': colors.primary || '#E29578',
-    '--theme-secondary': colors.secondary || '#3E3026',
-    '--theme-accent': colors.accent || '#FFDAB9',
-    '--theme-text': colors.textMain || '#FFFDFB',
-    '--theme-text-muted': colors.textMuted || '#CDBBAA',
-    '--theme-text-on-primary': colors.textOnPrimary || '#FFFFFF',
-    '--theme-text-on-secondary': colors.textOnSecondary || '#FFFFFF',
-  };
+  const themeStyles = buildLayoutThemeStyles(colors);
+  const pageBg = getLayoutPageBackgroundClass(!isDarkMode);
 
   const title = content.heroTitle?.[language] || 'Welcome Member';
   const subtitle = content.heroSubtitle?.[language] || '';
@@ -25,8 +19,8 @@ function SplitLayout({ config, manager, campaign, navigate, hash }) {
   const features = content.features?.[language] || [];
 
   return (
-    <main style={themeStyles} className="flex-1 w-full min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 flex items-center p-4 md:p-8 animate-fadeIn select-none">
-      <div className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-0 rounded-[2rem] shadow-2xl overflow-hidden bg-[var(--theme-surface)] backdrop-blur-xl border border-[var(--theme-secondary)]">
+    <main className={`flex-1 w-full min-h-full flex items-center p-4 md:p-8 animate-fadeIn select-none ${pageBg}`}>
+      <div style={themeStyles} className="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-0 rounded-[2rem] shadow-2xl overflow-hidden bg-[var(--theme-surface)] backdrop-blur-xl border border-[var(--theme-secondary)]">
         <div className="lg:col-span-7 p-8 md:p-14 flex flex-col justify-center space-y-8">
           {manager?.name && (
             <div className="self-start px-4 py-2 rounded-full bg-[var(--theme-secondary)] border border-[var(--theme-primary)]/10 text-sm font-bold text-[var(--theme-text-on-secondary)]">
@@ -81,9 +75,9 @@ function SplitLayout({ config, manager, campaign, navigate, hash }) {
 
           <div className="flex flex-col items-center justify-center text-center gap-2">
             <div className="flex -space-x-2">
-                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-secondary)] bg-[#D4A373] flex items-center justify-center text-[8px] text-white font-bold">EM</div>
-                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-secondary)] bg-[#E29578] flex items-center justify-center text-[8px] text-white font-bold">SJ</div>
-                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-secondary)] bg-[#FFDAB9] flex items-center justify-center text-[8px] text-stone-900 font-bold">L</div>
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-surface)] bg-[var(--theme-secondary)] flex items-center justify-center text-[8px] text-[var(--theme-text-on-secondary)] font-bold">JD</div>
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-surface)] bg-[var(--theme-primary)] flex items-center justify-center text-[8px] text-[var(--theme-text-on-primary)] font-bold">AM</div>
+                <div className="w-8 h-8 rounded-full border-2 border-[var(--theme-surface)] bg-[var(--theme-accent)] flex items-center justify-center text-[8px] text-stone-900 font-bold">SL</div>
             </div>
             <p className="text-xs font-bold text-[var(--theme-text-muted)]">
               {language === 'hebrew' ? 'הצטרפו לקהילת הלקוחות המצליחים שלנו.' : 'Join a growing community of successful clients.'}

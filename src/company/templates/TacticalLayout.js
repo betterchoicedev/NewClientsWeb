@@ -1,20 +1,16 @@
 import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import ScarcityWidget from '../../components/ScarcityWidget';
+import { buildLayoutThemeStyles, getLayoutPageBackgroundClass } from './layoutTheme';
 
 function TacticalLayout({ config, manager, campaign, navigate, hash }) {
   const { language } = useLanguage();
+  const { isDarkMode } = useTheme();
   const content = config?.content || {};
   const colors = config?.ui?.themeSettings?.colors || {};
-
-  const themeStyles = {
-    '--theme-surface': colors.surface || 'rgba(24, 20, 18, 0.85)',
-    '--theme-primary': colors.primary || '#E29578',
-    '--theme-secondary': colors.secondary || '#3E3026',
-    '--theme-accent': colors.accent || '#FFDAB9',
-    '--theme-text': colors.textMain || '#FFFDFB',
-    '--theme-text-muted': colors.textMuted || '#CDBBAA',
-  };
+  const themeStyles = buildLayoutThemeStyles(colors);
+  const pageBg = getLayoutPageBackgroundClass(!isDarkMode);
 
   const title = content.heroTitle?.[language] || 'Tactical Portal';
   const subtitle = content.heroSubtitle?.[language] || '';
@@ -23,8 +19,8 @@ function TacticalLayout({ config, manager, campaign, navigate, hash }) {
   const features = content.features?.[language] || [];
 
   return (
-    <main style={themeStyles} className="flex-1 flex items-center justify-center p-4 md:p-8 min-h-screen w-full bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 select-none font-mono">
-      <div className="max-w-3xl w-full bg-[var(--theme-surface)] backdrop-blur-xl border-4 border-[var(--theme-primary)] p-8 md:p-12 relative transition-all duration-500 shadow-[12px_12px_0px_0px_var(--theme-primary)]">
+    <main className={`flex-1 flex items-center justify-center p-4 md:p-8 min-h-full w-full select-none font-mono ${pageBg}`}>
+      <div style={themeStyles} className="max-w-3xl w-full bg-[var(--theme-surface)] backdrop-blur-xl border-4 border-[var(--theme-primary)] p-8 md:p-12 relative transition-all duration-500 shadow-[12px_12px_0px_0px_var(--theme-primary)]">
         <div className="absolute top-0 right-0 p-4 text-xs font-bold text-[var(--theme-primary)]">
           STATUS: <span className="text-[var(--theme-accent)]">AWAITING_INPUT</span>
         </div>
