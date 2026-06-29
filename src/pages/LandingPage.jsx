@@ -73,8 +73,7 @@ export default function LandingPage() {
           throw err;
         }
 
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8080';
-        const response = await fetch(`${apiUrl}/api/landing/validate`, {
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';        const response = await fetch(`${apiUrl}/api/landing/validate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ managerId: manager_id, linkId: link_id })
