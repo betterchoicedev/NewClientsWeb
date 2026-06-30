@@ -1,20 +1,16 @@
 import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import ScarcityWidget from '../../components/ScarcityWidget';
+import { buildLayoutThemeStyles, getLayoutPageBackgroundClass } from './layoutTheme';
 
 function CenteredLayout({ config, manager, campaign, navigate, hash }) {
   const { language } = useLanguage();
+  const { isDarkMode } = useTheme();
   const content = config?.content || {};
   const colors = config?.ui?.themeSettings?.colors || {};
-
-  const themeStyles = {
-    '--theme-surface': colors.surface || 'rgba(24, 20, 18, 0.85)',
-    '--theme-primary': colors.primary || '#E29578',
-    '--theme-secondary': colors.secondary || '#3E3026',
-    '--theme-accent': colors.accent || '#FFDAB9',
-    '--theme-text': colors.textMain || '#FFFDFB',
-    '--theme-text-muted': colors.textMuted || '#CDBBAA',
-  };
+  const themeStyles = buildLayoutThemeStyles(colors);
+  const pageBg = getLayoutPageBackgroundClass(!isDarkMode);
 
   const title = content.heroTitle?.[language] || 'BetterChoice Portal';
   const subtitle = content.heroSubtitle?.[language] || '';
@@ -23,8 +19,8 @@ function CenteredLayout({ config, manager, campaign, navigate, hash }) {
   const features = content.features?.[language] || [];
 
   return (
-    <main style={themeStyles} className="flex-1 flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 p-4 md:p-8 w-full animate-fadeIn select-none">
-      <div className="w-full max-w-3xl mx-auto bg-[var(--theme-surface)] backdrop-blur-xl rounded-[2rem] p-8 md:p-14 shadow-2xl border border-[var(--theme-secondary)] relative transition-all duration-300">
+    <main className={`flex-1 flex flex-col items-center justify-center min-h-full p-4 md:p-8 w-full animate-fadeIn select-none ${pageBg}`}>
+      <div style={themeStyles} className="w-full max-w-3xl mx-auto bg-[var(--theme-surface)] backdrop-blur-xl rounded-[2rem] p-8 md:p-14 shadow-2xl border border-[var(--theme-secondary)] relative transition-all duration-300">
         <div className="flex justify-center mb-6">
           <span className="px-4 py-1.5 rounded-full bg-[var(--theme-secondary)] text-[var(--theme-accent)] text-xs font-bold tracking-widest uppercase border border-[var(--theme-primary)]/20">
             {language === 'hebrew' ? 'שלב 1 מתוך 3: הפעלה' : 'Step 1 of 3: Activation'}
