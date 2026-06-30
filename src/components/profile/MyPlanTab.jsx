@@ -367,7 +367,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       if (!userCode) return;
       
       try {
-        const apiUrl = PRODUCTION_API_URL;
+        const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';  
         const response = await fetch(`${apiUrl}/api/profile/client-data-full?userCode=${encodeURIComponent(userCode)}`);
         const result = await response.json();
         
@@ -508,7 +508,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       const mealPlanName = `${clientName}'s Meal Plan`;
 
       // Save to both databases via API
-      const apiUrl = PRODUCTION_API_URL;
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const saveResponse = await fetch(`${apiUrl}/api/profile/meal-plan/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1075,7 +1075,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       };
 
       // Save via API
-      const apiUrl = PRODUCTION_API_URL;
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const response = await fetch(`${apiUrl}/api/profile/meal-plan/save-edited`, {
         method: 'POST',
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
@@ -1122,7 +1122,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
           ? 'מעבד את הבקשה שלך. זה יכול לקחת עד 30 שניות...'
           : 'Processing your request. This may take up to 30 seconds...'
       );
-      const apiUrl = PRODUCTION_API_URL;
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const body = {
         planId: planData.id,
         userCode,
@@ -1490,7 +1490,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 
     try {
       // Clear the edited plan from database via API
-      const apiUrl = PRODUCTION_API_URL;
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
       const response = await fetch(`${apiUrl}/api/profile/meal-plan/clear-edited`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1534,7 +1534,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
     try {
       setIsContactingDietitian(true);
 
-      const apiUrl = PRODUCTION_API_URL;
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
 
       const providerResponse = await fetch(`${apiUrl}/api/profile/provider?userCode=${encodeURIComponent(userCode)}`);
       const providerResult = await providerResponse.json();
