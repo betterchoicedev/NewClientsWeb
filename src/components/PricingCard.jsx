@@ -35,12 +35,14 @@ const PricingCard = ({
   
   const [selectedPrice, setSelectedPrice] = useState(getDefaultPriceId());
   // USD-priced products (e.g. Digital Only) show dollars first; ILS-priced show shekels first
-  const isUsdPrimary = product.prices?.[0]?.currency === 'USD';
+  const isUsdPrimary = String(product.prices?.[0]?.currency || '').toUpperCase() === 'USD';
   const [showUSD, setShowUSD] = useState(isUsdPrimary);
   
   // Check if this is a consultation product (can always be purchased)
-  const isConsultation = product.name.toLowerCase().includes('consultation') || 
-                         product.nameHebrew?.includes('יעוץ');
+  const productName = typeof product?.name === 'string' ? product.name : '';
+  const isConsultation = productName.toLowerCase().includes('consultation') ||
+                         product.nameHebrew?.includes('יעוץ') ||
+                         product.category === 'consultation';
   
   // Determine if this product should be blocked
   const isBlocked = hasAnyActiveSubscription && !isConsultation;
@@ -72,9 +74,13 @@ const PricingCard = ({
     }
 
     try {
+      const selectedPriceObj = product.prices?.find((p) => p.id === selectedPrice);
+      const checkoutMode = selectedPriceObj?.interval ? 'subscription' : 'payment';
+
       await createCheckoutSession(selectedPrice, {
         customerId: user?.id,
         customerEmail: user?.email,
+        mode: checkoutMode,
         promoCode: showNavyDigitalPromo && navyPromoAppliedCode ? navyPromoAppliedCode : undefined,
         metadata: showNavyDigitalPromo && navyPromoAppliedCode
           ? { navy_access_code: navyPromoAppliedCode }
@@ -89,7 +95,7 @@ const PricingCard = ({
   const formatPrice = (priceObj) => {
     if (!priceObj) return 'Contact for pricing';
 
-    const isPriceUsd = priceObj.currency === 'USD';
+    const isPriceUsd = String(priceObj.currency || '').toUpperCase() === 'USD';
 
     if (isPriceUsd) {
       // Price is stored in USD (cents)
@@ -159,7 +165,7 @@ const PricingCard = ({
   // Show "Approx." when displaying converted currency (ILS→USD for most products, USD→ILS for Digital Only)
   const isApproximate = (priceObj) => {
     if (!priceObj) return false;
-    if (priceObj.currency === 'USD') return !showUSD && (usdExchangeRate != null && usdExchangeRate > 0); // Digital Only: showing ILS
+    if (String(priceObj.currency || '').toUpperCase() === 'USD') return !showUSD && (usdExchangeRate != null && usdExchangeRate > 0); // Digital Only: showing ILS
     return showUSD; // ILS-priced: showing USD
   };
   const approxLabel = language === 'hebrew' ? 'בערך ' : 'Approx. ';
@@ -211,9 +217,11 @@ const PricingCard = ({
           <h3 className={`text-xl font-bold ${themeClasses.textPrimary} mb-2`}>
             {language === 'hebrew' ? (product.nameHebrew || product.name) : product.name}
           </h3>
-          <p className={`${themeClasses.textSecondary} text-sm`}>
-            {language === 'hebrew' ? (product.descriptionHebrew || product.description) : product.description}
-          </p>
+          {(language === 'hebrew' ? (product.descriptionHebrew || product.description) : product.description) && (
+            <p className={`${themeClasses.textSecondary} text-sm`}>
+              {language === 'hebrew' ? (product.descriptionHebrew || product.description) : product.description}
+            </p>
+          )}
         </div>
 
         {/* Price Options */}

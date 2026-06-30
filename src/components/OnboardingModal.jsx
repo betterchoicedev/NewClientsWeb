@@ -8,6 +8,75 @@ import { translateMenu } from '../services/translateService';
 const CREATE_MEAL_PLAN_API_URL =
   'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
 
+const localizedLabel = (value, language = 'english') => {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') {
+    return language === 'hebrew'
+      ? (value.hebrew || value.english || '')
+      : (value.english || value.hebrew || '');
+  }
+  return String(value);
+};
+
+const getCustomStepFieldName = (step) =>
+  step?.fieldName || step?.name || `custom_${String(step?.id || '').replace(/-/g, '_')}`;
+
+const resolveCustomFieldDefinition = (customSteps = [], fieldName) => {
+  const nestedField = customSteps
+    .flatMap((step) => step?.fields || [])
+    .find((field) => field?.name === fieldName);
+
+  if (nestedField) {
+    return {
+      ...nestedField,
+      description: nestedField.description || '',
+    };
+  }
+
+  const flatStep = customSteps.find((step) => getCustomStepFieldName(step) === fieldName);
+  if (!flatStep) return null;
+
+  return {
+    name: fieldName,
+    type: flatStep.type || 'text',
+    label: flatStep.question || flatStep.title || fieldName,
+    description: flatStep.description || '',
+    options: flatStep.options || [],
+  };
+};
+
+const isCustomFieldEmpty = (value) => {
+  if (value == null) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'string') return value.trim() === '';
+  return !value;
+};
+
+const getCustomFieldNamesFromConfig = (companyConfig) =>
+  companyConfig?.onboarding?.customSteps
+    ?.flatMap((step) => {
+      if (Array.isArray(step?.fields) && step.fields.length > 0) {
+        return step.fields.map((field) => field?.name).filter(Boolean);
+      }
+      if (step?.question || step?.title) {
+        return [getCustomStepFieldName(step)];
+      }
+      return [];
+    }) || [];
+
+const buildCustomAnswersPayload = (formData, companyConfig, fieldNamesFilter = null) => {
+  const payload = {};
+  getCustomFieldNamesFromConfig(companyConfig).forEach((name) => {
+    if (fieldNamesFilter && !fieldNamesFilter.includes(name)) return;
+    const value = formData?.[name];
+    if (!isCustomFieldEmpty(value)) {
+      payload[name] = value;
+    }
+  });
+  return payload;
+};
+
 /**
  * PortalSelect — a styled, accessible replacement for native <select>.
  * The dropdown list is rendered through a React portal to document.body so it
@@ -1082,6 +1151,58 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
     }
   ];
 
+  const customStepsConfig = [...(companyConfig?.onboarding?.customSteps || [])].sort((a, b) => {
+    const orderA = typeof a?.order === 'number' ? a.order : 0;
+    const orderB = typeof b?.order === 'number' ? b.order : 0;
+    return orderA - orderB;
+  });
+
+  // Format the custom steps to match the existing step structure
+  const formattedCustomSteps = customStepsConfig
+    .map((step) => {
+      if (!step) return null;
+
+      // Nested admin shape: { title, fields: [{ name, label, type }] }
+      if (Array.isArray(step.fields) && step.fields.length > 0) {
+        const fields = step.fields
+          .filter((field) => field && field.name)
+          .map((field) => field.name);
+
+        if (fields.length === 0) return null;
+
+        return {
+          title: localizedLabel(step.title, language) || (language === 'hebrew' ? 'שאלה נוספת' : 'Additional Question'),
+          fields,
+          isCustom: true,
+        };
+      }
+
+      // Flat admin shape: { question, type, options, id }
+      if (step.question || step.title) {
+        const fieldName = getCustomStepFieldName(step);
+        return {
+          title: localizedLabel(step.question || step.title, language) || (language === 'hebrew' ? 'שאלה נוספת' : 'Additional Question'),
+          fields: [fieldName],
+          isCustom: true,
+        };
+      }
+
+      return null;
+    })
+    .filter((step) => step && step.fields.length > 0);
+
+  const mealPlanningIndex = allSteps.findIndex(
+    (step) => step.fields.includes('number_of_meals') && step.fields.includes('meal_descriptions')
+  );
+
+  const combinedAllSteps = mealPlanningIndex === -1
+    ? [...allSteps, ...formattedCustomSteps]
+    : [
+        ...allSteps.slice(0, mealPlanningIndex),
+        ...formattedCustomSteps,
+        ...allSteps.slice(mealPlanningIndex),
+      ];
+
   const steps = filteredSteps;
 
   // Calculate BMR using Harris-Benedict equation
@@ -1508,7 +1629,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
     if (isOpen && user) {
       loadExistingData();
     }
-  }, [isOpen, user?.id, includeNursingStatus]);
+  }, [isOpen, user?.id, includeNursingStatus, companyConfig?.onboarding?.customSteps]);
 
   // Safety net for the same race: if filteredSteps was already built while
   // includeNursingStatus was still true (default), strip nursing_status the
@@ -1722,7 +1843,8 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
             if (typeof cp === 'string') return cp;
             if (typeof cp === 'object' && cp !== null && cp.dietary_preferences) return cp.dietary_preferences;
             return prev.client_preference || '';
-          })()
+          })(),
+          ...(data.custom_answers && typeof data.custom_answers === 'object' ? data.custom_answers : {})
         }));
 
         // Set separate date fields (preserve draft DOB when DB row exists but birth_date is still empty)
@@ -1861,6 +1983,7 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
       // Helper function to check if a field is empty
       const isEmpty = (value) => {
         if (value === null || value === undefined) return true;
+        if (Array.isArray(value)) return value.length === 0;
         if (typeof value === 'string' && value.trim() === '') return true;
         if (typeof value === 'number' && value === 0) return false; // 0 is valid
         return !value;
@@ -2067,8 +2190,20 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
       // No need to store availableFields, we only need to set filteredSteps
 
       // Filter steps to only show steps with missing fields
-      let filtered = allSteps
+      let filtered = combinedAllSteps
         .map(step => {
+          if (step.isCustom) {
+            const savedAnswers = data?.custom_answers || {};
+            const draftAnswers = savedProgress?.formData || {};
+            return {
+              ...step,
+              fields: step.fields.filter(field =>
+                isEmpty(savedAnswers[field]) &&
+                isEmpty(draftForm[field]) &&
+                isEmpty(draftAnswers[field])
+              )
+            };
+          }
           // Show Preferred Language step only when language is actually missing
           if (step.fields.length === 1 && step.fields[0] === 'language') {
             return {
@@ -2437,6 +2572,24 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
     }
   };
 
+  const handleCustomMultiselectToggle = (fieldName, optionValue) => {
+    setFormData((prev) => {
+      const current = Array.isArray(prev[fieldName]) ? prev[fieldName] : [];
+      const next = current.includes(optionValue)
+        ? current.filter((value) => value !== optionValue)
+        : [...current, optionValue];
+      return { ...prev, [fieldName]: next };
+    });
+
+    if (fieldErrors[fieldName]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[fieldName];
+        return next;
+      });
+    }
+  };
+
   // Handler for limitation selection toggle
   const handleLimitationToggle = (limitationValue) => {
     if (limitationValue === 'none') {
@@ -2748,9 +2901,18 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
         }
         return;
       }
+
+      const customField = resolveCustomFieldDefinition(companyConfig?.onboarding?.customSteps, field);
+      if (customField?.type === 'multiselect') {
+        if (isCustomFieldEmpty(formData[field])) {
+          newFieldErrors[field] = true;
+          hasErrors = true;
+        }
+        return;
+      }
       
       // For other fields, empty value means missing
-      if (!formData[field]) {
+      if (isCustomFieldEmpty(formData[field])) {
         newFieldErrors[field] = true;
         hasErrors = true;
       }
@@ -2924,6 +3086,15 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
         partialClientData.phone = phoneNumber;
         partialChatUserData.phone_number = phoneNumber;
         partialChatUserData.whatsapp_number = phoneNumber;
+      }
+
+      // Persist custom onboarding answers incrementally (merge all answered custom fields)
+      if (currentStepDef.isCustom) {
+        const customAnswersPayload = buildCustomAnswersPayload(formData, companyConfig);
+        if (Object.keys(customAnswersPayload).length > 0) {
+          partialClientData.custom_answers = customAnswersPayload;
+          partialChatUserData.custom_answers = customAnswersPayload;
+        }
       }
 
       try {
@@ -3494,6 +3665,14 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
         onboarding_done: true,
         updated_at: new Date().toISOString()
       };
+
+      // Extract custom onboarding answers into custom_answers JSONB
+      const customAnswersPayload = buildCustomAnswersPayload(formData, companyConfig);
+
+      if (Object.keys(customAnswersPayload).length > 0) {
+        clientData.custom_answers = customAnswersPayload;
+        chatUserData.custom_answers = customAnswersPayload;
+      }
       
       // Log age saving for debugging
       if (allOnboardingFields.includes('date_of_birth')) {
@@ -5970,6 +6149,78 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
               })}
             </div>
           )}
+
+          {/* Dynamic Custom Fields Renderer */}
+          {currentFields.map(fieldName => {
+            const customField = resolveCustomFieldDefinition(
+              companyConfig?.onboarding?.customSteps,
+              fieldName
+            );
+
+            if (!customField || !customField.name) return null;
+
+            return (
+              <div key={fieldName} className="group mb-4 sm:mb-5 md:mb-6">
+                <label className={`block text-xs sm:text-sm font-semibold mb-1.5 sm:mb-2 ${themeClasses.textPrimary}`}>
+                  {localizedLabel(customField.label, language) || fieldName}
+                </label>
+                {customField.description && (
+                  <p className={`text-xs sm:text-sm mb-2 sm:mb-3 ${themeClasses.textSecondary}`}>
+                    {localizedLabel(customField.description, language)}
+                  </p>
+                )}
+
+                {customField.type === 'text' && (
+                  <input
+                    type="text"
+                    name={customField.name}
+                    value={formData[customField.name] || ''}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass(customField.name)} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} placeholder:text-gray-400 hover:border-gray-500/40 outline-none`}
+                  />
+                )}
+
+                {customField.type === 'select' && (
+                  <PortalSelect
+                    name={customField.name}
+                    value={formData[customField.name] || ''}
+                    onChange={(v) => handleInputChange({ target: { name: customField.name, value: v } })}
+                    options={(customField.options || []).map(opt => ({ value: opt, label: opt }))}
+                    placeholder={language === 'hebrew' ? 'בחר' : 'Select'}
+                    hasError={!!fieldErrors[customField.name]}
+                    isDarkMode={isDarkMode}
+                    themeClasses={themeClasses}
+                    direction={direction}
+                    className={`w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base bg-black/5 dark:bg-white/5 border ${getBorderClass(customField.name)} rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 outline-none`}
+                  />
+                )}
+
+                {customField.type === 'multiselect' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                    {(customField.options || []).map((option) => {
+                      const selected = Array.isArray(formData[customField.name])
+                        ? formData[customField.name].includes(option)
+                        : false;
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => handleCustomMultiselectToggle(customField.name, option)}
+                          className={`relative w-full px-4 py-3.5 sm:px-5 sm:py-4 text-sm sm:text-base text-left rounded-2xl transition-all duration-300 active:scale-[0.98] border focus:outline-none ${
+                            selected
+                              ? 'bg-emerald-500/10 border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-500 dark:text-emerald-400 font-semibold'
+                              : `bg-black/5 dark:bg-white/5 border-gray-500/20 ${themeClasses.textPrimary} hover:border-emerald-500/40 hover:bg-emerald-500/5`
+                          } ${fieldErrors[customField.name] && !selected ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : ''}`}
+                        >
+                          {option}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Error Message */}

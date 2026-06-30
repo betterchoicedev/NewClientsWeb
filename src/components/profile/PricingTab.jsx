@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useStripe } from '../../context/StripeContext';
-import { getAllProducts, getProductsByCategory, getProduct, STRIPE_PRODUCTS } from '../../config/stripe-products';
+import { getAllProducts, getProduct, STRIPE_PRODUCTS } from '../../config/stripe-products';
 import PricingCard from '../PricingCard';
 import { useCompanyConfig } from '../../company/useCompanyConfig';
+import { resolvePricingCatalog } from '../../company/normalizeCustomProduct';
 
-const PricingTab = ({ themeClasses, user, language, companyName = '' }) => {
+const PricingTab = ({
+  themeClasses,
+  user,
+  language,
+  companyName = '',
+  companyConfig: companyConfigProp = null,
+}) => {
   const { getCustomerSubscriptions } = useStripe();
   const [activeCategory, setActiveCategory] = useState('all');
   const [userSubscriptions, setUserSubscriptions] = useState([]);
@@ -16,16 +23,17 @@ const PricingTab = ({ themeClasses, user, language, companyName = '' }) => {
   const [navyPromoError, setNavyPromoError] = useState('');
   const [navyPromoAppliedCode, setNavyPromoAppliedCode] = useState('');
   const [animatedDigitalPrice, setAnimatedDigitalPrice] = useState(48);
-  const companyConfig = useCompanyConfig(companyName || user?.company_name || user?.companyName || user?.company || '');
+  const staticCompanyConfig = useCompanyConfig(companyName || user?.company_name || user?.companyName || user?.company || '');
+  const companyConfig = companyConfigProp || staticCompanyConfig;
 
-  const allProducts = getAllProducts();
+  // Custom company catalog replaces defaults unless pricing.mergeDefaultProducts === true
+  const allProducts = resolvePricingCatalog(companyConfig, getAllProducts);
 
-  // Get products by category
-  const premiumProducts = getProductsByCategory('premium');
-  const completeProducts = getProductsByCategory('complete');
-  const nutritionProducts = getProductsByCategory('nutrition');
-  const contentProducts = getProductsByCategory('content');
-  const consultationProducts = getProductsByCategory('consultation');
+  const premiumProducts = allProducts.filter(p => p.category === 'premium');
+  const completeProducts = allProducts.filter(p => p.category === 'complete');
+  const nutritionProducts = allProducts.filter(p => p.category === 'nutrition');
+  const contentProducts = allProducts.filter(p => p.category === 'content');
+  const consultationProducts = allProducts.filter(p => p.category === 'consultation');
 
   const [subscriptionsLastFetched, setSubscriptionsLastFetched] = useState(null);
   const userCode = user?.user_code || user?.userCode || user?.code || '';

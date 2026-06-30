@@ -40,7 +40,7 @@ export const StripeProvider = ({ children }) => {
       
       // Check if this is specifically a consultation (one-time payment)
       const isConsultation = priceId === STRIPE_PRICES.CONSULTATION;
-      const mode = isConsultation ? 'payment' : (priceInfo?.interval ? 'subscription' : 'payment');
+      const mode = options.mode || (isConsultation ? 'payment' : (priceInfo?.interval ? 'subscription' : 'subscription'));
 
 
       const requestBody = {
