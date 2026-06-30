@@ -451,6 +451,12 @@ const ProfilePage = () => {
     }
   }, [profileData.userCode, loadCompanyAssignment]);
 
+  useEffect(() => {
+    if (activeTab === 'pricing' && profileData.userCode) {
+      loadCompanyAssignment(profileData.userCode);
+    }
+  }, [activeTab, profileData.userCode, loadCompanyAssignment]);
+
   // Sync web language with user's preferred language
   useEffect(() => {
     if (profileData.userLanguage) {
@@ -1258,6 +1264,7 @@ const ProfilePage = () => {
                     }}
                     language={language}
                     companyName={assignedCompanyName}
+                    companyConfig={assignedCompanyConfig}
                   />
                 )}
                 {activeTab === 'settings' && (
