@@ -5141,6 +5141,36 @@ async function compressFoodImage(buffer) {
     .toBuffer();
 }
 
+const ANALYZE_IMAGE_LOG = '[analyze-image]';
+
+function logAnalyzeImage(step, payload) {
+  if (payload === undefined) {
+    console.log(`${ANALYZE_IMAGE_LOG} ${step}`);
+    return;
+  }
+  const detail = typeof payload === 'string'
+    ? payload
+    : JSON.stringify(payload);
+  console.log(`${ANALYZE_IMAGE_LOG} ${step} ${detail}`);
+}
+
+// Summarize a base64 field without dumping the payload into logs.
+function summarizeBase64Field(label, raw) {
+  if (raw == null) return { field: label, present: false };
+  if (typeof raw !== 'string') {
+    return { field: label, present: true, invalid: true, typeof: typeof raw };
+  }
+  const mimeMatch = raw.match(/^data:([^;]+);base64,/);
+  const base64Len = raw.replace(/^data:[^;]+;base64,/, '').length;
+  return {
+    field: label,
+    present: true,
+    mime: mimeMatch ? mimeMatch[1] : '(raw base64, no data-uri prefix)',
+    base64Chars: base64Len,
+    approxBytes: Math.round(base64Len * 0.75),
+  };
+}
+
 // Parse a LiDAR / ToF depth map and return volumetric metrics that can be
 // injected into the LLM prompt and used to calibrate per-item weight estimates.
 //
@@ -5154,9 +5184,15 @@ async function compressFoodImage(buffer) {
 // failure — depth processing must NEVER cause the image analysis request to fail.
 async function processDepthMap(depthBase64) {
   try {
+    const depthSummary = summarizeBase64Field('depthData', depthBase64);
+    logAnalyzeImage('LiDAR/depth map received', depthSummary);
+
     const base64Data = depthBase64.replace(/^data:[^;]+;base64,/, '');
     const rawBuffer = Buffer.from(base64Data, 'base64');
-    if (!rawBuffer.length) return null;
+    if (!rawBuffer.length) {
+      logAnalyzeImage('LiDAR/depth skipped', 'decoded depth buffer is empty');
+      return null;
+    }
 
     // Read raw pixel data. We ask sharp to normalise to 16-bit so we get a
     // consistent uint16 range regardless of whether the source is 8-bit,
@@ -5168,22 +5204,28 @@ async function processDepthMap(depthBase64) {
 
     const { width, height, channels } = info;
     const totalPx = width * height;
-    if (totalPx === 0) return null;
+    if (totalPx === 0) {
+      logAnalyzeImage('LiDAR/depth skipped', 'depth map has zero pixels');
+      return null;
+    }
 
     // Each pixel is one uint8 byte after .raw(); for 16-bit we need pairs.
     // sharp's .raw() on a 16-bit source returns Buffer of uint16 values packed
     // as 2 bytes each. Detect by checking buffer size vs pixel count.
     const bytesPerPx = data.length / totalPx;
     let depthValues; // array of depth values in mm
+    let depthEncoding;
 
     if (bytesPerPx >= 2) {
       // 16-bit path: interpret as uint16 little-endian millimetres
+      depthEncoding = '16-bit uint16 LE (expected LiDAR mm)';
       depthValues = new Float64Array(totalPx);
       for (let i = 0; i < totalPx; i++) {
         depthValues[i] = data.readUInt16LE(i * 2);
       }
     } else {
       // 8-bit path: scale [0,255] to a rough mm range (0-5000mm)
+      depthEncoding = '8-bit grayscale (scaled to ~0-5000mm)';
       depthValues = new Float64Array(totalPx);
       for (let i = 0; i < totalPx; i++) {
         depthValues[i] = data[i] * (5000 / 255);
@@ -5193,9 +5235,22 @@ async function processDepthMap(depthBase64) {
     // If values are all ≤ 10 they are probably in metres (float32 cast to
     // uint16 would give tiny numbers). Scale to mm.
     const maxRaw = Math.max(...depthValues.slice(0, Math.min(1000, totalPx)));
+    let scaledMetresToMm = false;
     if (maxRaw <= 10) {
+      scaledMetresToMm = true;
       for (let i = 0; i < totalPx; i++) depthValues[i] *= 1000;
     }
+
+    logAnalyzeImage('LiDAR/depth decoded', {
+      rawBytes: rawBuffer.length,
+      width,
+      height,
+      channels,
+      bytesPerPx: Math.round(bytesPerPx * 100) / 100,
+      depthEncoding,
+      maxRawSample: Math.round(maxRaw * 100) / 100,
+      scaledMetresToMm,
+    });
 
     // --- Segment foreground (food) from background (plate/table) ---
     // Strategy: the plate surface is the dominant depth plane (most pixels at
@@ -5239,7 +5294,14 @@ async function processDepthMap(depthBase64) {
       }
     }
 
-    if (foodAreaPx === 0) return null;
+    if (foodAreaPx === 0) {
+      logAnalyzeImage('LiDAR/depth skipped', {
+        reason: 'no foreground food pixels above plate threshold',
+        plateSurfaceMm: Math.round(plateSurfaceMm),
+        foregroundThresholdMm: FOREGROUND_THRESHOLD_MM,
+      });
+      return null;
+    }
 
     const avgElevationMm = elevationSum / foodAreaPx;
 
@@ -5259,13 +5321,22 @@ async function processDepthMap(depthBase64) {
     const avgElevationCm = avgElevationMm / 10;
     const totalVolumeCm3 = foodAreaCm2 * avgElevationCm;
 
-    return {
+    const metrics = {
       totalVolumeCm3: Math.round(totalVolumeCm3 * 10) / 10,
       avgElevationMm: Math.round(avgElevationMm),
       maxElevationMm: Math.round(maxElevationMm),
     };
+
+    logAnalyzeImage('LiDAR/depth metrics computed', {
+      ...metrics,
+      foodAreaPx,
+      foodAreaCm2: Math.round(foodAreaCm2 * 10) / 10,
+      plateSurfaceMm: Math.round(plateSurfaceMm),
+    });
+
+    return metrics;
   } catch (err) {
-    console.error('processDepthMap error (non-fatal):', err.message);
+    logAnalyzeImage('LiDAR/depth error (non-fatal)', err.message);
     return null;
   }
 }
@@ -6360,15 +6431,32 @@ function buildImageAnalysisResponseBody(visionReport, weightedItems, macroReport
 // Not-food 422:
 //   { error: 'not_food', message: <reason> }
 app.post('/api/food-logs/analyze-image', async (req, res) => {
+  const requestId = Date.now().toString(36);
   try {
     const { imageData, mealLabel, userCaption, planMeal, depthData } = req.body || {};
+
+    logAnalyzeImage(`[${requestId}] → request`, {
+      rgb: summarizeBase64Field('imageData', imageData),
+      lidar: summarizeBase64Field('depthData', depthData),
+      mealLabel: mealLabel ?? null,
+      userCaption: typeof userCaption === 'string' && userCaption.trim()
+        ? `${userCaption.trim().length} chars`
+        : null,
+      planMeal: planMeal ? 'present' : 'absent',
+      extraBodyKeys: Object.keys(req.body || {}).filter(
+        (k) => !['imageData', 'depthData', 'mealLabel', 'userCaption', 'planMeal'].includes(k)
+      ),
+    });
+
     if (!imageData || typeof imageData !== 'string') {
+      logAnalyzeImage(`[${requestId}] ✗ rejected`, 'missing or invalid imageData (RGB required)');
       return res.status(400).json({ error: 'imageData (base64 string) is required' });
     }
 
     const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
     const rawBuffer = Buffer.from(base64Data, 'base64');
     if (!rawBuffer.length) {
+      logAnalyzeImage(`[${requestId}] ✗ rejected`, 'imageData decoded to empty buffer');
       return res.status(400).json({ error: 'imageData decoded to an empty buffer' });
     }
 
@@ -6376,30 +6464,63 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
     try {
       compressed = await compressFoodImage(rawBuffer);
     } catch (compressErr) {
+      logAnalyzeImage(`[${requestId}] ✗ rejected`, `RGB decode/compress failed: ${compressErr.message}`);
       return res.status(400).json({ error: 'Could not decode/compress image', message: compressErr.message });
     }
+
+    logAnalyzeImage(`[${requestId}] RGB image ready`, {
+      rawBytes: rawBuffer.length,
+      jpegBytes: compressed.length,
+      compressionRatio: `${Math.round((1 - compressed.length / rawBuffer.length) * 100)}% smaller`,
+    });
 
     // Process LiDAR depth map when the client provides one (iPhone 12 Pro+).
     // processDepthMap never throws — returns null on any failure so the request
     // always continues on the 2D-only path when depth data is absent or invalid.
-    const depthMetrics = (depthData && typeof depthData === 'string')
-      ? await processDepthMap(depthData)
-      : null;
-
-    if (depthMetrics) {
-      console.log(`📐 Depth data processed: ${depthMetrics.totalVolumeCm3}cm³ total, avg ${depthMetrics.avgElevationMm}mm height`);
+    let depthMetrics = null;
+    if (!depthData) {
+      logAnalyzeImage(`[${requestId}] sensor path`, '2D-only — phone sent RGB only (no depthData)');
+    } else if (typeof depthData !== 'string') {
+      logAnalyzeImage(`[${requestId}] sensor path`, `2D-only — depthData ignored (expected string, got ${typeof depthData})`);
+    } else {
+      depthMetrics = await processDepthMap(depthData);
+      if (depthMetrics) {
+        logAnalyzeImage(`[${requestId}] sensor path`, `LiDAR-enhanced — ${depthMetrics.totalVolumeCm3}cm³, avg height ${depthMetrics.avgElevationMm}mm`);
+      } else {
+        logAnalyzeImage(`[${requestId}] sensor path`, '2D fallback — depthData was sent but could not be processed');
+      }
     }
 
     // Bad/empty plan payloads are silently ignored (sanitized → null) so the
     // LLM behaves as if no plan was sent rather than failing the request.
     const cleanPlanMeal = sanitizePlanMeal(planMeal);
+    logAnalyzeImage(`[${requestId}] context`, {
+      mealLabel: mealLabel ?? null,
+      captionUsed: sanitizeUserCaption(userCaption) || null,
+      planMealAccepted: !!cleanPlanMeal,
+      analysisMode: depthMetrics ? 'RGB + LiDAR' : 'RGB only (2D)',
+    });
 
     // Step 1: Vision LLM — food ID, geometry (volume + density), health score.
     // No macros or plan matching at this stage.
+    logAnalyzeImage(`[${requestId}] step 1/5`, 'calling vision LLM (RGB photo)');
     const prompt      = buildFoodImagePrompt(mealLabel, userCaption, depthMetrics);
     const visionReport = await callFoodVisionLLM(compressed, prompt);
+    logAnalyzeImage(`[${requestId}] step 1/5 done`, {
+      is_food: visionReport.is_food,
+      not_food_reason: visionReport.not_food_reason ?? null,
+      itemCount: Array.isArray(visionReport.food_items) ? visionReport.food_items.length : 0,
+      items: (visionReport.food_items || []).map((item) => ({
+        name: item.name,
+        estimated_volume_cm3: item.estimated_volume_cm3,
+        estimated_weight_g: item.estimated_weight_g,
+        is_beverage: item.is_beverage === true,
+      })),
+      overall_health_score: visionReport.overall_health_score ?? null,
+    });
 
     if (!visionReport.is_food || !Array.isArray(visionReport.food_items) || visionReport.food_items.length === 0) {
+      logAnalyzeImage(`[${requestId}] ✗ not food`, visionReport.not_food_reason || 'no food items detected');
       return res.status(422).json({
         error: 'not_food',
         message: visionReport.not_food_reason || 'The provided image does not contain food items.'
@@ -6407,23 +6528,57 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
     }
 
     // Step 2: Compute per-item weights using ρ·V (or LLM visual fallback).
-    const { weightedItems } = computeWeightsFromVisionReport(visionReport, depthMetrics);
+    const { weightedItems, anyDepthCalibrated } = computeWeightsFromVisionReport(visionReport, depthMetrics);
+    logAnalyzeImage(`[${requestId}] step 2/5 done`, {
+      weightMethod: depthMetrics ? 'ρ·V when LLM returned volume+density, else LLM weight' : 'LLM visual weight (2D)',
+      anyDepthCalibrated,
+      items: weightedItems.map((wi) => ({
+        name: wi.name,
+        grams: Math.round(wi.grams),
+        depth_calibrated: wi.depth_calibrated,
+        is_beverage: wi.is_beverage,
+        estimated_volume_ml: wi.estimated_volume_ml,
+      })),
+    });
 
     // Step 3: Text LLM — USDA macro lookup ONLY. No arithmetic, no plan math.
+    logAnalyzeImage(`[${requestId}] step 3/5`, 'calling macro lookup LLM');
     const macroReport = await callMacroLookupLLM(weightedItems);
+    logAnalyzeImage(`[${requestId}] step 3/5 done`, {
+      macroItemCount: macroReport?.items?.length ?? 0,
+    });
 
     // Step 4: Backend computes accurate meal totals (no LLM involved).
     const computedTotals = computeMealTotals(weightedItems, macroReport);
+    logAnalyzeImage(`[${requestId}] step 4/5 done`, { computedTotals });
 
     // Step 5: (Optional) Tiny plan-match LLM call — receives pre-computed
     // numbers so it never has to do arithmetic; just judges the score.
-    const planMatchReport = cleanPlanMeal
-      ? await callPlanMatchLLM(computedTotals, cleanPlanMeal)
-      : null;
+    let planMatchReport = null;
+    if (cleanPlanMeal) {
+      logAnalyzeImage(`[${requestId}] step 5/5`, 'calling plan-match LLM');
+      planMatchReport = await callPlanMatchLLM(computedTotals, cleanPlanMeal);
+      logAnalyzeImage(`[${requestId}] step 5/5 done`, planMatchReport);
+    } else {
+      logAnalyzeImage(`[${requestId}] step 5/5 skipped`, 'no plan meal in request');
+    }
 
     // Step 6: Assemble the final response.
-    return res.json(buildImageAnalysisResponseBody(visionReport, weightedItems, macroReport, planMatchReport, depthMetrics));
+    const responseBody = buildImageAnalysisResponseBody(visionReport, weightedItems, macroReport, planMatchReport, depthMetrics);
+    logAnalyzeImage(`[${requestId}] ✓ response`, {
+      itemCount: responseBody.items.length,
+      depth_enhanced: responseBody.depth_enhanced,
+      overall_health_score: responseBody.overall_health_score,
+      plan_match_score: responseBody.plan_match?.score ?? null,
+      portions: responseBody.items.map((item) => ({
+        name: item.name,
+        portion_estimate: item.portion_estimate,
+        calories: item.macros?.calories,
+      })),
+    });
+    return res.json(responseBody);
   } catch (error) {
+    logAnalyzeImage(`[${requestId}] ✗ error`, error.message);
     console.error('❌ Error in POST /api/food-logs/analyze-image:', error);
     return res.status(500).json({
       error: 'Failed to analyze food image',
@@ -6431,6 +6586,7 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
     });
   }
 });
+
 
 
 // POST /api/food-logs/analyze-text
