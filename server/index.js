@@ -5141,6 +5141,135 @@ async function compressFoodImage(buffer) {
     .toBuffer();
 }
 
+// Parse a LiDAR / ToF depth map and return volumetric metrics that can be
+// injected into the LLM prompt and used to calibrate per-item weight estimates.
+//
+// Depth map format expected from react-native-vision-camera on iOS:
+//   Apple embeds AVDepthData as a 16-bit grayscale auxiliary image (values in
+//   millimetres, little-endian). On devices that return 32-bit float (metres)
+//   sharp will still read it but all values land in [0,1] range; we detect
+//   that and scale accordingly.
+//
+// Returns { totalVolumeCm3, avgElevationMm, maxElevationMm } or null on any
+// failure — depth processing must NEVER cause the image analysis request to fail.
+async function processDepthMap(depthBase64) {
+  try {
+    const base64Data = depthBase64.replace(/^data:[^;]+;base64,/, '');
+    const rawBuffer = Buffer.from(base64Data, 'base64');
+    if (!rawBuffer.length) return null;
+
+    // Read raw pixel data. We ask sharp to normalise to 16-bit so we get a
+    // consistent uint16 range regardless of whether the source is 8-bit,
+    // 16-bit, or float. Sharp returns values 0..65535.
+    const { data, info } = await sharp(rawBuffer)
+      .grayscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width, height, channels } = info;
+    const totalPx = width * height;
+    if (totalPx === 0) return null;
+
+    // Each pixel is one uint8 byte after .raw(); for 16-bit we need pairs.
+    // sharp's .raw() on a 16-bit source returns Buffer of uint16 values packed
+    // as 2 bytes each. Detect by checking buffer size vs pixel count.
+    const bytesPerPx = data.length / totalPx;
+    let depthValues; // array of depth values in mm
+
+    if (bytesPerPx >= 2) {
+      // 16-bit path: interpret as uint16 little-endian millimetres
+      depthValues = new Float64Array(totalPx);
+      for (let i = 0; i < totalPx; i++) {
+        depthValues[i] = data.readUInt16LE(i * 2);
+      }
+    } else {
+      // 8-bit path: scale [0,255] to a rough mm range (0-5000mm)
+      depthValues = new Float64Array(totalPx);
+      for (let i = 0; i < totalPx; i++) {
+        depthValues[i] = data[i] * (5000 / 255);
+      }
+    }
+
+    // If values are all ≤ 10 they are probably in metres (float32 cast to
+    // uint16 would give tiny numbers). Scale to mm.
+    const maxRaw = Math.max(...depthValues.slice(0, Math.min(1000, totalPx)));
+    if (maxRaw <= 10) {
+      for (let i = 0; i < totalPx; i++) depthValues[i] *= 1000;
+    }
+
+    // --- Segment foreground (food) from background (plate/table) ---
+    // Strategy: the plate surface is the dominant depth plane (most pixels at
+    // a consistent depth). Food sits CLOSER to the camera (smaller depth value).
+    // 1. Build a histogram of depth values (1mm buckets up to 5000mm).
+    // 2. Find the peak bucket — that is the plate surface depth.
+    // 3. Pixels more than FOREGROUND_THRESHOLD_MM closer than the plate are food.
+    const BUCKET_MM = 5;           // 5mm histogram resolution
+    const MAX_DEPTH_MM = 5000;
+    const FOREGROUND_THRESHOLD_MM = 15; // food must be ≥15mm above plate
+    const buckets = new Int32Array(Math.ceil(MAX_DEPTH_MM / BUCKET_MM));
+
+    for (let i = 0; i < totalPx; i++) {
+      const v = depthValues[i];
+      if (v > 0 && v < MAX_DEPTH_MM) {
+        buckets[Math.floor(v / BUCKET_MM)]++;
+      }
+    }
+
+    // Find the most populous bucket (background / plate surface).
+    let peakBucket = 0;
+    let peakCount = 0;
+    for (let b = 0; b < buckets.length; b++) {
+      if (buckets[b] > peakCount) { peakCount = buckets[b]; peakBucket = b; }
+    }
+    const plateSurfaceMm = (peakBucket + 0.5) * BUCKET_MM;
+
+    // Collect foreground (food) pixels: closer than plate by threshold.
+    let foodAreaPx = 0;
+    let elevationSum = 0;
+    let maxElevationMm = 0;
+
+    for (let i = 0; i < totalPx; i++) {
+      const v = depthValues[i];
+      if (v <= 0 || v >= MAX_DEPTH_MM) continue;
+      const elevMm = plateSurfaceMm - v;
+      if (elevMm >= FOREGROUND_THRESHOLD_MM) {
+        foodAreaPx++;
+        elevationSum += elevMm;
+        if (elevMm > maxElevationMm) maxElevationMm = elevMm;
+      }
+    }
+
+    if (foodAreaPx === 0) return null;
+
+    const avgElevationMm = elevationSum / foodAreaPx;
+
+    // --- Convert pixel area to physical area ---
+    // iPhone LiDAR depth maps are typically 256×192 px, covering a ~60° HFOV.
+    // At a typical meal distance of ~300mm, each pixel covers roughly:
+    //   pixelWidthMm ≈ 2 × tan(30°) × 300mm / 256 ≈ 1.35mm
+    // We approximate pixel size from image dimensions + assumed FOV.
+    const SENSOR_HFOV_DEG = 60;
+    const ASSUMED_DISTANCE_MM = 300;
+    const halfWidthMm = Math.tan((SENSOR_HFOV_DEG / 2) * (Math.PI / 180)) * ASSUMED_DISTANCE_MM;
+    const pixelWidthMm = (2 * halfWidthMm) / width;
+    const pixelAreaCm2 = Math.pow(pixelWidthMm / 10, 2); // mm² → cm²
+
+    // Volume = base area × average elevation
+    const foodAreaCm2 = foodAreaPx * pixelAreaCm2;
+    const avgElevationCm = avgElevationMm / 10;
+    const totalVolumeCm3 = foodAreaCm2 * avgElevationCm;
+
+    return {
+      totalVolumeCm3: Math.round(totalVolumeCm3 * 10) / 10,
+      avgElevationMm: Math.round(avgElevationMm),
+      maxElevationMm: Math.round(maxElevationMm),
+    };
+  } catch (err) {
+    console.error('processDepthMap error (non-fatal):', err.message);
+    return null;
+  }
+}
+
 // Strict structured-output schema. Nullable fields use ["type","null"] which is
 // the format Azure / OpenAI v1 structured outputs require alongside strict:true.
 const FOOD_IMAGE_LLM_SCHEMA = {
@@ -5184,20 +5313,17 @@ const FOOD_IMAGE_LLM_SCHEMA = {
               type: ['number', 'null'],
               description: 'Volume in milliliters. MUST be filled when is_beverage is true. MUST be null when is_beverage is false.'
             },
-            confidence: { type: 'number', description: '0..1 confidence in identification + portion estimate.' },
-            macros_per_100g: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                calories_per_100g: { type: 'number' },
-                protein_per_100g: { type: 'number' },
-                carbs_per_100g:   { type: 'number' },
-                fat_per_100g:     { type: 'number' }
-              },
-              required: ['calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g']
-            }
+            estimated_volume_cm3: {
+              type: 'number',
+              description: 'Estimated volume of this food item in cm³ from shape/geometry analysis. Must be positive. Used with density_gcm3 to derive weight: weight_g = estimated_volume_cm3 × density_gcm3.'
+            },
+            density_gcm3: {
+              type: 'number',
+              description: 'Bulk density of this food in g/cm³. Reference values: water/broth=1.0, grilled chicken=1.06, raw beef=1.05, cooked rice=0.85, cooked pasta=0.70, boiled potato=0.90, bread=0.25, leafy salad=0.08, hummus=1.05, olive oil=0.92, butter=0.91, hard cheese=1.1, soft cheese=0.95, cooked lentils=0.85, egg white=1.03.'
+            },
+            confidence: { type: 'number', description: '0..1 confidence in identification + portion estimate.' }
           },
-          required: ['name', 'visual_evidence', 'estimated_weight_g', 'is_beverage', 'estimated_volume_ml', 'confidence', 'macros_per_100g']
+          required: ['name', 'visual_evidence', 'estimated_volume_cm3', 'density_gcm3', 'estimated_weight_g', 'is_beverage', 'estimated_volume_ml', 'confidence']
         }
       },
       overall_health_score: {
@@ -5207,19 +5333,137 @@ const FOOD_IMAGE_LLM_SCHEMA = {
       overall_health_score_reason: {
         type: ['string', 'null'],
         description: 'Short (1 sentence) justification for overall_health_score. Null when is_food is false.'
-      },
-      plan_match_score: {
-        type: ['number', 'null'],
-        description: '0-10 how closely the photo matches the supplied plan meal (best of MAIN vs ALTERNATIVE). Null when no plan meal was supplied or when is_food is false.'
-      },
-      plan_match_reason: {
-        type: ['string', 'null'],
-        description: 'Short (1 sentence) justification for plan_match_score, mentioning which variant was used. Null when no plan meal was supplied or when is_food is false.'
-      },
-      plan_match_variant: {
-        type: ['string', 'null'],
-        description: 'Which plan variant the score was based on: "main", "alternative", or "none" if neither was a real match. Null when no plan meal was supplied or when is_food is false.'
       }
+    },
+    required: [
+      'is_food', 'not_food_reason', 'meal_label', 'info_message', 'dietary_warnings', 'food_items',
+      'overall_health_score', 'overall_health_score_reason'
+    ]
+  }
+};
+
+// Schema for the second (text-only) LLM call that fetches macros per 100g and
+// computes plan adherence based on pre-computed item weights.
+// Macro-lookup schema: the text LLM returns ONLY per-item macros_per_100g.
+// No plan scoring here — arithmetic and plan matching happen in backend code
+// (computeMealTotals) and a separate tiny LLM call (callPlanMatchLLM).
+const FOOD_MACRO_LLM_SCHEMA = {
+  name: 'food_macro_lookup',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string' },
+            macros_per_100g: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                calories_per_100g: { type: 'number' },
+                protein_per_100g:  { type: 'number' },
+                carbs_per_100g:    { type: 'number' },
+                fat_per_100g:      { type: 'number' }
+              },
+              required: ['calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g']
+            }
+          },
+          required: ['name', 'macros_per_100g']
+        }
+      }
+    },
+    required: ['items']
+  }
+};
+
+// Plan-match schema: a tiny second text call that receives pre-computed meal
+// totals (calculated by the backend, not the LLM) and returns only a score.
+const PLAN_MATCH_LLM_SCHEMA = {
+  name: 'plan_match_scoring',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      plan_match_score:   { type: 'number',          description: '0–10 adherence score.' },
+      plan_match_reason:  { type: 'string',          description: '1-sentence justification.' },
+      plan_match_variant: { type: 'string',          description: '"main", "alternative", or "none".' }
+    },
+    required: ['plan_match_score', 'plan_match_reason', 'plan_match_variant']
+  }
+};
+
+// Schema for the text endpoint's single-LLM call (/analyze-text).
+// Unlike FOOD_IMAGE_LLM_SCHEMA (geometry-only), this schema still includes
+// macros_per_100g (the text model handles nutrition directly) and
+// plan_match_* fields (plan adherence is computed in one shot here).
+const FOOD_TEXT_LLM_SCHEMA = {
+  name: 'food_text_analysis',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      is_food: {
+        type: 'boolean',
+        description: 'True only when the text clearly describes food, beverages, or a packaged food product that can be quantified.'
+      },
+      not_food_reason: {
+        type: ['string', 'null'],
+        description: 'Short reason when is_food is false. null when is_food is true.'
+      },
+      meal_label:        { type: ['string', 'null'] },
+      info_message:      { type: ['string', 'null'] },
+      dietary_warnings:  { type: ['array', 'null'], items: { type: 'string' } },
+      food_items: {
+        type: ['array', 'null'],
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            name:               { type: 'string' },
+            visual_evidence:    { type: 'string' },
+            estimated_weight_g: { type: 'number' },
+            is_beverage: {
+              type: 'boolean',
+              description: 'True for drinks / liquids people normally measure in volume. False for solid food.'
+            },
+            estimated_volume_ml: {
+              type: ['number', 'null'],
+              description: 'Volume in ml when is_beverage is true; null otherwise.'
+            },
+            confidence: { type: 'number', description: '0..1 confidence.' },
+            macros_per_100g: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                calories_per_100g: { type: 'number' },
+                protein_per_100g:  { type: 'number' },
+                carbs_per_100g:    { type: 'number' },
+                fat_per_100g:      { type: 'number' }
+              },
+              required: ['calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g']
+            }
+          },
+          required: ['name', 'visual_evidence', 'estimated_weight_g', 'is_beverage', 'estimated_volume_ml', 'confidence', 'macros_per_100g']
+        }
+      },
+      overall_health_score: {
+        type: ['number', 'null'],
+        description: '0-10 general nutritional quality. INDEPENDENT of any meal plan. Null when is_food is false.'
+      },
+      overall_health_score_reason: {
+        type: ['string', 'null'],
+        description: 'Short (1 sentence) justification for overall_health_score. Null when is_food is false.'
+      },
+      plan_match_score:   { type: ['number', 'null'] },
+      plan_match_reason:  { type: ['string', 'null'] },
+      plan_match_variant: { type: ['string', 'null'] }
     },
     required: [
       'is_food', 'not_food_reason', 'meal_label', 'info_message', 'dietary_warnings', 'food_items',
@@ -5361,46 +5605,36 @@ function formatPlanMealForPrompt(planMeal) {
   return `\n${header}\n${renderVariant('MAIN',        planMeal.main)}\n${renderVariant('ALTERNATIVE', planMeal.alternative)}\n`;
 }
 
-function buildFoodImagePrompt(mealLabel, userCaption, planMeal) {
+function buildFoodImagePrompt(mealLabel, userCaption, depthMetrics) {
   const cleanCaption = sanitizeUserCaption(userCaption);
   const captionBlock = cleanCaption
     ? `\n* **User description (sent with the photo):** "${cleanCaption}"\n  Treat this as ground truth about the dish identity, ingredients, preparation, or portion when it does not contradict clear visual evidence. Prefer the user's wording for \`name\` and let it refine portion / density estimates.\n`
     : '';
 
-  const planBlock = formatPlanMealForPrompt(planMeal);
-  const hasPlan = !!planBlock;
-
   const meal = mealLabel ? String(mealLabel) : 'unknown';
 
-  const planStep = hasPlan
-    ? `
-7.  **MEAL-PLAN ADHERENCE SCORE (a plan meal was supplied — produce real numbers):**
-    * Compare the dish in the photo/description against BOTH the MAIN and the ALTERNATIVE variant above.
-    * Pick whichever variant the nutritional profile most resembles, and base \`plan_match_score\` on that one only.
-    * The score is the client's adherence to their plan. Judge using:
-        - **Macro & Calorie Proximity (PRIMARY FOCUS):** how close the computed totals (calories / protein / carbs / fat) are to that variant's target totals. This dictates the score.
-        - **Portion sanity:** significantly oversized or undersized portions ruin the macro targets and heavily reduce the score.
-        - **Identity / ingredient overlap (MINOR NOTE):** acknowledge if they ate the actual planned dish, but DO NOT heavily penalize them if they swapped the meal for something else that still hits the exact same macro and calorie targets.
-    * Scoring guide:
-        - 9–10 = Excellent macro and calorie match. The nutritional targets were hit, regardless of whether it's the exact planned dish or a smart substitute.
-        - 7–8  = Good macro match with minor deviations (e.g., slightly higher fat, slightly lower protein, or small portion drift).
-        - 4–6  = Moderate mismatch (e.g., calories are somewhat close, but the macro balance is wrong, like missing the protein target entirely).
-        - 0–3  = Complete macro/calorie mismatch (e.g., vastly different calorie count or entirely wrong nutritional profile compared to the plan).
-    * Set \`plan_match_variant\` to \`"main"\`, \`"alternative"\`, or \`"none"\` (use \`"none"\` only when the macros are a complete mismatch — in that case keep \`plan_match_score\` ≤ 3).
-    * \`plan_match_reason\`: 1 short sentence. Focus the reasoning primarily on how the macros/calories compared to the target. You may briefly mention the dish identity as secondary context.`
-    : `
-7.  **MEAL-PLAN ADHERENCE SCORE:**
-    * No plan meal was supplied. Set \`plan_match_score\`, \`plan_match_reason\`, and \`plan_match_variant\` to \`null\`.`;
+  // When the client provides LiDAR depth data the backend has already computed
+  // volumetric metrics. Inject them as a high-trust block so the model anchors
+  // its per-item volume estimates to physics-accurate measurements.
+  const depthBlock = depthMetrics
+    ? `\n**DEPTH SENSOR DATA (LiDAR — treat as physical ground truth, ±5–10% accuracy):**
+* Total food volume above plate surface: ~${depthMetrics.totalVolumeCm3} cm³  (~${depthMetrics.totalVolumeCm3} ml)
+* Average food height above plate: ~${depthMetrics.avgElevationMm}mm
+* Peak food height: ~${depthMetrics.maxElevationMm}mm
 
-  return `Act as a Lead Forensic Food Scientist and Computer Vision Specialist. Your objective is to classify the image as food or not, perform the macro analysis, and rate the meal.
+Your per-item \`estimated_volume_cm3\` values MUST sum to approximately **${depthMetrics.totalVolumeCm3} cm³**.
+The LiDAR sensor measured the total physical food volume. Distribute it across items proportionally to their visual footprint and relative bulk.\n`
+    : '';
+
+  return `Act as a Lead Forensic Food Scientist and Computer Vision Specialist. Your task is to identify the food items in the image, estimate their volume and density, and rate the meal's visual quality. You do NOT compute macros or plan adherence — those are handled separately.
 
 **CONTEXTUAL METADATA:**
 * **User Meal Time:** ${meal}
-${captionBlock}${planBlock}
+${captionBlock}${depthBlock}
 **STEP 0 — IMAGE TYPE GATE (execute first, before anything else):**
 * Is the image clearly a single dish, multiple food items, a beverage, or a packaged food product?
-  - If NO (it is not food at all – e.g. a person, scenery, document, screenshot, or quality is too poor to identify any food) → set \`is_food: false\`, fill \`not_food_reason\` with a short explanation, and set EVERY other field (\`food_items\`, \`overall_health_score\`, \`overall_health_score_reason\`, \`plan_match_score\`, \`plan_match_reason\`, \`plan_match_variant\`, etc.) to \`null\`. Skip the rest of the steps.
-  - If YES → set \`is_food: true\`, leave \`not_food_reason\` null, and continue to steps 1–7 below.
+  - If NO (it is not food at all – e.g. a person, scenery, document, screenshot, or quality is too poor to identify any food) → set \`is_food: false\`, fill \`not_food_reason\` with a short explanation, and set ALL other fields to \`null\`. Skip the rest of the steps.
+  - If YES → set \`is_food: true\`, leave \`not_food_reason\` null, and continue to steps 1–5 below.
 
 **WHEN is_food IS TRUE — food photo analysis protocol:**
 
@@ -5411,47 +5645,39 @@ ${captionBlock}${planBlock}
 2.  **GEOMETRIC SCALE & CONTAINER STANDARDIZATION (CRITICAL FOR ACCURACY):**
     * **Anchor Identification:** Identify standard reference objects (dinner fork ≈ 20cm, dinner plate ≈ 25-28cm, standard mug, Starbucks Grande cup, etc.).
     * **Container Geometry:** If food is in a bowl/container, estimate the container's volume first. Is the container full, half-full, or 1/4 full?
-    * **Z-Axis Estimation:** Analyze shadows and layering to estimate height. Piled high (pyramid) or spread flat (cylinder)?
+    * **Z-Axis Estimation:**${depthMetrics ? ' LiDAR depth data has been provided above — use the measured height values instead of shadow-based estimation. Do not re-estimate height from shadows.' : ' Analyze shadows and layering to estimate height. Piled high (pyramid) or spread flat (cylinder)?'}
 
-3.  **COMPONENT DECOMPOSITION & DENSITY MAPPING:**
+3.  **COMPONENT DECOMPOSITION, VOLUME & DENSITY MAPPING (CRITICAL — this is how weight is computed):**
     * Deconstruct the dish into distinct components (Protein, Starch, Veg, Sauce, etc.).
-    * **Shape & Dimensions:** Approximate geometric primitive and dimensions relative to the Anchor.
-    * **Porosity/Density Mapping:**
-        * High (Compact): Steak, dense brownie (>1.0 g/cm³).
-        * Medium: Pasta, rice (0.6–0.9 g/cm³).
-        * Low (Aerated): Popcorn, leafy salad, bread (<0.3 g/cm³).
-    * **Hidden Calorie Detection:**
-        * **Viscosity:** Watery sauce (low cal) vs. clinging/glossy (oil/cream-based)?
-        * **Absorption:** For items like eggplant or bread, assume oil absorption if surface sheen is high.
-    * **Final Weight Output:** Set \`estimated_weight_g\` for each component based on volume × density.
-    * **Beverage Handling (decides the user-facing unit):**
-        - Set \`is_beverage: true\` ONLY for drinks / pourable liquids that people naturally measure in volume (water, juice, milk, soft drinks, soda, coffee, tea, beer, wine, cocktails, smoothies, milkshakes, drinkable yogurts, broth served as a drink, etc.). Soups eaten with a spoon, ice cream, yogurt in a bowl, sauces, and dressings are NOT beverages.
-        - When \`is_beverage\` is true: fill \`estimated_volume_ml\` from container geometry (mug ≈ 250ml, standard glass ≈ 250ml, soda can ≈ 330ml, half-litre bottle ≈ 500ml, Starbucks Tall ≈ 350ml / Grande ≈ 470ml / Venti ≈ 590ml) and convert to grams using the drink's density (water / most soft drinks ≈ 1.0 g/ml, milk ≈ 1.03 g/ml, whole-milk smoothies ≈ 1.0–1.05 g/ml, beer ≈ 1.01 g/ml, oil ≈ 0.92 g/ml). \`estimated_weight_g\` must STILL be filled (macros math runs in grams).
-        - When \`is_beverage\` is false: set \`estimated_volume_ml: null\`.
+    * **Shape & Dimensions:** Approximate each component's geometric primitive (cylinder, hemisphere, slab, etc.) and its dimensions relative to the Anchor.
+    * **For EACH component, output TWO mandatory fields:**
+        - \`estimated_volume_cm3\`: the physical volume of the item in cm³. Compute from dimensions: cylinder πr²h, slab l×w×h, etc.${depthMetrics ? ` All items' volumes MUST sum to ~${depthMetrics.totalVolumeCm3} cm³ (LiDAR measurement).` : ''}
+        - \`density_gcm3\`: the bulk density in g/cm³. Reference values:
+            * >1.0 g/cm³ — grilled/raw meat & fish (chicken≈1.06, beef≈1.05, salmon≈1.05), hard cheese (≈1.1), hummus (≈1.05), boiled potato (≈0.90), cooked legumes (≈0.85–0.90), cooked rice (≈0.85)
+            * 0.6–0.9 g/cm³ — cooked pasta (≈0.70), soft cheese (≈0.95), yogurt (≈1.0), egg (≈1.03)
+            * 0.2–0.5 g/cm³ — bread/toast (≈0.25–0.30), pancake (≈0.45), waffle (≈0.40)
+            * <0.2 g/cm³  — leafy salad (≈0.08), popcorn (≈0.07), puffed cereal (≈0.10)
+            * Liquids/fats — water/broth (≈1.0), olive oil (≈0.92), butter (≈0.91)
+    * \`estimated_weight_g\` MUST equal \`estimated_volume_cm3 × density_gcm3\` (rounded to nearest gram). Do not use any other method.
     * **Hidden Calorie & Implicit Ingredient Detection (MANDATORY SEPARATION):**
-        * **Explicit Extraction:** If you detect or infer added fats (oil, butter, dressings) or significant sauces, you MUST create a distinct, separate component for them in your output list. Do not implicitly merge their calories into the main food item.
+        * **Explicit Extraction:** If you detect or infer added fats (oil, butter, dressings) or significant sauces, you MUST create a distinct, separate component for them. Do not merge their mass into the main food item.
         * **Visual Cues (Gloss/Sheen):** If vegetables, pasta, or salads appear shiny, glossy, or have pools of liquid, explicitly add an estimated portion of "Oil", "Butter", or "Dressing".
         * **Culinary Context (Heuristics):** If the dish traditionally relies on oil or fat (e.g., Hummus, Fried Eggs, Roasted Vegetables, Mediterranean Salads), assume standard culinary preparation and add an appropriate baseline amount of oil/fat.
-        * **Viscosity & Absorption:** For porous items (eggplant, bread, croutons), assume high oil absorption and increase the estimated weight of the hidden fat component if the surface sheen is high.
+    * **Beverage Handling (decides the user-facing unit):**
+        - Set \`is_beverage: true\` ONLY for drinks / pourable liquids that people naturally measure in volume (water, juice, milk, soft drinks, soda, coffee, tea, beer, wine, cocktails, smoothies, milkshakes, drinkable yogurts, broth served as a drink, etc.). Soups eaten with a spoon, ice cream, yogurt in a bowl, sauces, and dressings are NOT beverages.
+        - When \`is_beverage\` is true: fill \`estimated_volume_ml\` from container geometry (mug ≈ 250ml, standard glass ≈ 250ml, soda can ≈ 330ml, half-litre bottle ≈ 500ml, Starbucks Tall ≈ 350ml / Grande ≈ 470ml / Venti ≈ 590ml).
+        - When \`is_beverage\` is false: set \`estimated_volume_ml: null\`.
 
-
-4.  **MACRONUTRIENT BASELINES (CRITICAL HANDOFF):**
-    * **DO NOT** calculate the final total macros for the estimated weight.
-    * Provide ONLY the standard USDA / nutritional database baseline values **PER 100 GRAMS** for each component, in \`macros_per_100g\`.
-    * The backend will multiply these baselines by the estimated mass.
-
-5.  **CONTEXTUAL REASONING:**
+4.  **CONTEXTUAL REASONING:**
     * **Meal Label Logic:** Cross-reference contents with "${meal}" (e.g., Pancakes at 20:00 is "Breakfast for Dinner", not "Snack").
 
-6.  **OVERALL HEALTH SCORE (always, when is_food is true — independent of any meal plan):**
+5.  **OVERALL HEALTH SCORE (always, when is_food is true):**
     * \`overall_health_score\` (0–10): general nutritional quality of the meal AS SHOWN. Judge macro balance, fiber / whole-food content, processing level, added sugar, fried / oily preparation, micronutrient density, and portion sanity.
         - 0–3 = poor (ultra-processed, fried, sugary, nutritionally empty).
         - 4–6 = mixed (some redeeming components, some poor ones).
         - 7–8 = good (balanced, mostly whole foods, reasonable portion).
         - 9–10 = excellent (clean, balanced, nutrient-dense).
     * \`overall_health_score_reason\`: 1 short sentence justifying the score.
-    * This score MUST NOT be influenced by the supplied meal plan — it reflects only the photo itself.
-${planStep}
 
 Keep all string fields short (≤ 1–2 sentences). Numbers must be plain numbers (no units, no ranges). Respond ONLY with a valid JSON object matching the schema. Do not output markdown, explanations, or repetition of steps.`;
 }
@@ -5657,7 +5883,7 @@ async function callFoodTextLLM(prompt) {
       temperature: 0.2,
       response_format: {
         type: 'json_schema',
-        json_schema: FOOD_IMAGE_LLM_SCHEMA
+        json_schema: FOOD_TEXT_LLM_SCHEMA
       },
       messages: [
         { role: 'user', content: prompt }
@@ -5686,13 +5912,251 @@ async function callFoodTextLLM(prompt) {
   }
 }
 
-// Shared response shaping for /analyze-image and /analyze-text. Both endpoints
-// return the same JSON shape; only the prompt + LLM differ. Pulling the math /
-// clamping / plan_match logic into one place keeps the two endpoints in sync.
-function buildFoodAnalysisResponseBody(llmReport, hasPlan) {
+// Builds the compact text prompt for the macro-lookup LLM call.
+// weightedItems: [{ name, grams, is_beverage, estimated_volume_ml }]
+// planMeal: optional sanitised plan meal object (same shape as used elsewhere)
+// Macro lookup prompt — USDA values only, no arithmetic, no plan context.
+// The LLM's only job here is to look up reference macros per 100g.
+function buildMacroLookupPrompt(weightedItems) {
+  const itemLines = weightedItems
+    .map((it) => `- ${it.name}`)
+    .join('\n');
+
+  return `You are a nutritional database. For each food item listed below, return the standard USDA FoodData Central macros per 100g.
+Do NOT guess or hallucinate — use established USDA or equivalent reference values only. Numbers only, no ranges.
+
+**Items:**
+${itemLines}
+
+Return ONLY a valid JSON object matching the schema. No markdown, no explanations.`;
+}
+
+// Second LLM call: text-only USDA macro lookup.
+// Returns { items: [{ name, macros_per_100g }] } only.
+// Plan matching is handled separately by callPlanMatchLLM after the backend
+// computes accurate meal totals.
+async function callMacroLookupLLM(weightedItems) {
+  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
+  const apiKey  = process.env.DEEPSEEK_API_KEY;
+  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o';
+
+  if (!apiBase || !apiKey) {
+    throw new Error('Macro LLM is not configured on the server (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY).');
+  }
+
+  const url    = `${apiBase}/chat/completions`;
+  const prompt = buildMacroLookupPrompt(weightedItems);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': apiKey,
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      max_completion_tokens: 1500,
+      temperature: 0.1,
+      response_format: {
+        type: 'json_schema',
+        json_schema: FOOD_MACRO_LLM_SCHEMA
+      },
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Macro LLM call failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
+  if (!content) {
+    const finishReason = choice?.finish_reason;
+    const usage = data.usage ? JSON.stringify(data.usage) : 'n/a';
+    throw new Error(`Empty content from macro LLM (finish_reason=${finishReason}, usage=${usage}).`);
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch (parseError) {
+    throw new Error(`Failed to parse macro LLM JSON: ${parseError.message}`);
+  }
+}
+
+// Compute the total meal macros from pre-computed item weights and the macro
+// report returned by callMacroLookupLLM. Pure arithmetic — no LLM involved.
+// Returns { calories, protein_g, carbs_g, fat_g } (all rounded integers).
+function computeMealTotals(weightedItems, macroReport) {
+  const macroByName = new Map();
+  for (const entry of (macroReport?.items || [])) {
+    if (entry.name) macroByName.set(entry.name.toLowerCase(), entry.macros_per_100g || {});
+  }
+
+  let calories = 0, protein_g = 0, carbs_g = 0, fat_g = 0;
+  for (const wi of weightedItems) {
+    const per100 = macroByName.get((wi.name || '').toLowerCase()) || {};
+    const m = wi.grams / 100;
+    calories  += (Number(per100.calories_per_100g) || 0) * m;
+    protein_g += (Number(per100.protein_per_100g)  || 0) * m;
+    carbs_g   += (Number(per100.carbs_per_100g)    || 0) * m;
+    fat_g     += (Number(per100.fat_per_100g)      || 0) * m;
+  }
+
+  return {
+    calories:  Math.round(calories),
+    protein_g: Math.round(protein_g),
+    carbs_g:   Math.round(carbs_g),
+    fat_g:     Math.round(fat_g),
+  };
+}
+
+// Builds the plan-match scoring prompt. The LLM receives ready-made totals
+// (computed by the backend) and the plan targets — its only job is to judge.
+function buildPlanMatchPrompt(computedTotals, planMeal) {
+  const planBlock = formatPlanMealForPrompt(planMeal);
+
+  return `You are a nutrition coach. A user has just eaten a meal. The backend calculated their actual intake:
+- Calories: ${computedTotals.calories} kcal
+- Protein:  ${computedTotals.protein_g}g
+- Carbs:    ${computedTotals.carbs_g}g
+- Fat:      ${computedTotals.fat_g}g
+
+${planBlock}
+Compare the actual intake against BOTH the MAIN and ALTERNATIVE plan variants above. Pick whichever variant the actual numbers resemble most and score adherence:
+- \`plan_match_score\` (0–10):
+    9–10 = excellent macro and calorie match.
+    7–8  = good match with minor deviations.
+    4–6  = moderate mismatch (calories close but macro balance off, or significant portion drift).
+    0–3  = complete mismatch (vastly different calorie count or nutritional profile).
+- \`plan_match_reason\`: 1 short sentence. Focus on how the macro/calorie numbers compare. Mention which variant was used.
+- \`plan_match_variant\`: "main", "alternative", or "none" (use "none" only for 0–3 scores).
+
+Return ONLY a valid JSON object matching the schema. No markdown, no explanations.`;
+}
+
+// Third (tiny) LLM call: plan adherence scoring only.
+// Receives pre-computed meal totals from the backend — the LLM never does math.
+async function callPlanMatchLLM(computedTotals, planMeal) {
+  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
+  const apiKey  = process.env.DEEPSEEK_API_KEY;
+  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o';
+
+  if (!apiBase || !apiKey) {
+    throw new Error('Plan match LLM is not configured (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY).');
+  }
+
+  const url    = `${apiBase}/chat/completions`;
+  const prompt = buildPlanMatchPrompt(computedTotals, planMeal);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': apiKey,
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      max_completion_tokens: 200,
+      temperature: 0.1,
+      response_format: {
+        type: 'json_schema',
+        json_schema: PLAN_MATCH_LLM_SCHEMA
+      },
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Plan match LLM call failed (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
+  if (!content) {
+    const finishReason = choice?.finish_reason;
+    const usage = data.usage ? JSON.stringify(data.usage) : 'n/a';
+    throw new Error(`Empty content from plan match LLM (finish_reason=${finishReason}, usage=${usage}).`);
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch (parseError) {
+    throw new Error(`Failed to parse plan match LLM JSON: ${parseError.message}`);
+  }
+}
+
+// Compute per-item weights from the vision LLM report using ρ·V when depth
+// metrics are available, falling back to the LLM's own visual estimate.
+// Returns an array of weighted item objects ready for the macro-lookup call
+// and for the final response builder.
+function computeWeightsFromVisionReport(visionReport, depthMetrics) {
+  let anyDepthCalibrated = false;
+
+  const weightedItems = (visionReport.food_items || []).map((item) => {
+    const volCm3      = Number(item.estimated_volume_cm3);
+    const densityGcm3 = Number(item.density_gcm3);
+    const hasDepthFields = Number.isFinite(volCm3) && volCm3 > 0
+                        && Number.isFinite(densityGcm3) && densityGcm3 > 0;
+
+    let grams;
+    if (depthMetrics && hasDepthFields) {
+      grams = Math.max(0, volCm3 * densityGcm3);
+      anyDepthCalibrated = true;
+    } else {
+      grams = Math.max(0, Number(item.estimated_weight_g) || 0);
+    }
+
+    const isBeverage = item.is_beverage === true;
+    const mlNum      = Number(item.estimated_volume_ml);
+
+    return {
+      name:                 item.name,
+      grams,
+      is_beverage:          isBeverage,
+      estimated_volume_ml:  (isBeverage && Number.isFinite(mlNum) && mlNum > 0) ? mlNum : null,
+      confidence:           typeof item.confidence === 'number' ? item.confidence : null,
+      visual_evidence:      item.visual_evidence || null,
+      depth_calibrated:     depthMetrics && hasDepthFields,
+    };
+  });
+
+  return { weightedItems, anyDepthCalibrated };
+}
+
+function buildFoodAnalysisResponseBody(llmReport, hasPlan, depthMetrics) {
   // ---- Math runs in code, NOT in the LLM ----
+  let anyDepthCalibrated = false;
+
   const items = (llmReport.food_items || []).map((item) => {
-    const grams = Math.max(0, Number(item.estimated_weight_g) || 0);
+    // Depth-calibrated path: use m = ρ·V when the LLM returned explicit
+    // volume + density AND the request included processed LiDAR data.
+    const volCm3 = Number(item.estimated_volume_cm3);
+    const densityGcm3 = Number(item.density_gcm3);
+    const hasDepthFields = Number.isFinite(volCm3) && volCm3 > 0
+                        && Number.isFinite(densityGcm3) && densityGcm3 > 0;
+
+    let grams;
+    if (depthMetrics && hasDepthFields) {
+      grams = Math.max(0, volCm3 * densityGcm3);
+      anyDepthCalibrated = true;
+    } else {
+      // Fallback: LLM visual estimate (2D-only path, or missing depth fields).
+      // When depth data was sent but fields are missing, also fall back to the
+      // LLM's own weight which was calibrated by the depth context in the prompt.
+      grams = Math.max(0, Number(item.estimated_weight_g) || 0);
+    }
+
     const per100 = item.macros_per_100g || {};
     const m = grams / 100;
 
@@ -5756,7 +6220,89 @@ function buildFoodAnalysisResponseBody(llmReport, hasPlan) {
     items,
     overall_health_score,
     overall_health_score_reason,
-    plan_match
+    plan_match,
+    // true when at least one item's weight was computed via m = ρ·V using
+    // LiDAR depth data. The frontend can use this to show a "LiDAR calibrated"
+    // badge. false (or absent) means weights come from 2D visual estimation.
+    depth_enhanced: anyDepthCalibrated,
+  };
+}
+
+// Response builder for the TWO-LLM image pipeline.
+// visionReport  — parsed output of callFoodVisionLLM (no macros, no plan fields)
+// weightedItems — output of computeWeightsFromVisionReport: [{ name, grams, is_beverage, estimated_volume_ml, confidence, visual_evidence, depth_calibrated }]
+// macroReport    — output of callMacroLookupLLM: { items:[{name,macros_per_100g}] }
+// planMatchReport— output of callPlanMatchLLM (null when no plan supplied):
+//                  { plan_match_score, plan_match_reason, plan_match_variant }
+// depthMetrics   — optional output of processDepthMap
+function buildImageAnalysisResponseBody(visionReport, weightedItems, macroReport, planMatchReport, depthMetrics) {
+  const clampScore = (v) => {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+    return Math.max(0, Math.min(10, Math.round(v * 10) / 10));
+  };
+
+  // Build a lookup map from macro report: name → macros_per_100g
+  const macroByName = new Map();
+  for (const entry of (macroReport?.items || [])) {
+    if (entry.name) macroByName.set(entry.name.toLowerCase(), entry.macros_per_100g || {});
+  }
+
+  let anyDepthCalibrated = false;
+
+  const items = weightedItems.map((wi) => {
+    const grams   = wi.grams;
+    const per100  = macroByName.get((wi.name || '').toLowerCase()) || {};
+    const m       = grams / 100;
+
+    const calories  = Math.round((Number(per100.calories_per_100g) || 0) * m);
+    const protein_g = Math.round((Number(per100.protein_per_100g)  || 0) * m);
+    const carbs_g   = Math.round((Number(per100.carbs_per_100g)    || 0) * m);
+    const fat_g     = Math.round((Number(per100.fat_per_100g)      || 0) * m);
+
+    if (wi.depth_calibrated) anyDepthCalibrated = true;
+
+    const hasMl = wi.is_beverage && wi.estimated_volume_ml != null && wi.estimated_volume_ml > 0;
+    const portion_estimate = hasMl
+      ? `${Math.round(wi.estimated_volume_ml)}ml`
+      : `${Math.round(grams)}g`;
+
+    return {
+      name: wi.name,
+      macros: { fat_g, carbs_g, calories, protein_g },
+      confidence:      wi.confidence,
+      visual_evidence: wi.visual_evidence,
+      portion_estimate,
+    };
+  });
+
+  const overall_health_score        = clampScore(visionReport.overall_health_score);
+  const overall_health_score_reason = typeof visionReport.overall_health_score_reason === 'string'
+    ? visionReport.overall_health_score_reason
+    : null;
+
+  // plan_match comes from the dedicated plan-match LLM call (which received
+  // pre-computed backend totals — never asked the LLM to do arithmetic).
+  let plan_match = null;
+  if (planMatchReport) {
+    const variantRaw = typeof planMatchReport.plan_match_variant === 'string'
+      ? planMatchReport.plan_match_variant.toLowerCase()
+      : null;
+    const variant = (variantRaw === 'main' || variantRaw === 'alternative' || variantRaw === 'none')
+      ? variantRaw
+      : null;
+    plan_match = {
+      score:   clampScore(planMatchReport.plan_match_score),
+      reason:  typeof planMatchReport.plan_match_reason === 'string' ? planMatchReport.plan_match_reason : null,
+      variant,
+    };
+  }
+
+  return {
+    items,
+    overall_health_score,
+    overall_health_score_reason,
+    plan_match,
+    depth_enhanced: anyDepthCalibrated,
   };
 }
 
@@ -5815,7 +6361,7 @@ function buildFoodAnalysisResponseBody(llmReport, hasPlan) {
 //   { error: 'not_food', message: <reason> }
 app.post('/api/food-logs/analyze-image', async (req, res) => {
   try {
-    const { imageData, mealLabel, userCaption, planMeal } = req.body || {};
+    const { imageData, mealLabel, userCaption, planMeal, depthData } = req.body || {};
     if (!imageData || typeof imageData !== 'string') {
       return res.status(400).json({ error: 'imageData (base64 string) is required' });
     }
@@ -5833,21 +6379,50 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
       return res.status(400).json({ error: 'Could not decode/compress image', message: compressErr.message });
     }
 
+    // Process LiDAR depth map when the client provides one (iPhone 12 Pro+).
+    // processDepthMap never throws — returns null on any failure so the request
+    // always continues on the 2D-only path when depth data is absent or invalid.
+    const depthMetrics = (depthData && typeof depthData === 'string')
+      ? await processDepthMap(depthData)
+      : null;
+
+    if (depthMetrics) {
+      console.log(`📐 Depth data processed: ${depthMetrics.totalVolumeCm3}cm³ total, avg ${depthMetrics.avgElevationMm}mm height`);
+    }
+
     // Bad/empty plan payloads are silently ignored (sanitized → null) so the
     // LLM behaves as if no plan was sent rather than failing the request.
     const cleanPlanMeal = sanitizePlanMeal(planMeal);
 
-    const prompt = buildFoodImagePrompt(mealLabel, userCaption, cleanPlanMeal);
-    const llmReport = await callFoodVisionLLM(compressed, prompt);
+    // Step 1: Vision LLM — food ID, geometry (volume + density), health score.
+    // No macros or plan matching at this stage.
+    const prompt      = buildFoodImagePrompt(mealLabel, userCaption, depthMetrics);
+    const visionReport = await callFoodVisionLLM(compressed, prompt);
 
-    if (!llmReport.is_food || !Array.isArray(llmReport.food_items) || llmReport.food_items.length === 0) {
+    if (!visionReport.is_food || !Array.isArray(visionReport.food_items) || visionReport.food_items.length === 0) {
       return res.status(422).json({
         error: 'not_food',
-        message: llmReport.not_food_reason || 'The provided image does not contain food items.'
+        message: visionReport.not_food_reason || 'The provided image does not contain food items.'
       });
     }
 
-    return res.json(buildFoodAnalysisResponseBody(llmReport, !!cleanPlanMeal));
+    // Step 2: Compute per-item weights using ρ·V (or LLM visual fallback).
+    const { weightedItems } = computeWeightsFromVisionReport(visionReport, depthMetrics);
+
+    // Step 3: Text LLM — USDA macro lookup ONLY. No arithmetic, no plan math.
+    const macroReport = await callMacroLookupLLM(weightedItems);
+
+    // Step 4: Backend computes accurate meal totals (no LLM involved).
+    const computedTotals = computeMealTotals(weightedItems, macroReport);
+
+    // Step 5: (Optional) Tiny plan-match LLM call — receives pre-computed
+    // numbers so it never has to do arithmetic; just judges the score.
+    const planMatchReport = cleanPlanMeal
+      ? await callPlanMatchLLM(computedTotals, cleanPlanMeal)
+      : null;
+
+    // Step 6: Assemble the final response.
+    return res.json(buildImageAnalysisResponseBody(visionReport, weightedItems, macroReport, planMatchReport, depthMetrics));
   } catch (error) {
     console.error('❌ Error in POST /api/food-logs/analyze-image:', error);
     return res.status(500).json({
@@ -5856,6 +6431,7 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
     });
   }
 });
+
 
 // POST /api/food-logs/analyze-text
 // Free-text counterpart of /analyze-image. Same response shape, same plan
