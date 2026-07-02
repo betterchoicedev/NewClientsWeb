@@ -5174,18 +5174,93 @@ function summarizeBase64Field(label, raw) {
 // Parse a LiDAR / ToF depth map and return volumetric metrics that can be
 // injected into the LLM prompt and used to calibrate per-item weight estimates.
 //
-// Depth map format expected from react-native-vision-camera on iOS:
-//   Apple embeds AVDepthData as a 16-bit grayscale auxiliary image (values in
-//   millimetres, little-endian). On devices that return 32-bit float (metres)
-//   sharp will still read it but all values land in [0,1] range; we detect
-//   that and scale accordingly.
+// depthMeta (from react-native-vision-camera) describes raw pixel layout:
+//   depth-32-bit — float32 depth in metres, planar, little-endian
+//   depth-16-bit — float16 depth in metres (fallback if client cannot convert)
 //
 // Returns { totalVolumeCm3, avgElevationMm, maxElevationMm } or null on any
 // failure — depth processing must NEVER cause the image analysis request to fail.
-async function processDepthMap(depthBase64) {
+function readFloat16LE(buffer, offset) {
+  const bits = buffer.readUInt16LE(offset);
+  const sign = (bits & 0x8000) >> 15;
+  const exponent = (bits & 0x7c00) >> 10;
+  const fraction = bits & 0x03ff;
+  if (exponent === 0) {
+    if (fraction === 0) return sign ? -0 : 0;
+    return (sign ? -1 : 1) * Math.pow(2, -14) * (fraction / 1024);
+  }
+  if (exponent === 0x1f) return fraction ? NaN : (sign ? -Infinity : Infinity);
+  return (sign ? -1 : 1) * Math.pow(2, exponent - 15) * (1 + fraction / 1024);
+}
+
+function decodeRawDepthBuffer(rawBuffer, depthMeta) {
+  if (!depthMeta || typeof depthMeta !== 'object') return null;
+  const width = Number(depthMeta.width);
+  const height = Number(depthMeta.height);
+  const pixelFormat = depthMeta.pixelFormat;
+  if (!width || !height || !pixelFormat) return null;
+
+  const totalPx = width * height;
+  if (totalPx <= 0) return null;
+
+  if (pixelFormat === 'depth-32-bit') {
+    const expectedBytes = totalPx * 4;
+    if (rawBuffer.length < expectedBytes) {
+      logAnalyzeImage('LiDAR/depth skipped', `depth-32-bit buffer too small (${rawBuffer.length} < ${expectedBytes})`);
+      return null;
+    }
+    const depthValues = new Float64Array(totalPx);
+    for (let i = 0; i < totalPx; i++) {
+      const metres = rawBuffer.readFloatLE(i * 4);
+      depthValues[i] = Number.isFinite(metres) && metres > 0 ? metres * 1000 : 0;
+    }
+    return {
+      depthValues,
+      width,
+      height,
+      depthEncoding: 'depth-32-bit float32 LE (m→mm)',
+      bytesPerPx: 4,
+    };
+  }
+
+  if (pixelFormat === 'depth-16-bit') {
+    const expectedBytes = totalPx * 2;
+    if (rawBuffer.length < expectedBytes) {
+      logAnalyzeImage('LiDAR/depth skipped', `depth-16-bit buffer too small (${rawBuffer.length} < ${expectedBytes})`);
+      return null;
+    }
+    const depthValues = new Float64Array(totalPx);
+    for (let i = 0; i < totalPx; i++) {
+      const metres = readFloat16LE(rawBuffer, i * 2);
+      depthValues[i] = Number.isFinite(metres) && metres > 0 ? metres * 1000 : 0;
+    }
+    return {
+      depthValues,
+      width,
+      height,
+      depthEncoding: 'depth-16-bit float16 LE (m→mm)',
+      bytesPerPx: 2,
+    };
+  }
+
+  logAnalyzeImage('LiDAR/depth skipped', `unsupported depth pixelFormat: ${pixelFormat} (convert to depth-32-bit on device)`);
+  return null;
+}
+
+async function processDepthMap(depthBase64, depthMeta) {
   try {
     const depthSummary = summarizeBase64Field('depthData', depthBase64);
-    logAnalyzeImage('LiDAR/depth map received', depthSummary);
+    logAnalyzeImage('LiDAR/depth map received', {
+      ...depthSummary,
+      meta: depthMeta
+        ? {
+            width: depthMeta.width ?? null,
+            height: depthMeta.height ?? null,
+            pixelFormat: depthMeta.pixelFormat ?? null,
+            bytesPerRow: depthMeta.bytesPerRow ?? null,
+          }
+        : null,
+    });
 
     const base64Data = depthBase64.replace(/^data:[^;]+;base64,/, '');
     const rawBuffer = Buffer.from(base64Data, 'base64');
@@ -5194,49 +5269,60 @@ async function processDepthMap(depthBase64) {
       return null;
     }
 
-    // Read raw pixel data. We ask sharp to normalise to 16-bit so we get a
-    // consistent uint16 range regardless of whether the source is 8-bit,
-    // 16-bit, or float. Sharp returns values 0..65535.
-    const { data, info } = await sharp(rawBuffer)
-      .grayscale()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+    let width;
+    let height;
+    let depthValues;
+    let depthEncoding;
+    let bytesPerPx;
 
-    const { width, height, channels } = info;
+    const rawDecoded = decodeRawDepthBuffer(rawBuffer, depthMeta);
+    if (rawDecoded) {
+      ({ depthValues, width, height, depthEncoding, bytesPerPx } = rawDecoded);
+    } else if (depthMeta?.width && depthMeta?.height) {
+      // Client sent dimensions but format was unsupported (e.g. disparity-16-bit).
+      return null;
+    } else {
+      // Legacy path: try sharp for image-encoded depth auxiliary images (HEIC/PNG).
+      const { data, info } = await sharp(rawBuffer)
+        .grayscale()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      width = info.width;
+      height = info.height;
+      const totalPx = width * height;
+      if (totalPx === 0) {
+        logAnalyzeImage('LiDAR/depth skipped', 'depth map has zero pixels');
+        return null;
+      }
+
+      bytesPerPx = data.length / totalPx;
+      if (bytesPerPx >= 2) {
+        depthEncoding = '16-bit uint16 LE (expected LiDAR mm)';
+        depthValues = new Float64Array(totalPx);
+        for (let i = 0; i < totalPx; i++) {
+          depthValues[i] = data.readUInt16LE(i * 2);
+        }
+      } else {
+        depthEncoding = '8-bit grayscale (scaled to ~0-5000mm)';
+        depthValues = new Float64Array(totalPx);
+        for (let i = 0; i < totalPx; i++) {
+          depthValues[i] = data[i] * (5000 / 255);
+        }
+      }
+    }
+
     const totalPx = width * height;
     if (totalPx === 0) {
       logAnalyzeImage('LiDAR/depth skipped', 'depth map has zero pixels');
       return null;
     }
 
-    // Each pixel is one uint8 byte after .raw(); for 16-bit we need pairs.
-    // sharp's .raw() on a 16-bit source returns Buffer of uint16 values packed
-    // as 2 bytes each. Detect by checking buffer size vs pixel count.
-    const bytesPerPx = data.length / totalPx;
-    let depthValues; // array of depth values in mm
-    let depthEncoding;
-
-    if (bytesPerPx >= 2) {
-      // 16-bit path: interpret as uint16 little-endian millimetres
-      depthEncoding = '16-bit uint16 LE (expected LiDAR mm)';
-      depthValues = new Float64Array(totalPx);
-      for (let i = 0; i < totalPx; i++) {
-        depthValues[i] = data.readUInt16LE(i * 2);
-      }
-    } else {
-      // 8-bit path: scale [0,255] to a rough mm range (0-5000mm)
-      depthEncoding = '8-bit grayscale (scaled to ~0-5000mm)';
-      depthValues = new Float64Array(totalPx);
-      for (let i = 0; i < totalPx; i++) {
-        depthValues[i] = data[i] * (5000 / 255);
-      }
-    }
-
     // If values are all ≤ 10 they are probably in metres (float32 cast to
     // uint16 would give tiny numbers). Scale to mm.
     const maxRaw = Math.max(...depthValues.slice(0, Math.min(1000, totalPx)));
     let scaledMetresToMm = false;
-    if (maxRaw <= 10) {
+    if (!rawDecoded && maxRaw <= 10) {
       scaledMetresToMm = true;
       for (let i = 0; i < totalPx; i++) depthValues[i] *= 1000;
     }
@@ -5245,8 +5331,7 @@ async function processDepthMap(depthBase64) {
       rawBytes: rawBuffer.length,
       width,
       height,
-      channels,
-      bytesPerPx: Math.round(bytesPerPx * 100) / 100,
+      bytesPerPx: bytesPerPx ?? Math.round((rawBuffer.length / totalPx) * 100) / 100,
       depthEncoding,
       maxRawSample: Math.round(maxRaw * 100) / 100,
       scaledMetresToMm,
@@ -6433,18 +6518,19 @@ function buildImageAnalysisResponseBody(visionReport, weightedItems, macroReport
 app.post('/api/food-logs/analyze-image', async (req, res) => {
   const requestId = Date.now().toString(36);
   try {
-    const { imageData, mealLabel, userCaption, planMeal, depthData } = req.body || {};
+    const { imageData, mealLabel, userCaption, planMeal, depthData, depthMeta } = req.body || {};
 
     logAnalyzeImage(`[${requestId}] → request`, {
       rgb: summarizeBase64Field('imageData', imageData),
       lidar: summarizeBase64Field('depthData', depthData),
+      depthMeta: depthMeta ?? null,
       mealLabel: mealLabel ?? null,
       userCaption: typeof userCaption === 'string' && userCaption.trim()
         ? `${userCaption.trim().length} chars`
         : null,
       planMeal: planMeal ? 'present' : 'absent',
       extraBodyKeys: Object.keys(req.body || {}).filter(
-        (k) => !['imageData', 'depthData', 'mealLabel', 'userCaption', 'planMeal'].includes(k)
+        (k) => !['imageData', 'depthData', 'depthMeta', 'mealLabel', 'userCaption', 'planMeal'].includes(k)
       ),
     });
 
@@ -6483,7 +6569,7 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
     } else if (typeof depthData !== 'string') {
       logAnalyzeImage(`[${requestId}] sensor path`, `2D-only — depthData ignored (expected string, got ${typeof depthData})`);
     } else {
-      depthMetrics = await processDepthMap(depthData);
+      depthMetrics = await processDepthMap(depthData, depthMeta);
       if (depthMetrics) {
         logAnalyzeImage(`[${requestId}] sensor path`, `LiDAR-enhanced — ${depthMetrics.totalVolumeCm3}cm³, avg height ${depthMetrics.avgElevationMm}mm`);
       } else {
@@ -6586,6 +6672,7 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
     });
   }
 });
+
 
 
 
