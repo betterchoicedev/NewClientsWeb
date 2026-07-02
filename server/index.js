@@ -5337,45 +5337,89 @@ async function processDepthMap(depthBase64, depthMeta) {
       scaledMetresToMm,
     });
 
-    // --- Segment foreground (food) from background (plate/table) ---
-    // Strategy: the plate surface is the dominant depth plane (most pixels at
-    // a consistent depth). Food sits CLOSER to the camera (smaller depth value).
-    // 1. Build a histogram of depth values (1mm buckets up to 5000mm).
-    // 2. Find the peak bucket — that is the plate surface depth.
-    // 3. Pixels more than FOREGROUND_THRESHOLD_MM closer than the plate are food.
-    const BUCKET_MM = 5;           // 5mm histogram resolution
-    const MAX_DEPTH_MM = 5000;
-    const FOREGROUND_THRESHOLD_MM = 15; // food must be ≥15mm above plate
+    // --- Detect plate surface using center-crop histogram ---
+    // A food photo's background (wall, far table) usually dominates a whole-frame
+    // histogram and is mistaken for the plate surface, inflating volume 10-50×.
+    // Fix: build the histogram only from the central 50 % of the frame where
+    // the plate / food is expected to be the dominant depth plane.
+    const BUCKET_MM = 5;
+    const MAX_DEPTH_MM = 2500;
+    const FOREGROUND_THRESHOLD_MM = 12; // food must be ≥12mm above plate surface
     const buckets = new Int32Array(Math.ceil(MAX_DEPTH_MM / BUCKET_MM));
 
-    for (let i = 0; i < totalPx; i++) {
-      const v = depthValues[i];
-      if (v > 0 && v < MAX_DEPTH_MM) {
-        buckets[Math.floor(v / BUCKET_MM)]++;
+    // Center-crop region for plate detection (middle 50 % of frame)
+    const histColStart = Math.floor(width  * 0.25);
+    const histColEnd   = Math.floor(width  * 0.75);
+    const histRowStart = Math.floor(height * 0.25);
+    const histRowEnd   = Math.floor(height * 0.75);
+
+    for (let row = histRowStart; row < histRowEnd; row++) {
+      for (let col = histColStart; col < histColEnd; col++) {
+        const v = depthValues[row * width + col];
+        if (v > 0 && v < MAX_DEPTH_MM) {
+          buckets[Math.floor(v / BUCKET_MM)]++;
+        }
       }
     }
 
-    // Find the most populous bucket (background / plate surface).
     let peakBucket = 0;
-    let peakCount = 0;
+    let peakCount  = 0;
     for (let b = 0; b < buckets.length; b++) {
       if (buckets[b] > peakCount) { peakCount = buckets[b]; peakBucket = b; }
     }
     const plateSurfaceMm = (peakBucket + 0.5) * BUCKET_MM;
 
-    // Collect foreground (food) pixels: closer than plate by threshold.
-    let foodAreaPx = 0;
+    // Sanity: a food photo should be taken at 150–1200mm from the plate.
+    // Outside that range the depth data is unreliable (e.g. background wall
+    // dominated the histogram, or the phone is too close / far).
+    const plausibleDistance = plateSurfaceMm >= 150 && plateSurfaceMm <= 1200;
+    if (!plausibleDistance) {
+      logAnalyzeImage('LiDAR/depth unreliable', {
+        reason: 'implausible plate distance — likely background-dominated',
+        plateSurfaceMm: Math.round(plateSurfaceMm),
+      });
+      // Return height hints only (no volume), marked as not volume-reliable.
+      // We still pass avgElevationMm / maxElevationMm as soft hints to the LLM.
+      const sampleValues = depthValues.slice(
+        (histRowStart * width + histColStart),
+        (histRowStart * width + histColStart) + Math.min(5000, (histRowEnd - histRowStart) * (histColEnd - histColStart))
+      );
+      const validSamples = Array.from(sampleValues).filter(v => v > 0 && v < MAX_DEPTH_MM);
+      if (validSamples.length === 0) return null;
+      validSamples.sort((a, b) => a - b);
+      const medianDist = validSamples[Math.floor(validSamples.length / 2)];
+      const roughMax   = Math.max(...validSamples.slice(-Math.floor(validSamples.length * 0.05)));
+      return {
+        totalVolumeCm3: null,
+        avgElevationMm: Math.round(medianDist > 0 ? Math.min(roughMax - medianDist, 200) : 0),
+        maxElevationMm: Math.round(Math.min(roughMax - (validSamples[0] ?? 0), 300)),
+        volumeReliable: false,
+        plateSurfaceMm: Math.round(plateSurfaceMm),
+      };
+    }
+
+    // --- Collect food pixels: scan center 60 % of frame only ---
+    // Whole-frame scanning includes hands, table edges, background → huge false area.
+    const foodColStart = Math.floor(width  * 0.20);
+    const foodColEnd   = Math.floor(width  * 0.80);
+    const foodRowStart = Math.floor(height * 0.20);
+    const foodRowEnd   = Math.floor(height * 0.80);
+    const centerPx     = (foodColEnd - foodColStart) * (foodRowEnd - foodRowStart);
+
+    let foodAreaPx   = 0;
     let elevationSum = 0;
     let maxElevationMm = 0;
 
-    for (let i = 0; i < totalPx; i++) {
-      const v = depthValues[i];
-      if (v <= 0 || v >= MAX_DEPTH_MM) continue;
-      const elevMm = plateSurfaceMm - v;
-      if (elevMm >= FOREGROUND_THRESHOLD_MM) {
-        foodAreaPx++;
-        elevationSum += elevMm;
-        if (elevMm > maxElevationMm) maxElevationMm = elevMm;
+    for (let row = foodRowStart; row < foodRowEnd; row++) {
+      for (let col = foodColStart; col < foodColEnd; col++) {
+        const v = depthValues[row * width + col];
+        if (v <= 0 || v >= MAX_DEPTH_MM) continue;
+        const elevMm = plateSurfaceMm - v;
+        if (elevMm >= FOREGROUND_THRESHOLD_MM) {
+          foodAreaPx++;
+          elevationSum += elevMm;
+          if (elevMm > maxElevationMm) maxElevationMm = elevMm;
+        }
       }
     }
 
@@ -5390,33 +5434,41 @@ async function processDepthMap(depthBase64, depthMeta) {
 
     const avgElevationMm = elevationSum / foodAreaPx;
 
-    // --- Convert pixel area to physical area ---
-    // iPhone LiDAR depth maps are typically 256×192 px, covering a ~60° HFOV.
-    // At a typical meal distance of ~300mm, each pixel covers roughly:
-    //   pixelWidthMm ≈ 2 × tan(30°) × 300mm / 256 ≈ 1.35mm
-    // We approximate pixel size from image dimensions + assumed FOV.
+    // --- Convert pixel area to physical area using the measured plate distance ---
+    // Using a fixed assumed distance (old code used 300mm) causes huge errors when
+    // the actual plate is at 500–1000mm: pixel area scales as distance².
     const SENSOR_HFOV_DEG = 60;
-    const ASSUMED_DISTANCE_MM = 300;
-    const halfWidthMm = Math.tan((SENSOR_HFOV_DEG / 2) * (Math.PI / 180)) * ASSUMED_DISTANCE_MM;
-    const pixelWidthMm = (2 * halfWidthMm) / width;
-    const pixelAreaCm2 = Math.pow(pixelWidthMm / 10, 2); // mm² → cm²
+    // Use actual measured distance; clamp to [200, 1200] mm for safety.
+    const referenceDist = Math.min(Math.max(plateSurfaceMm, 200), 1200);
+    const halfWidthMm   = Math.tan((SENSOR_HFOV_DEG / 2) * (Math.PI / 180)) * referenceDist;
+    const pixelWidthMm  = (2 * halfWidthMm) / width;
+    const pixelAreaCm2  = Math.pow(pixelWidthMm / 10, 2);
 
-    // Volume = base area × average elevation
-    const foodAreaCm2 = foodAreaPx * pixelAreaCm2;
+    const foodAreaCm2    = foodAreaPx * pixelAreaCm2;
     const avgElevationCm = avgElevationMm / 10;
     const totalVolumeCm3 = foodAreaCm2 * avgElevationCm;
 
+    // Sanity: a realistic single-serving meal (200–2500 cm³).
+    // avgElevation > 100mm usually means segmentation spilled into background.
+    const volumeReliable =
+      avgElevationMm  >= 5   && avgElevationMm  <= 100 &&
+      totalVolumeCm3  >= 50  && totalVolumeCm3  <= 3000 &&
+      (foodAreaPx / centerPx) <= 0.65; // food shouldn't be >65% of the center region
+
     const metrics = {
-      totalVolumeCm3: Math.round(totalVolumeCm3 * 10) / 10,
-      avgElevationMm: Math.round(avgElevationMm),
-      maxElevationMm: Math.round(maxElevationMm),
+      totalVolumeCm3:  volumeReliable ? Math.round(totalVolumeCm3 * 10) / 10 : null,
+      avgElevationMm:  Math.round(avgElevationMm),
+      maxElevationMm:  Math.round(maxElevationMm),
+      volumeReliable,
+      plateSurfaceMm:  Math.round(plateSurfaceMm),
     };
 
     logAnalyzeImage('LiDAR/depth metrics computed', {
       ...metrics,
       foodAreaPx,
-      foodAreaCm2: Math.round(foodAreaCm2 * 10) / 10,
-      plateSurfaceMm: Math.round(plateSurfaceMm),
+      foodAreaCm2:    Math.round(foodAreaCm2 * 10) / 10,
+      foodFraction:   Math.round((foodAreaPx / centerPx) * 100) + '%',
+      referenceDist:  Math.round(referenceDist),
     });
 
     return metrics;
@@ -5770,17 +5822,25 @@ function buildFoodImagePrompt(mealLabel, userCaption, depthMetrics) {
   const meal = mealLabel ? String(mealLabel) : 'unknown';
 
   // When the client provides LiDAR depth data the backend has already computed
-  // volumetric metrics. Inject them as a high-trust block so the model anchors
-  // its per-item volume estimates to physics-accurate measurements.
-  const depthBlock = depthMetrics
-    ? `\n**DEPTH SENSOR DATA (LiDAR — treat as physical ground truth, ±5–10% accuracy):**
-* Total food volume above plate surface: ~${depthMetrics.totalVolumeCm3} cm³  (~${depthMetrics.totalVolumeCm3} ml)
+  // volumetric metrics. Inject them so the model can anchor its height estimates.
+  // volumeReliable=true → total volume was measured cleanly; enforce the sum.
+  // volumeReliable=false → height data only; use as soft guidance, not hard constraint.
+  let depthBlock = '';
+  if (depthMetrics && depthMetrics.volumeReliable && depthMetrics.totalVolumeCm3 != null) {
+    depthBlock = `\n**DEPTH SENSOR DATA (LiDAR — calibrated, ±10% accuracy):**
+* Total food volume above plate: ~${depthMetrics.totalVolumeCm3} cm³
 * Average food height above plate: ~${depthMetrics.avgElevationMm}mm
 * Peak food height: ~${depthMetrics.maxElevationMm}mm
 
 Your per-item \`estimated_volume_cm3\` values MUST sum to approximately **${depthMetrics.totalVolumeCm3} cm³**.
-The LiDAR sensor measured the total physical food volume. Distribute it across items proportionally to their visual footprint and relative bulk.\n`
-    : '';
+Distribute proportionally to each item's visual footprint and relative bulk.\n`;
+  } else if (depthMetrics) {
+    depthBlock = `\n**DEPTH SENSOR DATA (LiDAR — height guidance only):**
+* Average food height above plate: ~${depthMetrics.avgElevationMm}mm
+* Peak food height: ~${depthMetrics.maxElevationMm}mm
+
+Use these height values to guide your Z-axis estimates. Do NOT use them as a strict volume budget — estimate each item's volume from visual geometry as usual.\n`;
+  }
 
   return `Act as a Lead Forensic Food Scientist and Computer Vision Specialist. Your task is to identify the food items in the image, estimate their volume and density, and rate the meal's visual quality. You do NOT compute macros or plan adherence — those are handled separately.
 
@@ -5801,13 +5861,13 @@ ${captionBlock}${depthBlock}
 2.  **GEOMETRIC SCALE & CONTAINER STANDARDIZATION (CRITICAL FOR ACCURACY):**
     * **Anchor Identification:** Identify standard reference objects (dinner fork ≈ 20cm, dinner plate ≈ 25-28cm, standard mug, Starbucks Grande cup, etc.).
     * **Container Geometry:** If food is in a bowl/container, estimate the container's volume first. Is the container full, half-full, or 1/4 full?
-    * **Z-Axis Estimation:**${depthMetrics ? ' LiDAR depth data has been provided above — use the measured height values instead of shadow-based estimation. Do not re-estimate height from shadows.' : ' Analyze shadows and layering to estimate height. Piled high (pyramid) or spread flat (cylinder)?'}
+    * **Z-Axis Estimation:**${depthMetrics ? ' LiDAR height data has been provided above — prefer the measured height values over shadow-based estimation.' : ' Analyze shadows and layering to estimate height. Piled high (pyramid) or spread flat (cylinder)?'}
 
 3.  **COMPONENT DECOMPOSITION, VOLUME & DENSITY MAPPING (CRITICAL — this is how weight is computed):**
     * Deconstruct the dish into distinct components (Protein, Starch, Veg, Sauce, etc.).
     * **Shape & Dimensions:** Approximate each component's geometric primitive (cylinder, hemisphere, slab, etc.) and its dimensions relative to the Anchor.
     * **For EACH component, output TWO mandatory fields:**
-        - \`estimated_volume_cm3\`: the physical volume of the item in cm³. Compute from dimensions: cylinder πr²h, slab l×w×h, etc.${depthMetrics ? ` All items' volumes MUST sum to ~${depthMetrics.totalVolumeCm3} cm³ (LiDAR measurement).` : ''}
+        - \`estimated_volume_cm3\`: the physical volume of the item in cm³. Compute from dimensions: cylinder πr²h, slab l×w×h, etc.${depthMetrics && depthMetrics.volumeReliable && depthMetrics.totalVolumeCm3 != null ? ` All items' volumes MUST sum to ~${depthMetrics.totalVolumeCm3} cm³ (LiDAR measurement).` : ''}
         - \`density_gcm3\`: the bulk density in g/cm³. Reference values:
             * >1.0 g/cm³ — grilled/raw meat & fish (chicken≈1.06, beef≈1.05, salmon≈1.05), hard cheese (≈1.1), hummus (≈1.05), boiled potato (≈0.90), cooked legumes (≈0.85–0.90), cooked rice (≈0.85)
             * 0.6–0.9 g/cm³ — cooked pasta (≈0.70), soft cheese (≈0.95), yogurt (≈1.0), egg (≈1.03)
@@ -6265,8 +6325,13 @@ function computeWeightsFromVisionReport(visionReport, depthMetrics) {
     const hasDepthFields = Number.isFinite(volCm3) && volCm3 > 0
                         && Number.isFinite(densityGcm3) && densityGcm3 > 0;
 
+    // Only use ρ·V (volume × density) when depth volume is reliable.
+    // volumeReliable=false means depth gave height hints only — the LLM estimated
+    // volumes freely, so ρ·V is still the right formula to use. But we should
+    // only flag depth_calibrated=true when the volume measurement was trustworthy.
+    const useDepthVolume = depthMetrics && hasDepthFields && depthMetrics.volumeReliable !== false;
     let grams;
-    if (depthMetrics && hasDepthFields) {
+    if (useDepthVolume) {
       grams = Math.max(0, volCm3 * densityGcm3);
       anyDepthCalibrated = true;
     } else {
@@ -6283,7 +6348,7 @@ function computeWeightsFromVisionReport(visionReport, depthMetrics) {
       estimated_volume_ml:  (isBeverage && Number.isFinite(mlNum) && mlNum > 0) ? mlNum : null,
       confidence:           typeof item.confidence === 'number' ? item.confidence : null,
       visual_evidence:      item.visual_evidence || null,
-      depth_calibrated:     depthMetrics && hasDepthFields,
+      depth_calibrated:     useDepthVolume,
     };
   });
 
@@ -6571,7 +6636,10 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
     } else {
       depthMetrics = await processDepthMap(depthData, depthMeta);
       if (depthMetrics) {
-        logAnalyzeImage(`[${requestId}] sensor path`, `LiDAR-enhanced — ${depthMetrics.totalVolumeCm3}cm³, avg height ${depthMetrics.avgElevationMm}mm`);
+        const sensorMode = depthMetrics.volumeReliable
+          ? `LiDAR-enhanced (volume calibrated) — ${depthMetrics.totalVolumeCm3}cm³, avg height ${depthMetrics.avgElevationMm}mm`
+          : `LiDAR height-hints only (volume unreliable) — avg height ${depthMetrics.avgElevationMm}mm, plate@${depthMetrics.plateSurfaceMm}mm`;
+        logAnalyzeImage(`[${requestId}] sensor path`, sensorMode);
       } else {
         logAnalyzeImage(`[${requestId}] sensor path`, '2D fallback — depthData was sent but could not be processed');
       }
@@ -6584,7 +6652,9 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
       mealLabel: mealLabel ?? null,
       captionUsed: sanitizeUserCaption(userCaption) || null,
       planMealAccepted: !!cleanPlanMeal,
-      analysisMode: depthMetrics ? 'RGB + LiDAR' : 'RGB only (2D)',
+      analysisMode: depthMetrics
+        ? (depthMetrics.volumeReliable ? 'RGB + LiDAR (volume calibrated)' : 'RGB + LiDAR (height hints)')
+        : 'RGB only (2D)',
     });
 
     // Step 1: Vision LLM — food ID, geometry (volume + density), health score.
@@ -6673,9 +6743,7 @@ app.post('/api/food-logs/analyze-image', async (req, res) => {
   }
 });
 
-
-
-
+  
 // POST /api/food-logs/analyze-text
 // Free-text counterpart of /analyze-image. Same response shape, same plan
 // match logic, same per-100g → totals math; the only differences are
