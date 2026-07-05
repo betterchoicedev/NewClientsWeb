@@ -115,8 +115,8 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
 
   const PUBLIC_API_PREFIXES = [
     '/api/auth/login',
-    '/api/auth/oauth/apple/exchange',
     '/api/auth/signup',
+    '/api/auth/create-client',
     '/api/auth/check-email',
     '/api/auth/check-phone',
     '/api/auth/check-user-code',
@@ -126,6 +126,10 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/auth/oauth/callback',
     '/api/auth/oauth/mobile-callback',
     '/api/auth/oauth/exchange',
+    '/api/auth/oauth/apple/verify',
+    '/api/auth/oauth/apple/exchange',
+    '/api/auth/oauth/google/finalize',
+    '/api/auth/oauth/google/start',
     '/api/auth/reset-password',
     '/api/auth/recovery/session',
     '/api/webhooks/',

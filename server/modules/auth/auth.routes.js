@@ -4,7 +4,6 @@ const { requireAuth } = require('../../middlewares/auth');
 
 const router = Router();
 
-router.post('/auth/refresh',                    ctrl.refreshSession);
 router.post('/auth/oauth/apple/verify',         ctrl.appleVerify);
 router.post('/auth/oauth/apple/exchange',       ctrl.appleExchange);
 router.post('/auth/oauth/google/finalize',      ctrl.googleFinalize);
