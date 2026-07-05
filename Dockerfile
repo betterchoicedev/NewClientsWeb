@@ -13,5 +13,5 @@ RUN npm install --only=production
 # Copy the rest of the code (including the server folder)
 COPY . .
 
-# Set the startup command to your specific server file
-CMD [ "node", "server/index.js" ]
+# Set the startup command to the new modular entry point
+CMD [ "node", "server/server.js" ]
