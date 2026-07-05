@@ -148,18 +148,71 @@ async function appleVerify(req, res) {
 
 async function appleExchange(req, res) {
   try {
-    const { code, redirectUri } = req.body || {};
-    if (!code) return res.status(400).json({ error: 'code is required' });
-
-    const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);
-    if (error || !data?.session) {
-      console.error('❌ Apple code exchange error:', error);
-      return res.status(401).json({ error: error?.message || 'Failed to exchange code' });
+    const { identityToken, fullName } = req.body || {};
+    if (!identityToken || typeof identityToken !== 'string') {
+      return res.status(400).json({ error: 'identityToken is required' });
     }
-    res.json({ data: { session: data.session, user: data.user }, error: null });
+
+    const payload = decodeJwtPayloadServer(identityToken);
+    const claimedEmail =
+      typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+
+    if (claimedEmail && (await emailHasBetterChoiceAccount(claimedEmail))) {
+      return res.status(409).json({ error: 'account_exists', email: claimedEmail });
+    }
+
+    const { data, error } = await clientDB.auth.signInWithIdToken({
+      provider: 'apple',
+      token: identityToken,
+    });
+
+    if (error) {
+      console.error('❌ Apple signup signInWithIdToken error:', error);
+      return res.status(401).json({ error: error.message || 'Apple sign-in rejected' });
+    }
+
+    if (!data?.user || !data?.session) {
+      return res.status(401).json({ error: 'Apple sign-in returned no session' });
+    }
+
+    const verifiedEmail = (data.user.email || claimedEmail || '').trim().toLowerCase();
+    if (
+      verifiedEmail &&
+      verifiedEmail !== claimedEmail &&
+      (await emailHasBetterChoiceAccount(verifiedEmail))
+    ) {
+      try {
+        await clientDB.auth.admin.deleteUser(data.user.id);
+      } catch (e) {
+        console.warn('Apple exchange: orphan cleanup failed:', e?.message);
+      }
+      return res.status(409).json({ error: 'account_exists', email: verifiedEmail });
+    }
+
+    if (fullName && (fullName.givenName || fullName.familyName)) {
+      try {
+        const patch = {};
+        if (fullName.givenName) patch.first_name = fullName.givenName;
+        if (fullName.familyName) patch.last_name = fullName.familyName;
+        await clientDB.auth.admin.updateUserById(data.user.id, {
+          user_metadata: patch,
+        });
+      } catch {
+        /* best-effort — Apple only shares the name on first sign-in */
+      }
+    }
+
+    return res.json({
+      userId: data.user.id,
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      expiresAt: data.session.expires_at ?? undefined,
+      expiresIn: data.session.expires_in ?? undefined,
+      email: data.user.email || claimedEmail || '',
+    });
   } catch (error) {
     console.error('POST /api/auth/oauth/apple/exchange error:', error);
-    res.status(500).json({ error: error.message || 'Apple exchange failed' });
+    res.status(500).json({ error: error.message || 'Apple sign-up failed' });
   }
 }
 
@@ -208,15 +261,39 @@ async function googleFinalize(req, res) {
 
 async function googleStart(req, res) {
   try {
-    const { data, error } = await clientDB.auth.signInWithOAuth({
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http')
+      .toString()
+      .split(',')[0]
+      .trim();
+    const host = (req.headers['x-forwarded-host'] || req.get('host') || '')
+      .toString()
+      .split(',')[0]
+      .trim();
+    if (!host) {
+      return res.status(500).json({ error: 'Could not resolve callback host' });
+    }
+    const mobileCallbackUrl = `${proto}://${host}/api/auth/oauth/mobile-callback`;
+
+    const { data, error } = await supabaseAuth.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${process.env.REACT_APP_API_URL || ''}/api/auth/oauth/callback` },
+      options: {
+        redirectTo: mobileCallbackUrl,
+        skipBrowserRedirect: true,
+      },
     });
-    if (error) return res.status(500).json({ error: error.message });
+
+    if (error) {
+      console.error('❌ Google OAuth start error:', error.message);
+      return res.status(500).json({ error: error.message || 'Failed to start Google sign-in' });
+    }
+    if (!data?.url) {
+      return res.status(500).json({ error: 'Supabase returned no OAuth URL' });
+    }
+
     res.json({ url: data.url });
   } catch (error) {
-    console.error('GET /api/auth/oauth/google/start error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('POST /api/auth/oauth/google/start error:', error);
+    res.status(500).json({ error: error.message || 'Failed to start Google sign-in' });
   }
 }
 
@@ -620,76 +697,272 @@ async function getDefaultProvider(req, res) {
   }
 }
 
+function buildCreateClientResponse({
+  userId,
+  userData,
+  clientRows,
+  providerToken,
+  alreadyExisted,
+  chatUserCreated,
+  chatUserData,
+}) {
+  const clientRow = clientRows?.[0] ?? null;
+  const email = clientRow?.email || userData?.email || '';
+
+  if (providerToken) {
+    return {
+      data: {
+        user: { id: userId, email },
+        session: {
+          access_token: providerToken.accessToken || null,
+          refresh_token: providerToken.refreshToken || null,
+          expires_at: providerToken.expiresAt ?? undefined,
+          expires_in: providerToken.expiresIn ?? undefined,
+          token_type: 'bearer',
+        },
+      },
+      language: null,
+      error: null,
+      ...(alreadyExisted ? { alreadyExisted: true } : {}),
+      chatUserCreated: chatUserCreated ?? false,
+      chatUserData: chatUserData ?? null,
+    };
+  }
+
+  return {
+    data: clientRows ?? [],
+    ...(alreadyExisted ? { alreadyExisted: true } : {}),
+    chatUserCreated: chatUserCreated ?? false,
+    chatUserData: chatUserData ?? null,
+  };
+}
+
 async function createClient(req, res) {
   try {
-    const { userId, userCode, email, firstName, lastName, phone, language, providerId } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    const {
+      userId,
+      userData,
+      userCode: requestedUserCode,
+      providerId,
+      invitationToken,
+      managerLinkData,
+      providerToken,
+    } = req.body;
 
-    const { data: existingClient } = await clientDB.from('clients').select('id, user_code').eq('user_id', userId).maybeSingle();
-    if (existingClient) return res.json({ success: true, client: existingClient, userCode: existingClient.user_code, alreadyExists: true });
-
-    // Generate user code if not provided
-    let finalUserCode = userCode;
-    if (!finalUserCode) {
-      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-      for (let attempts = 0; attempts < 100 && !finalUserCode; attempts++) {
-        let code = '';
-        for (let i = 0; i < 6; i++) code += letters.charAt(Math.floor(Math.random() * letters.length));
-        const { data: codeCheck } = await clientDB.from('clients').select('user_code').eq('user_code', code).maybeSingle();
-        if (!codeCheck) finalUserCode = code;
-      }
-      if (!finalUserCode) return res.status(500).json({ error: 'Failed to generate unique user code' });
+    if (!userId || !userData) {
+      return res.status(400).json({ error: 'User ID and user data are required' });
     }
 
-    const normalizePhone = (p) => p ? p.replace(/[\s\-\(\)\.]/g, '') : null;
-
-    const { data: clientData, error: clientError } = await clientDB.from('clients').insert([{
-      user_id: userId,
-      email: email?.toLowerCase().trim() || null,
-      first_name: firstName || null,
-      last_name: lastName || null,
-      full_name: `${firstName || ''} ${lastName || ''}`.trim() || null,
-      phone: normalizePhone(phone),
-      user_code: finalUserCode,
-      user_language: language || 'en',
-      status: 'active',
-    }]).select();
-
-    if (clientError) {
-      console.error('❌ Error creating client:', clientError);
-      return res.status(500).json({ error: 'Failed to create client record' });
+    if (req.userId && userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
     }
 
-    if (adminDB && email) {
+    const { data: authUserData, error: authUserError } = await clientDB.auth.admin.getUserById(userId);
+    if (authUserError || !authUserData?.user) {
+      return res.status(400).json({ error: 'Invalid user' });
+    }
+
+    const { data: existingClient } = await clientDB
+      .from('clients')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingClient) {
+      return res.json(
+        buildCreateClientResponse({
+          userId,
+          userData,
+          clientRows: [existingClient],
+          providerToken,
+          alreadyExisted: true,
+          chatUserCreated: false,
+          chatUserData: null,
+        }),
+      );
+    }
+
+    const normalizedSignupEmail = (userData.email || '').trim().toLowerCase();
+    if (normalizedSignupEmail && (await emailHasBetterChoiceAccount(normalizedSignupEmail))) {
       try {
-        let finalProviderId = providerId;
-        if (!finalProviderId) {
-          const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
-          const { data: defaultManager } = await adminDB.from('profiles').select('id').eq('company_id', betterChoiceCompanyId).eq('role', 'company_manager').order('created_at', { ascending: true }).limit(1).maybeSingle();
-          finalProviderId = defaultManager?.id;
-        }
-
-        const { data: existingChatUser } = await adminDB.from('chat_users').select('id').eq('email', email.toLowerCase().trim()).maybeSingle();
-        if (!existingChatUser) {
-          await adminDB.from('chat_users').insert([{
-            user_code: finalUserCode,
-            full_name: `${firstName || ''} ${lastName || ''}`.trim() || null,
-            email: email.toLowerCase().trim(),
-            phone_number: normalizePhone(phone),
-            whatsapp_number: normalizePhone(phone),
-            provider_id: finalProviderId || null,
-            activated: true,
-            is_verified: false,
-            language: language || 'en',
-            created_at: new Date().toISOString(),
-          }]);
-        }
-      } catch (chatError) { console.error('⚠️ Error creating chat_user in create-client:', chatError); }
+        await clientDB.auth.admin.deleteUser(userId);
+      } catch (e) {
+        console.warn('create-client: orphan cleanup failed:', e?.message);
+      }
+      return res.status(409).json({ error: 'account_exists', email: normalizedSignupEmail });
     }
 
-    res.json({ success: true, client: clientData?.[0] || null, userCode: finalUserCode, alreadyExists: false });
+    let userCode = requestedUserCode || null;
+    if (!userCode) {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      let attempts = 0;
+      while (attempts < 100 && !userCode) {
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+          code += letters.charAt(Math.floor(Math.random() * letters.length));
+        }
+        const { data: codeCheck } = await clientDB
+          .from('clients')
+          .select('user_code')
+          .eq('user_code', code)
+          .maybeSingle();
+        if (!codeCheck) userCode = code;
+        attempts++;
+      }
+      if (!userCode) {
+        return res.status(500).json({ error: 'Failed to generate unique user code' });
+      }
+    }
+
+    const clientInsertData = {
+      user_id: userId,
+      full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+      email: userData.email,
+      phone: userData.phone,
+      user_code: userCode,
+      status: 'active',
+    };
+
+    const { data, error } = await clientDB.from('clients').insert([clientInsertData]).select();
+    if (error) throw error;
+
+    const regDb = adminDB;
+    let registrationRule = null;
+    let linkIdFromToken = null;
+    let managerIdFromToken = null;
+
+    if (invitationToken) {
+      try {
+        const decoded = Buffer.from(invitationToken, 'base64').toString('utf-8');
+        try {
+          const obj = JSON.parse(decoded);
+          if (obj?.link_id) {
+            linkIdFromToken = obj.link_id;
+            managerIdFromToken = obj.manager_id || null;
+          } else if (obj?.manager_id) managerIdFromToken = obj.manager_id;
+        } catch {
+          managerIdFromToken = decoded;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!linkIdFromToken && managerLinkData?.link_id) linkIdFromToken = managerLinkData.link_id;
+    if (!managerIdFromToken && managerLinkData?.manager_id) {
+      managerIdFromToken = managerLinkData.manager_id;
+    }
+
+    if (linkIdFromToken || managerIdFromToken) {
+      if (!regDb) {
+        return res.status(503).json({
+          error: 'Registration links require CHAT_SUPABASE_URL and CHAT_SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      try {
+        let row = null;
+        if (linkIdFromToken) {
+          const { data: r, error: re } = await regDb
+            .from('registration_rules')
+            .select('id, link_id, manager_id, max_slots, current_count, expires_at, is_active')
+            .eq('link_id', linkIdFromToken)
+            .maybeSingle();
+          if (!re) row = r;
+        } else {
+          const numericId = /^\d+$/.test(String(managerIdFromToken))
+            ? parseInt(managerIdFromToken, 10)
+            : null;
+          if (numericId != null) {
+            const { data: r } = await regDb
+              .from('registration_rules')
+              .select('id, manager_id, max_slots, current_count, expires_at, is_active')
+              .eq('id', numericId)
+              .maybeSingle();
+            row = r;
+          }
+          if (!row) {
+            const { data: r } = await regDb
+              .from('registration_rules')
+              .select('id, manager_id, max_slots, current_count, expires_at, is_active')
+              .eq('manager_id', managerIdFromToken)
+              .maybeSingle();
+            row = r;
+          }
+        }
+        if (row) registrationRule = row;
+      } catch (e) {
+        console.error('⚠️ create-client: resolve registration link:', e);
+      }
+    }
+
+    if (registrationRule && regDb) {
+      try {
+        const linkIdToUse = linkIdFromToken || registrationRule.link_id;
+        const useLinkId = !!linkIdToUse;
+        let q = regDb.from('registration_rules').select('current_count, max_slots, is_active');
+        if (useLinkId) q = q.eq('link_id', linkIdToUse);
+        else q = q.eq('id', registrationRule.id);
+        const { data: cur, error: fe } = await q.maybeSingle();
+        if (!fe && cur != null) {
+          const newCount = (cur.current_count || 0) + 1;
+          const setInactive = cur.max_slots != null && newCount >= cur.max_slots;
+          const updatePayload = { current_count: newCount };
+          if (setInactive) updatePayload.is_active = false;
+          let upd = regDb.from('registration_rules').update(updatePayload);
+          if (useLinkId) upd = upd.eq('link_id', linkIdToUse);
+          else upd = upd.eq('id', registrationRule.id);
+          const { error: ue } = await upd;
+          if (ue) console.error('❌ create-client: increment registration link:', ue.message);
+        }
+      } catch (e) {
+        console.error('❌ create-client: exception incrementing registration link:', e);
+      }
+    }
+
+    let chatUserCreated = false;
+    let chatUserDataResult = null;
+
+    if (adminDB && data?.[0]) {
+      try {
+        const chatUserData = {
+          user_code: userCode,
+          full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+          email: userData.email,
+          phone_number: userData.phone,
+          whatsapp_number: userData.phone,
+          platform: userData.platform || 'whatsapp',
+          provider_id: providerId || null,
+          activated: true,
+          is_verified: false,
+          language: 'en',
+          created_at: new Date().toISOString(),
+        };
+
+        const { data: chatUserResult, error: chatUserError } = await adminDB
+          .from('chat_users')
+          .insert([chatUserData])
+          .select();
+
+        if (!chatUserError) {
+          chatUserCreated = true;
+          chatUserDataResult = chatUserResult;
+        }
+      } catch (chatError) {
+        console.error('Error creating chat user:', chatError);
+      }
+    }
+
+    res.json(
+      buildCreateClientResponse({
+        userId,
+        userData,
+        clientRows: data,
+        providerToken,
+        chatUserCreated,
+        chatUserData: chatUserDataResult,
+      }),
+    );
   } catch (error) {
-    console.error('Error creating client:', error);
+    console.error('Error creating client record:', error);
     res.status(500).json({ error: error.message });
   }
 }
