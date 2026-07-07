@@ -19,7 +19,7 @@ function logAnalyzeImage(step, payload) {
 
 async function getFoodLogs(req, res) {
   try {
-    const { userCode, date } = req.query;
+    const { userCode, date, startDate, endDate } = req.query;
     if (!userCode) return res.status(400).json({ error: 'User code is required' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
 
@@ -27,7 +27,12 @@ async function getFoodLogs(req, res) {
     if (userError || !userData) return res.status(404).json({ error: 'User not found' });
 
     let query = adminDB.from('food_logs').select('*').eq('user_id', userData.id).order('log_date', { ascending: false }).order('created_at', { ascending: false });
-    if (date) query = query.eq('log_date', date);
+    if (date) {
+      query = query.eq('log_date', date);
+    } else {
+      if (startDate) query = query.gte('log_date', startDate);
+      if (endDate) query = query.lte('log_date', endDate);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
