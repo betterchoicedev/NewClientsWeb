@@ -13,11 +13,6 @@ const {
   formatPlanMealForPrompt,
   calculateMainTotalsFromMeals,
 } = require('../utils/helpers');
-const {
-  formatDailyTargets,
-  formatLoggedMealsList,
-  formatFullMealPlanMenu,
-} = require('../utils/promptFormatters');
 
 // ─── Prompt builders ──────────────────────────────────────────────────────────
 
@@ -314,152 +309,6 @@ async function callPlanMatchLLM(computedTotals, planMeal) {
   try { return JSON.parse(content); } catch (e) { throw new Error(`Failed to parse plan match LLM JSON: ${e.message}`); }
 }
 
-// ─── Holistic plan-match (API-first + DB-fallback) ───────────────────────────
-
-function calculateDailyBudgetContext(fullMealPlan, todayPreviousLogs, currentMealMacros) {
-  const target = fullMealPlan?.totals || { calories: 0, protein: 0, carbs: 0, fat: 0 };
-
-  const prior = (todayPreviousLogs || []).reduce((acc, log) => ({
-    calories:  acc.calories  + (_num(log.total_calories)  || 0),
-    protein_g: acc.protein_g + (_num(log.total_protein_g) || 0),
-    carbs_g:   acc.carbs_g   + (_num(log.total_carbs_g)   || 0),
-    fat_g:     acc.fat_g     + (_num(log.total_fat_g)     || 0),
-  }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
-
-  const projected = {
-    calories:  prior.calories  + (Number(currentMealMacros.calories)  || 0),
-    protein_g: prior.protein_g + (Number(currentMealMacros.protein_g) || 0),
-    carbs_g:   prior.carbs_g   + (Number(currentMealMacros.carbs_g)   || 0),
-    fat_g:     prior.fat_g     + (Number(currentMealMacros.fat_g)     || 0),
-  };
-
-  return { target, prior, projected };
-}
-
-function _num(val, fallback = 0) {
-  const n = Number(val);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function buildHolisticPlanMatchPrompt(computedTotals, fullMealPlan, todayPreviousLogs, mealLabel) {
-  const { target, prior, projected } = calculateDailyBudgetContext(fullMealPlan, todayPreviousLogs, computedTotals);
-
-  return `You are an expert clinical dietitian and flexible nutrition coach. Your job is to evaluate a user's newly logged meal against their FULL DAILY MEAL PLAN and REMAINING DAILY BUDGET.
-
-**1. DAILY TARGET BUDGET:**
-- Target: ${formatDailyTargets(target)}
-
-**2. TODAY'S PRIOR INTAKE (Meals already consumed today before this one):**
-${formatLoggedMealsList(todayPreviousLogs)}
-- Cumulative Prior Total: ${Math.round(prior.calories)} kcal | ${Math.round(prior.protein_g)}g P / ${Math.round(prior.carbs_g)}g C / ${Math.round(prior.fat_g)}g F
-
-**3. CURRENT LOGGED MEAL (User Label: "${mealLabel || 'Unspecified'}"):**
-- Actual Macros: ${computedTotals.calories} kcal | ${computedTotals.protein_g}g P / ${computedTotals.carbs_g}g C / ${computedTotals.fat_g}g F
-- Projected Day Total (Prior + Current): ${Math.round(projected.calories)} kcal | ${Math.round(projected.protein_g)}g P / ${Math.round(projected.carbs_g)}g C / ${Math.round(projected.fat_g)}g F
-
-**4. ASSIGNED DAILY MEAL PLAN MENU:**
-${formatFullMealPlanMenu(fullMealPlan)}
-
-**HOLISTIC SCORING INSTRUCTIONS:**
-Evaluate how well this meal serves the user's **overall daily nutrition budget**, NOT just a rigid single slot:
-* **9–10 (Excellent / On-Plan):** The dish matches one of the assigned Main/Alternative meals for the day OR fits perfectly into the remaining calorie/macro budget. (If they ate their assigned Lunch dish during Breakfast, score this 9-10 because it is on their daily plan!).
-* **7–8 (Good / Strategic IIFYM):** The dish differs from the assigned menu, but strategically fills a remaining macro deficit without blowing past total calories.
-* **4–6 (Moderate Mismatch):** The meal takes up too much of the remaining calorie budget or skews macros heavily away from daily targets.
-* **0–3 (Poor Adherence):** The meal severely exceeds the remaining daily calorie allowance or completely disregards dietary structure.
-
-**VARIANT MAPPING:**
-- If the meal conceptually resembles any "Main" meal on the daily menu, set \`plan_match_variant\` to \`"main"\`.
-- If it resembles an "Alternative" option or is an acceptable flexible substitution that fits macros, set \`plan_match_variant\` to \`"alternative"\`.
-- Set to \`"none"\` ONLY if the score is 0–3.
-
-Respond ONLY with a valid JSON object matching the schema. No markdown, no explanations.`;
-}
-
-async function callHolisticPlanMatchLLM(computedTotals, fullMealPlan, todayPreviousLogs, mealLabel) {
-  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
-  const apiKey  = process.env.DEEPSEEK_API_KEY;
-  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o';
-
-  if (!apiBase || !apiKey) throw new Error('Plan match LLM is not configured (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY).');
-
-  const prompt = buildHolisticPlanMatchPrompt(computedTotals, fullMealPlan, todayPreviousLogs, mealLabel);
-  const response = await fetch(`${apiBase}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api-key': apiKey, 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      max_completion_tokens: 300,
-      temperature: 0.1,
-      response_format: { type: 'json_schema', json_schema: PLAN_MATCH_LLM_SCHEMA },
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Holistic plan match LLM call failed (${response.status}): ${errText}`);
-  }
-
-  const data    = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error('Empty content from holistic plan match LLM.');
-  try { return JSON.parse(content); } catch (e) { throw new Error(`Failed to parse holistic plan match LLM JSON: ${e.message}`); }
-}
-
-async function getHolisticAdherence({ computedTotals, mealLabel, planMeal, fullMealPlan, todayLogs, userCode, adminDB }) {
-  let resolvedMealPlan  = fullMealPlan || null;
-  let resolvedTodayLogs = Array.isArray(todayLogs) ? todayLogs : null;
-
-  if (!resolvedMealPlan && userCode && adminDB) {
-    try {
-      const { data: planRecord } = await adminDB
-        .from('meal_plans_and_schemas')
-        .select('meal_plan')
-        .eq('user_code', userCode)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (planRecord?.meal_plan) resolvedMealPlan = planRecord.meal_plan;
-    } catch (err) {
-      console.warn('⚠️ Fallback DB fetch for meal plan failed:', err.message);
-    }
-  }
-
-  if (!resolvedTodayLogs && userCode && adminDB) {
-    try {
-      const { data: userRecord } = await adminDB
-        .from('chat_users')
-        .select('id')
-        .eq('user_code', userCode)
-        .maybeSingle();
-      if (userRecord?.id) {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const { data: logs } = await adminDB
-          .from('food_logs')
-          .select('*')
-          .eq('user_id', userRecord.id)
-          .eq('log_date', todayStr);
-        if (Array.isArray(logs)) resolvedTodayLogs = logs;
-      }
-    } catch (err) {
-      console.warn('⚠️ Fallback DB fetch for today food logs failed:', err.message);
-    }
-  }
-
-  resolvedTodayLogs = resolvedTodayLogs || [];
-
-  if (resolvedMealPlan && (resolvedMealPlan.totals || Array.isArray(resolvedMealPlan.meals))) {
-    return await callHolisticPlanMatchLLM(computedTotals, resolvedMealPlan, resolvedTodayLogs, mealLabel);
-  }
-
-  if (planMeal) {
-    return await callPlanMatchLLM(computedTotals, planMeal);
-  }
-
-  return null;
-}
-
 // ─── Weight / response builders ───────────────────────────────────────────────
 
 function computeMealTotals(weightedItems, macroReport) {
@@ -479,20 +328,6 @@ function computeMealTotals(weightedItems, macroReport) {
   }
 
   return { calories: Math.round(calories), protein_g: Math.round(protein_g), carbs_g: Math.round(carbs_g), fat_g: Math.round(fat_g) };
-}
-
-function computeTextMealTotals(llmReport) {
-  return (llmReport.food_items || []).reduce((acc, item) => {
-    const grams = Math.max(0, Number(item.estimated_weight_g) || 0);
-    const m     = grams / 100;
-    const per100 = item.macros_per_100g || {};
-    return {
-      calories:  acc.calories  + Math.round((Number(per100.calories_per_100g) || 0) * m),
-      protein_g: acc.protein_g + Math.round((Number(per100.protein_per_100g)  || 0) * m),
-      carbs_g:   acc.carbs_g   + Math.round((Number(per100.carbs_per_100g)    || 0) * m),
-      fat_g:     acc.fat_g     + Math.round((Number(per100.fat_per_100g)      || 0) * m),
-    };
-  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
 }
 
 function computeWeightsFromVisionReport(visionReport, depthMetrics) {
@@ -529,7 +364,7 @@ function computeWeightsFromVisionReport(visionReport, depthMetrics) {
   return { weightedItems, anyDepthCalibrated };
 }
 
-function buildFoodAnalysisResponseBody(llmReport, planMatchReport = null, depthMetrics = null) {
+function buildFoodAnalysisResponseBody(llmReport, hasPlan, depthMetrics) {
   let anyDepthCalibrated = false;
 
   const items = (llmReport.food_items || []).map((item) => {
@@ -569,10 +404,10 @@ function buildFoodAnalysisResponseBody(llmReport, planMatchReport = null, depthM
   const overall_health_score_reason = typeof llmReport.overall_health_score_reason === 'string' ? llmReport.overall_health_score_reason : null;
 
   let plan_match = null;
-  if (planMatchReport) {
-    const variantRaw = typeof planMatchReport.plan_match_variant === 'string' ? planMatchReport.plan_match_variant.toLowerCase() : null;
-    const variant = (variantRaw === 'main' || variantRaw === 'alternative' || variantRaw === 'flexible_match' || variantRaw === 'none') ? variantRaw : null;
-    plan_match = { score: clampScore(planMatchReport.plan_match_score), reason: typeof planMatchReport.plan_match_reason === 'string' ? planMatchReport.plan_match_reason : null, variant };
+  if (hasPlan) {
+    const variantRaw = typeof llmReport.plan_match_variant === 'string' ? llmReport.plan_match_variant.toLowerCase() : null;
+    const variant = (variantRaw === 'main' || variantRaw === 'alternative' || variantRaw === 'none') ? variantRaw : null;
+    plan_match = { score: clampScore(llmReport.plan_match_score), reason: typeof llmReport.plan_match_reason === 'string' ? llmReport.plan_match_reason : null, variant };
   }
 
   return { items, overall_health_score, overall_health_score_reason, plan_match, depth_enhanced: anyDepthCalibrated };
@@ -816,11 +651,9 @@ module.exports = {
   buildPlanMatchPrompt,
   callPlanMatchLLM,
   computeMealTotals,
-  computeTextMealTotals,
   computeWeightsFromVisionReport,
   buildFoodAnalysisResponseBody,
   buildImageAnalysisResponseBody,
-  getHolisticAdherence,
   generateUpdatedMealPlan,
   createAndSaveOnboardingMealPlanForUser,
 };

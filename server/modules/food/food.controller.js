@@ -4,8 +4,8 @@ const { INGREDIENT_REPORT_TYPES } = require('../../utils/constants');
 const { compressFoodImage, processDepthMap, sanitizePlanMeal, sanitizeFoodText, summarizeBase64Field } = require('../../utils/helpers');
 const {
   buildFoodImagePrompt, callFoodVisionLLM, buildFoodTextPrompt, callFoodTextLLM,
-  callMacroLookupLLM, callPlanMatchLLM, getHolisticAdherence,
-  computeMealTotals, computeTextMealTotals, computeWeightsFromVisionReport,
+  callMacroLookupLLM, callPlanMatchLLM,
+  computeMealTotals, computeWeightsFromVisionReport,
   buildFoodAnalysisResponseBody, buildImageAnalysisResponseBody,
 } = require('../../services/ai.service');
 
@@ -119,10 +119,7 @@ async function deleteFoodLog(req, res) {
 async function analyzeImage(req, res) {
   const requestId = Date.now().toString(36);
   try {
-    const {
-      imageData, mealLabel, userCaption, planMeal,
-      depthData, depthMeta, fullMealPlan, todayLogs, userCode,
-    } = req.body || {};
+    const { imageData, mealLabel, userCaption, planMeal, depthData, depthMeta } = req.body || {};
 
     logAnalyzeImage(`[${requestId}] → request`, {
       rgb: summarizeBase64Field('imageData', imageData),
@@ -131,8 +128,6 @@ async function analyzeImage(req, res) {
       mealLabel: mealLabel ?? null,
       userCaption: typeof userCaption === 'string' && userCaption.trim() ? `${userCaption.trim().length} chars` : null,
       planMeal: planMeal ? 'present' : 'absent',
-      fullMealPlan: fullMealPlan ? 'api_provided' : 'will_fallback_db',
-      todayLogs: Array.isArray(todayLogs) ? `${todayLogs.length} logs provided` : 'will_fallback_db',
     });
 
     if (!imageData || typeof imageData !== 'string') {
@@ -174,16 +169,11 @@ async function analyzeImage(req, res) {
     const computedTotals = computeMealTotals(weightedItems, macroReport);
     logAnalyzeImage(`[${requestId}] step 4/5 done`, { computedTotals });
 
-    logAnalyzeImage(`[${requestId}] step 5/5`, 'calling holistic plan-match LLM');
-    const planMatchReport = await getHolisticAdherence({
-      computedTotals,
-      mealLabel,
-      planMeal: cleanPlanMeal,
-      fullMealPlan,
-      todayLogs,
-      userCode: userCode || req.userCode,
-      adminDB,
-    });
+    let planMatchReport = null;
+    if (cleanPlanMeal) {
+      logAnalyzeImage(`[${requestId}] step 5/5`, 'calling plan-match LLM');
+      planMatchReport = await callPlanMatchLLM(computedTotals, cleanPlanMeal);
+    }
 
     const responseBody = buildImageAnalysisResponseBody(visionReport, weightedItems, macroReport, planMatchReport, depthMetrics);
     logAnalyzeImage(`[${requestId}] ✓ response`, { itemCount: responseBody.items.length });
@@ -197,7 +187,7 @@ async function analyzeImage(req, res) {
 
 async function analyzeText(req, res) {
   try {
-    const { text, mealLabel, planMeal, fullMealPlan, todayLogs, userCode } = req.body || {};
+    const { text, mealLabel, planMeal } = req.body || {};
     if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text (food description string) is required' });
 
     const cleanText = sanitizeFoodText(text);
@@ -211,19 +201,7 @@ async function analyzeText(req, res) {
       return res.status(422).json({ error: 'not_food', message: llmReport.not_food_reason || 'The provided text does not describe food items.' });
     }
 
-    const computedTotals = computeTextMealTotals(llmReport);
-
-    const planMatchReport = await getHolisticAdherence({
-      computedTotals,
-      mealLabel,
-      planMeal: cleanPlanMeal,
-      fullMealPlan,
-      todayLogs,
-      userCode: userCode || req.userCode,
-      adminDB,
-    });
-
-    return res.json(buildFoodAnalysisResponseBody(llmReport, planMatchReport));
+    return res.json(buildFoodAnalysisResponseBody(llmReport, !!cleanPlanMeal));
   } catch (error) {
     console.error('❌ Error in POST /api/food-logs/analyze-text:', error);
     return res.status(500).json({ error: 'Failed to analyze food text', message: error.message });
