@@ -222,25 +222,23 @@ async function dailyMacroSummarySvg(req, res) {
 }
 
 async function validateLanding(req, res) {
-  const { managerId, linkId } = req.body;
-  console.log(`=== [HANDSHAKE] === Validating Schema Route for Manager: ${managerId}, Link: ${linkId || 'None'}`);
+  let { managerId, linkId } = req.body;
+  console.log(`=== [HANDSHAKE] === Validating Schema Route for Manager: ${managerId || 'Unknown'}, Link: ${linkId || 'None'}`);
 
-  if (!managerId) return res.status(400).json({ error: 'INVALID_TOKEN_STRUCTURE' });
+  if (!managerId && !linkId) return res.status(400).json({ error: 'INVALID_TOKEN_STRUCTURE' });
 
   try {
-    const { data: profile, error: profileErr } = await adminDB.from('profiles').select('name, role, company_id, companies(name, config)').eq('id', managerId).single();
-    if (profileErr || !profile) return res.status(404).json({ error: 'Manager profile data records not found' });
-
-    const companyData = profile.companies;
-    if (!companyData) return res.status(404).json({ error: 'Associated corporate master profile missing' });
-
+    let rule = null;
     let slotsRemaining = null, maxSlots = null, currentCount = 0, expiresAt = null, isSmartLinkActive = false;
 
     if (linkId) {
-      const { data: rule, error: ruleErr } = await adminDB.from('registration_rules').select('max_slots, current_count, expires_at, is_active').eq('link_id', linkId).maybeSingle();
+      const { data: ruleData, error: ruleErr } = await adminDB.from('registration_rules').select('manager_id, max_slots, current_count, expires_at, is_active').eq('link_id', linkId).maybeSingle();
       if (ruleErr) console.error('[-] Error fetching live campaign metrics:', ruleErr);
 
-      if (rule) {
+      if (ruleData) {
+        rule = ruleData;
+        if (!managerId) managerId = rule.manager_id;
+        
         if (rule.is_active === false) return res.status(410).json({ error: 'This specific campaign track has been deactivated' });
         if (rule.expires_at && new Date(rule.expires_at) < new Date()) return res.status(410).json({ error: 'Campaign tracking parameters have expired on the server clock' });
 
@@ -251,13 +249,23 @@ async function validateLanding(req, res) {
         isSmartLinkActive = true;
 
         if (slotsRemaining <= 0) return res.status(403).json({ error: 'Registration thresholds reached. No remaining available slots' });
+      } else if (!managerId) {
+        return res.status(404).json({ error: 'Registration link not found' });
       }
     }
+
+    if (!managerId) return res.status(400).json({ error: 'INVALID_TOKEN_STRUCTURE' });
+
+    const { data: profile, error: profileErr } = await adminDB.from('profiles').select('name, role, company_id, companies(name, config)').eq('id', managerId).single();
+    if (profileErr || !profile) return res.status(404).json({ error: 'Manager profile data records not found' });
+
+    const companyData = profile.companies;
+    if (!companyData) return res.status(404).json({ error: 'Associated corporate master profile missing' });
 
     return res.status(200).json({
       success: true,
       company: { id: profile.company_id, name: companyData.name, slug: companyData.name.toLowerCase().replace(/\s+/g, '').trim(), config: companyData.config || {} },
-      manager: { name: profile.name, role: profile.role },
+      manager: { name: profile.name, role: profile.role, id: managerId },
       campaign: { isSmartLink: isSmartLinkActive, maxSlots, currentCount, slotsRemaining, expiresAt },
     });
   } catch (globalFaultException) {

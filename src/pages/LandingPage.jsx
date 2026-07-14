@@ -51,10 +51,10 @@ export default function LandingPage() {
 
           if (decodedString.startsWith('{')) {
             const decodedPayload = JSON.parse(decodedString);
-            manager_id = decodedPayload.manager_id;
-            link_id = decodedPayload.link_id;
-            max_clients = decodedPayload.max_clients;
-            expiry_date = decodedPayload.expiry_date;
+            manager_id = decodedPayload.manager_id || null;
+            link_id = decodedPayload.link_id || null;
+            max_clients = decodedPayload.max_clients || null;
+            expiry_date = decodedPayload.expiry_date || null;
           } else {
             manager_id = decodedString;
           }
@@ -63,7 +63,7 @@ export default function LandingPage() {
           throw new Error('INVALID_TOKEN_STRUCTURE');
         }
 
-        if (!manager_id) {
+        if (!manager_id && !link_id) {
           throw new Error('INVALID_TOKEN_STRUCTURE');
         }
 
@@ -95,6 +95,11 @@ export default function LandingPage() {
           const errorInstance = new Error('REGISTRATION_LIMIT_REACHED');
           errorInstance.status = 403;
           throw errorInstance;
+        }
+
+        // Now manager_id is reliably populated from backend if we only sent link_id
+        if (!manager_id && resData.manager?.id) {
+          manager_id = resData.manager.id;
         }
 
         // 🛠️ FIX BUG 2: Map structural fallbacks to handle both nested or flat DB configuration profiles

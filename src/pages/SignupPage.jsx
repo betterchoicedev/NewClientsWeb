@@ -115,7 +115,18 @@ function SignupPage() {
       localStorage.setItem('deferred_invitation_token', base64Token);
       const linkData = decodeRegistrationHash(base64Token);
       if (!linkData) return false;
-      sessionStorage.setItem('manager_link_data', JSON.stringify({ link_id: linkData.link_id || undefined, manager_id: linkData.manager_id }));
+      
+      // Merge with existing to preserve manager_id if already resolved
+      let existingData = {};
+      try {
+        const raw = sessionStorage.getItem('manager_link_data');
+        if (raw) existingData = JSON.parse(raw);
+      } catch (e) {}
+
+      sessionStorage.setItem('manager_link_data', JSON.stringify({ 
+        link_id: linkData.link_id || existingData.link_id || undefined, 
+        manager_id: linkData.manager_id || existingData.manager_id || undefined 
+      }));
       return true;
     } catch (e) {
       console.error('Error checking invitation token:', e);
@@ -225,11 +236,18 @@ function SignupPage() {
       if (token) {
         const linkData = decodeRegistrationHash(token);
         if (linkData) {
+          // If we already resolved the manager_id in initializeSignup, keep it!
+          let existingData = {};
+          try {
+            const raw = sessionStorage.getItem('manager_link_data');
+            if (raw) existingData = JSON.parse(raw);
+          } catch (e) {}
+
           sessionStorage.setItem(
             'manager_link_data',
             JSON.stringify({
-              link_id: linkData.link_id || undefined,
-              manager_id: linkData.manager_id || undefined,
+              link_id: linkData.link_id || existingData.link_id || undefined,
+              manager_id: linkData.manager_id || existingData.manager_id || undefined,
             })
           );
         }
