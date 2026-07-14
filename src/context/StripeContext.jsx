@@ -51,8 +51,8 @@ export const StripeProvider = ({ children }) => {
         cancelUrl: options.cancelUrl || STRIPE_CONFIG.options.cancel_url,
       };
 
-      // Call backend API to create checkout session
-      const response = await fetch('https://newclientsweb-615263253386.me-west1.run.app/api/stripe/create-checkout-session', {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/stripe/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -104,7 +104,8 @@ export const StripeProvider = ({ children }) => {
     setError(null);
 
     try {
-      const response = await fetch('https://newclientsweb-615263253386.me-west1.run.app/api/stripe/create-payment-intent', {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/stripe/create-payment-intent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -136,7 +137,8 @@ export const StripeProvider = ({ children }) => {
   // Get customer's subscriptions
   const getCustomerSubscriptions = async (customerId) => {
     try {
-      const response = await fetch(`https://newclientsweb-615263253386.me-west1.run.app/api/stripe/subscriptions?customerId=${encodeURIComponent(customerId)}`);
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/stripe/subscriptions?customerId=${encodeURIComponent(customerId)}`);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -157,7 +159,8 @@ export const StripeProvider = ({ children }) => {
     setError(null);
 
     try {
-      const response = await fetch(`https://newclientsweb-615263253386.me-west1.run.app/api/stripe/subscriptions/${subscriptionId}/cancel`, {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/stripe/subscriptions/${subscriptionId}/cancel`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -190,7 +193,8 @@ export const StripeProvider = ({ children }) => {
     setError(null);
 
     try {
-      const response = await fetch(`https://newclientsweb-615263253386.me-west1.run.app/api/stripe/subscriptions/${subscriptionId}/reactivate`, {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/stripe/subscriptions/${subscriptionId}/reactivate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +221,8 @@ export const StripeProvider = ({ children }) => {
   // Get checkout session details
   const getCheckoutSession = async (sessionId) => {
     try {
-      const response = await fetch(`https://newclientsweb-615263253386.me-west1.run.app/api/stripe/checkout-session/${sessionId}`);
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/stripe/checkout-session/${sessionId}`);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -237,7 +242,8 @@ export const StripeProvider = ({ children }) => {
     setError(null);
 
     try {
-      const response = await fetch(`https://newclientsweb-615263253386.me-west1.run.app/api/stripe/subscriptions/${subscriptionId}/payment-method`, {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+      const response = await fetch(`${apiUrl}/api/stripe/subscriptions/${subscriptionId}/payment-method`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

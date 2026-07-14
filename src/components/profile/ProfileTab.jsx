@@ -4,6 +4,7 @@ import { createWeightLog } from '../../supabase/secondaryClient';
 import { apiFetch } from '../../lib/apiClient';
 import { signOut } from '../../supabase/auth';
 import { useSettings } from '../../context/SettingsContext';
+import { Flame, Activity, Camera, Edit2, Check, X, LogOut, ChevronRight, User, Settings, Info, AlertTriangle, UserMinus, Building, ExternalLink, Calendar } from 'lucide-react';
 
 const CM_PER_IN = 2.54;
 
@@ -1403,7 +1404,7 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
               {/* Section header */}
               <div className="flex items-center mb-4 sm:mb-6 min-w-0">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center mr-2.5 sm:mr-3 flex-shrink-0">
-                  <span className="text-orange-600 dark:text-orange-400 text-base sm:text-lg">🔥</span>
+                  <Flame className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className={`${themeClasses.textPrimary} text-base sm:text-lg md:text-xl font-bold leading-tight`}>
@@ -1796,8 +1797,8 @@ const ProfileTab = ({ profileData, onInputChange, onSave, isSaving, saveStatus, 
         {/* Health Information */}
         <div className={`${themeClasses.bgSecondary} rounded-xl p-4 sm:p-6 border-l-4 border-emerald-500`}>
           <div className="flex items-center mb-4 sm:mb-6">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-100 dark:bg-emerald-900 rounded-lg flex items-center justify-center mr-3">
-              <span className="text-emerald-600 dark:text-emerald-400 text-base sm:text-lg">🏥</span>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-100 dark:bg-emerald-900 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+              <Activity className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
               <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-bold`}>

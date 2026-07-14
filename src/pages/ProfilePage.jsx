@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Calendar, Utensils, MessageCircle, CreditCard, User, Sun, Moon, Laptop, Smartphone, BarChart2, FileText } from 'lucide-react';
 import {
   AreaChart,
   Area,
@@ -880,31 +881,31 @@ const ProfilePage = () => {
     { 
       id: 'dailyLog', 
       label: language === 'hebrew' ? 'יומן בריאות' : 'Health Diary',
-      icon: '📝',
+      icon: <FileText size={20} />,
       description: language === 'hebrew' ? 'מעקב, הבנה והתקדמות' : 'Tracking, Understanding, and Progress'
     },
     { 
       id: 'myPlan', 
       label: t.profile.tabs.myPlan,
-      icon: '🍽️',
+      icon: <Utensils size={20} />,
       description: language === 'hebrew' ? 'תוכנית תזונה וכושר מותאמת אישית' : 'Personalized nutrition and fitness plan'
     },
     { 
       id: 'messages', 
       label: t.profile.tabs.messages,
-      icon: '💬',
+      icon: <MessageCircle size={20} />,
       description: language === 'hebrew' ? 'תקשורת עם הדיאטנית AI שלך' : 'Communication with your AI dietitian'
     },
     { 
       id: 'pricing', 
       label: language === 'hebrew' ? 'תוכניות מנוי' : 'Subscription Plans',
-      icon: '💳',
+      icon: <CreditCard size={20} />,
       description: language === 'hebrew' ? 'בחר את התוכנית המתאימה לך' : 'Choose your perfect plan'
     },
     { 
       id: 'profile', 
       label: t.profile.tabs.profile,
-      icon: '👤',
+      icon: <User size={20} />,
       description: language === 'hebrew' ? 'נהל את הפרטים האישיים שלך' : 'Manage your personal information'
     }
   ];
@@ -1002,9 +1003,9 @@ const ProfilePage = () => {
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${direction === 'rtl' ? 'ml-4' : 'mr-4'} ${
                   activeTab === tab.id 
                     ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/40 scale-105' 
-                    : `${themeClasses.bgCard} shadow-sm border ${isDarkMode ? 'border-slate-700' : 'border-slate-200'} group-hover:scale-105`
+                    : `${themeClasses.bgCard} shadow-sm border ${isDarkMode ? 'border-slate-700 text-white' : 'border-slate-200 text-slate-700'} group-hover:scale-105`
                 }`}>
-                  <span className="text-xl">{tab.icon}</span>
+                  <span className="flex items-center justify-center">{tab.icon}</span>
                 </div>
                 <div className={`flex-1 min-w-0 overflow-hidden ${direction === 'rtl' ? 'text-right' : 'text-left'}`}>
                   <div className={`font-bold transition-colors duration-300 ${
@@ -1050,7 +1051,7 @@ const ProfilePage = () => {
                     onClick={toggleTheme}
                     className={`${themeClasses.bgCard} shadow-sm border ${isDarkMode ? 'border-emerald-500/50 text-yellow-400' : 'border-slate-200 text-slate-700 hover:border-emerald-400/50'} rounded-xl p-3 transition-colors duration-300`}
                   >
-                    {isDarkMode ? '☀️' : '🌙'}
+                    {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
                   </motion.button>
                 </div>
               </div>
@@ -1170,10 +1171,10 @@ const ProfilePage = () => {
                       className={`w-full flex items-center ${direction === 'rtl' ? 'flex-row-reverse' : ''} gap-4 px-4 py-3.5 rounded-2xl transition-all font-bold ${
                         activeTab === tab.id
                           ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30'
-                          : `${themeClasses.bgSecondary} ${themeClasses.textSecondary} hover:bg-opacity-80`
+                          : `${themeClasses.bgSecondary} hover:bg-opacity-80 ${isDarkMode ? 'text-white' : 'text-slate-700'}`
                       }`}
                     >
-                      <span className="text-2xl">{tab.icon}</span>
+                      <span className="flex items-center justify-center">{tab.icon}</span>
                       <span className="flex-1 text-left rtl:text-right">{tab.label}</span>
                     </button>
                   ))}
@@ -1738,7 +1739,7 @@ export const WeightProgressComponent = ({ userCode, themeClasses, language, isDa
       {isMobile && (
         <div className={`${themeClasses.bgSecondary} rounded-xl p-3 mb-5 border border-emerald-500/20`}>
           <div className="flex items-start gap-2">
-            <span className="text-lg">💻</span>
+            <Laptop className="w-5 h-5 text-emerald-500 flex-shrink-0" />
             <p className={`${themeClasses.textSecondary} text-xs sm:text-sm flex-1 font-medium`}>
               {language === 'hebrew' 
                 ? 'לצפייה טובה יותר, פתח את האתר במחשב' 
@@ -1847,7 +1848,7 @@ export const WeightProgressComponent = ({ userCode, themeClasses, language, isDa
       {isLandscape && (
         <div className={`${themeClasses.bgCard} rounded-2xl p-8 mb-6 border-2 border-emerald-500/50 shadow-xl`} style={{ minHeight: '200px' }}>
           <div className="flex flex-col items-center justify-center text-center h-full">
-            <div className="text-6xl mb-4 animate-bounce">📱</div>
+            <Smartphone className="w-16 h-16 mb-4 text-emerald-500 animate-bounce" />
             <h3 className={`${themeClasses.textPrimary} text-xl sm:text-2xl font-bold mb-3`}>
               {language === 'hebrew' ? 'סובב את הטלפון' : 'Rotate Your Phone'}
             </h3>
@@ -1864,7 +1865,7 @@ export const WeightProgressComponent = ({ userCode, themeClasses, language, isDa
       <div className={`rounded-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} ${themeClasses.bgCard} p-4 shadow-sm overflow-visible`}>
         {!hasData ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <div className="text-4xl mb-4 opacity-50">📊</div>
+            <BarChart2 className="w-10 h-10 mb-4 text-emerald-500 opacity-50" />
             <p className={`${themeClasses.textSecondary} text-sm sm:text-base font-medium text-center`}>
               {language === 'hebrew' ? 'אין לך רשומות מדידות גוף' : "You don't have any Body Measurements Log"}
             </p>
@@ -2259,7 +2260,7 @@ export const FoodLogProgressComponent = ({ userCode, themeClasses, language, isD
       {isMobile && (
         <div className={`${themeClasses.bgSecondary} rounded-xl p-3 mb-5 border border-emerald-500/20`}>
           <div className="flex items-start gap-2">
-            <span className="text-lg">💻</span>
+            <Laptop className="w-5 h-5 text-emerald-500 flex-shrink-0" />
             <p className={`${themeClasses.textSecondary} text-xs sm:text-sm flex-1 font-medium`}>
               {language === 'hebrew' 
                 ? 'לצפייה טובה יותר, פתח את האתר במחשב' 
@@ -2341,7 +2342,7 @@ export const FoodLogProgressComponent = ({ userCode, themeClasses, language, isD
       {isLandscape && (
         <div className={`${themeClasses.bgCard} rounded-2xl p-8 mb-6 border-2 border-emerald-500/50 shadow-xl`} style={{ minHeight: '200px' }}>
           <div className="flex flex-col items-center justify-center text-center h-full">
-            <div className="text-6xl mb-4 animate-bounce">📱</div>
+            <Smartphone className="w-16 h-16 mb-4 text-emerald-500 animate-bounce" />
             <h3 className={`${themeClasses.textPrimary} text-xl sm:text-2xl font-bold mb-3`}>
               {language === 'hebrew' ? 'סובב את הטלפון' : 'Rotate Your Phone'}
             </h3>
@@ -2358,7 +2359,7 @@ export const FoodLogProgressComponent = ({ userCode, themeClasses, language, isD
       <div className={`rounded-2xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} ${themeClasses.bgCard} p-4 shadow-sm overflow-visible`}>
         {!hasData ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <div className="text-4xl mb-4 opacity-50">📊</div>
+            <BarChart2 className="w-10 h-10 mb-4 text-emerald-500 opacity-50" />
             <p className={`${themeClasses.textSecondary} text-sm sm:text-base font-medium text-center mb-6`}>
               {language === 'hebrew' ? 'אין לך רשומות יומן תזונה' : "You don't have any Food Log entries"}
             </p>

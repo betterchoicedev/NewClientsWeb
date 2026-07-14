@@ -5,6 +5,7 @@ import { useSettings } from '../../context/SettingsContext';
 import AddIngredientModal from '../AddIngredientModal';
 import IngredientPortionModal from '../IngredientPortionModal';
 import TrainingPlanTab from './TrainingPlanTab';
+import { Target, Lightbulb, Utensils, Save, Sunrise, Sun, Moon, Apple, Edit3, Trash2 } from 'lucide-react';
 import { translateMenu } from '../../services/translateService';
 import { getAuthHeaders } from '../../lib/apiClient';
 import {
@@ -426,7 +427,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
 
       // Single-step meal plan generation (same flow as onboarding modal)
       setGenerationProgress(10);
-      setGenerationStep(language === 'hebrew' ? '🍽️ יוצר ארוחות מותאמות אישית...' : '🍽️ Creating personalized meals...');
+      setGenerationStep(language === 'hebrew' ? 'יוצר ארוחות מותאמות אישית...' : 'Creating personalized meals...');
 
       // Gradual progress animation
       const progressInterval = setInterval(() => {
@@ -477,7 +478,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
         payload.template ?? payload.schema ?? payload.meal_plan?.template ?? null;
 
       setGenerationProgress(60);
-      setGenerationStep(language === 'hebrew' ? '🔢 מחשב ערכים תזונתיים...' : '🔢 Calculating nutrition values...');
+      setGenerationStep(language === 'hebrew' ? 'מחשב ערכים תזונתיים...' : 'Calculating nutrition values...');
 
       const menuData = {
         meals: menu,
@@ -489,7 +490,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       };
 
       setGenerationProgress(70);
-      setGenerationStep(language === 'hebrew' ? '💾 שומר תפריט...' : '💾 Saving menu...');
+      setGenerationStep(language === 'hebrew' ? 'שומר תפריט...' : 'Saving menu...');
 
       // Auto-save to both databases immediately
       console.log('💾 Auto-saving menu data:', menuData);
@@ -535,11 +536,11 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       console.log('✅ Menu saved successfully to both databases!');
 
       setGenerationProgress(85);
-      setGenerationStep(language === 'hebrew' ? '🌐 מכין תצוגה...' : '🌐 Preparing display...');
+      setGenerationStep(language === 'hebrew' ? 'מכין תצוגה...' : 'Preparing display...');
 
       // Translate if needed
       if (language === 'hebrew') {
-        setGenerationStep(language === 'hebrew' ? '🌐 מתרגם לעברית...' : '🌐 Translating to Hebrew...');
+        setGenerationStep(language === 'hebrew' ? 'מתרגם לעברית...' : 'Translating to Hebrew...');
         const translatedMenu = await translateMenu(menuData, 'he');
         setPlanData({
           meal_plan: translatedMenu,
@@ -555,7 +556,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
       }
 
       setGenerationProgress(100);
-      setGenerationStep(language === 'hebrew' ? '🎉 התפריט מוכן ונשמר!' : '🎉 Menu saved successfully!');
+      setGenerationStep(language === 'hebrew' ? 'התפריט מוכן ונשמר!' : 'Menu saved successfully!');
 
       // Clear progress and reload to show the saved meal plan
       setTimeout(() => {
@@ -644,7 +645,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                   </>
                 ) : (
                   <>
-                    <span className="text-2xl">🎯</span>
+                    <Target className="w-6 h-6 text-emerald-500" />
                     <span>{language === 'hebrew' ? 'צור תפריט אוטומטי' : 'Generate Automatic Menu'}</span>
                   </>
                 )}
@@ -727,11 +728,12 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
   // Get meal icons
   const getMealIcon = (mealName) => {
     const name = mealName.toLowerCase();
-    if (name.includes('breakfast') || name.includes('בוקר')) return '🌅';
-    if (name.includes('lunch') || name.includes('צהריים')) return '☀️';
-    if (name.includes('dinner') || name.includes('ערב')) return '🌙';
-    if (name.includes('snack') || name.includes('חטיף')) return '🍎';
-    return '🍽️';
+    const iconClass = "w-6 h-6";
+    if (name.includes('breakfast') || name.includes('בוקר')) return <Sunrise className={`${iconClass} text-yellow-500`} />;
+    if (name.includes('lunch') || name.includes('צהריים')) return <Sun className={`${iconClass} text-orange-500`} />;
+    if (name.includes('dinner') || name.includes('ערב')) return <Moon className={`${iconClass} text-blue-500`} />;
+    if (name.includes('snack') || name.includes('חטיף')) return <Apple className={`${iconClass} text-red-500`} />;
+    return <Utensils className={`${iconClass} text-emerald-500`} />;
   };
 
   // Get meal color
@@ -1929,8 +1931,9 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                   </svg>
                 </div>
                 <div className="flex-1 pt-1 sm:pt-2">
-                  <h4 className={`${themeClasses.textPrimary} text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4 tracking-tight`}>
-                    {language === 'hebrew' ? '💡 רוצים תוכנית תזונה מותאמת יותר?' : '💡 Want a More Personalized Meal Plan?'}
+                  <h4 className={`${themeClasses.textPrimary} flex items-center gap-2 text-lg sm:text-xl md:text-2xl font-bold mb-3 sm:mb-4 tracking-tight`}>
+                    <Lightbulb className="w-6 h-6 text-yellow-500 flex-shrink-0" />
+                    <span>{language === 'hebrew' ? 'רוצים תוכנית תזונה מותאמת יותר?' : 'Want a More Personalized Meal Plan?'}</span>
                   </h4>
                   <p className={`${themeClasses.textPrimary} text-base sm:text-lg md:text-xl leading-relaxed font-medium mb-4 sm:mb-6`}>
                     {language === 'hebrew'
@@ -2015,7 +2018,7 @@ const MyPlanTab = ({ themeClasses, t, userCode, language, clientRegion }) => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
                   <div className="flex items-center">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center mr-3 sm:mr-4 shadow-lg shadow-emerald-500/25">
-                      <span className="text-xl sm:text-2xl group-hover:animate-bounce transition-transform duration-300">{getMealIcon(meal.meal)}</span>
+                      <div className="group-hover:animate-bounce transition-transform duration-300 flex items-center justify-center">{getMealIcon(meal.meal)}</div>
                   </div>
                     <div className="text-left">
                       <p className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium mb-1`}>

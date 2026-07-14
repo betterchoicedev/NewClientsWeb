@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Ban } from 'lucide-react';
 import { useStripe } from '../../context/StripeContext';
 import { getAllProducts, getProduct, STRIPE_PRODUCTS } from '../../config/stripe-products';
 import PricingCard from '../PricingCard';
@@ -28,6 +29,10 @@ const PricingTab = ({
 
   // Custom company catalog replaces defaults unless pricing.mergeDefaultProducts === true
   const allProducts = resolvePricingCatalog(companyConfig, getAllProducts);
+  const usesCustomCatalogOnly =
+    allProducts.length > 0 &&
+    allProducts.every((product) => product.isCustomProduct) &&
+    companyConfig?.pricing?.mergeDefaultProducts !== true;
 
   const premiumProducts = allProducts.filter(p => p.category === 'premium');
   const completeProducts = allProducts.filter(p => p.category === 'complete');
@@ -455,7 +460,8 @@ const PricingTab = ({
         </div>
       </div>
     ),
-    includes: companyConfig?.pricing?.showWhatEveryPlanIncludes && (
+    // BetterChoice default "what every plan includes" copy only when default plans remain
+    includes: companyConfig?.pricing?.showWhatEveryPlanIncludes && !usesCustomCatalogOnly && (
       <div className="mb-8 animate-slideInUp" style={{ animationDelay: '0.3s' }}>
         <div className={`${themeClasses.bgCard} border ${themeClasses.borderPrimary} rounded-2xl p-6 md:p-8 shadow-lg`}>
           <h3 className={`${themeClasses.textPrimary} text-xl font-bold mb-4 ${language === 'hebrew' ? 'text-right' : 'text-left'}`}>
@@ -616,7 +622,7 @@ const PricingTab = ({
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 sm:p-6 shadow-lg">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 h-9 w-9 rounded-lg bg-red-500 text-white flex items-center justify-center flex-shrink-0">
-                <span className="text-lg">🚫</span>
+                <Ban className="w-5 h-5" />
               </div>
               <div className="flex-1">
                 <h3 className={`${themeClasses.textPrimary} text-lg sm:text-xl font-semibold mb-2`}>

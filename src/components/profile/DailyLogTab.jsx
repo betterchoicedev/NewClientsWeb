@@ -5,6 +5,7 @@ import { getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog } from '../../
 import AddIngredientModal from '../AddIngredientModal';
 import IngredientPortionModal from '../IngredientPortionModal';
 import { MacroSummaryCircles } from './MyPlanTab';
+import { Sunrise, Sun, Moon, Apple, Utensils, Edit3, Trash2, Clock, Calendar, Search } from 'lucide-react';
 import { translateMenu } from '../../services/translateService';
 import {
   getClientMealPlan,
@@ -1411,16 +1412,17 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
         
         // Get meal icon
         const getMealIcon = () => {
+          const iconClass = "w-10 h-10 lg:w-8 lg:h-8";
           if (currentMealLower.includes('breakfast') || currentMealLower.includes('בוקר') || currentMealLower === 'early morning') {
-            return '🌅';
+            return <Sunrise className={`${iconClass} text-yellow-500`} />;
           } else if (currentMealLower.includes('lunch') || currentMealLower.includes('צהריים')) {
-            return '☀️';
+            return <Sun className={`${iconClass} text-orange-500`} />;
           } else if (currentMealLower.includes('dinner') || currentMealLower.includes('ערב')) {
-            return '🌙';
+            return <Moon className={`${iconClass} text-blue-500`} />;
           } else if (currentMealLower.includes('snack') || currentMealLower.includes('חטיף') || currentMealLower === 'late snack' || currentMealLower === 'late night') {
-            return '🍎';
+            return <Apple className={`${iconClass} text-red-500`} />;
           }
-          return '🍽️';
+          return <Utensils className={`${iconClass} text-emerald-500`} />;
         };
         
         // Get meal display name - use the displayName from mealInfo, or fallback to mealTitleMap
@@ -1450,7 +1452,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-teal-500/10 pointer-events-none" />
               <div className="relative z-10 flex items-center gap-4">
                 <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg animate-pulse">
-                  <span className="text-3xl">{getMealIcon()}</span>
+                  <div className="group-hover:animate-bounce transition-transform duration-300">{getMealIcon()}</div>
                 </div>
                 <div className="flex-1">
                   <p className={`${themeClasses.textSecondary} text-sm mb-1`}>
@@ -1487,12 +1489,12 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
             const mealLogs = groupedLogs[meal] || [];
             const getMealIcon = (mealName) => {
               const name = mealName.toLowerCase();
-              if (name.includes('breakfast') || name.includes('בוקר')) return '🌅';
-              if (name.includes('lunch') || name.includes('צהריים')) return '☀️';
-              if (name.includes('dinner') || name.includes('ערב')) return '🌙';
-              if (name.includes('snack') || name.includes('חטיף')) return '🍎';
-              if (name === 'other' || name.includes('אחר')) return '🍽️';
-              return '🍽️';
+              const iconClass = "w-8 h-8 lg:w-6 lg:h-6";
+              if (name.includes('breakfast') || name.includes('בוקר')) return <Sunrise className={`${iconClass} text-yellow-500`} />;
+              if (name.includes('lunch') || name.includes('צהריים')) return <Sun className={`${iconClass} text-orange-500`} />;
+              if (name.includes('dinner') || name.includes('ערב')) return <Moon className={`${iconClass} text-blue-500`} />;
+              if (name.includes('snack') || name.includes('חטיף')) return <Apple className={`${iconClass} text-red-500`} />;
+              return <Utensils className={`${iconClass} text-emerald-500`} />;
             };
 
             const getMealColor = (mealName) => {
@@ -1538,7 +1540,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                 <div className="relative z-10">
                 <div className="flex items-center mb-4 sm:mb-6">
                   <div className={`w-14 h-14 sm:w-16 sm:h-16 lg:w-12 lg:h-12 bg-gradient-to-br ${getMealColor(meal)} rounded-2xl lg:rounded-xl flex items-center justify-center mr-4 shadow-xl lg:shadow-lg`}>
-                    <span className="text-3xl sm:text-4xl lg:text-2xl group-hover:animate-bounce transition-transform duration-300">{getMealIcon(meal)}</span>
+                    <div className="group-hover:animate-bounce transition-transform duration-300 flex items-center justify-center">{getMealIcon(meal)}</div>
                   </div>
                       <div className="flex-1">
                     <p className={`${themeClasses.textSecondary} text-xs sm:text-sm font-medium mb-1 uppercase tracking-wide`}>
@@ -1922,7 +1924,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-indigo-500/5 pointer-events-none rounded-2xl" />
                           <div className="relative z-10">
                             <h3 className={`${themeClasses.textPrimary} font-bold text-lg sm:text-xl mb-4 ${language === 'hebrew' ? 'text-right' : 'text-left'} border-b-2 border-blue-500/30 pb-2`}>
-                              {language === 'hebrew' ? '📋 לפי התוכנית' : '📋 Plan Meal'}
+                              {language === 'hebrew' ? 'לפי התוכנית' : 'Plan Meal'}
                             </h3>
                             
                             <div className={`${themeClasses.bgCard} rounded-xl p-4 border border-blue-500/20`}>
@@ -1975,7 +1977,7 @@ const DailyLogTab = ({ themeClasses, t, userCode, language, clientRegion, direct
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 lg:flex lg:items-center lg:justify-between">
                               <div className="flex items-center gap-2 lg:gap-2">
                                 <div className={`w-8 h-8 lg:w-8 lg:h-8 bg-gradient-to-br ${getMealColor(meal)} rounded-lg lg:rounded-lg flex items-center justify-center lg:shadow-lg w-12 h-12 rounded-xl shadow-lg`}>
-                                  <span className="text-lg lg:text-lg text-2xl">{getMealIcon(meal)}</span>
+                                  <div className="flex items-center justify-center">{getMealIcon(meal)}</div>
                                 </div>
                                 <p className={`${themeClasses.textPrimary} font-bold text-sm uppercase tracking-wide lg:text-sm lg:font-bold lg:uppercase lg:tracking-wide text-base`}>
                                   {mealTitleMap[meal] || t.profile.dailyLogTab.meals[meal] || meal} {language === 'hebrew' ? 'סה"כ' : 'Total'}

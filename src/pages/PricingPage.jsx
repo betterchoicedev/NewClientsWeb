@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Search } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -107,7 +108,7 @@ const PricingPage = () => {
               </div>
               <div className="ml-3">
                 <h3 className="font-semibold text-green-800 dark:text-green-300 text-lg">
-                  {language === 'hebrew' ? '🎉 המנויים הפעילים שלך' : '🎉 Your Active Subscriptions'}
+                  {language === 'hebrew' ? 'המנויים הפעילים שלך' : 'Your Active Subscriptions'}
                 </h3>
                 <div className="mt-2 space-y-1">
                   {userSubscriptions
@@ -189,7 +190,7 @@ const PricingPage = () => {
         {/* Empty State */}
         {filteredProducts.length === 0 && (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4">🔍</div>
+            <Search className="w-14 h-14 mx-auto mb-4 text-gray-400 dark:text-gray-500 opacity-60" />
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               {language === 'hebrew' ? 'לא נמצאו תוכניות' : 'No Plans Found'}
             </h3>

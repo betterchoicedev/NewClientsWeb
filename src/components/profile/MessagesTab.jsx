@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getChatMessages } from '../../supabase/secondaryClient';
+import { Music } from 'lucide-react';
 
 const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
   const [messages, setMessages] = useState([]);
@@ -578,8 +579,9 @@ const MessagesTab = ({ themeClasses, t, userCode, activeTab, language }) => {
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-slate-700 mb-2">
-                  🎵 Audio Message
+                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-2">
+                  <Music className="w-4 h-4 text-slate-500" />
+                  <span>{language === 'hebrew' ? 'הודעה קולית' : 'Audio Message'}</span>
                 </div>
                 <audio
                   src={normalizedAudioData}
