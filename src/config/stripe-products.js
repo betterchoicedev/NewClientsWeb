@@ -122,7 +122,7 @@ export const PRODUCT_CONFIG = {
         amount: 60000, // ₪600/month in agorot
         amountUSD: 17100, // $171/month in cents (600 ÷ 3.5)
         currency: 'ILS',
-        popular: true
+        popular: false
       },
       {
         id: STRIPE_PRICES.NUTRITION_TRAINING_ONCE_3_MONTHS,
@@ -187,7 +187,7 @@ export const PRODUCT_CONFIG = {
         amountUSD: 14300, // $143/month in cents
         currency: 'ILS',
         discount: '14% off',
-        popular: true
+        popular: false
       }
     ]
   },
@@ -272,7 +272,7 @@ export const PRODUCT_CONFIG = {
         amount: 65000, // ₪650.00 in agorot
         amountUSD: 18600, // $186.00 in cents
         currency: 'ILS',
-        popular: true
+        popular: false
       }
     ]
   },
@@ -307,7 +307,7 @@ export const PRODUCT_CONFIG = {
         amount: 4800,
         amountUSD: 4800,
         currency: 'USD',
-        popular: true
+        popular: false
       }
     ]
 }

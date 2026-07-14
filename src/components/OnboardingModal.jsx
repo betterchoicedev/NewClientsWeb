@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { normalizePhoneForDatabase, createClientRecord } from '../supabase/auth';
 import { translateMenu } from '../services/translateService';
+import { extractRawCustomProducts, normalizeCustomProducts } from '../company/normalizeCustomProduct';
 
 const CREATE_MEAL_PLAN_API_URL =
   'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
@@ -3939,7 +3940,12 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
 
       // Queue the payment screen first so the loading screen transitions
       // directly into the payment question once the meal plan finishes.
-      setShowUsageBasedOffer(true);
+      
+      if (user?.user_metadata?.skip_pricing) {
+        setShowUsageBasedOffer(false);
+      } else {
+        setShowUsageBasedOffer(true);
+      }
 
       // Create the meal plan before the user sees the payment question.
       // The loading UI (gated on `isGeneratingMealPlan`) is rendered ahead of
@@ -3957,6 +3963,29 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
         }
       } else {
         console.warn('⚠️ No userCode available - skipping meal plan generation before payment question.');
+      }
+      
+      if (user?.user_metadata?.skip_pricing) {
+        // Automatically finish onboarding and skip payment screen
+        try {
+          const completeResponse = await fetch(`${apiUrl}/api/onboarding/update-client`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: user?.id,
+              clientData: {
+                onboarding_completed: true,
+                updated_at: new Date().toISOString()
+              }
+            })
+          });
+          if (!completeResponse.ok) {
+            console.warn('⚠️ Failed to complete onboarding status');
+          }
+          sendWhatsAppAndClose();
+        } catch (e) {
+          console.error('❌ Error skipping payment:', e);
+        }
       }
       return;
     } catch (err) {
@@ -4293,159 +4322,413 @@ const OnboardingModal = ({ isOpen, onClose, user, userCode, companyName, company
       }
     };
 
+    // Custom products from company config
+    const rawCustomProducts = extractRawCustomProducts(companyConfig);
+    const customProductsForPricing = normalizeCustomProducts(rawCustomProducts);
+    const hasCustomProducts = customProductsForPricing.length > 0;
+
+    const handleSupportWithProduct = async (priceId, intervalType) => {
+      if (!priceId) return;
+      setCheckoutLoading(true);
+      setError('');
+      try {
+        await finalizeOnboardingAfterSubscription({ requireActiveSubscription: false, sendWelcome: false });
+        const mode = intervalType ? 'subscription' : 'payment';
+        const res = await fetch(`${apiUrl}/api/stripe/create-checkout-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            priceId,
+            mode,
+            customerId: user?.id,
+            customerEmail: user?.email,
+            metadata: { from: 'onboarding_upsell', user_id: user?.id }
+          })
+        });
+        const data = await res.json();
+        if (data.url) {
+          if (user?.id) localStorage.removeItem(`onboarding_${user.id}`);
+          window.location.href = data.url;
+          return;
+        }
+        setError(data.error || (language === 'hebrew' ? 'שגיאה ביצירת הקישור לתשלום' : 'Error creating checkout'));
+      } catch (e) {
+        setError(e.message || (language === 'hebrew' ? 'שגיאה בחיבור לשרת' : 'Connection error'));
+      } finally {
+        setCheckoutLoading(false);
+      }
+    };
+
+    const formatCustomPrice = (priceObj) => {
+      if (!priceObj) return '';
+      const currency = String(priceObj.currency || 'USD').toUpperCase();
+      const amountRaw = priceObj.amount != null ? priceObj.amount : (priceObj.amountUSD || 0);
+      const amount = amountRaw / 100;
+      const symbol = currency === 'USD' ? '$' : currency === 'ILS' ? '₪' : currency;
+      const displayAmount = amount % 1 === 0 ? amount : amount.toFixed(2);
+      const intervalLabel = priceObj.interval === 'month'
+        ? (language === 'hebrew' ? '/חודש' : '/mo')
+        : priceObj.interval === 'year'
+          ? (language === 'hebrew' ? '/שנה' : '/yr')
+          : '';
+      return { symbol, displayAmount, intervalLabel, currency, amount };
+    };
+
+    const CATEGORY_LABELS_LOCAL = {
+      premium:      { en: 'Premium',      he: 'פרימיום' },
+      complete:     { en: 'Complete',     he: 'מלא' },
+      nutrition:    { en: 'Nutrition',    he: 'תזונה' },
+      content:      { en: 'Content',      he: 'תוכן' },
+      consultation: { en: 'Consultation', he: 'יעוץ' },
+      training:     { en: 'Training',     he: 'אימונים' },
+      other:        { en: 'Other',        he: 'אחר' },
+    };
+    const getCategoryLabelLocal = (catId) => {
+      const entry = CATEGORY_LABELS_LOCAL[catId];
+      if (entry) return language === 'hebrew' ? entry.he : entry.en;
+      return catId ? catId.charAt(0).toUpperCase() + catId.slice(1) : '';
+    };
+
+    // Shared promo-code + skip footer used by both layouts
+    const sharedFooter = (
+      <div className={`sticky bottom-[-1px] z-30 mt-auto py-2 -mx-4 sm:-mx-8 md:-mx-10 px-4 sm:px-8 md:px-10 ${themeClasses.bgCard} bg-opacity-100 border-t border-gray-700/40 flex flex-col gap-2 shadow-[0_-8px_20px_rgba(0,0,0,0.35)]`}>
+        {!hasCustomProducts && (
+          <button
+            onClick={handleSupport}
+            disabled={checkoutLoading}
+            className="w-full py-3 sm:py-3.5 px-5 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25"
+          >
+            {checkoutLoading
+              ? (language === 'hebrew' ? 'מתחברים...' : 'Connecting...')
+              : (language === 'hebrew' ? 'אני בפנים, בואו נתחיל!' : 'I\'m in, let\'s start!')}
+          </button>
+        )}
+        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+        <details className="text-left opacity-80">
+          <summary className={`cursor-pointer text-[10px] sm:text-[11px] ${themeClasses.textSecondary} leading-tight`}>
+            {language === 'hebrew'
+              ? 'אפשרות אחרונה (ללא תשלום)'
+              : 'Last option (without payment)'}
+          </summary>
+          <div className="mt-1.5 space-y-1.5">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={commitToBotUsage}
+                onChange={(e) => {
+                  setCommitToBotUsage(e.target.checked);
+                  if (promoCodeError) setPromoCodeError('');
+                }}
+                className="mt-0.5 h-3 w-3 accent-emerald-500"
+              />
+              <span className={`text-[10px] sm:text-[11px] leading-tight ${themeClasses.textSecondary}`}>
+                {language === 'hebrew'
+                  ? 'אני מתחייב/ת להשתמש בבוט ולא לדלג יותר מ-4 ימים.'
+                  : 'I commit to using the bot and not skipping more than 4 days.'}
+              </span>
+            </label>
+            {promoCodeError && (
+              <p className="text-red-400 text-[10px] sm:text-xs">{promoCodeError}</p>
+            )}
+            <button
+              onClick={handleContinueWithoutPayment}
+              disabled={promoCodeLoading}
+              className={`w-full py-1.5 px-3 rounded-lg text-[11px] sm:text-xs font-medium border border-gray-600/40 ${themeClasses.textSecondary} ${themeClasses.bgCard} hover:border-emerald-500/40 transition-all disabled:opacity-60`}
+            >
+              {promoCodeLoading
+                ? (language === 'hebrew' ? 'מעדכן...' : 'Updating...')
+                : (language === 'hebrew' ? 'המשך ללא תשלום' : 'Continue without payment')}
+            </button>
+          </div>
+        </details>
+      </div>
+    );
+
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-2 sm:p-4" dir={direction}>
-  <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 pt-4 px-4 pb-0 sm:pt-8 sm:px-8 sm:pb-0 md:pt-10 md:px-10 md:pb-0 max-w-lg w-full h-[95vh] sm:max-h-[95vh] overflow-y-auto animate-scaleIn relative text-center flex flex-col`}>
-    
-    {/* עיצוב רקע עליון */}
-    <div className="absolute top-0 left-0 right-0 h-16 sm:h-24 bg-gradient-to-br from-emerald-500/20 via-blue-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none" />
-    
-    {/* כפתור שפה */}
-    <button
-      onClick={toggleLanguage}
-      className={`absolute top-2 right-2 sm:top-4 sm:right-4 z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
-    >
-      <span className="hidden sm:inline">{language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}</span>
-      <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
-    </button>
+        <div className={`${themeClasses.bgCard} rounded-xl sm:rounded-2xl shadow-2xl border border-white/10 pt-4 px-4 pb-0 sm:pt-6 sm:px-8 sm:pb-0 md:pt-8 md:px-10 md:pb-0 ${hasCustomProducts && customProductsForPricing.length > 1 ? 'max-w-2xl' : 'max-w-lg'} w-full h-[95vh] sm:max-h-[95vh] overflow-y-auto animate-scaleIn relative text-center flex flex-col`}>
 
-    <div className="relative mt-4 sm:mt-4 mb-4">
-      {/* אייקון מוטיבציה */}
-      <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
-        <span className="text-3xl">🏁</span>
-      </div>
-      
-      {/* כותרת */}
-      <h2 className={`text-2xl sm:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent mb-3 ${themeClasses.textPrimary}`}>
-        {language === 'hebrew' ? 'ההתמדה שלכם, המתנה שלנו!' : 'Your consistency, our gift!'}
-      </h2>
-      
-      {/* הסבר מרכזי */}
-      <p className={`${themeClasses.textPrimary} text-lg font-medium mb-4 leading-tight`}>
-        {language === 'hebrew'
-          ? 'המטרה שלנו היא שתהיו בריאים. לכן, אם תתמידו בשימוש במערכת - חינם לגמרי.'
-          : 'Our goal is your health. If you stay consistent with the system - completely free.'}
-      </p>
+          {/* Top gradient accent */}
+          <div className="absolute top-0 left-0 right-0 h-16 sm:h-24 bg-gradient-to-br from-emerald-500/20 via-blue-500/10 to-transparent rounded-t-xl sm:rounded-t-2xl pointer-events-none" />
 
-      {/* פירוט המחיר */}
-      <div className={`p-5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 mb-6 shadow-inner`}>
-        <p className={`${themeClasses.textSecondary} text-sm sm:text-lg leading-relaxed`}>
-          {language === 'hebrew' ? (
-            <>
-              כל יום שימוש שווה <span className="text-emerald-400 font-bold">כסף</span>, <br />
-              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">אבל מותר לכם כמה ימים בחודש</span> <br />
-              ועדיין לקבל את כל השירות בחינם!
-            </>
-          ) : (
-            <>
-              Each day of use is <span className="text-emerald-400 font-bold">money</span>, <br />
-              <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">but you can miss a couple of days a month</span> <br />
-              and still get everything for free!
-            </>
-          )}
-        </p>
-      </div>
-
-      {/* כוכביות הסבר */}
-      <div className="space-y-1">
-        <p className={`${themeClasses.textPrimary} font-medium italic opacity-90 text-xs sm:text-sm`}>
-          {language === 'hebrew' 
-            ? '*החיוב יתבצע רק אם לא תעמדו ביעד ההתמדה (מקסימום $48 לחודש)' 
-            : '*Payment is only required if the consistency goal isn\'t met (max $48/mo)'}
-        </p>
-        <p className={`${themeClasses.textSecondary} italic opacity-70 text-[10px] sm:text-xs`}>
-          {language === 'hebrew'
-            ? '**ניתן לבטל את החיוב בכל שלב'
-            : '**you can cancel the charge at any time'}
-        </p>
-      </div>
-      <div className={`mt-3 text-[11px] sm:text-xs ${themeClasses.textSecondary} opacity-80 flex items-center justify-center gap-2`}>
-        <span className="animate-bounce">↓</span>
-        <span>{language === 'hebrew' ? 'גלול/י למטה לעוד אפשרויות' : 'Scroll down for more options'}</span>
-      </div>
-
-      <div className={`mt-4 p-3 sm:p-4 rounded-xl border border-gray-600/40 ${themeClasses.bgCard}`}>
-        <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
-          {language === 'hebrew' ? 'יש לך קוד?' : 'Have a code?'}
-        </label>
-        <input
-          type="text"
-          value={promoCode}
-          onChange={(e) => {
-            setPromoCode(e.target.value);
-            if (promoCodeError) setPromoCodeError('');
-          }}
-          placeholder={language === 'hebrew' ? 'הזן קוד' : 'Enter code'}
-          className={`w-full px-4 py-3.5 text-sm bg-black/5 dark:bg-white/5 border border-gray-500/20 rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 placeholder:text-gray-400 outline-none`}
-        />
-
-        {promoCodeError && (
-          <p className="text-red-400 text-xs sm:text-sm mt-2">{promoCodeError}</p>
-        )}
-
-        <button
-          onClick={handleContinueWithCode}
-          disabled={promoCodeLoading}
-          className="w-full mt-3 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-60"
-        >
-          {promoCodeLoading
-            ? (language === 'hebrew' ? 'מאמת קוד...' : 'Validating code...')
-            : (language === 'hebrew' ? 'המשך עם קוד' : 'Continue with code')}
-        </button>
-      </div>
-    </div>
-
-    {/* כפתורי פעולה */}
-    <div className={`sticky bottom-[-1px] z-30 mt-auto py-2 -mx-4 sm:-mx-8 md:-mx-10 px-4 sm:px-8 md:px-10 ${themeClasses.bgCard} bg-opacity-100 border-t border-gray-700/40 flex flex-col gap-2 shadow-[0_-8px_20px_rgba(0,0,0,0.35)]`}>
-      <button
-        onClick={handleSupport}
-        disabled={checkoutLoading}
-        className="w-full py-3 sm:py-3.5 px-5 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25"
-      >
-        {checkoutLoading
-          ? (language === 'hebrew' ? 'מתחברים...' : 'Connecting...')
-          : (language === 'hebrew' ? 'אני בפנים, בואו נתחיל!' : 'I\'m in, let\'s start!')}
-      </button>
-      <details className="text-left opacity-80">
-        <summary className={`cursor-pointer text-[10px] sm:text-[11px] ${themeClasses.textSecondary} leading-tight`}>
-          {language === 'hebrew'
-            ? 'אפשרות אחרונה (ללא תשלום)'
-            : 'Last option (without payment)'}
-        </summary>
-        <div className="mt-1.5 space-y-1.5">
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={commitToBotUsage}
-              onChange={(e) => {
-                setCommitToBotUsage(e.target.checked);
-                if (promoCodeError) setPromoCodeError('');
-              }}
-              className="mt-0.5 h-3 w-3 accent-emerald-500"
-            />
-            <span className={`text-[10px] sm:text-[11px] leading-tight ${themeClasses.textSecondary}`}>
-              {language === 'hebrew'
-                ? 'אני מתחייב/ת להשתמש בבוט ולא לדלג יותר מ-4 ימים.'
-                : 'I commit to using the bot and not skipping more than 4 days.'}
-            </span>
-          </label>
-          {promoCodeError && (
-            <p className="text-red-400 text-[10px] sm:text-xs">{promoCodeError}</p>
-          )}
+          {/* Language toggle */}
           <button
-            onClick={handleContinueWithoutPayment}
-            disabled={promoCodeLoading}
-            className={`w-full py-1.5 px-3 rounded-lg text-[11px] sm:text-xs font-medium border border-gray-600/40 ${themeClasses.textSecondary} ${themeClasses.bgCard} hover:border-emerald-500/40 transition-all disabled:opacity-60`}
+            onClick={toggleLanguage}
+            className={`absolute top-2 right-2 sm:top-4 sm:right-4 z-10 px-2 py-1.5 sm:px-3 sm:py-1.5 rounded-lg ${themeClasses.bgCard} border-2 border-gray-600/50 hover:border-emerald-500/50 transition-all text-xs sm:text-sm font-semibold ${themeClasses.textPrimary} hover:bg-emerald-500/10`}
           >
-            {promoCodeLoading
-              ? (language === 'hebrew' ? 'מעדכן...' : 'Updating...')
-              : (language === 'hebrew' ? 'המשך ללא תשלום' : 'Continue without payment')}
+            <span className="hidden sm:inline">{language === 'hebrew' ? '🇬🇧 English' : '🇮🇱 עברית'}</span>
+            <span className="sm:hidden">{language === 'hebrew' ? 'EN' : 'ע'}</span>
           </button>
+
+          {hasCustomProducts ? (
+            /* ─── Custom Products Pricing UI ─── */
+            <div className="relative mt-4 sm:mt-2 mb-4 flex flex-col">
+              {/* Header */}
+              <div className="mb-4 flex items-center gap-3 text-left">
+                <div className="w-11 h-11 flex-shrink-0 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                  <span className="text-xl">💎</span>
+                </div>
+                <div>
+                  <h2 className={`text-lg sm:text-xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent leading-tight ${themeClasses.textPrimary}`}>
+                    {language === 'hebrew' ? 'בחרו את התוכנית שלכם' : 'Choose Your Plan'}
+                  </h2>
+                  <p className={`${themeClasses.textSecondary} text-xs leading-snug`}>
+                    {language === 'hebrew'
+                      ? 'תוכניות מותאמות אישית להגיע ליעדים שלך.'
+                      : 'Tailored plans to help you reach your goals.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Product Cards Grid */}
+              <div className={`grid gap-3 sm:gap-4 mb-4 ${
+                customProductsForPricing.length === 1
+                  ? 'grid-cols-1'
+                  : customProductsForPricing.length === 2
+                    ? 'grid-cols-1 sm:grid-cols-2'
+                    : 'grid-cols-1 sm:grid-cols-2'
+              }`}>
+                {customProductsForPricing.map((product, idx) => {
+                  const firstPrice = product.prices?.[0];
+                  const priceFormatted = formatCustomPrice(firstPrice);
+                  const productName = language === 'hebrew' ? (product.nameHebrew || product.name) : product.name;
+                  const productDesc = language === 'hebrew' ? (product.descriptionHebrew || product.description) : product.description;
+                  const productFeatures = language === 'hebrew' ? (product.featuresHebrew?.length ? product.featuresHebrew : product.features) : product.features;
+                  const isPopular = product.popular === true || customProductsForPricing.length === 1 || (idx === 0 && customProductsForPricing.length > 1);
+
+                  return (
+                    <div
+                      key={product.id || idx}
+                      className={`relative rounded-2xl border flex flex-col text-left overflow-hidden transition-all duration-300 ${
+                        isPopular
+                          ? 'border-emerald-500/60 bg-gradient-to-b from-emerald-950/40 via-zinc-900/60 to-emerald-950/30 shadow-lg shadow-emerald-500/15 ring-1 ring-emerald-500/20'
+                          : `border-white/10 ${themeClasses.bgCard} hover:border-emerald-500/30`
+                      }`}
+                      style={{ animationDelay: `${idx * 0.08}s` }}
+                    >
+                      {/* Popular badge */}
+                      {isPopular && (
+                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-500 to-transparent" />
+                      )}
+                      {isPopular && customProductsForPricing.length > 1 && product.popular !== false && (
+                        <div className="absolute top-3 right-3">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wide">
+                            {language === 'hebrew' ? 'פופולרי' : 'Popular'}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="p-4 sm:p-5 flex flex-col flex-1">
+                        {/* Category chip */}
+                        {product.category && (
+                          <span className={`self-start mb-2 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border ${
+                            isPopular
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
+                              : `${themeClasses.bgSecondary || 'bg-white/5'} ${themeClasses.textMuted || 'text-gray-400'} border-white/10`
+                          }`}>
+                            {getCategoryLabelLocal(product.category)}
+                          </span>
+                        )}
+
+                        {/* Plan name */}
+                        <h3 className={`text-base sm:text-lg font-bold mb-1 ${themeClasses.textPrimary}`}>
+                          {productName}
+                        </h3>
+
+                        {/* Description */}
+                        {productDesc && (
+                          <p className={`${themeClasses.textSecondary} text-xs sm:text-sm mb-3 leading-snug`}>
+                            {productDesc}
+                          </p>
+                        )}
+
+                        {/* Price display */}
+                        {firstPrice && (
+                          <div className="mb-4 mt-1">
+                            <div className="flex items-end gap-1">
+                              <span className={`text-3xl sm:text-4xl font-extrabold tracking-tight ${isPopular ? 'text-emerald-400' : themeClasses.textPrimary}`}>
+                                {priceFormatted.symbol}{priceFormatted.displayAmount}
+                              </span>
+                              {priceFormatted.intervalLabel && (
+                                <span className={`text-sm sm:text-base font-medium mb-1 ${themeClasses.textSecondary}`}>
+                                  {priceFormatted.intervalLabel}
+                                </span>
+                              )}
+                            </div>
+                            {/* Additional price tiers */}
+                            {product.prices?.length > 1 && (
+                              <div className="flex flex-col gap-1 mt-2">
+                                {product.prices.slice(1).map((p, pi) => {
+                                  const pf = formatCustomPrice(p);
+                                  return (
+                                    <span key={pi} className={`text-xs ${themeClasses.textSecondary} opacity-70`}>
+                                      {pf.symbol}{pf.displayAmount}{pf.intervalLabel}
+                                      {p.commitment ? ` · ${p.commitment}mo` : ''}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Features list */}
+                        {productFeatures?.length > 0 && (
+                          <ul className="space-y-1.5 mb-4 flex-1">
+                            {productFeatures.map((feature, fi) => (
+                              <li key={fi} className="flex items-start gap-2">
+                                <svg className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                <span className={`text-xs sm:text-sm ${themeClasses.textSecondary} leading-snug`}>{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        {/* CTA button */}
+                        <button
+                          onClick={() => firstPrice && handleSupportWithProduct(firstPrice.id, firstPrice.interval)}
+                          disabled={checkoutLoading || !firstPrice}
+                          className={`w-full mt-auto py-3 px-4 rounded-xl font-bold text-sm sm:text-base transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
+                            isPopular
+                              ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white shadow-md shadow-emerald-500/25 hover:scale-[1.02]'
+                              : `bg-white/10 hover:bg-white/15 ${themeClasses.textPrimary} border border-white/15 hover:border-emerald-500/30 hover:scale-[1.01]`
+                          }`}
+                        >
+                          {checkoutLoading
+                            ? (language === 'hebrew' ? 'מתחברים...' : 'Connecting...')
+                            : (language === 'hebrew' ? 'בחירה ✓' : 'Get Started')}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Promo code section */}
+              <div className={`mt-4 p-3 sm:p-4 rounded-xl border border-gray-600/30 ${themeClasses.bgCard} mb-1`}>
+                <label className={`block text-xs sm:text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+                  {language === 'hebrew' ? 'יש לך קוד גישה?' : 'Have an access code?'}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={promoCode}
+                    onChange={(e) => {
+                      setPromoCode(e.target.value);
+                      if (promoCodeError) setPromoCodeError('');
+                    }}
+                    placeholder={language === 'hebrew' ? 'הזן קוד' : 'Enter code'}
+                    className={`flex-1 px-3 py-2.5 text-sm bg-black/5 dark:bg-white/5 border border-gray-500/20 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/50 transition-all ${themeClasses.textPrimary} placeholder:text-gray-400 outline-none`}
+                  />
+                  <button
+                    onClick={handleContinueWithCode}
+                    disabled={promoCodeLoading}
+                    className="px-4 py-2.5 rounded-xl font-semibold text-white text-sm bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 active:scale-[0.98] transition-all disabled:opacity-60 whitespace-nowrap"
+                  >
+                    {promoCodeLoading
+                      ? '...'
+                      : (language === 'hebrew' ? 'אמת' : 'Apply')}
+                  </button>
+                </div>
+                {promoCodeError && (
+                  <p className="text-red-400 text-xs mt-1.5">{promoCodeError}</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* ─── Default Usage-Based Offer UI ─── */
+            <div className="relative mt-4 sm:mt-4 mb-4">
+              {/* Motivation icon */}
+              <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30">
+                <span className="text-3xl">🏁</span>
+              </div>
+
+              {/* Title */}
+              <h2 className={`text-2xl sm:text-3xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent mb-3 ${themeClasses.textPrimary}`}>
+                {language === 'hebrew' ? 'ההתמדה שלכם, המתנה שלנו!' : 'Your consistency, our gift!'}
+              </h2>
+
+              {/* Main explanation */}
+              <p className={`${themeClasses.textPrimary} text-lg font-medium mb-4 leading-tight`}>
+                {language === 'hebrew'
+                  ? 'המטרה שלנו היא שתהיו בריאים. לכן, אם תתמידו בשימוש במערכת - חינם לגמרי.'
+                  : 'Our goal is your health. If you stay consistent with the system - completely free.'}
+              </p>
+
+              {/* Price detail */}
+              <div className="p-5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 mb-6 shadow-inner">
+                <p className={`${themeClasses.textSecondary} text-sm sm:text-lg leading-relaxed`}>
+                  {language === 'hebrew' ? (
+                    <>
+                      כל יום שימוש שווה <span className="text-emerald-400 font-bold">כסף</span>, <br />
+                      <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">אבל מותר לכם כמה ימים בחודש</span> <br />
+                      ועדיין לקבל את כל השירות בחינם!
+                    </>
+                  ) : (
+                    <>
+                      Each day of use is <span className="text-emerald-400 font-bold">money</span>, <br />
+                      <span className="text-white font-bold underline underline-offset-4 decoration-emerald-500">but you can miss a couple of days a month</span> <br />
+                      and still get everything for free!
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {/* Fine print */}
+              <div className="space-y-1">
+                <p className={`${themeClasses.textPrimary} font-medium italic opacity-90 text-xs sm:text-sm`}>
+                  {language === 'hebrew'
+                    ? '*החיוב יתבצע רק אם לא תעמדו ביעד ההתמדה (מקסימום $48 לחודש)'
+                    : '*Payment is only required if the consistency goal isn\'t met (max $48/mo)'}
+                </p>
+                <p className={`${themeClasses.textSecondary} italic opacity-70 text-[10px] sm:text-xs`}>
+                  {language === 'hebrew'
+                    ? '**ניתן לבטל את החיוב בכל שלב'
+                    : '**you can cancel the charge at any time'}
+                </p>
+              </div>
+              <div className={`mt-3 text-[11px] sm:text-xs ${themeClasses.textSecondary} opacity-80 flex items-center justify-center gap-2`}>
+                <span className="animate-bounce">↓</span>
+                <span>{language === 'hebrew' ? 'גלול/י למטה לעוד אפשרויות' : 'Scroll down for more options'}</span>
+              </div>
+
+              {/* Promo code */}
+              <div className={`mt-4 p-3 sm:p-4 rounded-xl border border-gray-600/40 ${themeClasses.bgCard}`}>
+                <label className={`block text-sm font-semibold mb-2 ${themeClasses.textPrimary}`}>
+                  {language === 'hebrew' ? 'יש לך קוד?' : 'Have a code?'}
+                </label>
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => {
+                    setPromoCode(e.target.value);
+                    if (promoCodeError) setPromoCodeError('');
+                  }}
+                  placeholder={language === 'hebrew' ? 'הזן קוד' : 'Enter code'}
+                  className={`w-full px-4 py-3.5 text-sm bg-black/5 dark:bg-white/5 border border-gray-500/20 rounded-2xl focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500/60 transition-all duration-300 ${themeClasses.textPrimary} hover:border-gray-500/40 placeholder:text-gray-400 outline-none`}
+                />
+                {promoCodeError && (
+                  <p className="text-red-400 text-xs sm:text-sm mt-2">{promoCodeError}</p>
+                )}
+                <button
+                  onClick={handleContinueWithCode}
+                  disabled={promoCodeLoading}
+                  className="w-full mt-3 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-60"
+                >
+                  {promoCodeLoading
+                    ? (language === 'hebrew' ? 'מאמת קוד...' : 'Validating code...')
+                    : (language === 'hebrew' ? 'המשך עם קוד' : 'Continue with code')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Shared sticky footer */}
+          {sharedFooter}
         </div>
-      </details>
-    </div>
-  </div>
-</div>
+      </div>
     );
   }
 

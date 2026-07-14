@@ -34,11 +34,22 @@ const PricingTab = ({
     allProducts.every((product) => product.isCustomProduct) &&
     companyConfig?.pricing?.mergeDefaultProducts !== true;
 
-  const premiumProducts = allProducts.filter(p => p.category === 'premium');
-  const completeProducts = allProducts.filter(p => p.category === 'complete');
-  const nutritionProducts = allProducts.filter(p => p.category === 'nutrition');
-  const contentProducts = allProducts.filter(p => p.category === 'content');
-  const consultationProducts = allProducts.filter(p => p.category === 'consultation');
+  // Category label lookup (covers both BetterChoice defaults and custom categories)
+  const CATEGORY_LABELS = {
+    premium:      { en: 'Premium',      he: 'פרימיום' },
+    complete:     { en: 'Complete',     he: 'מלא' },
+    nutrition:    { en: 'Nutrition',    he: 'תזונה' },
+    content:      { en: 'Content',      he: 'תוכן' },
+    consultation: { en: 'Consultation', he: 'יעוץ' },
+    training:     { en: 'Training',     he: 'אימונים' },
+    other:        { en: 'Other',        he: 'אחר' },
+  };
+  const getCategoryLabel = (catId) => {
+    const entry = CATEGORY_LABELS[catId];
+    if (entry) return language === 'hebrew' ? entry.he : entry.en;
+    // Fallback: capitalise the raw key
+    return catId.charAt(0).toUpperCase() + catId.slice(1);
+  };
 
   const [subscriptionsLastFetched, setSubscriptionsLastFetched] = useState(null);
   const userCode = user?.user_code || user?.userCode || user?.code || '';
@@ -249,29 +260,19 @@ const PricingTab = ({
   };
 
   const getFilteredProducts = () => {
-    switch (activeCategory) {
-      case 'premium':
-        return premiumProducts;
-      case 'complete':
-        return completeProducts;
-      case 'nutrition':
-        return nutritionProducts;
-      case 'content':
-        return contentProducts;
-      case 'consultation':
-        return consultationProducts;
-      default:
-        return allProducts;
-    }
+    if (activeCategory === 'all') return allProducts;
+    return allProducts.filter(p => p.category === activeCategory);
   };
 
+  // Build category tabs dynamically from the actual products in the catalog
+  const distinctCategories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
   const categories = [
     { id: 'all', label: language === 'hebrew' ? 'הכל' : 'All Plans', count: allProducts.length },
-    { id: 'premium', label: language === 'hebrew' ? 'פרימיום' : 'Premium', count: premiumProducts.length },
-    { id: 'complete', label: language === 'hebrew' ? 'מלא' : 'Complete', count: completeProducts.length },
-    { id: 'nutrition', label: language === 'hebrew' ? 'תזונה' : 'Nutrition', count: nutritionProducts.length },
-    { id: 'content', label: language === 'hebrew' ? 'תוכן' : 'Content', count: contentProducts.length },
-    { id: 'consultation', label: language === 'hebrew' ? 'יעוץ' : 'Consultation', count: consultationProducts.length },
+    ...distinctCategories.map(catId => ({
+      id: catId,
+      label: getCategoryLabel(catId),
+      count: allProducts.filter(p => p.category === catId).length,
+    })),
   ].filter(category => category.count > 0);
 
   const filteredProducts = getFilteredProducts();

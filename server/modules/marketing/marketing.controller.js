@@ -151,10 +151,10 @@ async function findRegistrationLink(req, res) {
 
     let row = null;
     if (link_id) {
-      const { data, error } = await adminDB.from('registration_rules').select('id, link_id, manager_id, max_slots, current_count, expires_at, is_active').eq('link_id', link_id).maybeSingle();
+      const { data, error } = await adminDB.from('registration_rules').select('id, link_id, manager_id, max_slots, current_count, expires_at, is_active, skip_pricing').eq('link_id', link_id).maybeSingle();
       if (!error) row = data;
     } else {
-      const { data, error } = await adminDB.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active').eq('manager_id', manager_id).maybeSingle();
+      const { data, error } = await adminDB.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active, skip_pricing').eq('manager_id', manager_id).maybeSingle();
       if (!error) row = data;
     }
 
@@ -232,7 +232,7 @@ async function validateLanding(req, res) {
     let slotsRemaining = null, maxSlots = null, currentCount = 0, expiresAt = null, isSmartLinkActive = false;
 
     if (linkId) {
-      const { data: ruleData, error: ruleErr } = await adminDB.from('registration_rules').select('manager_id, max_slots, current_count, expires_at, is_active').eq('link_id', linkId).maybeSingle();
+      const { data: ruleData, error: ruleErr } = await adminDB.from('registration_rules').select('manager_id, max_slots, current_count, expires_at, is_active, skip_pricing').eq('link_id', linkId).maybeSingle();
       if (ruleErr) console.error('[-] Error fetching live campaign metrics:', ruleErr);
 
       if (ruleData) {
@@ -266,7 +266,7 @@ async function validateLanding(req, res) {
       success: true,
       company: { id: profile.company_id, name: companyData.name, slug: companyData.name.toLowerCase().replace(/\s+/g, '').trim(), config: companyData.config || {} },
       manager: { name: profile.name, role: profile.role, id: managerId },
-      campaign: { isSmartLink: isSmartLinkActive, maxSlots, currentCount, slotsRemaining, expiresAt },
+      campaign: { isSmartLink: isSmartLinkActive, maxSlots, currentCount, slotsRemaining, expiresAt, skipPricing: rule?.skip_pricing },
     });
   } catch (globalFaultException) {
     console.error('[-] Fatal backend transaction collapse:', globalFaultException);

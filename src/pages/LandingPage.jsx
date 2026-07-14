@@ -149,6 +149,7 @@ export default function LandingPage() {
           maxSlots: resolvedMaxSlots,
           slotsRemaining: resolvedSlotsRemaining,
           expiresAt: expiry_date || resData.campaign?.expiresAt,
+          skipPricing: !!resData.campaign?.skipPricing,
         });
 
       } catch (err) {

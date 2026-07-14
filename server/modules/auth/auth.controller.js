@@ -125,8 +125,8 @@ async function appleVerify(req, res) {
     if (fullName && (fullName.givenName || fullName.familyName)) {
       try {
         const patch = {};
-        if (fullName.givenName)  patch.first_name = fullName.givenName;
-        if (fullName.familyName) patch.last_name  = fullName.familyName;
+        if (fullName.givenName) patch.first_name = fullName.givenName;
+        if (fullName.familyName) patch.last_name = fullName.familyName;
         await clientDB.from('clients').update(patch).eq('email', finalEmail);
       } catch { /* best-effort */ }
     }
@@ -337,21 +337,21 @@ async function deleteAccount(req, res) {
         const { error: plansError } = await adminDB.from('meal_plans_and_schemas').delete().in('id', mealPlanIds);
         if (plansError) return res.status(500).json({ error: `Failed to delete meal plans: ${plansError.message}` });
       }
-      await adminDB.from('food_logs').delete().eq('user_code', userCode).catch(() => {});
+      await adminDB.from('food_logs').delete().eq('user_code', userCode).catch(() => { });
     }
 
     if (adminDB && chatUserId) {
-      await adminDB.from('food_logs').delete().eq('user_id', chatUserId).catch(() => {});
-      await adminDB.from('weight_logs').delete().eq('user_code', userCode || chatUserId).catch(() => {});
-      await adminDB.from('calendar_events').delete().eq('user_id', chatUserId).catch(() => {});
-      await adminDB.from('chat_users').delete().eq('id', chatUserId).catch(() => {});
+      await adminDB.from('food_logs').delete().eq('user_id', chatUserId).catch(() => { });
+      await adminDB.from('weight_logs').delete().eq('user_code', userCode || chatUserId).catch(() => { });
+      await adminDB.from('calendar_events').delete().eq('user_id', chatUserId).catch(() => { });
+      await adminDB.from('chat_users').delete().eq('id', chatUserId).catch(() => { });
     }
 
     if (userCode) {
-      await clientDB.from('client_meal_plans').delete().eq('user_code', userCode).catch(() => {});
-      await clientDB.from('stripe_subscriptions').delete().eq('user_id', authUserId).catch(() => {});
-      await clientDB.from('stripe_payments').delete().eq('user_id', authUserId).catch(() => {});
-      await clientDB.from('clients').delete().eq('user_code', userCode).catch(() => {});
+      await clientDB.from('client_meal_plans').delete().eq('user_code', userCode).catch(() => { });
+      await clientDB.from('stripe_subscriptions').delete().eq('user_id', authUserId).catch(() => { });
+      await clientDB.from('stripe_payments').delete().eq('user_id', authUserId).catch(() => { });
+      await clientDB.from('clients').delete().eq('user_code', userCode).catch(() => { });
     }
 
     const { error: authDeleteError } = await clientDB.auth.admin.deleteUser(authUserId);
@@ -402,16 +402,16 @@ async function signup(req, res) {
       try {
         let row = null;
         if (linkIdFromToken) {
-          const { data, error } = await regDb.from('registration_rules').select('id, link_id, manager_id, max_slots, current_count, expires_at, is_active').eq('link_id', linkIdFromToken).maybeSingle();
+          const { data, error } = await regDb.from('registration_rules').select('id, link_id, manager_id, max_slots, current_count, expires_at, is_active, skip_pricing').eq('link_id', linkIdFromToken).maybeSingle();
           if (!error) row = data;
         } else {
           const numericId = /^\d+$/.test(String(managerIdFromToken)) ? parseInt(managerIdFromToken, 10) : null;
           if (numericId != null) {
-            const { data } = await regDb.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active').eq('id', numericId).maybeSingle();
+            const { data } = await regDb.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active, skip_pricing').eq('id', numericId).maybeSingle();
             row = data;
           }
           if (!row) {
-            const { data } = await regDb.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active').eq('manager_id', managerIdFromToken).maybeSingle();
+            const { data } = await regDb.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active, skip_pricing').eq('manager_id', managerIdFromToken).maybeSingle();
             row = data;
           }
         }
@@ -449,6 +449,7 @@ async function signup(req, res) {
           phone: userData.phone,
           newsletter: userData.newsletter,
           full_name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+          skip_pricing: registrationRule?.skip_pricing ?? false,
         },
       },
     });
@@ -662,10 +663,10 @@ async function checkRegistrationRule(req, res) {
       let registrationRule = null;
 
       if (!isNaN(integerId) && integerId > 0) {
-        const { data, error } = await adminDB.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active').eq('id', integerId).maybeSingle();
+        const { data, error } = await adminDB.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active, skip_pricing').eq('id', integerId).maybeSingle();
         if (!error && data) registrationRule = data;
       } else {
-        const { data, error } = await adminDB.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active').eq('manager_id', decodedToken).maybeSingle();
+        const { data, error } = await adminDB.from('registration_rules').select('id, manager_id, max_slots, current_count, expires_at, is_active, skip_pricing').eq('manager_id', decodedToken).maybeSingle();
         if (!error && data) registrationRule = data;
       }
 

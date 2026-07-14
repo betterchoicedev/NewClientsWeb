@@ -943,7 +943,7 @@ const ProfilePage = () => {
   return (
     <div className={`min-h-screen ${themeClasses.bgPrimary} flex flex-col lg:flex-row language-transition language-text-transition`} dir={direction} style={{ height: '100vh', overflow: 'hidden' }}>
       {/* Sidebar Navigation - Desktop */}
-      <div data-tour="profile-sidebar" className={`hidden lg:flex flex-col ${language === 'english' ? 'w-96' : 'w-80'} ${themeClasses.bgCard} backdrop-blur-xl bg-opacity-80 dark:bg-opacity-80 shadow-2xl border-r ${isDarkMode ? 'border-slate-700/50' : 'border-emerald-100/50'} relative z-20`} dir={direction}>
+      <div data-tour="profile-sidebar" className={`${showOnboarding ? 'hidden' : 'hidden lg:flex'} flex-col ${language === 'english' ? 'w-96' : 'w-80'} ${themeClasses.bgCard} backdrop-blur-xl bg-opacity-80 dark:bg-opacity-80 shadow-2xl border-r ${isDarkMode ? 'border-slate-700/50' : 'border-emerald-100/50'} relative z-20`} dir={direction}>
         {/* Decorative gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none" />
         
@@ -1087,8 +1087,8 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Mobile Header - Shows on mobile only */}
-      <div className={`lg:hidden ${themeClasses.bgCard} backdrop-blur-xl bg-opacity-90 dark:bg-opacity-90 shadow-sm border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} relative z-20`}>
+      {/* Mobile Header - Shows on mobile only, hidden during onboarding */}
+      <div className={`${showOnboarding ? 'hidden' : 'lg:hidden'} ${themeClasses.bgCard} backdrop-blur-xl bg-opacity-90 dark:bg-opacity-90 shadow-sm border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'} relative z-20`}>
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none" />
         <div className="relative z-10">
           <div className="p-4 relative">
