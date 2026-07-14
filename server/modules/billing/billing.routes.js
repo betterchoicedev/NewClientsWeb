@@ -14,6 +14,9 @@ router.post('/webhooks/stripe', express.raw({ type: '*/*' }), (req, res, next) =
   handler(req, res).catch(next);
 });
 
+// Apply JSON body parser for all other billing routes
+router.use(express.json({ limit: '20mb' }));
+
 router.get( '/exchange-rates',                                   ctrl.getExchangeRates);
 router.post('/stripe/check-commitment-periods',    requireAuth,  ctrl.checkCommitmentPeriods);
 router.post('/stripe/sync-to-database',            requireAuth,  ctrl.syncToDatabase);
