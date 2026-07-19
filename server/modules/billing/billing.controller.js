@@ -152,8 +152,30 @@ async function syncToDatabase(req, res) {
 
 async function createCheckoutSession(req, res) {
   try {
-    const { priceId, mode = 'subscription', customerId, customerEmail, successUrl, cancelUrl, promoCode, metadata = {} } = req.body;
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { priceId, mode = 'subscription', promoCode, metadata: clientMeta = {} } = req.body || {};
     if (!priceId) return res.status(400).json({ error: 'Price ID is required' });
+
+    const allowedPrices = new Set([DIGITAL_ONLY_PRICE_ID]);
+    if (!allowedPrices.has(priceId)) {
+      return res.status(400).json({ error: 'Price ID is not allowed' });
+    }
+
+    const customerEmail = req.authUser?.email || req.clientRecord?.email || null;
+    const origin = typeof req.headers.origin === 'string' ? req.headers.origin.replace(/\/$/, '') : null;
+    const successUrl = origin
+      ? `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}`
+      : 'https://betterchoice.one/payment-success?session_id={CHECKOUT_SESSION_ID}';
+    const cancelUrl = origin
+      ? `${origin}/profile?onboarding=payment`
+      : 'https://betterchoice.one/payment-cancel';
+
+    const safeMeta = {};
+    if (clientMeta && typeof clientMeta === 'object' && clientMeta.from === 'onboarding_upsell') {
+      safeMeta.from = 'onboarding_upsell';
+    }
 
     const lineItem = priceId === DIGITAL_ONLY_PRICE_ID ? { price: priceId } : { price: priceId, quantity: 1 };
 
@@ -161,9 +183,10 @@ async function createCheckoutSession(req, res) {
       payment_method_types: ['card'],
       line_items: [lineItem],
       mode,
-      success_url: successUrl || 'https://betterchoice.one/payment-success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: cancelUrl || 'https://betterchoice.one/payment-cancel',
-      metadata: { priceId, ...metadata },
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      client_reference_id: userId,
+      metadata: { priceId, user_id: userId, ...safeMeta },
       allow_promotion_codes: true,
     };
 
@@ -180,29 +203,30 @@ async function createCheckoutSession(req, res) {
       }
     }
 
-    if (customerId || customerEmail) {
-      try {
-        if (customerId) {
-          const customers = await stripe.customers.list({ limit: 100 });
-          const existingCustomer = customers.data.find(c => c.metadata?.user_id === customerId);
-          if (existingCustomer) {
-            sessionConfig.customer = existingCustomer.id;
-          } else {
-            const customer = await stripe.customers.create({ email: customerEmail, metadata: { user_id: customerId } });
-            sessionConfig.customer = customer.id;
-          }
-        } else if (customerEmail) {
-          sessionConfig.customer_email = customerEmail;
+    try {
+      const customers = await stripe.customers.list({ email: customerEmail || undefined, limit: 20 });
+      const existingCustomer =
+        customers.data.find((c) => c.metadata?.user_id === userId) ||
+        (customerEmail ? customers.data.find((c) => c.email === customerEmail) : null);
+      if (existingCustomer) {
+        sessionConfig.customer = existingCustomer.id;
+        if (!existingCustomer.metadata?.user_id) {
+          await stripe.customers.update(existingCustomer.id, { metadata: { ...existingCustomer.metadata, user_id: userId } });
         }
-      } catch (customerError) {
-        console.error('Error handling customer:', customerError);
+      } else if (customerEmail) {
+        const customer = await stripe.customers.create({ email: customerEmail, metadata: { user_id: userId } });
+        sessionConfig.customer = customer.id;
       }
+    } catch (customerError) {
+      console.error('Error handling customer:', customerError);
+      if (customerEmail) sessionConfig.customer_email = customerEmail;
     }
 
+    const boundMeta = { user_id: userId, price_id: priceId, created_at: new Date().toISOString(), ...safeMeta };
     if (mode === 'subscription') {
-      sessionConfig.subscription_data = { metadata: { user_id: customerId || 'anonymous', price_id: priceId, created_at: new Date().toISOString(), ...metadata } };
+      sessionConfig.subscription_data = { metadata: boundMeta };
     } else if (mode === 'payment') {
-      sessionConfig.payment_intent_data = { metadata: { user_id: customerId || 'anonymous', price_id: priceId, created_at: new Date().toISOString(), ...metadata } };
+      sessionConfig.payment_intent_data = { metadata: boundMeta };
     }
 
     const session = await stripe.checkout.sessions.create(sessionConfig);

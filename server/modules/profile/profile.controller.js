@@ -82,9 +82,9 @@ async function updateUserSettings(req, res) {
 
 async function getOnboardingClientData(req, res) {
   try {
-    const { user_id } = req.query;
-    if (!user_id) return res.status(400).json({ error: 'user_id is required' });
-    const { data, error } = await clientDB.from('clients').select('*').eq('user_id', user_id).single();
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { data, error } = await clientDB.from('clients').select('*').eq('user_id', userId).single();
     if (error) {
       if (error.code === 'PGRST116') return res.json({ data: null });
       return res.status(500).json({ error: 'Failed to fetch client data', message: error.message });
@@ -97,10 +97,10 @@ async function getOnboardingClientData(req, res) {
 
 async function getOnboardingChatUserMealData(req, res) {
   try {
-    const { user_code } = req.query;
-    if (!user_code) return res.status(400).json({ error: 'user_code is required' });
+    const userCode = req.userCode;
+    if (!userCode) return res.status(400).json({ error: 'user_code is required' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
-    const { data, error } = await adminDB.from('chat_users').select('number_of_meals, meal_plan_structure, first_meal_time, last_meal_time, client_preference').eq('user_code', user_code).single();
+    const { data, error } = await adminDB.from('chat_users').select('number_of_meals, meal_plan_structure, first_meal_time, last_meal_time, client_preference').eq('user_code', userCode).single();
     if (error) {
       if (error.code === 'PGRST116') return res.json({ data: null });
       return res.status(500).json({ error: 'Failed to fetch chat user meal data', message: error.message });
@@ -113,7 +113,9 @@ async function getOnboardingChatUserMealData(req, res) {
 
 async function checkOnboardingPhone(req, res) {
   try {
-    const { phone, user_id, user_code } = req.body;
+    const { phone } = req.body;
+    const user_id = req.userId;
+    const user_code = req.userCode;
     if (!phone) return res.status(400).json({ error: 'phone is required' });
 
     const { data: clientData } = await clientDB.from('clients').select('phone, user_id').eq('phone', phone).maybeSingle();
@@ -136,8 +138,9 @@ async function checkOnboardingPhone(req, res) {
 
 async function updateOnboardingClient(req, res) {
   try {
-    const { user_id, clientData } = req.body;
-    if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+    const user_id = req.userId;
+    if (!user_id) return res.status(401).json({ error: 'Unauthorized' });
+    const { clientData } = req.body;
     if (!clientData) return res.status(400).json({ error: 'clientData is required' });
     const { data, error } = await clientDB.from('clients').update(clientData).eq('user_id', user_id).select();
     if (error) return res.status(500).json({ error: 'Failed to update client', message: error.message });
@@ -149,8 +152,9 @@ async function updateOnboardingClient(req, res) {
 
 async function updateOnboardingChatUser(req, res) {
   try {
-    const { user_code, chatUserData } = req.body;
+    const user_code = req.userCode;
     if (!user_code) return res.status(400).json({ error: 'user_code is required' });
+    const { chatUserData } = req.body;
     if (!chatUserData) return res.status(400).json({ error: 'chatUserData is required' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
 
@@ -167,7 +171,8 @@ async function updateOnboardingChatUser(req, res) {
 
 async function startAsyncMealPlan(req, res) {
   try {
-    const { user_id, user_code } = req.body || {};
+    const user_id = req.userId;
+    const user_code = req.userCode;
     if (!user_id && !user_code) return res.status(400).json({ error: 'user_id or user_code is required' });
     setImmediate(() => {
       createAndSaveOnboardingMealPlanForUser(user_id || null, user_code || null, { clientDB, adminDB }).catch((err) => {
@@ -193,16 +198,26 @@ async function classifyActivity(req, res) {
 
     const url = `${apiBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
 
-    const systemPrompt = `You are an expert fitness and nutrition routing AI. Your exact task is to analyze a user's open-text description of their daily physical activity, job, and lifestyle, and accurately assign them the correct Harris-Benedict Activity Level.
+    const systemPrompt = `You are an expert fitness and nutrition routing AI. Assign the correct Harris-Benedict Activity Level from the user's description of their job AND intentional exercise.
 
-Use the following strict classifications:
-- "sedentary": Little to no intentional exercise. Desk jobs, mostly sitting or lying down. (Equivalent to 1.2)
-- "light": Light exercise or sports 1-3 days a week. (Equivalent to 1.375)
-- "moderate": Moderate exercise or sports 3-5 days a week. (Equivalent to 1.55)
-- "very": Hard exercise or sports 6-7 days a week. (Equivalent to 1.725)
-- "extra": Very hard exercise, physical job AND daily training, or 2x a day training. (Equivalent to 1.9)
+Strict levels:
+- "sedentary" (1.2): Desk / seated work most of the day AND little or no intentional exercise.
+- "light" (1.375): Mostly seated or light standing work, PLUS light intentional exercise or sports about 1–3 days/week (e.g. office job + weekend sport only).
+- "moderate" (1.55): Noticeably active day (on-feet retail/hospitality, walking a lot) OR moderate exercise/sports 3–5 days/week. Also use when a desk job is paired with solid training most weekdays.
+- "very" (1.725): Physically demanding job (construction, warehouse, farming, heavy lifting, highly physical 9–5) OR hard exercise/sports 6–7 days/week. A physical labor job must NEVER be classified below "moderate"; prefer "very" when the job itself is strenuous.
+- "extra" (1.9): Very hard exercise AND a physical job, OR 2x/day training, or elite-level daily load.
 
-Analyze the input carefully. If a user's description falls between two categories, default to the lower category to prevent overestimating caloric burn.`;
+Decision order (important):
+1. Score occupation first (seated vs on-feet vs heavy physical labor).
+2. Then add intentional sports/gym frequency.
+3. Combine both — do not ignore a physical job just because weekend sport sounds "light".
+
+Examples:
+- Office 9–5 + sports on weekends only → typically "light" (sometimes "moderate" if weekends are intense multi-hour sessions).
+- Physical labor 9–5 (even with little extra gym) → at least "moderate", usually "very".
+- Desk job + gym 4–5 days → "moderate" or "very" depending on intensity.
+
+Only when two levels are truly equally plausible, prefer the lower one to avoid overestimating burn. Never downshift a clearly physical job to "light" or "sedentary".`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -309,26 +324,51 @@ async function getOnboardingStatus(req, res) {
 async function searchCities(req, res) {
   try {
     if (!adminDB) return res.status(503).json({ error: 'City search is unavailable', message: 'adminDB is not configured' });
+
+    // Progressive disclosure: country/region must be chosen before searching 230k cities.
+    const country = (req.query.country || '').toString().trim();
+    const countryCodes = country
+      ? country.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
+      : [];
+    if (countryCodes.length === 0) {
+      return res.status(400).json({
+        error: 'country is required',
+        message: 'Pass country (ISO 3166-1 alpha-2), e.g. ?country=IL&q=Tel',
+      });
+    }
+
     const rawQ = (req.query.q || '').toString().trim();
     if (rawQ.length < 1) return res.json({ data: [] });
 
     const safe = rawQ.replace(/[,()*]/g, '').trim();
     if (safe.length < 1) return res.json({ data: [] });
 
+    const mode = (req.query.mode || 'full').toString().trim().toLowerCase() === 'quick' ? 'quick' : 'full';
     const limitParam = parseInt(req.query.limit, 10);
-    const limit = Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 10, 1), 25);
-    const country = (req.query.country || '').toString().trim();
-    const countryCodes = country ? country.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean) : [];
+    // quick: confident probe (max 2). full: autocomplete list (default 12, max 15).
+    const limit =
+      mode === 'quick'
+        ? Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 2, 1), 2)
+        : Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 12, 1), 15);
 
-    const orFilter = [`name.ilike.${safe}%`, `asciiname.ilike.${safe}%`, `alternatenames.ilike.%${safe}%`].join(',');
-    let query = adminDB.from('cities500').select('geonameid, name, asciiname, alternatenames, country_code, latitude, longitude, timezone, population').or(orFilter).order('population', { ascending: false, nullsFirst: false }).limit(limit);
+    // Prefix-only (no alternatenames mid-match) so indexes on name/asciiname can be used.
+    const orFilter = [`name.ilike.${safe}%`, `asciiname.ilike.${safe}%`].join(',');
+
+    let query = adminDB
+      .from('cities500')
+      .select(
+        'geonameid, name, asciiname, country_code, latitude, longitude, timezone, population'
+      )
+      .or(orFilter)
+      .order('population', { ascending: false, nullsFirst: false })
+      .limit(limit);
 
     if (countryCodes.length === 1) query = query.eq('country_code', countryCodes[0]);
-    else if (countryCodes.length > 1) query = query.in('country_code', countryCodes);
+    else query = query.in('country_code', countryCodes);
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: 'Failed to search cities', message: error.message });
-    res.json({ data: data || [] });
+    res.json({ data: data || [], mode });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error', message: error.message });
   }
@@ -493,8 +533,11 @@ async function aiUpdateMealPlan(req, res) {
 
 async function getProfileClient(req, res) {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.query?.userId && req.query.userId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const { data, error } = await clientDB.from('clients').select('*').eq('user_id', userId).maybeSingle();
     if (error && error.code !== 'PGRST116') throw error;
     res.json({ data });
@@ -505,8 +548,11 @@ async function getProfileClient(req, res) {
 
 async function loadProfile(req, res) {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.query?.userId && req.query.userId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const { data, error } = await clientDB.from('clients').select('*').eq('user_id', userId).maybeSingle();
     if (error && error.code !== 'PGRST116') throw error;
     res.json({ data });

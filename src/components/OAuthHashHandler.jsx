@@ -40,7 +40,7 @@ function OAuthHashHandler() {
     ranRef.current = true;
 
     // Mirrors AuthCallbackPage: ensure the clients/chat_users rows exist with the
-    // right provider_id before the user lands on /profile, so the OnboardingModal
+    // right provider_id before the user lands on /profile, so onboarding
     // has a real companyConfig.
     (async () => {
       try {

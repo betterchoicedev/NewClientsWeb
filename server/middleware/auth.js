@@ -141,7 +141,6 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/macro-summary-svg',
     '/api/db/registration-links',
     '/health',
-    '/api/onboarding/classify-activity',
   ];
 
   const PROTECTED_API_PREFIXES = [

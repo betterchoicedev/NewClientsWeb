@@ -17,8 +17,8 @@ router.post('/onboarding/check-phone',         requireAuth, ctrl.checkOnboarding
 router.post('/onboarding/update-client',       requireAuth, ctrl.updateOnboardingClient);
 router.post('/onboarding/update-chat-user',    requireAuth, ctrl.updateOnboardingChatUser);
 router.post('/onboarding/start-async-meal-plan', requireAuth, ctrl.startAsyncMealPlan);
-router.post('/onboarding/classify-activity',              ctrl.classifyActivity);
-router.get( '/onboarding/status',              requireAuth, ctrl.getOnboardingStatus);
+router.post('/onboarding/classify-activity',     requireAuth, ctrl.classifyActivity);
+// GET /onboarding/status is served by modules/onboarding (richer contract).
 
 // ─── Cities ───────────────────────────────────────────────────────────────────
 router.get('/cities/search', ctrl.searchCities);

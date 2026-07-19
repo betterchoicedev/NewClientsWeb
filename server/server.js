@@ -17,10 +17,11 @@ const { registerAuthSessionRoutes } = require('./routes/authSession');
 const authRoutes      = require('./modules/auth/auth.routes');
 const billingRoutes   = require('./modules/billing/billing.routes');
 const foodRoutes      = require('./modules/food/food.routes');
-const profileRoutes   = require('./modules/profile/profile.routes');
-const trackingRoutes  = require('./modules/tracking/tracking.routes');
-const coachingRoutes  = require('./modules/coaching/coaching.routes');
-const marketingRoutes = require('./modules/marketing/marketing.routes');
+const profileRoutes    = require('./modules/profile/profile.routes');
+const onboardingRoutes = require('./modules/onboarding/onboarding.routes');
+const trackingRoutes   = require('./modules/tracking/tracking.routes');
+const coachingRoutes   = require('./modules/coaching/coaching.routes');
+const marketingRoutes  = require('./modules/marketing/marketing.routes');
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 const app = express();
@@ -54,6 +55,8 @@ app.get('/health', (_req, res) => res.json({ status: 'OK', timestamp: new Date()
 // ─── Domain modules ───────────────────────────────────────────────────────────
 app.use('/api', authRoutes);
 app.use('/api', foodRoutes);
+// Onboarding draft/commit/status must mount before profile so GET /onboarding/status uses the new contract.
+app.use('/api', onboardingRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', trackingRoutes);
 app.use('/api', coachingRoutes);

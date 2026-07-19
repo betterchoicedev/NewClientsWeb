@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useStripe } from '../context/StripeContext';
+import { getOnboardingStatus } from '../features/onboarding/api/onboardingApi';
 
 const PaymentSuccessPage = () => {
   const { language, direction } = useLanguage();
@@ -16,11 +17,10 @@ const PaymentSuccessPage = () => {
   const [sessionData, setSessionData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [entitlementReady, setEntitlementReady] = useState(false);
+  const [pollingStatus, setPollingStatus] = useState('');
 
   const sessionId = searchParams.get('session_id');
-  const normalizedCompanyName = String(user?.company_name || user?.companyName || user?.company || '').trim().toLowerCase();
-  const isNavyCompany = normalizedCompanyName === 'navy';
-  const [welcomeSentForThisPayment, setWelcomeSentForThisPayment] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -32,33 +32,49 @@ const PaymentSuccessPage = () => {
     fetchSessionData();
   }, [sessionId, language]);
 
+  const pollOnboardingStatus = async () => {
+    const maxAttempts = 20;
+    const delayMs = 1500;
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        setPollingStatus(
+          language === 'hebrew'
+            ? `ממתין לאישור מנוי... (${i + 1}/${maxAttempts})`
+            : `Confirming subscription... (${i + 1}/${maxAttempts})`
+        );
+        const status = await getOnboardingStatus();
+        if (
+          status.subscriptionStatus === 'active' ||
+          status.completed === true
+        ) {
+          setEntitlementReady(true);
+          setPollingStatus('');
+          return status;
+        }
+      } catch (e) {
+        console.warn('onboarding status poll failed', e);
+      }
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+    setPollingStatus(
+      language === 'hebrew'
+        ? 'התשלום התקבל; המנוי עדיין מתעדכן. אפשר להמשיך לפרופיל.'
+        : 'Payment received; subscription is still updating. You can continue to your profile.'
+    );
+    return null;
+  };
+
   const fetchSessionData = async () => {
     try {
       setLoading(true);
       const data = await getCheckoutSession(sessionId);
       setSessionData(data);
 
-      // Navy-only: send welcome only after successful paid onboarding Digital Only checkout.
-      const isOnboardingUpsellCheckout = data?.metadata?.from === 'onboarding_upsell';
-      if (isNavyCompany && isOnboardingUpsellCheckout && !welcomeSentForThisPayment) {
-        try {
-          const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-          const metadataUserId = data?.metadata?.user_id || null;
-          const resolvedUserId = user?.id || metadataUserId;
-          if (resolvedUserId) {
-            await fetch(`${apiUrl}/api/whatsapp/send-welcome-by-user-id`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: resolvedUserId })
-            });
-            setWelcomeSentForThisPayment(true);
-          }
-        } catch (welcomeError) {
-          console.warn('Could not send Navy post-payment welcome WhatsApp:', welcomeError);
-        }
+      // Webhook is source of truth for entitlement + WhatsApp. Poll until active.
+      if (isAuthenticated) {
+        await pollOnboardingStatus();
       }
 
-      // If user isn't authenticated, redirect to login after showing success
       if (!isAuthenticated) {
         setTimeout(() => {
           navigate('/login', { 
@@ -94,7 +110,7 @@ const PaymentSuccessPage = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
           <p className="text-lg text-gray-600 dark:text-gray-400">
-            {language === 'hebrew' ? 'מאמת תשלום...' : 'Verifying payment...'}
+            {pollingStatus || (language === 'hebrew' ? 'מאמת תשלום...' : 'Verifying payment...')}
           </p>
         </div>
       </div>
@@ -315,6 +331,13 @@ const PaymentSuccessPage = () => {
 
           {/* Action Buttons */}
           <div className="grid gap-4 md:grid-cols-2 animate-fadeInUp animation-delay-1500">
+            {(pollingStatus || entitlementReady) && (
+              <p className="md:col-span-2 text-sm text-center opacity-80">
+                {entitlementReady
+                  ? (language === 'hebrew' ? 'המנוי פעיל — אפשר להמשיך.' : 'Subscription active — you are good to go.')
+                  : pollingStatus}
+              </p>
+            )}
             {isAuthenticated ? (
               <Link
                 to="/profile"

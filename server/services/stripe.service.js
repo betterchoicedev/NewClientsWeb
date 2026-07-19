@@ -71,11 +71,69 @@ async function updateChatUserSubscription(customerEmail, subscriptionStatus, sub
   }
 }
 
-async function updateSubscriptionInfo(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt, { clientDB, adminDB }) {
+async function updateClientsSubscriptionByUserId(userId, subscriptionStatus, subscriptionType, subscriptionExpiresAt, clientDB) {
+  if (!userId) return false;
+  try {
+    const { error } = await clientDB.from('clients').update({
+      subscription_status: subscriptionStatus || 'none',
+      subscription_type: subscriptionType,
+      subscription_expires_at: subscriptionExpiresAt,
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', userId);
+    if (error) {
+      console.error('❌ Error updating clients subscription by user_id:', error);
+      return false;
+    }
+    console.log(`✅ clients subscription info updated for user_id: ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Error in updateClientsSubscriptionByUserId:', error);
+    return false;
+  }
+}
+
+async function updateChatUserSubscriptionByUserId(userId, subscriptionStatus, subscriptionType, subscriptionExpiresAt, { clientDB, adminDB }) {
+  if (!adminDB || !userId) return false;
+  try {
+    const { data: client } = await clientDB.from('clients').select('user_code').eq('user_id', userId).maybeSingle();
+    if (!client?.user_code) return false;
+    const { error } = await adminDB.from('chat_users').update({
+      subscription_status: subscriptionStatus,
+      subscription_type: subscriptionType,
+      subscription_expires_at: subscriptionExpiresAt,
+      updated_at: new Date().toISOString(),
+    }).eq('user_code', client.user_code);
+    if (error) {
+      console.error('❌ Error updating chat_users subscription by user_id:', error);
+      return false;
+    }
+    console.log(`✅ chat_users subscription info updated for user_id: ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Error in updateChatUserSubscriptionByUserId:', error);
+    return false;
+  }
+}
+
+async function updateSubscriptionInfo(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt, { clientDB, adminDB, userId }) {
+  if (userId) {
+    await Promise.all([
+      updateClientsSubscriptionByUserId(userId, subscriptionStatus, subscriptionType, subscriptionExpiresAt, clientDB),
+      updateChatUserSubscriptionByUserId(userId, subscriptionStatus, subscriptionType, subscriptionExpiresAt, { clientDB, adminDB }),
+    ]);
+    return;
+  }
   await Promise.all([
     updateClientsSubscription(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt, clientDB),
     updateChatUserSubscription(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt, adminDB),
   ]);
+}
+
+async function completeOnboardingAfterPaid(userId, { clientDB, adminDB }) {
+  if (!userId) return;
+  const { completeOnboardingAfterPaidSubscription } = require('../modules/onboarding/onboarding.service');
+  await completeOnboardingAfterPaidSubscription(userId, { clientDB, adminDB });
+  console.log('✅ Onboarding marked complete after paid subscription for', userId);
 }
 
 async function removeUserFromStripeUsageLog(userId, clientDB) {
@@ -185,24 +243,36 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
 
     try {
       const customer = await stripe.customers.retrieve(subscription.customer);
-      if (customer.email) {
-        await updateSubscriptionInfo(customer.email, subscription.status, subscriptionType, commitmentEndDate ? commitmentEndDate.toISOString() : null, { clientDB, adminDB });
+      if (customer.email || userId) {
+        await updateSubscriptionInfo(
+          customer.email,
+          subscription.status,
+          subscriptionType,
+          commitmentEndDate ? commitmentEndDate.toISOString() : null,
+          { clientDB, adminDB, userId }
+        );
       }
     } catch (customerError) {
       console.error('❌ Error retrieving customer for subscription info update:', customerError);
     }
 
-    if (priceId === DIGITAL_ONLY_PRICE_ID && userId) {
+    const fromOnboarding =
+      subscription.metadata?.from === 'onboarding_upsell' ||
+      priceId === DIGITAL_ONLY_PRICE_ID;
+
+    if (fromOnboarding && userId) {
+      await completeOnboardingAfterPaid(userId, { clientDB, adminDB });
       try {
         const r = await sendWhatsAppWelcomeByUserId(userId, clientDB);
-        if (r.success) console.log('📱 WhatsApp welcome sent (onboarding upsell) for user:', userId);
-        else console.warn('📱 WhatsApp welcome (onboarding upsell) skipped or failed:', r.message);
+        if (r.success) console.log('📱 WhatsApp welcome sent (onboarding paid) for user:', userId);
+        else console.warn('📱 WhatsApp welcome (onboarding paid) skipped or failed:', r.message);
       } catch (e) {
-        console.warn('📱 WhatsApp welcome (onboarding upsell) error:', e.message);
+        console.warn('📱 WhatsApp welcome (onboarding paid) error:', e.message);
       }
     }
   } catch (error) {
     console.error('❌ Error processing subscription creation:', error);
+    throw error;
   }
 }
 
@@ -253,14 +323,33 @@ async function handleSubscriptionUpdated(subscription, { clientDB, adminDB }) {
 
     try {
       const customer = await stripe.customers.retrieve(subscription.customer);
-      if (customer.email) {
-        await updateSubscriptionInfo(customer.email, subscription.status, subscriptionType, commitmentEndDate ? commitmentEndDate.toISOString() : null, { clientDB, adminDB });
+      const metaUserId = subscription.metadata?.user_id || userId;
+      if (customer.email || metaUserId) {
+        await updateSubscriptionInfo(
+          customer.email,
+          subscription.status,
+          subscriptionType,
+          commitmentEndDate ? commitmentEndDate.toISOString() : null,
+          { clientDB, adminDB, userId: metaUserId }
+        );
+      }
+      if (
+        metaUserId &&
+        (subscription.metadata?.from === 'onboarding_upsell' || subscription.status === 'active') &&
+        subscription.status === 'active'
+      ) {
+        // Idempotent: safe if already completed
+        if (subscription.metadata?.from === 'onboarding_upsell') {
+          await completeOnboardingAfterPaid(metaUserId, { clientDB, adminDB });
+        }
       }
     } catch (customerError) {
       console.error('❌ Error retrieving customer for subscription info update:', customerError);
+      throw customerError;
     }
   } catch (error) {
     console.error('❌ Error processing subscription update:', error);
+    throw error;
   }
 }
 

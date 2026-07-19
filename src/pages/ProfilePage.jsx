@@ -16,7 +16,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany, getWeightLogs, createWeightLog } from '../supabase/secondaryClient';
 import { normalizePhoneForDatabase, signOut } from '../supabase/auth';
-import OnboardingModal from '../components/OnboardingModal';
+import OnboardingGate from '../features/onboarding/OnboardingGate';
 import DailyLogTab from '../components/profile/DailyLogTab';
 import PricingTab from '../components/profile/PricingTab';
 import MessagesTab from '../components/profile/MessagesTab';
@@ -198,6 +198,9 @@ const ProfilePage = () => {
   const [saveStatus, setSaveStatus] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // Dev testing: remount key + forceFresh for Ctrl+Shift+O onboarding reset
+  const [onboardingRemountKey, setOnboardingRemountKey] = useState(0);
+  const [forceFreshOnboarding, setForceFreshOnboarding] = useState(false);
   const [userCode, setUserCode] = useState(null);
   const [companyOptions, setCompanyOptions] = useState([]);
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
@@ -296,13 +299,27 @@ const ProfilePage = () => {
     toCompanySlug
   ]);
 
-  // Check onboarding status
+  // Check onboarding status via new status API (falls back to profile client)
   const checkOnboardingStatus = useCallback(async () => {
     try {
       if (!user) return;
 
+      try {
+        const { getOnboardingStatus } = await import('../features/onboarding/api/onboardingApi');
+        const status = await getOnboardingStatus();
+        if (status?.userCode) setUserCode(status.userCode);
+        setOnboardingCompleted(status?.completed === true);
+        setShowOnboarding(status?.completed !== true);
+        return;
+      } catch (statusErr) {
+        console.warn('getOnboardingStatus failed, falling back to profile client', statusErr);
+      }
+
       const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-      const response = await fetch(`${apiUrl}/api/profile/client?userId=${encodeURIComponent(user.id)}`);
+      const { getAuthHeaders } = await import('../lib/apiClient');
+      const response = await fetch(`${apiUrl}/api/profile/client`, {
+        headers: getAuthHeaders(),
+      });
       const result = await response.json();
 
       if (!response.ok) {
@@ -314,21 +331,9 @@ const ProfilePage = () => {
 
       if (data) {
         setUserCode(data.user_code);
-        
-        // Track onboarding completion status
         setOnboardingCompleted(data.onboarding_completed === true);
-        
-        // Show onboarding ONLY if onboarding_completed is not true
-        // Once onboarding is completed (onboarding_completed === true), never show it again
-        // regardless of missing fields - user can fill them later in the profile
-        if (data.onboarding_completed !== true) {
-          setShowOnboarding(true);
-        } else {
-          // Onboarding is completed - don't show it again
-          setShowOnboarding(false);
-        }
+        setShowOnboarding(data.onboarding_completed !== true);
       } else {
-        // No profile data at all - show onboarding
         setOnboardingCompleted(false);
         setShowOnboarding(true);
       }
@@ -339,6 +344,7 @@ const ProfilePage = () => {
 
   // Callback to handle onboarding completion
   const handleOnboardingComplete = async (completed = true) => {
+    setForceFreshOnboarding(false);
     if (completed) {
       // Onboarding was completed - close the modal first to prevent reopening
       setShowOnboarding(false);
@@ -360,6 +366,25 @@ const ProfilePage = () => {
       setOnboardingCompleted(false);
     }
   };
+
+  // Dev testing: Ctrl/Cmd + Shift + O — clears draft, force-fresh reopen from welcome
+  useEffect(() => {
+    if (!user) return undefined;
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'O' || e.key === 'o')) {
+        e.preventDefault();
+        console.log('[DEV] Force-resetting onboarding (Ctrl+Shift+O)');
+        try {
+          localStorage.removeItem(`onboarding_${user.id}`);
+        } catch (_) { /* ignore */ }
+        setForceFreshOnboarding(true);
+        setOnboardingRemountKey((k) => k + 1);
+        setShowOnboarding(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [user]);
 
   // Redirect to home page if not authenticated (only after auth loading is complete)
   useEffect(() => {
@@ -1277,13 +1302,15 @@ const ProfilePage = () => {
         </div>
 
         {/* Onboarding Modal */}
-        <OnboardingModal
+        <OnboardingGate
+          key={onboardingRemountKey}
           isOpen={showOnboarding}
           onClose={handleOnboardingComplete}
           user={user}
-          userCode={userCode}
           companyName={assignedCompanyName}
           companyConfig={assignedCompanyConfig}
+          forceFresh={forceFreshOnboarding}
+          remountKey={onboardingRemountKey}
         />
 
         {/* Logout Confirmation Modal (AnimatePresence) */}
