@@ -3,9 +3,10 @@ import { useOnboardingStore, PHASES } from '../onboarding.store';
 import { buildSteps } from '../steps/stepDefs';
 import StepFields, { validateStep } from '../steps/StepFields';
 import StepShell from '../components/StepShell';
-import { commitOnboarding } from '../api/onboardingApi';
+import { commitOnboarding, checkOnboardingPhone, saveOnboardingStep } from '../api/onboardingApi';
 import { clearLocalDraft } from '../hooks/useOnboardingDraftSync';
 import { isOnboardingHebrew } from '../onboardingLocale';
+import { normalizeOnboardingPhone } from '../phoneUtils';
 
 const COMMIT_TIMEOUT_MS = 30000;
 
@@ -17,8 +18,8 @@ function commitErrorMessage(err, isHe) {
   }
   if (status === 404) {
     return isHe
-      ? 'שמירת ההצטרפות עדיין לא זמינה בשרת הזה (הנתיב לא קיים בפרודקשן). צריך לפרוס את ה־API המעודכן.'
-      : 'Onboarding save isn’t available on this API host yet (commit route missing on production). Deploy the updated API.';
+      ? 'לא ניתן לשמור — ודאו שהשרת המקומי פועל (פורט 8080) או שפריסת ה־API בפרודקשן מעודכנת.'
+      : 'Could not save — ensure the local API is running on port 8080, or deploy the latest API to production.';
   }
   if (status >= 500) return isHe ? 'שגיאת שרת — נסו שוב' : 'Server error — please retry';
   return err?.message || (isHe ? 'שגיאה בשמירה' : 'Failed to save');
@@ -67,7 +68,44 @@ export default function QuestionsPhase({ userId, onCommitted }) {
       return;
     }
 
+    if (step.id === 'phone') {
+      setLoading(true);
+      try {
+        const normalizedPhone = normalizeOnboardingPhone(
+          answers.phone,
+          answers.phoneCountryCode || '+972'
+        );
+        const { exists } = await checkOnboardingPhone(normalizedPhone);
+        if (exists) {
+          setLocalError(
+            isHe
+              ? 'מספר הטלפון כבר קיים במערכת. אנא השתמש במספר אחר.'
+              : 'This phone number is already registered. Please use a different number.'
+          );
+          return;
+        }
+      } catch (e) {
+        setLocalError(
+          isHe ? 'לא ניתן לאמת את מספר הטלפון — נסו שוב' : 'Could not verify phone number — please retry'
+        );
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+
     if (!isLast) {
+      const nextIndex = stepIndex + 1;
+      const draft = useOnboardingStore.getState().getDraftPayload();
+      saveOnboardingStep({
+        stepId: step.id,
+        answers,
+        stepIndex: nextIndex,
+        phase: PHASES.QUESTIONS,
+        draft,
+      }).catch((e) => {
+        console.warn('Step progress persistence warning:', e);
+      });
       nextStep(steps.length);
       return;
     }
@@ -81,13 +119,13 @@ export default function QuestionsPhase({ userId, onCommitted }) {
 
     try {
       const result = await commitOnboarding({ answers, signal: controller.signal });
-      if (!result?.userCode) throw new Error(isHe ? 'לא התקבל קוד משתמש' : 'No user code returned');
+      if (!result?.userCode) throw new Error(isHe ? 'שמירה נכשלה — נסו שוב' : 'Save failed — please try again');
       setUserCode(result.userCode);
       clearLocalDraft(userId);
       if (result.phase === 'pwa' || result.completed) {
         forcePhase(PHASES.PWA);
       } else {
-        forcePhase(PHASES.PAYMENT);
+        forcePhase(PHASES.PRODUCTS);
       }
       onCommitted?.(result);
     } catch (e) {

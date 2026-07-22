@@ -1,7 +1,9 @@
 import React from 'react';
+import { X } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOnboardingStore } from '../onboarding.store';
 import { isOnboardingHebrew } from '../onboardingLocale';
+import { useOnboardingDismiss } from '../onboardingDismissContext';
 
 /** @deprecated Prefer GlassPrimaryButton */
 export const btnPrimary =
@@ -89,13 +91,14 @@ export default function OnboardingPanel({
   footerClassName = '',
 }) {
   const { isDarkMode } = useTheme();
+  const onDismiss = useOnboardingDismiss();
   const language = useOnboardingStore((s) => s.answers.language);
   const isHe = isOnboardingHebrew(language);
   const immersive = variant === 'immersive' || hideHeader;
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6"
       dir={isHe ? 'rtl' : 'ltr'}
     >
       {/* Dimmed + blurred stage */}
@@ -128,7 +131,7 @@ export default function OnboardingPanel({
       </div>
 
       <div
-        className={`relative w-full ${maxWidthClass} max-h-[min(94vh,760px)] flex flex-col overflow-hidden rounded-[1.85rem] border ${
+        className={`relative w-full ${maxWidthClass} max-h-[100dvh] sm:max-h-[min(94vh,760px)] flex flex-col overflow-hidden rounded-t-[1.85rem] sm:rounded-[1.85rem] border ${
           isDarkMode
             ? 'bg-slate-900/45 border-white/15 shadow-[0_24px_80px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.04)_inset]'
             : 'bg-white/45 border-white/70 shadow-[0_24px_80px_rgba(15,23,42,0.14),0_0_0_1px_rgba(255,255,255,0.55)_inset]'
@@ -154,9 +157,26 @@ export default function OnboardingPanel({
           }}
         />
 
+        {onDismiss ? (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Close onboarding"
+            className={`absolute top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
+              isHe ? 'left-3' : 'right-3'
+            } ${
+              isDarkMode
+                ? 'border-white/15 bg-white/10 text-slate-200 hover:bg-white/20'
+                : 'border-white/70 bg-white/50 text-slate-600 hover:bg-white/80'
+            }`}
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        ) : null}
+
         <div
-          className={`relative z-[1] flex-1 min-h-0 overflow-y-auto overscroll-contain ${
-            immersive ? 'px-0 py-0' : 'px-5 pt-5 pb-4'
+          className={`relative z-[1] flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y ${
+            immersive ? 'px-0 py-0' : 'px-4 pt-4 pb-3 sm:px-5 sm:pt-5 sm:pb-4'
           } ${isDarkMode ? 'text-slate-100' : 'text-slate-900'} ${bodyClassName}`}
         >
           {children}

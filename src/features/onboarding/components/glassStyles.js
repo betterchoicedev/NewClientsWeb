@@ -1,5 +1,13 @@
 /** Shared liquid-glass styles for onboarding dropdowns, triggers, and options. */
 
+/** Onboarding modal shell (OnboardingPanel). Dropdown portals must sit above this. */
+export const ONBOARDING_OVERLAY_Z = 100;
+export const ONBOARDING_DROPDOWN_SCRIM_Z = 5000;
+export const ONBOARDING_DROPDOWN_MENU_Z = 5001;
+
+/** Reserve space for sticky footer (Back / Continue) when flipping DOB menus. */
+export const ONBOARDING_FOOTER_CLEARANCE_PX = 96;
+
 export function glassMenuClass(isDark) {
   return [
     'overflow-hidden rounded-2xl border backdrop-blur-2xl',
@@ -34,6 +42,15 @@ export function glassInputClass(isDark) {
     isDark
       ? 'bg-white/[0.06] border-white/15 text-white placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] focus:border-emerald-400/40'
       : 'bg-white/50 border-white/70 text-slate-900 placeholder:text-slate-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] focus:border-emerald-400/50',
+  ].join(' ');
+}
+
+/** Native <select> — option menus ignore most CSS unless color-scheme is set. */
+export function glassSelectClass(isDark) {
+  return [
+    glassInputClass(isDark),
+    'appearance-none cursor-pointer',
+    isDark ? 'color-scheme-dark [&>option]:bg-slate-900 [&>option]:text-slate-100' : 'color-scheme-light [&>option]:bg-white [&>option]:text-slate-900',
   ].join(' ');
 }
 

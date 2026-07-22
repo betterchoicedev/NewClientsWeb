@@ -18,7 +18,8 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
 
       const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
       if (error || !user) {
-        return res.status(401).json({ error: 'Invalid or expired token' });
+        console.error('requireAuth rejection:', error?.message || 'No user returned');
+        return res.status(401).json({ error: 'Invalid or expired token', details: error?.message });
       }
 
       req.authUser = user;
@@ -140,6 +141,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/weekly-macro-summary-svg',
     '/api/macro-summary-svg',
     '/api/db/registration-links',
+    '/api/onboarding/classify-activity',
     '/health',
   ];
 

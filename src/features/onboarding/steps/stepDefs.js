@@ -98,8 +98,8 @@ export function buildSteps({ includeNursingStatus = true, customSteps = [] } = {
 
   const customs = (customSteps || []).map((cs, i) => ({
     id: `custom_${cs.id || i}`,
-    titleEn: cs.titleEn || cs.title || cs.label || `Custom ${i + 1}`,
-    titleHe: cs.titleHe || cs.title || cs.label || `מותאם ${i + 1}`,
+    titleEn: cs.titleEn || cs.question || cs.title || cs.label || `Custom ${i + 1}`,
+    titleHe: cs.titleHe || cs.question || cs.title || cs.label || `מותאם ${i + 1}`,
     fields: [`custom_${cs.id || i}`],
     isCustom: true,
     custom: cs,

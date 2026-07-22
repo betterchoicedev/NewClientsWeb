@@ -4,6 +4,7 @@ import { ChevronDown, MapPin, Search } from 'lucide-react';
 import { searchCities } from '../api/onboardingApi';
 import SearchableSelect from './SearchableSelect';
 import { COUNTRY_OPTIONS } from '../countryOptions';
+import { formatCityLabel } from '../cityDisplayUtils';
 import { glassMenuClass, glassMenuHeaderClass, glassOptionClass } from './glassStyles';
 
 const MENU_MAX_H = 280;
@@ -48,10 +49,17 @@ export default function CitySearchSelect({
   const [hits, setHits] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState('');
   const [menuStyle, setMenuStyle] = useState(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
   const abortRef = useRef(null);
+
+  useEffect(() => {
+    if (!value) {
+      setSelectedLabel('');
+    }
+  }, [value]);
 
   useEffect(() => {
     if (!open || !cityEnabled) return undefined;
@@ -183,6 +191,8 @@ export default function CitySearchSelect({
   }, [open]);
 
   const pick = (c) => {
+    const label = c.display_label || formatCityLabel(c);
+    setSelectedLabel(label);
     onSelect({
       city: c.name,
       timezone: c.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '',
@@ -256,7 +266,7 @@ export default function CitySearchSelect({
                   >
                     <MapPin size={14} className="mt-0.5 shrink-0 opacity-50" aria-hidden />
                     <span>
-                      <span className="font-medium">{c.name}</span>
+                      <span className="font-medium">{c.display_label || formatCityLabel(c)}</span>
                       {c.timezone ? (
                         <span
                           className={`block text-xs mt-0.5 ${
@@ -321,7 +331,7 @@ export default function CitySearchSelect({
                 ? isHe
                   ? 'בחרו מדינה תחילה'
                   : 'Select a country first'
-                : value || (isHe ? 'בחרו עיר מהרשימה' : 'Select a city from the list')}
+                : selectedLabel || value || (isHe ? 'בחרו עיר מהרשימה' : 'Select a city from the list')}
             </span>
           </span>
           <ChevronDown

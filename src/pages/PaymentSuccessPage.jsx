@@ -4,12 +4,14 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useStripe } from '../context/StripeContext';
-import { getOnboardingStatus } from '../features/onboarding/api/onboardingApi';
+import { completeOnboardingAfterPayment, getOnboardingStatus } from '../features/onboarding/api/onboardingApi';
+import { useOnboardingEntitlement } from '../features/onboarding/OnboardingEntitlementContext';
 
 const PaymentSuccessPage = () => {
   const { language, direction } = useLanguage();
   const { themeClasses } = useTheme();
   const { user, isAuthenticated } = useAuth();
+  const { refresh: refreshEntitlement } = useOnboardingEntitlement();
   const { getCheckoutSession } = useStripe();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -47,8 +49,14 @@ const PaymentSuccessPage = () => {
           status.subscriptionStatus === 'active' ||
           status.completed === true
         ) {
+          try {
+            await completeOnboardingAfterPayment();
+          } catch (e) {
+            console.warn('complete onboarding after payment failed', e);
+          }
           setEntitlementReady(true);
           setPollingStatus('');
+          await refreshEntitlement();
           return status;
         }
       } catch (e) {

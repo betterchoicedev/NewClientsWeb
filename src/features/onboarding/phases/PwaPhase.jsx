@@ -4,6 +4,8 @@ import { useTheme } from '../../../context/ThemeContext';
 import { useOnboardingStore, PHASES } from '../onboarding.store';
 import { isOnboardingHebrew } from '../onboardingLocale';
 import OnboardingPanel, { GlassPrimaryButton, btnGhost } from '../components/OnboardingPanel';
+import { completeOnboardingAfterPayment } from '../api/onboardingApi';
+import AppStoreBadges from '../components/AppStoreBadges';
 
 export default function PwaPhase({ onComplete }) {
   const { isDarkMode } = useTheme();
@@ -21,7 +23,12 @@ export default function PwaPhase({ onComplete }) {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const finish = () => {
+  const finish = async () => {
+    try {
+      await completeOnboardingAfterPayment();
+    } catch (e) {
+      console.warn('[PwaPhase] complete onboarding failed', e);
+    }
     forcePhase(PHASES.DONE);
     onComplete?.(true);
   };
@@ -51,7 +58,7 @@ export default function PwaPhase({ onComplete }) {
         </div>
       }
     >
-      <div className="text-center space-y-4 py-6">
+      <div className="text-center space-y-6 py-6">
         <div
           className={`mx-auto w-14 h-14 rounded-2xl flex items-center justify-center border backdrop-blur-md ${
             isDarkMode
@@ -61,14 +68,23 @@ export default function PwaPhase({ onComplete }) {
         >
           <Smartphone size={28} aria-hidden />
         </div>
-        <h2 className={`text-xl font-extrabold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-          {isHe ? 'הוסף למסך הבית' : 'Add to Home Screen'}
-        </h2>
-        <p className={`text-sm font-medium leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-          {isHe
-            ? 'להתקנה מהירה וגישה נוחה לאפליקציה.'
-            : 'Install for quick access to your meal plan and tracking.'}
-        </p>
+        <div className="space-y-2">
+          <h2 className={`text-xl font-extrabold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+            {isHe ? 'התקנת האפליקציה' : 'Install the app'}
+          </h2>
+          <p className={`text-sm font-medium leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+            {isHe
+              ? 'הורידו את האפליקציה או הוסיפו למסך הבית לגישה מהירה לתוכנית ולמעקב.'
+              : 'Download the app or add to your home screen for quick access to your plan and tracking.'}
+          </p>
+        </div>
+
+        <div className="space-y-3 w-full px-1 sm:px-2">
+          <p className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            {isHe ? 'הורדה מהחנות' : 'Download from the store'}
+          </p>
+          <AppStoreBadges />
+        </div>
       </div>
     </OnboardingPanel>
   );

@@ -57,16 +57,27 @@ const initialState = {
   draftSyncError: null,
   companyConfig: null,
   companyName: null,
+  companyId: null,
   includeNursingStatus: true,
   weightUnit: 'kg',
   heightUnit: 'cm',
   skipPayment: false,
+  selectedProductIds: [],
+  appliedPromo: null,
 };
 
 export const useOnboardingStore = create((set, get) => ({
   ...initialState,
 
-  reset: (overrides = {}) => set({ ...initialState, answers: emptyAnswers(), ...overrides }),
+  reset: (overrides = {}) => {
+    const preservedCompany = {
+      companyConfig: get().companyConfig,
+      companyName: get().companyName,
+      companyId: get().companyId,
+      includeNursingStatus: get().includeNursingStatus,
+    };
+    set({ ...initialState, answers: emptyAnswers(), ...preservedCompany, ...overrides });
+  },
 
   setPhase: (phase) => {
     const from = get().phase;
@@ -115,11 +126,28 @@ export const useOnboardingStore = create((set, get) => ({
 
   setUserCode: (userCode) => set({ userCode }),
 
-  setCompany: ({ companyConfig, companyName, includeNursingStatus }) =>
+  setCompany: ({ companyConfig, companyName, companyId, includeNursingStatus }) =>
     set({
       companyConfig: companyConfig ?? null,
       companyName: companyName ?? null,
+      companyId: companyId ?? null,
       includeNursingStatus: includeNursingStatus !== false,
+    }),
+
+  setSelectedProductIds: (selectedProductIds) => {
+    const ids = Array.isArray(selectedProductIds) ? selectedProductIds.filter(Boolean) : [];
+    set({ selectedProductIds: ids.length ? [ids[0]] : [] });
+  },
+
+  setAppliedPromo: (appliedPromo) => set({ appliedPromo: appliedPromo || null }),
+
+  hydrateCommerce: ({ selectedProductIds, appliedPromo } = {}) =>
+    set((s) => {
+      const ids = Array.isArray(selectedProductIds) ? selectedProductIds.filter(Boolean) : s.selectedProductIds;
+      return {
+        selectedProductIds: ids.length ? [ids[0]] : [],
+        appliedPromo: appliedPromo !== undefined ? appliedPromo : s.appliedPromo,
+      };
     }),
 
   setUnits: ({ weightUnit, heightUnit }) =>
@@ -134,14 +162,21 @@ export const useOnboardingStore = create((set, get) => ({
     const phase = phaseFrom(status);
     const draft = status?.draft || {};
     const draftAnswers = draft.answers || draft.formData || {};
+    const commerce = draft.commerce || {};
+    const draftStep = typeof draft.stepIndex === 'number' ? draft.stepIndex : 0;
+    const hint = typeof status?.resumeStepHint === 'number' ? status.resumeStepHint : 0;
     set({
       hydrated: true,
       phase: phase === P.DONE ? P.DONE : phase,
       userCode: status?.userCode || null,
-      stepIndex: typeof draft.stepIndex === 'number' ? draft.stepIndex : 0,
+      stepIndex: Math.max(draftStep, hint),
       answers: { ...emptyAnswers(), ...draftAnswers },
       weightUnit: draft.weightUnit || 'kg',
       heightUnit: draft.heightUnit || 'cm',
+      selectedProductIds: Array.isArray(commerce.selectedProductIds) && commerce.selectedProductIds.length
+        ? [commerce.selectedProductIds[0]]
+        : [],
+      appliedPromo: commerce.appliedPromo || null,
       error: null,
     });
   },
@@ -153,6 +188,10 @@ export const useOnboardingStore = create((set, get) => ({
       stepIndex: s.stepIndex,
       weightUnit: s.weightUnit,
       heightUnit: s.heightUnit,
+      commerce: {
+        selectedProductIds: s.selectedProductIds,
+        appliedPromo: s.appliedPromo,
+      },
       savedAt: new Date().toISOString(),
     };
   },

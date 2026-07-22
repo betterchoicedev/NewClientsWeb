@@ -1,10 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useOnboardingStore } from '../onboarding.store';
 import { saveDraft } from '../api/onboardingApi';
 import { PHASES } from '../onboarding.machine';
 
 const LOCAL_KEY = (userId) => `onboarding_${userId}`;
+const SESSION_DRAFT_KEY = (userId) => `onboarding_draft_full_${userId}`;
 const DEBOUNCE_MS = 500;
+
+/** Stable callback ref for effects without exhaustive-deps churn. */
+function useCallbackRef(fn) {
+  const ref = useRef(fn);
+  ref.current = fn;
+  return useCallback((...args) => ref.current(...args), []);
+}
 
 /** Fields safe to keep in localStorage (no PHI / medical / contact). */
 const LOCAL_SAFE_ANSWER_KEYS = [
@@ -35,11 +43,22 @@ function toLocalSafeDraft(draft) {
     heightUnit: draft?.heightUnit || 'cm',
     savedAt: draft?.savedAt || new Date().toISOString(),
     answers: safeAnswers,
+    commerce: draft?.commerce || null,
+    phase: draft?.phase || null,
   };
 }
 
+function writeSessionDraft(userId, draft) {
+  if (!userId) return;
+  try {
+    sessionStorage.setItem(SESSION_DRAFT_KEY(userId), JSON.stringify(draft));
+  } catch (_) {
+    /* ignore quota */
+  }
+}
+
 /**
- * Debounced sync: stripped localStorage + full POST /api/onboarding/draft while in questions phase.
+ * Debounced sync: localStorage (safe subset) + sessionStorage (full) + server draft.
  */
 export function useOnboardingDraftSync(userId, enabled = true) {
   const timerRef = useRef(null);
@@ -48,39 +67,51 @@ export function useOnboardingDraftSync(userId, enabled = true) {
   const phase = useOnboardingStore((s) => s.phase);
   const weightUnit = useOnboardingStore((s) => s.weightUnit);
   const heightUnit = useOnboardingStore((s) => s.heightUnit);
+  const selectedProductIds = useOnboardingStore((s) => s.selectedProductIds);
+  const appliedPromo = useOnboardingStore((s) => s.appliedPromo);
   const hydrated = useOnboardingStore((s) => s.hydrated);
   const getDraftPayload = useOnboardingStore((s) => s.getDraftPayload);
   const setDraftSyncing = useOnboardingStore((s) => s.setDraftSyncing);
   const setDraftSyncError = useOnboardingStore((s) => s.setDraftSyncError);
   const setUserCode = useOnboardingStore((s) => s.setUserCode);
 
+  const syncPhases = new Set([
+    PHASES.WELCOME,
+    PHASES.PRODUCTS,
+    PHASES.PROMO,
+    PHASES.PAYMENT,
+    PHASES.QUESTIONS,
+  ]);
+
+  const persistDraft = useCallbackRef(async () => {
+    if (!userId) return;
+    const draft = { ...getDraftPayload(), phase, savedAt: new Date().toISOString() };
+    try {
+      localStorage.setItem(LOCAL_KEY(userId), JSON.stringify(toLocalSafeDraft(draft)));
+    } catch (_) {
+      /* ignore quota */
+    }
+    writeSessionDraft(userId, draft);
+    try {
+      setDraftSyncing(true);
+      const res = await saveDraft({ draft, phase, stepIndex });
+      if (res?.userCode) setUserCode(res.userCode);
+      setDraftSyncError(null);
+    } catch (e) {
+      console.warn('[onboarding] draft sync failed:', e.message);
+      setDraftSyncError(e.message || 'Draft not saved');
+    } finally {
+      setDraftSyncing(false);
+    }
+  });
+
   useEffect(() => {
     if (!enabled || !userId || !hydrated) return undefined;
-    if (phase !== PHASES.QUESTIONS && phase !== PHASES.WELCOME) return undefined;
+    if (!syncPhases.has(phase)) return undefined;
 
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(async () => {
-      const draft = { ...getDraftPayload(), savedAt: new Date().toISOString() };
-      try {
-        localStorage.setItem(LOCAL_KEY(userId), JSON.stringify(toLocalSafeDraft(draft)));
-      } catch (_) {
-        /* ignore quota */
-      }
-      try {
-        setDraftSyncing(true);
-        const res = await saveDraft({
-          draft,
-          phase: phase === PHASES.WELCOME ? PHASES.WELCOME : PHASES.QUESTIONS,
-          stepIndex,
-        });
-        if (res?.userCode) setUserCode(res.userCode);
-        setDraftSyncError(null);
-      } catch (e) {
-        console.warn('[onboarding] draft sync failed:', e.message);
-        setDraftSyncError(e.message || 'Draft not saved');
-      } finally {
-        setDraftSyncing(false);
-      }
+    timerRef.current = setTimeout(() => {
+      persistDraft();
     }, DEBOUNCE_MS);
 
     return () => {
@@ -95,11 +126,27 @@ export function useOnboardingDraftSync(userId, enabled = true) {
     phase,
     weightUnit,
     heightUnit,
-    getDraftPayload,
-    setDraftSyncing,
-    setDraftSyncError,
-    setUserCode,
+    selectedProductIds,
+    appliedPromo,
+    persistDraft,
   ]);
+
+  useEffect(() => {
+    if (!enabled || !userId || !hydrated) return undefined;
+    const flush = () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      persistDraft();
+    };
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, [enabled, userId, hydrated, persistDraft]);
 }
 
 export function readLocalDraft(userId) {
@@ -111,9 +158,19 @@ export function readLocalDraft(userId) {
   }
 }
 
+export function readSessionDraft(userId) {
+  try {
+    const raw = sessionStorage.getItem(SESSION_DRAFT_KEY(userId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function clearLocalDraft(userId) {
   try {
     localStorage.removeItem(LOCAL_KEY(userId));
+    sessionStorage.removeItem(SESSION_DRAFT_KEY(userId));
   } catch (_) {
     /* ignore */
   }

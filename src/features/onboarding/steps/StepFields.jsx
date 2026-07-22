@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { Check, Sparkles } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useLanguage } from '../../../context/LanguageContext';
 import { useOnboardingStore } from '../onboarding.store';
@@ -8,16 +9,16 @@ import CitySearchSelect from '../components/CitySearchSelect';
 import DateOfBirthSelect from '../components/DateOfBirthSelect';
 import { regionFromCountry } from '../countryOptions';
 import { applyPreferredLanguageToApp, isOnboardingHebrew } from '../onboardingLocale';
-import {
-  calculateAge,
-  calculateDailyCalories,
-  defaultMacros,
-} from './stepDefs';
+import CaloriesMacrosFields from '../components/CaloriesMacrosFields';
+import MealPlanningFields from '../components/MealPlanningFields';
+import { GlassSecondaryButton } from '../components/OnboardingPanel';
 import {
   glassChipClass,
   glassInputClass,
   glassOptionBtnClass,
+  glassSelectClass,
 } from '../components/glassStyles';
+import { isValidPhoneDigits, sanitizePhoneDigits } from '../phoneUtils';
 
 const inputClass = glassInputClass;
 const optionBtn = glassOptionBtnClass;
@@ -132,6 +133,137 @@ function ChipMulti({
   );
 }
 
+function normalizeCustomOptions(options) {
+  const list = Array.isArray(options)
+    ? options
+    : typeof options === 'string'
+      ? options.split(/[,;\n]/).map((o) => o.trim()).filter(Boolean)
+      : [];
+  return list.map((opt) => {
+    const label = String(opt);
+    return { value: label, en: label, he: label };
+  });
+}
+
+function ChoiceOptionList({ options, selectedValues, onToggle, isHe, isDark, multiple = false }) {
+  const selected = multiple
+    ? (Array.isArray(selectedValues) ? selectedValues : [])
+    : selectedValues
+      ? [selectedValues]
+      : [];
+
+  return (
+    <div className="space-y-2">
+      <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+        {multiple
+          ? isHe
+            ? 'בחרו את כל האפשרויות הרלוונטיות'
+            : 'Select all that apply'
+          : isHe
+            ? 'בחרו אפשרות אחת'
+            : 'Choose one option'}
+      </p>
+      <div className="grid gap-2" role={multiple ? 'group' : 'radiogroup'}>
+        {options.map((opt) => {
+          const on = selected.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role={multiple ? 'checkbox' : 'radio'}
+              aria-checked={on}
+              onClick={() => onToggle(opt.value)}
+              className={optionBtn(on, isDark)}
+            >
+              <span className="flex items-center justify-between gap-3 w-full">
+                <span>{isHe ? opt.he : opt.en}</span>
+                {on ? (
+                  <Check size={18} className="shrink-0 text-emerald-500" aria-hidden />
+                ) : (
+                  <span
+                    className={`shrink-0 w-5 h-5 rounded-full border-2 ${
+                      isDark ? 'border-white/20' : 'border-slate-300'
+                    }`}
+                    aria-hidden
+                  />
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CustomStepField({ step, answers, setAnswer, isDark, isHe }) {
+  const custom = step.custom || {};
+  const customKey = custom.id || step.fields?.[0]?.replace(/^custom_/, '') || step.id?.replace(/^custom_/, '');
+  const type = custom.type || 'text';
+  const options = normalizeCustomOptions(custom.options);
+  const stored = answers.custom_answers?.[customKey];
+
+  const setCustomValue = (value) => {
+    setAnswer('custom_answers', {
+      ...(answers.custom_answers || {}),
+      [customKey]: value,
+    });
+  };
+
+  const description = custom.description || custom.descriptionEn || custom.descriptionHe;
+  const descriptionText =
+    isHe && custom.descriptionHe ? custom.descriptionHe : custom.descriptionEn || description;
+
+  let field;
+  if (type === 'multiselect') {
+    const selected = Array.isArray(stored) ? stored : [];
+    field = (
+      <ChoiceOptionList
+        options={options}
+        selectedValues={selected}
+        multiple
+        onToggle={(value) => {
+          const next = selected.includes(value)
+            ? selected.filter((v) => v !== value)
+            : [...selected, value];
+          setCustomValue(next);
+        }}
+        isHe={isHe}
+        isDark={isDark}
+      />
+    );
+  } else if (type === 'select') {
+    field = (
+      <ChoiceOptionList
+        options={options}
+        selectedValues={stored}
+        onToggle={(value) => setCustomValue(value)}
+        isHe={isHe}
+        isDark={isDark}
+      />
+    );
+  } else {
+    field = (
+      <textarea
+        className={inputClass(isDark)}
+        rows={4}
+        value={typeof stored === 'string' ? stored : ''}
+        onChange={(e) => setCustomValue(e.target.value)}
+        placeholder={custom.placeholder || ''}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {descriptionText ? (
+        <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{descriptionText}</p>
+      ) : null}
+      {field}
+    </div>
+  );
+}
+
 function preferredLanguageNote(code, isHe, isDark) {
   if (!code) return null;
   if (code === 'he') {
@@ -173,26 +305,6 @@ export default function StepFields({ step }) {
 
   const id = step?.id;
 
-  useEffect(() => {
-    if (id !== 'calories') return;
-    const age = calculateAge(answers.date_of_birth);
-    const cals = calculateDailyCalories(
-      age,
-      answers.gender,
-      answers.weight_kg,
-      answers.height_cm,
-      answers.activity_level,
-      answers.goal,
-      answers.nursing_status
-    );
-    if (cals && !answers.daily_calories) {
-      setAnswers({
-        daily_calories: cals,
-        macros: defaultMacros(cals, answers.goal),
-      });
-    }
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const toggleList = (field, value) => {
     const cur = Array.isArray(answers[field]) ? answers[field] : [];
     const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value];
@@ -207,21 +319,13 @@ export default function StepFields({ step }) {
   if (!step) return null;
 
   if (step.isCustom) {
-    const key = step.fields[0];
-    const customKey = step.custom?.id || key;
-    const val = answers.custom_answers?.[customKey] || '';
     return (
-      <textarea
-        className={inputClass(isDarkMode)}
-        rows={4}
-        value={val}
-        onChange={(e) =>
-          setAnswer('custom_answers', {
-            ...(answers.custom_answers || {}),
-            [customKey]: e.target.value,
-          })
-        }
-        placeholder={step.custom?.placeholder || ''}
+      <CustomStepField
+        step={step}
+        answers={answers}
+        setAnswer={setAnswer}
+        isDark={isDarkMode}
+        isHe={isHe}
       />
     );
   }
@@ -257,14 +361,23 @@ export default function StepFields({ step }) {
     case 'phone':
       return (
         <div className="flex gap-2">
-          <select className={`${inputClass(isDarkMode)} w-28`} value={answers.phoneCountryCode || '+972'} onChange={(e) => setAnswer('phoneCountryCode', e.target.value)}>
+          <select className={`${glassSelectClass(isDarkMode)} w-28`} value={answers.phoneCountryCode || '+972'} onChange={(e) => setAnswer('phoneCountryCode', e.target.value)}>
             <option value="+972">+972</option>
             <option value="+1">+1</option>
             <option value="+44">+44</option>
             <option value="+33">+33</option>
             <option value="+49">+49</option>
           </select>
-          <input className={inputClass(isDarkMode)} type="tel" placeholder={isHe ? 'מספר טלפון' : 'Phone number'} value={answers.phone || ''} onChange={(e) => setAnswer('phone', e.target.value)} />
+          <input
+            className={inputClass(isDarkMode)}
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="tel-national"
+            placeholder={isHe ? 'מספר טלפון' : 'Phone number'}
+            value={answers.phone || ''}
+            onChange={(e) => setAnswer('phone', sanitizePhoneDigits(e.target.value))}
+          />
         </div>
       );
 
@@ -326,12 +439,20 @@ export default function StepFields({ step }) {
             />
           )}
           {includeNursing && answers.gender === 'female' && (
-            <select className={inputClass(isDarkMode)} value={answers.nursing_status || ''} onChange={(e) => setAnswer('nursing_status', e.target.value)}>
-              <option value="">{isHe ? 'מצב פיזיולוגי' : 'Physiological state'}</option>
-              <option value="none">{isHe ? 'לא מניקה' : 'Not nursing'}</option>
-              <option value="partial">{isHe ? 'הנקה חלקית' : 'Partial nursing'}</option>
-              <option value="exclusive">{isHe ? 'הנקה מלאה' : 'Exclusive nursing'}</option>
-            </select>
+            <SearchableSelect
+              options={[
+                { value: 'none', label: isHe ? 'לא מניקה' : 'Not nursing' },
+                { value: 'partial', label: isHe ? 'הנקה חלקית' : 'Partial nursing' },
+                { value: 'exclusive', label: isHe ? 'הנקה מלאה' : 'Exclusive nursing' },
+              ]}
+              value={answers.nursing_status || ''}
+              onChange={(v) => setAnswer('nursing_status', v)}
+              placeholder={isHe ? 'מצב פיזיולוגי' : 'Physiological state'}
+              searchPlaceholder={isHe ? 'חיפוש...' : 'Search...'}
+              emptyText={isHe ? 'לא נמצאו תוצאות' : 'No matches'}
+              isDark={isDarkMode}
+              inputClass={inputClass(isDarkMode)}
+            />
           )}
         </div>
       );
@@ -397,17 +518,55 @@ export default function StepFields({ step }) {
     case 'activity':
       return (
         <div className="space-y-5">
-          <div className="space-y-3">
-            <textarea className={inputClass(isDarkMode)} rows={3} placeholder={isHe ? 'תאר את הפעילות היומית שלך' : 'Describe your daily activity'} value={answers.activity_description || ''} onChange={(e) => setAnswer('activity_description', e.target.value)} />
-            <button
-              type="button"
-              disabled={classifying || !answers.activity_description}
-              className={`text-sm font-semibold text-emerald-700 disabled:opacity-50 ${isDarkMode ? 'text-emerald-400' : ''}`}
+          <div className="space-y-2">
+            <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+              {isHe ? 'בחרו רמת פעילות' : 'Select your activity level'}
+            </p>
+            <div className="grid gap-2">
+              {ACTIVITY_LEVELS.map((a) => (
+                <button
+                  key={a.value}
+                  type="button"
+                  onClick={() => setAnswer('activity_level', a.value)}
+                  className={optionBtn(answers.activity_level === a.value, isDarkMode)}
+                >
+                  {isHe ? a.he : a.en}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className={`space-y-3 pt-1 border-t ${isDarkMode ? 'border-white/10' : 'border-slate-200/80'}`}>
+            <div>
+              <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                {isHe ? 'לא בטוחים?' : 'Not sure?'}
+              </p>
+              <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                {isHe
+                  ? 'תארו את העבודה והפעילות הגופנית שלכם — נציע רמה אוטומטית (אופציונלי)'
+                  : 'Describe your job and exercise — we can suggest a level for you (optional)'}
+              </p>
+            </div>
+            <textarea
+              className={inputClass(isDarkMode)}
+              rows={3}
+              placeholder={
+                isHe
+                  ? 'לדוגמה: עבודה משרדית + אימוני כוח 4 פעמים בשבוע'
+                  : 'e.g. Desk job + strength training 4 days a week'
+              }
+              value={answers.activity_description || ''}
+              onChange={(e) => setAnswer('activity_description', e.target.value)}
+            />
+            <GlassSecondaryButton
+              className="w-full"
+              disabled={classifying || !answers.activity_description?.trim()}
               onClick={async () => {
                 setClassifyError(null);
                 setClassifying(true);
                 try {
                   const res = await classifyActivity(answers.activity_description);
+                  console.info('[StepFields] classify mapped', { raw: res?.activity_factor, reasoning: res?.reasoning, promptVersion: res?.promptVersion });
                   const raw = res?.activity_factor;
                   const allowed = new Set(ACTIVITY_LEVELS.map((a) => a.value));
                   if (typeof raw === 'string' && allowed.has(raw)) {
@@ -435,29 +594,23 @@ export default function StepFields({ step }) {
                     if (best) setAnswer('activity_level', best);
                     else throw new Error('bad classification');
                   }
-                } catch (_) {
-                  setClassifyError(isHe ? 'הסיווג נכשל — בחרו ידנית' : 'Auto-classify failed — pick a level');
+                } catch (err) {
+                  console.error('[StepFields] classify failed', err?.status, err?.message, err?.data);
+                  setClassifyError(isHe ? 'הסיווג נכשל — בחרו ידנית למעלה' : 'Auto-classify failed — pick a level above');
                 }
                 setClassifying(false);
               }}
             >
-              {classifying ? (isHe ? 'מסווג...' : 'Classifying...') : (isHe ? 'סווג אוטומטית' : 'Auto-classify level')}
-            </button>
+              <Sparkles size={18} aria-hidden />
+              {classifying
+                ? (isHe ? 'מסווג...' : 'Classifying...')
+                : (isHe ? 'סווג אוטומטית לפי התיאור' : 'Auto-classify from description')}
+            </GlassSecondaryButton>
             {classifyError ? (
-              <p className={`text-xs ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>{classifyError}</p>
+              <p className={`text-xs ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`} role="alert">
+                {classifyError}
+              </p>
             ) : null}
-          </div>
-          <div className="grid gap-2">
-            {ACTIVITY_LEVELS.map((a) => (
-              <button
-                key={a.value}
-                type="button"
-                onClick={() => setAnswer('activity_level', a.value)}
-                className={optionBtn(answers.activity_level === a.value, isDarkMode)}
-              >
-                {isHe ? a.he : a.en}
-              </button>
-            ))}
           </div>
         </div>
       );
@@ -535,81 +688,21 @@ export default function StepFields({ step }) {
 
     case 'calories':
       return (
-        <div className="space-y-3">
-          <label className={`block text-sm space-y-1.5 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-            {isHe ? 'קלוריות יומיות' : 'Daily calories'}
-            <input
-              type="number"
-              className={inputClass(isDarkMode)}
-              value={answers.daily_calories ?? ''}
-              onChange={(e) => {
-                const cals = e.target.value ? Number(e.target.value) : null;
-                setAnswers({ daily_calories: cals, macros: defaultMacros(cals, answers.goal) });
-              }}
-            />
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {['protein', 'carbs', 'fat'].map((m) => (
-              <label key={m} className={`block text-sm capitalize space-y-1.5 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-                {m}
-                <input
-                  type="number"
-                  className={inputClass(isDarkMode)}
-                  value={answers.macros?.[m] ?? ''}
-                  onChange={(e) =>
-                    setAnswer('macros', {
-                      ...(answers.macros || {}),
-                      [m]: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                />
-              </label>
-            ))}
-          </div>
-        </div>
+        <CaloriesMacrosFields
+          isHe={isHe}
+          isDark={isDarkMode}
+          inputClass={inputClass(isDarkMode)}
+        />
       );
 
-    case 'meals': {
-      const n = parseInt(answers.number_of_meals, 10) || 0;
-      const mealCountOptions = [3, 4, 5, 6].map((x) => ({
-        value: String(x),
-        label: isHe ? `${x} ארוחות` : `${x} meals`,
-      }));
+    case 'meals':
       return (
-        <div className="space-y-3">
-          <SearchableSelect
-            options={mealCountOptions}
-            value={answers.number_of_meals || ''}
-            onChange={(v) => {
-              const num = parseInt(v, 10) || 0;
-              setAnswers({
-                number_of_meals: v,
-                meal_descriptions: Array.from({ length: num }, (_, i) => answers.meal_descriptions?.[i] || ''),
-                meal_names: Array.from({ length: num }, (_, i) => answers.meal_names?.[i] || `Meal ${i + 1}`),
-              });
-            }}
-            placeholder={isHe ? 'מספר ארוחות' : 'Number of meals'}
-            searchPlaceholder={isHe ? 'חיפוש...' : 'Search...'}
-            emptyText={isHe ? 'לא נמצאו תוצאות' : 'No matches'}
-            isDark={isDarkMode}
-            inputClass={inputClass(isDarkMode)}
-          />
-          {Array.from({ length: n }, (_, i) => (
-            <input
-              key={i}
-              className={inputClass(isDarkMode)}
-              placeholder={isHe ? `תיאור ארוחה ${i + 1}` : `Meal ${i + 1} description`}
-              value={answers.meal_descriptions?.[i] || ''}
-              onChange={(e) => {
-                const next = [...(answers.meal_descriptions || [])];
-                next[i] = e.target.value;
-                setAnswer('meal_descriptions', next);
-              }}
-            />
-          ))}
-        </div>
+        <MealPlanningFields
+          isHe={isHe}
+          isDark={isDarkMode}
+          inputClass={inputClass(isDarkMode)}
+        />
       );
-    }
 
     case 'medical':
       return (
@@ -625,6 +718,23 @@ export function validateStep(step, answers, { includeNursingStatus = true, isHe 
   if (!step) return null;
   const t = (en, he) => (isHe ? he : en);
 
+  if (step.isCustom) {
+    const custom = step.custom || {};
+    const customKey = custom.id || step.fields?.[0]?.replace(/^custom_/, '') || step.id?.replace(/^custom_/, '');
+    const val = answers.custom_answers?.[customKey];
+    const type = custom.type || 'text';
+    if (type === 'multiselect') {
+      if (!Array.isArray(val) || val.length === 0) {
+        return t('Please select at least one option', 'נא לבחור לפחות אפשרות אחת');
+      }
+    } else if (type === 'select') {
+      if (!val || !String(val).trim()) return t('Please select an option', 'נא לבחור אפשרות');
+    } else if (!val || !String(val).trim()) {
+      return t('Please enter an answer', 'נא להזין תשובה');
+    }
+    return null;
+  }
+
   switch (step.id) {
     case 'language':
       if (!answers.language) return t('Please select a language', 'נא לבחור שפה');
@@ -636,6 +746,9 @@ export function validateStep(step, answers, { includeNursingStatus = true, isHe 
       break;
     case 'phone':
       if (!answers.phone?.trim()) return t('Please enter a phone number', 'נא להזין מספר טלפון');
+      if (!isValidPhoneDigits(answers.phone)) {
+        return t('Phone number must contain only digits (7–15)', 'מספר הטלפון חייב להכיל ספרות בלבד (7–15)');
+      }
       break;
     case 'city':
       if (!answers.country_code?.trim()) return t('Please select a country first', 'נא לבחור מדינה תחילה');
@@ -662,9 +775,6 @@ export function validateStep(step, answers, { includeNursingStatus = true, isHe 
       if (!answers.target_weight) return t('Please enter target weight', 'נא להזין משקל מטרה');
       break;
     case 'activity':
-      if (!answers.activity_description?.trim()) {
-        return t('Please describe your activity', 'נא לתאר את הפעילות');
-      }
       if (!answers.activity_level) return t('Please select activity level', 'נא לבחור רמת פעילות');
       break;
     case 'goal':
@@ -677,10 +787,20 @@ export function validateStep(step, answers, { includeNursingStatus = true, isHe 
       break;
     case 'calories':
       if (!answers.daily_calories) return t('Please set daily calories', 'נא להגדיר קלוריות יומיות');
+      if (!answers.macros?.protein || !answers.macros?.carbs || !answers.macros?.fat) {
+        return t('Please set macro targets', 'נא להגדיר יעדי מאקרו');
+      }
       break;
-    case 'meals':
+    case 'meals': {
       if (!answers.number_of_meals) return t('Please choose number of meals', 'נא לבחור מספר ארוחות');
+      const n = parseInt(answers.number_of_meals, 10) || 0;
+      const descs = answers.meal_descriptions || [];
+      const empty = Array.from({ length: n }, (_, i) => !descs[i]?.trim());
+      if (empty.some(Boolean)) {
+        return t('Please describe each meal', 'נא לתאר כל ארוחה');
+      }
       break;
+    }
     default:
       break;
   }

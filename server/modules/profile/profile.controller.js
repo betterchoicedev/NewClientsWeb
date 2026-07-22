@@ -1,6 +1,8 @@
 const { randomUUID } = require('crypto');
+const OpenAI = require('openai');
 const { clientDB, adminDB } = require('../../config/db');
 const { parseTimeToFloat } = require('../../utils/helpers');
+const { formatCityLabel } = require('../../utils/cityDisplay');
 const { generateUpdatedMealPlan, createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.service');
 
 // ─── Resolve user_code helper ─────────────────────────────────────────────────
@@ -190,65 +192,83 @@ async function classifyActivity(req, res) {
     const { activityDescription } = req.body;
     if (!activityDescription || !activityDescription.trim()) return res.status(400).json({ error: 'activityDescription is required' });
 
-    const apiBase = (process.env.AZURE_OPENAI_API_BASE || '').replace(/\/$/, '');
-    const apiKey = process.env.AZURE_OPENAI_API_KEY;
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    const apiKey = process.env.CLASSIFY_ACTIVITY_KEY;
+    const apiBase = (process.env.CLASSIFY_ACTIVITY_BASE || '').replace(/\/$/, '');
+    const model = process.env.CLASSIFY_ACTIVITY_DEPLOYMENT || 'gpt-4o-mini';
 
-    if (!apiBase || !apiKey || !deployment) return res.status(500).json({ error: 'Azure OpenAI is not configured on the server' });
+    if (!apiKey) return res.status(500).json({ error: 'CLASSIFY_ACTIVITY_KEY is not configured on the server' });
 
-    const url = `${apiBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
-
-    const systemPrompt = `You are an expert fitness and nutrition routing AI. Assign the correct Harris-Benedict Activity Level from the user's description of their job AND intentional exercise.
-
-Strict levels:
-- "sedentary" (1.2): Desk / seated work most of the day AND little or no intentional exercise.
-- "light" (1.375): Mostly seated or light standing work, PLUS light intentional exercise or sports about 1–3 days/week (e.g. office job + weekend sport only).
-- "moderate" (1.55): Noticeably active day (on-feet retail/hospitality, walking a lot) OR moderate exercise/sports 3–5 days/week. Also use when a desk job is paired with solid training most weekdays.
-- "very" (1.725): Physically demanding job (construction, warehouse, farming, heavy lifting, highly physical 9–5) OR hard exercise/sports 6–7 days/week. A physical labor job must NEVER be classified below "moderate"; prefer "very" when the job itself is strenuous.
-- "extra" (1.9): Very hard exercise AND a physical job, OR 2x/day training, or elite-level daily load.
-
-Decision order (important):
-1. Score occupation first (seated vs on-feet vs heavy physical labor).
-2. Then add intentional sports/gym frequency.
-3. Combine both — do not ignore a physical job just because weekend sport sounds "light".
-
-Examples:
-- Office 9–5 + sports on weekends only → typically "light" (sometimes "moderate" if weekends are intense multi-hour sessions).
-- Physical labor 9–5 (even with little extra gym) → at least "moderate", usually "very".
-- Desk job + gym 4–5 days → "moderate" or "very" depending on intensity.
-
-Only when two levels are truly equally plausible, prefer the lower one to avoid overestimating burn. Never downshift a clearly physical job to "light" or "sedentary".`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-      body: JSON.stringify({
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `User Input:\n"${activityDescription.trim()}"` }],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'activity_classification',
-            strict: true,
-            schema: { type: 'object', properties: { activity_factor: { type: 'string', enum: ['sedentary', 'light', 'moderate', 'very', 'extra'] }, reasoning: { type: 'string' } }, required: ['activity_factor', 'reasoning'], additionalProperties: false }
-          }
-        },
-        max_tokens: 200,
-      }),
+    const client = new OpenAI({
+      apiKey,
+      ...(apiBase ? { baseURL: apiBase } : {}),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(502).json({ error: 'AI classification failed', details: errText });
-    }
+    const systemPrompt = `You are an expert fitness and nutrition routing AI. Assign the Harris-Benedict activity level from the user's description of their job(s) AND intentional exercise.
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+Strict levels:
+- "sedentary" (1.2): Desk/seated work almost all day AND little or no intentional exercise.
+- "light" (1.375): Mostly seated or light standing work with only light exercise ~1–3 days/week. NEVER use for anyone with a physically demanding job.
+- "moderate" (1.55): On-feet retail/hospitality, lots of daily walking, OR moderate exercise 3–5 days/week, OR a desk-only job with regular training most weekdays. NEVER use when a physical/manual/labor job is mentioned.
+- "very" (1.725): Physically demanding job (construction, warehouse, farming, lifting, trades, "physical job", manual labor, strenuous work) OR hard exercise 6–7 days/week. This is the DEFAULT whenever a physical job appears — even part-time, mornings-only, or combined with a desk job.
+- "extra" (1.9): Very hard daily training AND a physical job, OR 2×/day training, OR elite-level volume.
+
+Hard rules (never break):
+1. Physical/manual/labor/strenuous job keywords ("physical job", construction, warehouse, trades, lifting, manual labor, active work, etc.) → output "very" by default. Do NOT output "moderate" or "light" for these profiles unless the user explicitly says the physical work is very mild/light AND there is no sport.
+2. Physical job + ANY intentional sport or exercise (including weekends only, casual sport, gym sometimes) → MUST be "very", never "moderate".
+3. Multiple jobs or split shifts: classify from the MOST demanding segment, never average. "Physical job + office afternoons" = physical job wins → "very".
+4. Weekend sports ADD to job load — they never downgrade a physical job. Physical job + office job + sport on weekends → "very" (mandatory; "moderate" is wrong).
+5. "light" is ONLY for genuinely low-load profiles: sedentary/light office work with light occasional exercise and NO physical job.
+6. "moderate" is ONLY for non-physical occupations (desk, retail on feet, walking-heavy office) plus moderate exercise. If ANY physical job is present, "moderate" is forbidden.
+
+Decision order:
+1. Scan for physical/manual/labor keywords → if found, start at "very".
+2. If physical job + any sport/exercise → lock "very".
+3. Else score on-feet vs seated occupation for moderate/light.
+4. Bump for exercise frequency only when no physical job is present.
+
+Mandatory mappings (do not override):
+- "physical job and an afternoon office job and sport on weekends" → "very"
+- Physical 9–5 + office afternoon + weekend sport → "very"
+- Physical labor with no extra gym → "very"
+- Office 9–5 + weekend sport only (no physical job) → "light" or "moderate"
+- Desk job + gym 4–5 days (no physical job) → "moderate" or "very"
+
+In reasoning, cite which rule and job segment drove the level. If you considered "moderate" but a physical job was mentioned, explain why "very" was chosen instead.`;
+
+    const response = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `User Input:\n"${activityDescription.trim()}"` },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'activity_classification',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              activity_factor: { type: 'string', enum: ['sedentary', 'light', 'moderate', 'very', 'extra'] },
+              reasoning: { type: 'string' },
+            },
+            required: ['activity_factor', 'reasoning'],
+            additionalProperties: false,
+          },
+        },
+      },
+      temperature: 1,
+      max_completion_tokens: 200,
+    });
+
+    const content = response.choices?.[0]?.message?.content;
     if (!content) return res.status(502).json({ error: 'Empty response from AI' });
 
     const parsed = JSON.parse(content);
     return res.json({ activity_factor: parsed.activity_factor, reasoning: parsed.reasoning });
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error', message: error.message });
+    console.error('[classifyActivity] AI error', error?.message || error);
+    res.status(502).json({ error: 'AI classification failed', details: error?.message || String(error) });
   }
 }
 
@@ -357,7 +377,7 @@ async function searchCities(req, res) {
     let query = adminDB
       .from('cities500')
       .select(
-        'geonameid, name, asciiname, country_code, latitude, longitude, timezone, population'
+        'geonameid, name, asciiname, alternatenames, country_code, latitude, longitude, timezone, population'
       )
       .or(orFilter)
       .order('population', { ascending: false, nullsFirst: false })
@@ -366,9 +386,13 @@ async function searchCities(req, res) {
     if (countryCodes.length === 1) query = query.eq('country_code', countryCodes[0]);
     else query = query.in('country_code', countryCodes);
 
-    const { data, error } = await query;
+    const { data: rows, error } = await query;
     if (error) return res.status(500).json({ error: 'Failed to search cities', message: error.message });
-    res.json({ data: data || [], mode });
+    const data = (rows || []).map((row) => ({
+      ...row,
+      display_label: formatCityLabel(row),
+    }));
+    res.json({ data, mode });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error', message: error.message });
   }

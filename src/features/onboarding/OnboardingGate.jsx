@@ -12,8 +12,10 @@ export default function OnboardingGate({
   user,
   companyConfig,
   companyName,
+  companyId = null,
   forceFresh = false,
   remountKey = 0,
+  allowDismiss = true,
 }) {
   const [mounted, setMounted] = useState(false);
   const reset = useOnboardingStore((s) => s.reset);
@@ -46,7 +48,9 @@ export default function OnboardingGate({
       user={user}
       companyConfig={companyConfig}
       companyName={companyName}
+      companyId={companyId}
       forceFresh={forceFresh}
+      allowDismiss={allowDismiss}
       skipPayment={Boolean(user?.user_metadata?.skip_pricing)}
       onComplete={handleComplete}
     />

@@ -1,5 +1,6 @@
 -- City autocomplete for cities500 (~230k rows).
 -- Prefix-only on name/asciiname (no alternatenames mid-match — that forces seq scans).
+-- name + asciiname also power bilingual display labels (e.g. Jerusalem - ירושלים).
 -- Filter by country first, prefer high-population matches, cap results (Hick's Law).
 --
 -- mode=quick → LIMIT 2 (confidence probe)

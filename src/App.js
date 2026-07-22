@@ -25,6 +25,8 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { StripeProvider } from './context/StripeContext';
 import { SettingsProvider } from './context/SettingsContext';
+import { OnboardingEntitlementProvider } from './features/onboarding/OnboardingEntitlementContext';
+import EntitlementGuard from './features/onboarding/EntitlementGuard';
 import CookieConsent from './components/CookieConsent';
 import AccessibilityWidget from './components/AccessibilityWidget';
 import WebsiteTour from './components/WebsiteTour';
@@ -35,16 +37,18 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <StripeProvider>
-          <LanguageProvider>
-            <SettingsProvider>
-            <Router>
-              <div className="App">
-                <OAuthHashHandler />
-                <CookieConsent />
-                <AccessibilityWidget />
-                <WebsiteTour />
-                <Routes>
+        <OnboardingEntitlementProvider>
+          <StripeProvider>
+            <LanguageProvider>
+              <SettingsProvider>
+              <Router>
+                <EntitlementGuard>
+                  <div className="App">
+                    <OAuthHashHandler />
+                    <CookieConsent />
+                    <AccessibilityWidget />
+                    <WebsiteTour />
+                    <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -67,11 +71,13 @@ function App() {
                   <Route path="/delete-account" element={<DeleteAccountPage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Routes>
-              </div>
-            </Router>
-            </SettingsProvider>
-          </LanguageProvider>
-        </StripeProvider>
+                  </div>
+                </EntitlementGuard>
+              </Router>
+              </SettingsProvider>
+            </LanguageProvider>
+          </StripeProvider>
+        </OnboardingEntitlementProvider>
       </AuthProvider>
     </ThemeProvider>
   );

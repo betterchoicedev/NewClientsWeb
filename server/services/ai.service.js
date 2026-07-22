@@ -13,6 +13,7 @@ const {
   formatPlanMealForPrompt,
   calculateMainTotalsFromMeals,
 } = require('../utils/helpers');
+const { sortMealPlanMeals, sortMealPlanStructure } = require('../utils/mealStructure');
 
 // ─── Prompt builders ──────────────────────────────────────────────────────────
 
@@ -551,7 +552,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode, 
 
     const { data: chatUserData, error: chatUserError } = await adminDB
       .from('chat_users')
-      .select('daily_target_total_calories, macros, user_language, language, full_name')
+      .select('daily_target_total_calories, macros, user_language, language, full_name, meal_plan_structure')
       .eq('user_code', resolvedUserCode)
       .maybeSingle();
 
@@ -605,10 +606,17 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode, 
     if (!Array.isArray(menu) || menu.length === 0) throw new Error('No meals were created by meal plan builder');
 
     const template = payload?.template ?? payload?.schema ?? payload?.meal_plan?.template ?? null;
+    const sortedMenu = sortMealPlanMeals(menu);
+    let schema = template;
+    if (!schema && Array.isArray(chatUserData?.meal_plan_structure) && chatUserData.meal_plan_structure.length > 0) {
+      schema = sortMealPlanStructure(chatUserData.meal_plan_structure);
+    } else if (Array.isArray(schema)) {
+      schema = sortMealPlanStructure(schema);
+    }
     const menuData = {
-      meals:  menu,
-      totals: payload?.totals ?? payload?.meal_plan?.totals ?? calculateMainTotalsFromMeals(menu),
-      note:   payload?.note  ?? payload?.meal_plan?.note   ?? '',
+      meals: sortedMenu,
+      totals: payload?.totals ?? payload?.meal_plan?.totals ?? calculateMainTotalsFromMeals(sortedMenu),
+      note: payload?.note ?? payload?.meal_plan?.note ?? '',
     };
 
     const planId         = randomUUID();
@@ -617,7 +625,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode, 
 
     const { error: secondaryError } = await adminDB.from('meal_plans_and_schemas').insert({
       id: planId, record_type: 'meal_plan', user_code: resolvedUserCode,
-      meal_plan_name: mealPlanName, schema: template, meal_plan: menuData,
+      meal_plan_name: mealPlanName, schema, meal_plan: menuData,
       status: 'active', daily_total_calories: dailyCalories, macros_target: macros,
       active_from: now, created_at: now, updated_at: now,
     });

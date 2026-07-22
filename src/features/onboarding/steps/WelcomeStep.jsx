@@ -65,8 +65,8 @@ export default function WelcomeStep({ onStart }) {
             style={{ animation: 'obWelcomeRise 650ms cubic-bezier(0.22, 1, 0.36, 1) 100ms both' }}
           >
             {isHe
-              ? 'כמה שאלות קצרות לבניית תוכנית התזונה שלך.'
-              : 'A few short questions to build your meal plan.'}
+              ? 'כמה שאלות קצרות, ואז בחירת תוכנית ותשלום.'
+              : 'A few short questions, then plan selection and payment.'}
           </p>
         </div>
 

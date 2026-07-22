@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany, getWeightLogs, createWeightLog } from '../supabase/secondaryClient';
 import { normalizePhoneForDatabase, signOut } from '../supabase/auth';
 import OnboardingGate from '../features/onboarding/OnboardingGate';
+import { useOnboardingEntitlement } from '../features/onboarding/OnboardingEntitlementContext';
 import DailyLogTab from '../components/profile/DailyLogTab';
 import PricingTab from '../components/profile/PricingTab';
 import MessagesTab from '../components/profile/MessagesTab';
@@ -158,6 +159,8 @@ export const getClientMealPlan = async (userCode) => {
 
 const ProfilePage = () => {
   const { user, isAuthenticated, loading } = useAuth();
+  const { requiresWall, canDismiss, refresh: refreshEntitlement, status: entitlementStatus } =
+    useOnboardingEntitlement();
   const navigate = useNavigate();
   const location = useLocation();
   const { companySlug: routeCompanySlug } = useParams();
@@ -198,7 +201,7 @@ const ProfilePage = () => {
   const [saveStatus, setSaveStatus] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
-  // Dev testing: remount key + forceFresh for Ctrl+Shift+O onboarding reset
+  // Dev: remount key + forceFresh for "Test onboarding" button
   const [onboardingRemountKey, setOnboardingRemountKey] = useState(0);
   const [forceFreshOnboarding, setForceFreshOnboarding] = useState(false);
   const [userCode, setUserCode] = useState(null);
@@ -212,6 +215,8 @@ const ProfilePage = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isProfileDataReady, setIsProfileDataReady] = useState(false);
+  const onboardingDevForceOpenRef = useRef(false);
+  const onboardingDismissedRef = useRef(false);
 
   const toCompanySlug = useCallback((companyName) => {
     const normalized = String(companyName || '')
@@ -299,92 +304,61 @@ const ProfilePage = () => {
     toCompanySlug
   ]);
 
-  // Check onboarding status via new status API (falls back to profile client)
   const checkOnboardingStatus = useCallback(async () => {
-    try {
-      if (!user) return;
+    if (onboardingDevForceOpenRef.current) return;
+    await refreshEntitlement();
+  }, [refreshEntitlement]);
 
-      try {
-        const { getOnboardingStatus } = await import('../features/onboarding/api/onboardingApi');
-        const status = await getOnboardingStatus();
-        if (status?.userCode) setUserCode(status.userCode);
-        setOnboardingCompleted(status?.completed === true);
-        setShowOnboarding(status?.completed !== true);
-        return;
-      } catch (statusErr) {
-        console.warn('getOnboardingStatus failed, falling back to profile client', statusErr);
-      }
-
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-      const { getAuthHeaders } = await import('../lib/apiClient');
-      const response = await fetch(`${apiUrl}/api/profile/client`, {
-        headers: getAuthHeaders(),
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        console.error('Error checking onboarding status:', result.error);
-        return;
-      }
-
-      const data = result.data;
-
-      if (data) {
-        setUserCode(data.user_code);
-        setOnboardingCompleted(data.onboarding_completed === true);
-        setShowOnboarding(data.onboarding_completed !== true);
-      } else {
-        setOnboardingCompleted(false);
-        setShowOnboarding(true);
-      }
-    } catch (error) {
-      console.error('Error checking onboarding status:', error);
+  useEffect(() => {
+    if (!user || onboardingDevForceOpenRef.current) return;
+    if (entitlementStatus?.userCode) setUserCode(entitlementStatus.userCode);
+    if (requiresWall) {
+      onboardingDismissedRef.current = false;
+      setShowOnboarding(true);
+      setOnboardingCompleted(false);
+      return;
     }
-  }, [user]);
+    if (entitlementStatus) {
+      setOnboardingCompleted(entitlementStatus.completed === true);
+      setShowOnboarding(false);
+    }
+  }, [user, requiresWall, entitlementStatus]);
 
-  // Callback to handle onboarding completion
   const handleOnboardingComplete = async (completed = true) => {
+    onboardingDevForceOpenRef.current = false;
     setForceFreshOnboarding(false);
     if (completed) {
-      // Onboarding was completed - close the modal first to prevent reopening
+      onboardingDismissedRef.current = false;
       setShowOnboarding(false);
-      
-      // Set state immediately to allow editing
       setOnboardingCompleted(true);
-      
-      // Reload profile data to show the updated information
-      // Don't call checkOnboardingStatus() here since we know onboarding is complete
-      // This prevents the modal from reopening
       await loadProfileData();
-      await checkOnboardingStatus();
-    } else {
-      // Onboarding was skipped - just close the modal without re-checking
-      // This prevents the modal from immediately reopening
+      await refreshEntitlement();
+    } else if (canDismiss) {
+      onboardingDismissedRef.current = true;
       setShowOnboarding(false);
-      
-      // Keep onboardingCompleted as false so fields remain read-only
       setOnboardingCompleted(false);
+    } else {
+      setShowOnboarding(true);
     }
   };
 
-  // Dev testing: Ctrl/Cmd + Shift + O — clears draft, force-fresh reopen from welcome
-  useEffect(() => {
-    if (!user) return undefined;
-    const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'O' || e.key === 'o')) {
-        e.preventDefault();
-        console.log('[DEV] Force-resetting onboarding (Ctrl+Shift+O)');
-        try {
-          localStorage.removeItem(`onboarding_${user.id}`);
-        } catch (_) { /* ignore */ }
-        setForceFreshOnboarding(true);
-        setOnboardingRemountKey((k) => k + 1);
-        setShowOnboarding(true);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [user]);
+  const closeOnboardingForDev = useCallback(() => {
+    handleOnboardingComplete(false);
+  }, []);
+
+  const resetOnboardingForDev = useCallback(() => {
+    if (user?.id) {
+      try {
+        localStorage.removeItem(`onboarding_${user.id}`);
+      } catch (_) { /* ignore */ }
+    }
+    onboardingDismissedRef.current = false;
+    onboardingDevForceOpenRef.current = true;
+    setForceFreshOnboarding(true);
+    setOnboardingRemountKey((k) => k + 1);
+    setOnboardingCompleted(false);
+    setShowOnboarding(true);
+  }, [user?.id]);
 
   // Redirect to home page if not authenticated (only after auth loading is complete)
   useEffect(() => {
@@ -415,11 +389,15 @@ const ProfilePage = () => {
     }
   }, [activeTab, user]);
 
-  // Listen for profile tour completion to show onboarding
+  // Listen for profile tour completion to show onboarding (skip tour wait when wall required)
   useEffect(() => {
     if (!user) return;
 
-    // Check if tour is already completed
+    if (requiresWall) {
+      checkOnboardingStatus();
+      return undefined;
+    }
+
     const profileTourCompleted = localStorage.getItem('profileTourCompleted');
     if (profileTourCompleted === 'true') {
       // Tour already completed, check onboarding
@@ -465,7 +443,7 @@ const ProfilePage = () => {
       clearInterval(pollInterval);
       clearTimeout(timeout);
     };
-  }, [user, checkOnboardingStatus]);
+  }, [user, requiresWall, checkOnboardingStatus]);
 
   useEffect(() => {
     loadCompanyOptions();
@@ -1309,9 +1287,31 @@ const ProfilePage = () => {
           user={user}
           companyName={assignedCompanyName}
           companyConfig={assignedCompanyConfig}
+          companyId={assignedCompanyId || null}
           forceFresh={forceFreshOnboarding}
           remountKey={onboardingRemountKey}
+          allowDismiss={canDismiss}
         />
+
+        {process.env.NODE_ENV === 'development' ? (
+          <div className="fixed bottom-4 right-4 z-[5100] flex flex-wrap justify-end gap-2 max-w-[min(100vw-2rem,24rem)]">
+            <button
+              type="button"
+              onClick={resetOnboardingForDev}
+              className="min-h-11 px-4 rounded-full text-sm font-semibold bg-emerald-600 text-white shadow-lg hover:bg-emerald-700"
+            >
+              Test onboarding
+            </button>
+            <button
+              type="button"
+              onClick={closeOnboardingForDev}
+              disabled={!showOnboarding}
+              className="min-h-11 px-4 rounded-full text-sm font-semibold bg-slate-600 text-white shadow-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Close onboarding
+            </button>
+          </div>
+        ) : null}
 
         {/* Logout Confirmation Modal (AnimatePresence) */}
         <AnimatePresence>

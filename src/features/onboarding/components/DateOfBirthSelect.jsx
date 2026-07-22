@@ -1,7 +1,13 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
-import { glassMenuClass, glassOptionClass } from './glassStyles';
+import {
+  glassMenuClass,
+  glassOptionClass,
+  ONBOARDING_DROPDOWN_MENU_Z,
+  ONBOARDING_DROPDOWN_SCRIM_Z,
+  ONBOARDING_FOOTER_CLEARANCE_PX,
+} from './glassStyles';
 
 const MENU_MAX_H = 280;
 const OPTION_CLS =
@@ -81,15 +87,15 @@ function PickerSelect({
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceBelow = window.innerHeight - rect.bottom - ONBOARDING_FOOTER_CLEARANCE_PX;
     const spaceAbove = rect.top;
     const openUp = spaceBelow < MENU_MAX_H + 16 && spaceAbove > spaceBelow;
-    const height = Math.min(MENU_MAX_H, openUp ? spaceAbove - 12 : spaceBelow - 12);
+    const height = Math.min(MENU_MAX_H, openUp ? spaceAbove - 12 : Math.max(spaceBelow - 12, 120));
     setMenuStyle({
       position: 'fixed',
       left: rect.left,
       width: Math.max(rect.width, 96),
-      zIndex: 300,
+      zIndex: ONBOARDING_DROPDOWN_MENU_Z,
       maxHeight: Math.max(160, height),
       ...(openUp
         ? { bottom: window.innerHeight - rect.top + 8 }
@@ -116,9 +122,9 @@ function PickerSelect({
       if (menuRef.current?.contains(e.target)) return;
       setOpen(false);
     };
-    // bubble phase: portal menu stops propagation so option presses aren't treated as outside
-    document.addEventListener('pointerdown', onDoc);
-    return () => document.removeEventListener('pointerdown', onDoc);
+    // Capture phase so outside taps never reach onboarding footer buttons underneath
+    document.addEventListener('pointerdown', onDoc, true);
+    return () => document.removeEventListener('pointerdown', onDoc, true);
   }, [open]);
 
   const selectValue = (v) => {
@@ -129,40 +135,52 @@ function PickerSelect({
   const menu =
     open && menuStyle
       ? createPortal(
-          <div
-            ref={menuRef}
-            style={menuStyle}
-            className={glassMenuClass(isDark)}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <ul
-              className="overflow-y-auto overscroll-contain py-1"
-              style={{ maxHeight: menuStyle.maxHeight }}
-              role="listbox"
+          <>
+            <div
+              aria-hidden
+              className="fixed inset-0 touch-none"
+              style={{ zIndex: ONBOARDING_DROPDOWN_SCRIM_Z }}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpen(false);
+              }}
+            />
+            <div
+              ref={menuRef}
+              style={menuStyle}
+              className={glassMenuClass(isDark)}
+              onPointerDown={(e) => e.stopPropagation()}
             >
-              {options.map((o) => {
-                const active = String(o.value) === String(value);
-                return (
-                  <li key={o.value}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      className={`${OPTION_CLS} ${glassOptionClass(active, isDark)}`}
-                      onPointerDown={(e) => {
-                        // Commit on pointerdown so the choice registers before any close race
-                        e.preventDefault();
-                        e.stopPropagation();
-                        selectValue(o.value);
-                      }}
-                    >
-                      {o.label}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>,
+              <ul
+                className="overflow-y-auto overscroll-contain py-1"
+                style={{ maxHeight: menuStyle.maxHeight }}
+                role="listbox"
+              >
+                {options.map((o) => {
+                  const active = String(o.value) === String(value);
+                  return (
+                    <li key={o.value}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        className={`${OPTION_CLS} ${glassOptionClass(active, isDark)}`}
+                        onPointerDown={(e) => {
+                          // Commit on pointerdown so the choice registers before any close race
+                          e.preventDefault();
+                          e.stopPropagation();
+                          selectValue(o.value);
+                        }}
+                      >
+                        {o.label}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </>,
           document.body
         )
       : null;

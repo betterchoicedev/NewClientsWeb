@@ -258,6 +258,7 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
 
     const fromOnboarding =
       subscription.metadata?.from === 'onboarding_upsell' ||
+      subscription.metadata?.from === 'onboarding_commerce' ||
       priceId === DIGITAL_ONLY_PRICE_ID;
 
     if (fromOnboarding && userId) {
@@ -335,13 +336,11 @@ async function handleSubscriptionUpdated(subscription, { clientDB, adminDB }) {
       }
       if (
         metaUserId &&
-        (subscription.metadata?.from === 'onboarding_upsell' || subscription.status === 'active') &&
-        subscription.status === 'active'
+        subscription.status === 'active' &&
+        (subscription.metadata?.from === 'onboarding_upsell' ||
+          subscription.metadata?.from === 'onboarding_commerce')
       ) {
-        // Idempotent: safe if already completed
-        if (subscription.metadata?.from === 'onboarding_upsell') {
-          await completeOnboardingAfterPaid(metaUserId, { clientDB, adminDB });
-        }
+        await completeOnboardingAfterPaid(metaUserId, { clientDB, adminDB });
       }
     } catch (customerError) {
       console.error('❌ Error retrieving customer for subscription info update:', customerError);

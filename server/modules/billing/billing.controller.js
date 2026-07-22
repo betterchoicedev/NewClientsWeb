@@ -155,33 +155,57 @@ async function createCheckoutSession(req, res) {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { priceId, mode = 'subscription', promoCode, metadata: clientMeta = {} } = req.body || {};
+    const {
+      priceId,
+      priceIds = [],
+      mode = 'subscription',
+      promoCode,
+      companyId,
+      metadata: clientMeta = {},
+    } = req.body || {};
     if (!priceId) return res.status(400).json({ error: 'Price ID is required' });
 
     const allowedPrices = new Set([DIGITAL_ONLY_PRICE_ID]);
-    if (!allowedPrices.has(priceId)) {
-      return res.status(400).json({ error: 'Price ID is not allowed' });
+    if (adminDB && companyId) {
+      const { data: companyRow } = await adminDB.from('companies').select('config').eq('id', companyId).maybeSingle();
+      const products = companyRow?.config?.pricing?.customProducts || [];
+      products.forEach((product) => {
+        if (product?.stripePriceId) allowedPrices.add(product.stripePriceId);
+        if (product?.priceId) allowedPrices.add(product.priceId);
+      });
+    }
+
+    const requestedPrices = [priceId, ...(Array.isArray(priceIds) ? priceIds : [])].filter(Boolean);
+    const uniquePrices = [...new Set(requestedPrices)];
+    const disallowed = uniquePrices.filter((id) => !allowedPrices.has(id));
+    if (disallowed.length > 0) {
+      return res.status(400).json({ error: 'One or more price IDs are not allowed' });
     }
 
     const customerEmail = req.authUser?.email || req.clientRecord?.email || null;
     const origin = typeof req.headers.origin === 'string' ? req.headers.origin.replace(/\/$/, '') : null;
     const successUrl = origin
-      ? `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}`
+      ? `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`
       : 'https://betterchoice.one/payment-success?session_id={CHECKOUT_SESSION_ID}';
     const cancelUrl = origin
       ? `${origin}/profile?onboarding=payment`
       : 'https://betterchoice.one/payment-cancel';
 
     const safeMeta = {};
-    if (clientMeta && typeof clientMeta === 'object' && clientMeta.from === 'onboarding_upsell') {
-      safeMeta.from = 'onboarding_upsell';
+    if (clientMeta && typeof clientMeta === 'object') {
+      if (clientMeta.from === 'onboarding_upsell' || clientMeta.from === 'onboarding_commerce') {
+        safeMeta.from = clientMeta.from;
+      }
+      if (companyId) safeMeta.company_id = String(companyId);
     }
 
-    const lineItem = priceId === DIGITAL_ONLY_PRICE_ID ? { price: priceId } : { price: priceId, quantity: 1 };
+    const lineItems = uniquePrices.map((id) =>
+      id === DIGITAL_ONLY_PRICE_ID ? { price: id } : { price: id, quantity: 1 }
+    );
 
     const sessionConfig = {
       payment_method_types: ['card'],
-      line_items: [lineItem],
+      line_items: lineItems,
       mode,
       success_url: successUrl,
       cancel_url: cancelUrl,
