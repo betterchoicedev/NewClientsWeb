@@ -1,6 +1,7 @@
 /**
  * Meal slot names, calorie split ratios, and meal_plan_structure builder.
- * Ported from legacy OnboardingModal.jsx — shared shape with server buildMealPlanStructure.
+ * Canonical chat_users.meal_plan_structure shape (meal-plan-builder):
+ *   { meal, description, calories, calories_pct }
  */
 
 export const MEAL_ORDER_EN = [
@@ -212,10 +213,6 @@ export function buildMealPlanStructure(answers) {
   const descriptions = Array.isArray(answers.meal_descriptions) ? answers.meal_descriptions : [];
   const names = Array.isArray(answers.meal_names) ? answers.meal_names : [];
   const dailyCalories = Number(answers.daily_calories) || 0;
-  const macros = answers.macros || {};
-  const protein = Number(macros.protein) || 0;
-  const carbs = Number(macros.carbs) || 0;
-  const fat = Number(macros.fat) || 0;
 
   const slotNames = Array.from({ length: numMeals }, (_, index) => {
     const raw = names[index] || `Meal ${index + 1}`;
@@ -224,20 +221,18 @@ export function buildMealPlanStructure(answers) {
 
   const ratios = computeMealRatios(numMeals, slotNames);
   const caloriesPerMeal = distributeIntegerByRatios(dailyCalories, ratios);
-  const proteinPerMeal = distributeIntegerByRatios(protein, ratios);
-  const carbsPerMeal = distributeIntegerByRatios(carbs, ratios);
-  const fatsPerMeal = distributeIntegerByRatios(fat, ratios);
 
-  const structure = descriptions.slice(0, numMeals).map((description, index) => ({
-    mealSlot: slotNames[index],
-    mealName: description || '',
-    targetCalories: caloriesPerMeal[index] || 0,
-    targetMacros: {
-      protein: proteinPerMeal[index] || 0,
-      carbs: carbsPerMeal[index] || 0,
-      fats: fatsPerMeal[index] || 0,
-    },
-  }));
+  const structure = Array.from({ length: numMeals }, (_, index) => {
+    const calories = caloriesPerMeal[index] || 0;
+    const caloriesPct =
+      dailyCalories > 0 ? Math.round((calories / dailyCalories) * 100) : 0;
+    return {
+      meal: slotNames[index],
+      description: descriptions[index] || '',
+      calories,
+      calories_pct: caloriesPct,
+    };
+  });
   return sortMealPlanStructure(structure);
 }
 

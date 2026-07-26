@@ -4,6 +4,7 @@ const { clientDB, adminDB } = require('../../config/db');
 const { parseTimeToFloat } = require('../../utils/helpers');
 const { formatCityLabel } = require('../../utils/cityDisplay');
 const { generateUpdatedMealPlan, createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.service');
+const { formatMacrosGramStrings, normalizeMealPlanForDb, normalizeChatUserPayloadForDb } = require('../../utils/nutritionFormats');
 
 // ─── Resolve user_code helper ─────────────────────────────────────────────────
 async function _resolveUserCode(authUserId, email) {
@@ -163,7 +164,7 @@ async function updateOnboardingChatUser(req, res) {
     const { data: chatUser, error: chatUserError } = await adminDB.from('chat_users').select('id').eq('user_code', user_code).single();
     if (chatUserError || !chatUser) return res.status(404).json({ error: 'Chat user not found', message: chatUserError?.message });
 
-    const { error } = await adminDB.from('chat_users').update(chatUserData).eq('id', chatUser.id);
+    const { error } = await adminDB.from('chat_users').update(normalizeChatUserPayloadForDb(chatUserData)).eq('id', chatUser.id);
     if (error) return res.status(500).json({ error: 'Failed to update chat user', message: error.message });
     res.json({ success: true, message: 'Chat user updated successfully' });
   } catch (error) {
@@ -462,7 +463,9 @@ async function saveEditedMealPlan(req, res) {
     const { data: planData, error: planError } = await clientDB.from('client_meal_plans').select('user_code, dietitian_meal_plan, client_edited_meal_plan').eq('id', planId).single();
     if (planError) throw planError;
 
-    const { error: clientMealPlanError } = await clientDB.from('client_meal_plans').update({ client_edited_meal_plan: mealPlan, edited_plan_date: today }).eq('id', planId);
+    const normalizedMealPlan = normalizeMealPlanForDb(mealPlan);
+
+    const { error: clientMealPlanError } = await clientDB.from('client_meal_plans').update({ client_edited_meal_plan: normalizedMealPlan, edited_plan_date: today }).eq('id', planId);
     if (clientMealPlanError) throw clientMealPlanError;
 
     if (adminDB && planData) {
@@ -471,11 +474,11 @@ async function saveEditedMealPlan(req, res) {
 
       if (schemaPlan) {
         const updateField = schemaPlan.client_edited_meal_plan ? 'client_edited_meal_plan' : 'dietitian_meal_plan';
-        await adminDB.from('meal_plans_and_schemas').update({ [updateField]: mealPlan, updated_at: today }).eq('id', schemaPlan.id);
+        await adminDB.from('meal_plans_and_schemas').update({ [updateField]: normalizedMealPlan, updated_at: today }).eq('id', schemaPlan.id);
       }
 
       const { data: chatUser } = await adminDB.from('chat_users').select('id').eq('user_code', userCodeToUse).maybeSingle();
-      if (chatUser) await adminDB.from('chat_users').update({ meal_plan: mealPlan, updated_at: today }).eq('id', chatUser.id);
+      if (chatUser) await adminDB.from('chat_users').update({ meal_plan: normalizedMealPlan, updated_at: today }).eq('id', chatUser.id);
     }
     res.json({ success: true });
   } catch (error) {
@@ -517,7 +520,9 @@ async function aiUpdateMealPlan(req, res) {
       language: chatProfile?.user_language || chatProfile?.language || 'english',
     };
 
-    const updatedMealPlan = await generateUpdatedMealPlan(JSON.stringify(baseMealPlan), String(requestText).trim(), userProfileObj);
+    const updatedMealPlan = normalizeMealPlanForDb(
+      await generateUpdatedMealPlan(JSON.stringify(baseMealPlan), String(requestText).trim(), userProfileObj)
+    );
     const now = new Date().toISOString();
 
     const { error: saveMainError } = await clientDB.from('client_meal_plans').update({ client_edited_meal_plan: updatedMealPlan, edited_plan_date: now, ai_plan_change_used: true, ai_plan_change_used_at: now, updated_at: now }).eq('id', planId);
@@ -653,7 +658,7 @@ async function syncChatUser(req, res) {
     const { data: chatUser, error: chatUserError } = await adminDB.from('chat_users').select('id').eq('user_code', userCode).maybeSingle();
     if (chatUserError) throw chatUserError;
     if (!chatUser) return res.status(404).json({ error: 'Chat user not found' });
-    const { error } = await adminDB.from('chat_users').update(chatUserData).eq('id', chatUser.id);
+    const { error } = await adminDB.from('chat_users').update(normalizeChatUserPayloadForDb(chatUserData)).eq('id', chatUser.id);
     if (error) throw error;
     res.json({ success: true });
   } catch (error) {
@@ -670,7 +675,7 @@ async function saveNutritional(req, res) {
     const updatePayload = {};
     if (daily_target_total_calories != null) updatePayload.daily_target_total_calories = Number(daily_target_total_calories);
     if (base_daily_total_calories != null) updatePayload.base_daily_total_calories = Number(base_daily_total_calories);
-    if (macros != null) updatePayload.macros = macros;
+    if (macros != null) updatePayload.macros = formatMacrosGramStrings(macros) || macros;
     if (height_cm != null && height_cm !== '') { const p = parseFloat(height_cm); if (!isNaN(p)) updatePayload.height_cm = p; }
     if (Activity_level != null && Activity_level !== '') updatePayload.Activity_level = Activity_level;
 
@@ -812,18 +817,20 @@ async function createMealPlan(req, res) {
     if (!planId || !userCode || !mealPlanName || !menuData) return res.status(400).json({ error: 'Missing required fields' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
     const now = new Date().toISOString();
+    const normalizedMenu = normalizeMealPlanForDb(menuData);
+    const macrosTarget = formatMacrosGramStrings(macros) || macros;
 
     const { error: secondaryError } = await adminDB.from('meal_plans_and_schemas').insert({
       id: planId, record_type: 'meal_plan', user_code: userCode, meal_plan_name: mealPlanName,
-      schema: template, meal_plan: menuData, status: 'active', daily_total_calories: dailyCalories,
-      macros_target: macros, active_from: now, created_at: now, updated_at: now,
+      schema: template, meal_plan: normalizedMenu, status: 'active', daily_total_calories: dailyCalories,
+      macros_target: macrosTarget, active_from: now, created_at: now, updated_at: now,
     });
     if (secondaryError) throw secondaryError;
 
     const { error: mainError } = await clientDB.from('client_meal_plans').insert({
       id: planId, user_code: userCode, original_meal_plan_id: planId, meal_plan_name: mealPlanName,
-      dietitian_meal_plan: menuData, active: true, daily_total_calories: dailyCalories,
-      macros_target: macros, created_at: now, updated_at: now,
+      dietitian_meal_plan: normalizedMenu, active: true, daily_total_calories: dailyCalories,
+      macros_target: macrosTarget, created_at: now, updated_at: now,
     });
     if (mainError) {
       await adminDB.from('meal_plans_and_schemas').delete().eq('id', planId);

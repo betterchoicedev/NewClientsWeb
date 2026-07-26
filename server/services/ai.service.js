@@ -11,9 +11,9 @@ const {
   sanitizeUserCaption,
   sanitizePlanMeal,
   formatPlanMealForPrompt,
-  calculateMainTotalsFromMeals,
 } = require('../utils/helpers');
-const { sortMealPlanMeals, sortMealPlanStructure } = require('../utils/mealStructure');
+const { sortMealPlanMeals } = require('../utils/mealStructure');
+const { formatMacrosGramStrings, normalizeMealPlanForDb } = require('../utils/nutritionFormats');
 
 // ─── Prompt builders ──────────────────────────────────────────────────────────
 
@@ -560,7 +560,8 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode, 
     if (chatUserData?.full_name) clientName = chatUserData.full_name;
 
     const dailyCalories = Number(chatUserData?.daily_target_total_calories || 0);
-    const macros        = chatUserData?.macros || null;
+    const macrosRaw     = chatUserData?.macros || null;
+    const macrosTarget  = formatMacrosGramStrings(macrosRaw) || macrosRaw;
     const userLanguage  = chatUserData?.user_language || chatUserData?.language || 'english';
 
     if (!dailyCalories) {
@@ -607,17 +608,12 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode, 
 
     const template = payload?.template ?? payload?.schema ?? payload?.meal_plan?.template ?? null;
     const sortedMenu = sortMealPlanMeals(menu);
-    let schema = template;
-    if (!schema && Array.isArray(chatUserData?.meal_plan_structure) && chatUserData.meal_plan_structure.length > 0) {
-      schema = sortMealPlanStructure(chatUserData.meal_plan_structure);
-    } else if (Array.isArray(schema)) {
-      schema = sortMealPlanStructure(schema);
-    }
-    const menuData = {
+    const schema = Array.isArray(template) ? sortMealPlanMeals(template) : template;
+    const menuData = normalizeMealPlanForDb({
       meals: sortedMenu,
-      totals: payload?.totals ?? payload?.meal_plan?.totals ?? calculateMainTotalsFromMeals(sortedMenu),
+      totals: payload?.totals ?? payload?.meal_plan?.totals,
       note: payload?.note ?? payload?.meal_plan?.note ?? '',
-    };
+    });
 
     const planId         = randomUUID();
     const now            = new Date().toISOString();
@@ -626,7 +622,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode, 
     const { error: secondaryError } = await adminDB.from('meal_plans_and_schemas').insert({
       id: planId, record_type: 'meal_plan', user_code: resolvedUserCode,
       meal_plan_name: mealPlanName, schema, meal_plan: menuData,
-      status: 'active', daily_total_calories: dailyCalories, macros_target: macros,
+      status: 'active', daily_total_calories: dailyCalories, macros_target: macrosTarget,
       active_from: now, created_at: now, updated_at: now,
     });
     if (secondaryError) throw secondaryError;
@@ -634,7 +630,7 @@ async function createAndSaveOnboardingMealPlanForUser(userId, fallbackUserCode, 
     const { error: mainError } = await clientDB.from('client_meal_plans').insert({
       id: planId, user_code: resolvedUserCode, original_meal_plan_id: planId,
       meal_plan_name: mealPlanName, dietitian_meal_plan: menuData,
-      active: true, daily_total_calories: dailyCalories, macros_target: macros,
+      active: true, daily_total_calories: dailyCalories, macros_target: macrosTarget,
       created_at: now, updated_at: now,
     });
 

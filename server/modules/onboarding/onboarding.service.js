@@ -4,7 +4,8 @@
  */
 const crypto = require('crypto');
 const { createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.service');
-const { buildMealPlanStructure, sortMealPlanStructure } = require('../../utils/mealStructure');
+const { buildMealPlanStructure, sortMealPlanStructure, normalizeMealPlanStructureForDb } = require('../../utils/mealStructure');
+const { formatMacrosGramStrings } = require('../../utils/nutritionFormats');
 
 const VALID_PHASES = new Set(['welcome', 'products', 'promo', 'payment', 'questions', 'committing', 'pwa', 'done']);
 const MAX_DRAFT_BYTES = 48 * 1024;
@@ -345,10 +346,14 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
     first_meal_time: answers.first_meal_time || undefined,
     last_meal_time: answers.last_meal_time || undefined,
     number_of_meals: answers.number_of_meals ? parseInt(answers.number_of_meals, 10) : undefined,
-    meal_plan_structure: mealPlanStructure ? sortMealPlanStructure(mealPlanStructure) : undefined,
+    meal_plan_structure: mealPlanStructure
+      ? sortMealPlanStructure(
+          normalizeMealPlanStructureForDb(mealPlanStructure, dailyCalories || 0)
+        )
+      : undefined,
     daily_target_total_calories: dailyCalories || undefined,
     base_daily_total_calories: bmr != null ? Math.round(bmr) : undefined,
-    macros: macros || undefined,
+    macros: macros ? formatMacrosGramStrings(macros) : undefined,
     client_preference: answers.client_preference
       ? { dietary_preferences: String(answers.client_preference).trim() }
       : undefined,

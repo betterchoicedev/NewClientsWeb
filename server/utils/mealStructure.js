@@ -1,5 +1,6 @@
 /**
  * Server-side meal_plan_structure builder (mirrors client nutrition/mealStructure.js).
+ * Canonical chat_users.meal_plan_structure: { meal, description, calories, calories_pct }
  */
 
 const MEAL_ORDER_EN = [
@@ -124,6 +125,49 @@ function distributeIntegerByRatios(total, ratios) {
   return floors;
 }
 
+/** Normalize one meal_plan_structure row to { meal, description, calories, calories_pct }. */
+function normalizeMealPlanStructureEntry(entry, dailyCalories = 0) {
+  if (!entry || typeof entry !== 'object') return null;
+
+  if (entry.meal && (entry.calories != null || entry.calories_pct != null)) {
+    const calories = Number(entry.calories) || 0;
+    const caloriesPct =
+      entry.calories_pct != null
+        ? Number(entry.calories_pct) || 0
+        : dailyCalories > 0
+          ? Math.round((calories / dailyCalories) * 100)
+          : 0;
+    return {
+      meal: convertMealNameToEnglish(entry.meal),
+      description: entry.description || '',
+      calories,
+      calories_pct: caloriesPct,
+    };
+  }
+
+  const meal = entry.mealSlot || entry.meal || 'Meal';
+  const description = entry.mealName || entry.description || '';
+  const calories = Number(entry.targetCalories ?? entry.calories) || 0;
+  const caloriesPct =
+    dailyCalories > 0 ? Math.round((calories / dailyCalories) * 100) : Number(entry.calories_pct) || 0;
+
+  return {
+    meal: convertMealNameToEnglish(meal),
+    description,
+    calories,
+    calories_pct: caloriesPct,
+  };
+}
+
+/** Accept legacy dietitian rows or canonical onboarding rows; always return canonical array. */
+function normalizeMealPlanStructureForDb(structure, dailyCalories = 0) {
+  if (!Array.isArray(structure)) return structure;
+  const normalized = structure
+    .map((entry) => normalizeMealPlanStructureEntry(entry, dailyCalories))
+    .filter(Boolean);
+  return sortMealPlanStructure(normalized);
+}
+
 function buildMealPlanStructure(answers) {
   const numMeals = parseInt(answers.number_of_meals, 10);
   if (!numMeals || numMeals < 1) return null;
@@ -131,10 +175,6 @@ function buildMealPlanStructure(answers) {
   const descriptions = Array.isArray(answers.meal_descriptions) ? answers.meal_descriptions : [];
   const names = Array.isArray(answers.meal_names) ? answers.meal_names : [];
   const dailyCalories = Number(answers.daily_calories) || 0;
-  const macros = answers.macros || {};
-  const protein = Number(macros.protein) || 0;
-  const carbs = Number(macros.carbs) || 0;
-  const fat = Number(macros.fat) || 0;
 
   const slotNames = Array.from({ length: numMeals }, (_, index) => {
     const raw = names[index] || `Meal ${index + 1}`;
@@ -143,25 +183,25 @@ function buildMealPlanStructure(answers) {
 
   const ratios = computeMealRatios(numMeals, slotNames);
   const caloriesPerMeal = distributeIntegerByRatios(dailyCalories, ratios);
-  const proteinPerMeal = distributeIntegerByRatios(protein, ratios);
-  const carbsPerMeal = distributeIntegerByRatios(carbs, ratios);
-  const fatsPerMeal = distributeIntegerByRatios(fat, ratios);
 
-  const structure = descriptions.slice(0, numMeals).map((description, index) => ({
-    mealSlot: slotNames[index],
-    mealName: description || '',
-    targetCalories: caloriesPerMeal[index] || 0,
-    targetMacros: {
-      protein: proteinPerMeal[index] || 0,
-      carbs: carbsPerMeal[index] || 0,
-      fats: fatsPerMeal[index] || 0,
-    },
-  }));
+  const structure = Array.from({ length: numMeals }, (_, index) => {
+    const calories = caloriesPerMeal[index] || 0;
+    const caloriesPct =
+      dailyCalories > 0 ? Math.round((calories / dailyCalories) * 100) : 0;
+    return {
+      meal: slotNames[index],
+      description: descriptions[index] || '',
+      calories,
+      calories_pct: caloriesPct,
+    };
+  });
   return sortMealPlanStructure(structure);
 }
 
 module.exports = {
   buildMealPlanStructure,
+  normalizeMealPlanStructureEntry,
+  normalizeMealPlanStructureForDb,
   sortMealPlanStructure,
   sortMealPlanMeals,
   getMealOrderIndex,
