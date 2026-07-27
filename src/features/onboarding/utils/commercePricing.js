@@ -3,10 +3,23 @@ import {
   normalizeCustomProducts,
   parseCompanyConfig,
 } from '../../../company/normalizeCustomProduct';
+import { getAllProducts } from '../../../config/stripe-products';
+
+function defaultHomepageProducts() {
+  return getAllProducts().map((product) => ({
+    ...product,
+    configId: product.id,
+    isCustomProduct: false,
+  }));
+}
 
 export function resolveCatalogProducts(companyConfig) {
   const config = parseCompanyConfig(companyConfig);
-  return normalizeCustomProducts(extractRawCustomProducts(config));
+  const customProducts = normalizeCustomProducts(extractRawCustomProducts(config));
+  if (customProducts.length > 0) {
+    return customProducts;
+  }
+  return defaultHomepageProducts();
 }
 
 export function getProductPriceCents(product) {

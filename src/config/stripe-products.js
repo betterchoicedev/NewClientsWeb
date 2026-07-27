@@ -1,6 +1,9 @@
 // Stripe Products and Prices Configuration
 // Real product and price IDs from your Stripe Dashboard
 
+/** Default thumbnail for built-in Stripe catalog plans (onboarding product picker, etc.) */
+export const DEFAULT_PRODUCT_LOGO_URL = '/betterchoice.png';
+
 export const STRIPE_PRODUCTS = {
   BETTER_PRO: 'prod_SbI1Lu7FWbybUO',
   NUTRITION_ONLY: 'prod_SbI1dssS5NElLZ', 
@@ -319,9 +322,10 @@ export const getProduct = (productId) => {
 };
 
 export const getAllProducts = () => {
-  return Object.keys(PRODUCT_CONFIG).map(productId => ({
+  return Object.keys(PRODUCT_CONFIG).map((productId) => ({
     id: productId,
-    ...PRODUCT_CONFIG[productId]
+    ...PRODUCT_CONFIG[productId],
+    logoUrl: PRODUCT_CONFIG[productId].logoUrl || DEFAULT_PRODUCT_LOGO_URL,
   }));
 };
 

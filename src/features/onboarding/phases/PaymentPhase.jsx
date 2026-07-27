@@ -40,8 +40,7 @@ export default function PaymentPhase({ onComplete }) {
       await refreshEntitlement();
       if (cancelled) return;
       setPolling(false);
-      forcePhase(PHASES.DONE);
-      onComplete?.(true);
+      forcePhase(PHASES.FINALIZING);
     };
 
     const poll = async () => {

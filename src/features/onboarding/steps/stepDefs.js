@@ -50,6 +50,48 @@ export function calculateDailyCalories(age, gender, weightKg, heightCm, activity
   return Math.round(Math.max(1200, tdee));
 }
 
+export function normalizeGoalValue(goal) {
+  if (!goal) return '';
+  const raw = String(goal).trim();
+  const GOAL_VALUES = new Set([
+    'lose', 'cut', 'maintain', 'gain', 'muscle', 'improve_performance', 'improve_health',
+  ]);
+  if (GOAL_VALUES.has(raw)) return raw;
+
+  const aliases = {
+    lose_weight: 'lose',
+    gain_weight: 'gain',
+    maintain_weight: 'maintain',
+    build_muscle: 'muscle',
+  };
+  if (aliases[raw] || aliases[raw.toLowerCase()]) return aliases[raw] || aliases[raw.toLowerCase()];
+
+  const lookup = {
+    'lose weight': 'lose',
+    'lose fat, keep muscle': 'cut',
+    'maintain weight': 'maintain',
+    'gain weight': 'gain',
+    'build muscle': 'muscle',
+    'improve performance': 'improve_performance',
+    'improve health': 'improve_health',
+    'ירידה במשקל': 'lose',
+    'ירידה בשומן תוך שמירה על שריר': 'cut',
+    'שמירה על משקל': 'maintain',
+    'עלייה במשקל': 'gain',
+    'בניית שרירים': 'muscle',
+    'שיפור ביצועים': 'improve_performance',
+    'שיפור בריאות': 'improve_health',
+  };
+  if (lookup[raw]) return lookup[raw];
+  const lower = raw.toLowerCase();
+  if (lookup[lower]) return lookup[lower];
+  return '';
+}
+
+export function isValidGoalValue(goal) {
+  return Boolean(normalizeGoalValue(goal));
+}
+
 export function defaultMacros(calories, goal) {
   if (!calories) return { protein: null, carbs: null, fat: null };
   let pPct = 0.3;

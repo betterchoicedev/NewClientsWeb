@@ -5,7 +5,7 @@ import { searchCities } from '../api/onboardingApi';
 import SearchableSelect from './SearchableSelect';
 import { COUNTRY_OPTIONS } from '../countryOptions';
 import { formatCityLabel } from '../cityDisplayUtils';
-import { glassMenuClass, glassMenuHeaderClass, glassOptionClass } from './glassStyles';
+import { glassMenuClass, glassMenuHeaderClass, glassOptionClass, ONBOARDING_DROPDOWN_MENU_Z } from './glassStyles';
 
 const MENU_MAX_H = 280;
 const SEARCH_LIMIT = 12;
@@ -49,6 +49,7 @@ export default function CitySearchSelect({
   const [hits, setHits] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [searchError, setSearchError] = useState(null);
   const [selectedLabel, setSelectedLabel] = useState('');
   const [menuStyle, setMenuStyle] = useState(null);
   const triggerRef = useRef(null);
@@ -74,6 +75,7 @@ export default function CitySearchSelect({
 
     setLoading(true);
     setLoadingMore(false);
+    setSearchError(null);
 
     const t = setTimeout(() => {
       if (abortRef.current) abortRef.current.abort();
@@ -115,6 +117,7 @@ export default function CitySearchSelect({
         })
         .catch((e) => {
           if (e?.name === 'AbortError') return;
+          if (!phase.optimistic) setHits([]);
         });
 
       const fullPromise = searchCities(reqQ, {
@@ -131,6 +134,9 @@ export default function CitySearchSelect({
         .catch((e) => {
           if (e?.name === 'AbortError') return;
           if (!phase.optimistic) setHits([]);
+          setSearchError(
+            isHe ? 'חיפוש העיר נכשל — נסו שוב' : 'City search failed — please try again'
+          );
         });
 
       Promise.allSettled([quickPromise, fullPromise]).then(() => {
@@ -158,7 +164,7 @@ export default function CitySearchSelect({
       position: 'fixed',
       left: rect.left,
       width: rect.width,
-      zIndex: 200,
+      zIndex: ONBOARDING_DROPDOWN_MENU_Z,
       maxHeight: Math.max(160, height),
       ...(openUp
         ? { bottom: window.innerHeight - rect.top + 8 }
@@ -225,6 +231,7 @@ export default function CitySearchSelect({
               <Search size={16} className="opacity-50 shrink-0" aria-hidden />
               <input
                 autoFocus
+                dir="auto"
                 className={`w-full bg-transparent outline-none text-sm py-0.5 ${
                   isDark
                     ? 'text-white placeholder:text-slate-500'
@@ -252,7 +259,7 @@ export default function CitySearchSelect({
               )}
               {showEmpty && (
                 <li className={`px-4 py-3 text-sm ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                  {isHe ? 'לא נמצאו ערים' : 'No cities found'}
+                  {searchError || (isHe ? 'לא נמצאו ערים' : 'No cities found')}
                 </li>
               )}
               {hits.map((c) => (

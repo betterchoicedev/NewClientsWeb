@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '../../../context/ThemeContext';
+import { DEFAULT_PRODUCT_LOGO_URL } from '../../../config/stripe-products';
 import { formatMoneyFromCents, getProductPriceCents } from '../utils/commercePricing';
 import { Package } from 'lucide-react';
 
@@ -10,7 +11,10 @@ export default function ProductCard({ product, selected, onSelect, isHe }) {
   const name = isHe ? (product.nameHebrew || product.name) : product.name;
   const description = isHe ? (product.descriptionHebrew || product.description) : product.description;
   const productId = product.configId || product.id;
-  const logoUrl = product.logoUrl || product.imageUrl || '';
+  const logoUrl =
+    product.logoUrl
+    || product.imageUrl
+    || (!product.isCustomProduct ? DEFAULT_PRODUCT_LOGO_URL : '');
 
   return (
     <button

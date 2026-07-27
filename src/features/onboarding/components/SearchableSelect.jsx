@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search } from 'lucide-react';
-import { glassMenuClass, glassMenuHeaderClass, glassOptionClass } from './glassStyles';
+import { glassMenuClass, glassMenuHeaderClass, glassOptionClass, ONBOARDING_DROPDOWN_MENU_Z } from './glassStyles';
 
 const MENU_MAX_H = 280;
 
@@ -25,8 +25,10 @@ export default function SearchableSelect({
   searchPlaceholder,
   isDark,
   inputClass,
+  inputDir = 'ltr',
   getLabel = (o) => o.label,
   getValue = (o) => o.value,
+  getTriggerLabel,
   emptyText = 'No matches',
   matchesLabel,
 }) {
@@ -39,6 +41,9 @@ export default function SearchableSelect({
 
   const selected = options.find((o) => getValue(o) === value);
   const selectedLabel = selected ? getLabel(selected) : '';
+  const triggerLabel = selected
+    ? (getTriggerLabel ? getTriggerLabel(selected) : selectedLabel)
+    : '';
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -47,7 +52,9 @@ export default function SearchableSelect({
       .map((o) => {
         const label = String(getLabel(o)).toLowerCase();
         const val = String(getValue(o)).toLowerCase();
-        const rank = rankMatch(label, val, q);
+        const extra = String(o.searchText || '').toLowerCase();
+        let rank = rankMatch(label, val, q);
+        if (rank === 4 && extra.includes(q)) rank = 2;
         return { o, rank, label };
       })
       .filter((row) => row.rank < 4)
@@ -68,7 +75,7 @@ export default function SearchableSelect({
       position: 'fixed',
       left: rect.left,
       width: rect.width,
-      zIndex: 200,
+      zIndex: ONBOARDING_DROPDOWN_MENU_Z,
       maxHeight: Math.max(160, height),
       ...(openUp
         ? { bottom: window.innerHeight - rect.top + 8 }
@@ -119,6 +126,7 @@ export default function SearchableSelect({
               <Search size={16} className="opacity-50 shrink-0" aria-hidden />
               <input
                 autoFocus
+                dir={inputDir}
                 className={`w-full bg-transparent outline-none text-sm py-0.5 ${
                   isDark
                     ? 'text-white placeholder:text-slate-500'
@@ -183,12 +191,12 @@ export default function SearchableSelect({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`${inputClass} flex items-center justify-between gap-2 text-start`}
+        className={`${inputClass} min-h-11 flex items-center justify-between gap-2 text-start`}
         aria-expanded={open}
         aria-haspopup="listbox"
       >
-        <span className={selectedLabel ? '' : isDark ? 'text-slate-500' : 'text-slate-400'}>
-          {selectedLabel || placeholder}
+        <span className={`truncate ${triggerLabel ? '' : isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+          {triggerLabel || placeholder}
         </span>
         <ChevronDown
           size={18}

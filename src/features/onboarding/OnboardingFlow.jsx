@@ -16,6 +16,7 @@ import QuestionsPhase from './phases/QuestionsPhase';
 import CommittingPhase from './phases/CommittingPhase';
 import PaymentPhase from './phases/PaymentPhase';
 import PwaPhase from './phases/PwaPhase';
+import FinalizingPhase from './phases/FinalizingPhase';
 
 function applyDraftToStore({
   draft,
@@ -129,8 +130,12 @@ export default function OnboardingFlow({
 
         if (status.completed) {
           hydrateFromStatus(status);
-          forcePhase(PHASES.DONE);
-          onComplete?.(true);
+          if (status.mealPlanReady) {
+            forcePhase(PHASES.DONE);
+            onComplete?.(true);
+          } else {
+            forcePhase(PHASES.FINALIZING);
+          }
           return;
         }
 
@@ -233,6 +238,9 @@ export default function OnboardingFlow({
       break;
     case PHASES.PWA:
       content = <PwaPhase onComplete={onComplete} />;
+      break;
+    case PHASES.FINALIZING:
+      content = <FinalizingPhase onComplete={onComplete} />;
       break;
     case PHASES.DONE:
       content = null;

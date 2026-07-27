@@ -171,7 +171,7 @@ export async function searchCities(q, { limit = 12, country, mode = 'full', sign
       ? Math.min(Math.max(limit, 1), 2)
       : Math.min(Math.max(limit, 1), 15);
   const params = new URLSearchParams({
-    q,
+    q: String(q ?? ''),
     limit: String(cappedLimit),
     country: String(country).toUpperCase(),
     mode: resolvedMode,

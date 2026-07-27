@@ -7,7 +7,7 @@ const { createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.se
 const { buildMealPlanStructure, sortMealPlanStructure, normalizeMealPlanStructureForDb } = require('../../utils/mealStructure');
 const { formatMacrosGramStrings } = require('../../utils/nutritionFormats');
 
-const VALID_PHASES = new Set(['welcome', 'products', 'promo', 'payment', 'questions', 'committing', 'pwa', 'done']);
+const VALID_PHASES = new Set(['welcome', 'products', 'promo', 'payment', 'questions', 'committing', 'pwa', 'finalizing', 'done']);
 const MAX_DRAFT_BYTES = 48 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -100,6 +100,42 @@ async function isPhoneTaken(phone, userId, userCode, { clientDB, adminDB }) {
   if (!chatUserData) return false;
   if (userCode && chatUserData.user_code === userCode) return false;
   return true;
+}
+
+function normalizeGoalValue(goal) {
+  if (!goal) return '';
+  const raw = String(goal).trim();
+  const values = new Set([
+    'lose', 'cut', 'maintain', 'gain', 'muscle', 'improve_performance', 'improve_health',
+  ]);
+  if (values.has(raw)) return raw;
+  const aliases = {
+    lose_weight: 'lose',
+    gain_weight: 'gain',
+    maintain_weight: 'maintain',
+    build_muscle: 'muscle',
+  };
+  if (aliases[raw] || aliases[raw.toLowerCase()]) return aliases[raw] || aliases[raw.toLowerCase()];
+  const lookup = {
+    'lose weight': 'lose',
+    'lose fat, keep muscle': 'cut',
+    'maintain weight': 'maintain',
+    'gain weight': 'gain',
+    'build muscle': 'muscle',
+    'improve performance': 'improve_performance',
+    'improve health': 'improve_health',
+    'ירידה במשקל': 'lose',
+    'ירידה בשומן תוך שמירה על שריר': 'cut',
+    'שמירה על משקל': 'maintain',
+    'עלייה במשקל': 'gain',
+    'בניית שרירים': 'muscle',
+    'שיפור ביצועים': 'improve_performance',
+    'שיפור בריאות': 'improve_health',
+  };
+  if (lookup[raw]) return lookup[raw];
+  const lower = raw.toLowerCase();
+  if (lookup[lower]) return lookup[lower];
+  return '';
 }
 
 function calculateBMR(age, gender, weightKg, heightCm) {
@@ -316,7 +352,7 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
   if (foodAllergies !== null) clientData.food_allergies = foodAllergies;
   if (answers.food_limitations !== undefined) clientData.food_limitations = foodLimitations;
   if (answers.activity_level) clientData.activity_level = answers.activity_level;
-  if (answers.goal) clientData.goal = answers.goal;
+  if (answers.goal) clientData.goal = normalizeGoalValue(answers.goal);
   if (answers.medical_conditions !== undefined) clientData.medical_conditions = answers.medical_conditions || null;
   if (answers.custom_answers && typeof answers.custom_answers === 'object') {
     clientData.custom_answers = answers.custom_answers;
@@ -342,7 +378,7 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
     food_limitations: foodLimitations,
     medical_conditions: answers.medical_conditions || null,
     Activity_level: answers.activity_level || undefined,
-    goal: answers.goal || undefined,
+    goal: normalizeGoalValue(answers.goal) || undefined,
     first_meal_time: answers.first_meal_time || undefined,
     last_meal_time: answers.last_meal_time || undefined,
     number_of_meals: answers.number_of_meals ? parseInt(answers.number_of_meals, 10) : undefined,

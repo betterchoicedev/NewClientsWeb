@@ -29,8 +29,7 @@ export default function PwaPhase({ onComplete }) {
     } catch (e) {
       console.warn('[PwaPhase] complete onboarding failed', e);
     }
-    forcePhase(PHASES.DONE);
-    onComplete?.(true);
+    forcePhase(PHASES.FINALIZING);
   };
 
   const install = async () => {

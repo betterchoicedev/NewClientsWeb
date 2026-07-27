@@ -16,8 +16,9 @@ import {
   glassChipClass,
   glassInputClass,
   glassOptionBtnClass,
-  glassSelectClass,
 } from '../components/glassStyles';
+import { normalizeGoalValue, isValidGoalValue } from './stepDefs';
+import { PHONE_PREFIX_OPTIONS } from '../phonePrefixOptions';
 import { isValidPhoneDigits, sanitizePhoneDigits } from '../phoneUtils';
 
 const inputClass = glassInputClass;
@@ -46,6 +47,57 @@ const GOALS = [
   { value: 'improve_performance', en: 'Improve performance', he: 'שיפור ביצועים' },
   { value: 'improve_health', en: 'Improve health', he: 'שיפור בריאות' },
 ];
+
+function buildTimeOptions(stepMinutes = 30) {
+  const options = [];
+  for (let minutes = 0; minutes < 24 * 60; minutes += stepMinutes) {
+    const hours = String(Math.floor(minutes / 60)).padStart(2, '0');
+    const mins = String(minutes % 60).padStart(2, '0');
+    const value = `${hours}:${mins}`;
+    options.push({ value, label: value });
+  }
+  return options;
+}
+
+const EATING_WINDOW_TIME_OPTIONS = buildTimeOptions(30);
+
+const FEET_MIN = 3;
+const FEET_MAX = 8;
+
+function buildFeetOptions(isHe) {
+  return Array.from({ length: FEET_MAX - FEET_MIN + 1 }, (_, i) => {
+    const feet = FEET_MIN + i;
+    return {
+      value: String(feet),
+      label: isHe ? `${feet} ר׳` : `${feet} ft`,
+    };
+  });
+}
+
+function buildInchesOptions(isHe) {
+  return Array.from({ length: 12 }, (_, i) => ({
+    value: String(i),
+    label: isHe ? `${i} אינץ׳` : `${i} in`,
+  }));
+}
+
+function cmToFeetInches(cm) {
+  const n = Number(cm);
+  if (!Number.isFinite(n) || n <= 0) return { feet: '', inches: '' };
+  const totalInches = Math.round(n / 2.54);
+  let feet = Math.floor(totalInches / 12);
+  let inches = totalInches % 12;
+  feet = Math.min(FEET_MAX, Math.max(FEET_MIN, feet));
+  return { feet: String(feet), inches: String(inches) };
+}
+
+function feetInchesToCm(feet, inches) {
+  const f = Number(feet);
+  const i = Number(inches);
+  if (!Number.isFinite(f) || !Number.isFinite(i)) return '';
+  if (f < FEET_MIN || f > FEET_MAX || i < 0 || i > 11) return '';
+  return String(Math.round((f * 12 + i) * 2.54));
+}
 
 const ALLERGIES = [
   { value: 'peanuts', en: 'Peanuts', he: 'בוטנים' },
@@ -360,16 +412,22 @@ export default function StepFields({ step }) {
 
     case 'phone':
       return (
-        <div className="flex gap-2">
-          <select className={`${glassSelectClass(isDarkMode)} w-28`} value={answers.phoneCountryCode || '+972'} onChange={(e) => setAnswer('phoneCountryCode', e.target.value)}>
-            <option value="+972">+972</option>
-            <option value="+1">+1</option>
-            <option value="+44">+44</option>
-            <option value="+33">+33</option>
-            <option value="+49">+49</option>
-          </select>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="w-full sm:w-44 shrink-0">
+            <SearchableSelect
+              options={PHONE_PREFIX_OPTIONS}
+              value={answers.phoneCountryCode || '+972'}
+              onChange={(code) => setAnswer('phoneCountryCode', code)}
+              placeholder={isHe ? 'קידומת' : 'Country code'}
+              searchPlaceholder={isHe ? 'חפשו מדינה או קידומת...' : 'Search country or code...'}
+              emptyText={isHe ? 'לא נמצאו תוצאות' : 'No matches'}
+              isDark={isDarkMode}
+              inputClass={`${inputClass(isDarkMode)} min-h-11`}
+              getTriggerLabel={(o) => o.value}
+            />
+          </div>
           <input
-            className={inputClass(isDarkMode)}
+            className={`${inputClass(isDarkMode)} min-h-11 flex-1`}
             type="tel"
             inputMode="numeric"
             pattern="[0-9]*"
@@ -460,12 +518,26 @@ export default function StepFields({ step }) {
     case 'biometrics': {
       const showCm = heightUnit === 'cm';
       const showKg = weightUnit === 'kg';
+      const { feet: heightFeet, inches: heightInches } = cmToFeetInches(answers.height_cm);
+      const feetOptions = buildFeetOptions(isHe);
+      const inchesOptions = buildInchesOptions(isHe);
+
+      const setHeightFromFeetInches = (feet, inches) => {
+        const nextFeet = feet ?? heightFeet;
+        const nextInches = inches ?? heightInches ?? '0';
+        if (!nextFeet) {
+          setAnswer('height_cm', '');
+          return;
+        }
+        setAnswer('height_cm', feetInchesToCm(nextFeet, nextInches));
+      };
+
       return (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2 text-sm">
             {[
               { label: 'cm', on: showCm, fn: () => setUnits({ heightUnit: 'cm' }) },
-              { label: 'in', on: !showCm, fn: () => setUnits({ heightUnit: 'in' }) },
+              { label: 'ft/in', on: !showCm, fn: () => setUnits({ heightUnit: 'in' }) },
               { label: 'kg', on: showKg, fn: () => setUnits({ weightUnit: 'kg' }) },
               { label: 'lbs', on: !showKg, fn: () => setUnits({ weightUnit: 'lbs' }) },
             ].map((u) => (
@@ -474,17 +546,55 @@ export default function StepFields({ step }) {
               </button>
             ))}
           </div>
-          <input
-            type="number"
-            className={inputClass(isDarkMode)}
-            placeholder={showCm ? (isHe ? 'גובה (ס״מ)' : 'Height (cm)') : (isHe ? 'גובה (אינץ׳)' : 'Height (in)')}
-            value={answers.height_cm || ''}
-            onChange={(e) => {
-              let v = e.target.value;
-              if (!showCm && v) v = String(Math.round(parseFloat(v) * 2.54));
-              setAnswer('height_cm', v);
-            }}
-          />
+          {showCm ? (
+            <input
+              type="number"
+              className={inputClass(isDarkMode)}
+              placeholder={isHe ? 'גובה (ס״מ)' : 'Height (cm)'}
+              value={answers.height_cm || ''}
+              onChange={(e) => setAnswer('height_cm', e.target.value)}
+            />
+          ) : (
+            <div className="space-y-2">
+              <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                {isHe ? 'גובה' : 'Height'}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <SearchableSelect
+                  options={feetOptions}
+                  value={heightFeet}
+                  onChange={(feet) => setHeightFromFeetInches(feet, heightInches || '0')}
+                  placeholder={isHe ? 'רגליים' : 'Feet'}
+                  searchPlaceholder={isHe ? 'חיפוש...' : 'Search...'}
+                  emptyText={isHe ? 'לא נמצאו תוצאות' : 'No matches'}
+                  isDark={isDarkMode}
+                  inputClass={`${inputClass(isDarkMode)} min-h-11`}
+                  getTriggerLabel={(o) => (isHe ? `${o.value} ר׳` : `${o.value}'`)}
+                />
+                <SearchableSelect
+                  options={inchesOptions}
+                  value={heightInches}
+                  onChange={(inches) => {
+                    if (!heightFeet) return;
+                    setHeightFromFeetInches(heightFeet, inches);
+                  }}
+                  placeholder={isHe ? 'אינץ׳' : 'Inches'}
+                  searchPlaceholder={isHe ? 'חיפוש...' : 'Search...'}
+                  emptyText={isHe ? 'לא נמצאו תוצאות' : 'No matches'}
+                  isDark={isDarkMode}
+                  inputClass={`${inputClass(isDarkMode)} min-h-11`}
+                  getTriggerLabel={(o) => (isHe ? `${o.value} אינץ׳` : `${o.value}"`)}
+                />
+              </div>
+              {heightFeet ? (
+                <p className={`text-xs px-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  {isHe
+                    ? `נבחר: ${heightFeet}'${heightInches || '0'}"`
+                    : `Selected: ${heightFeet}'${heightInches || '0'}"`}
+                </p>
+              ) : null}
+            </div>
+          )}
           <input
             type="number"
             className={inputClass(isDarkMode)}
@@ -623,7 +733,7 @@ export default function StepFields({ step }) {
               key={g.value}
               type="button"
               onClick={() => setAnswer('goal', g.value)}
-              className={optionBtn(answers.goal === g.value, isDarkMode)}
+              className={optionBtn(normalizeGoalValue(answers.goal) === g.value, isDarkMode)}
             >
               {isHe ? g.he : g.en}
             </button>
@@ -674,14 +784,32 @@ export default function StepFields({ step }) {
 
     case 'eating_window':
       return (
-        <div className="grid grid-cols-2 gap-3">
-          <label className={`text-sm space-y-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-            <span>{isHe ? 'ארוחה ראשונה' : 'First meal'}</span>
-            <input type="time" className={inputClass(isDarkMode)} value={answers.first_meal_time || '08:00'} onChange={(e) => setAnswer('first_meal_time', e.target.value)} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className={`text-sm space-y-2 block ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+            <span className="font-medium">{isHe ? 'ארוחה ראשונה' : 'First meal'}</span>
+            <SearchableSelect
+              options={EATING_WINDOW_TIME_OPTIONS}
+              value={answers.first_meal_time || '08:00'}
+              onChange={(time) => setAnswer('first_meal_time', time)}
+              placeholder={isHe ? 'בחרו שעה' : 'Select time'}
+              searchPlaceholder={isHe ? 'חיפוש...' : 'Search...'}
+              emptyText={isHe ? 'לא נמצאו תוצאות' : 'No matches'}
+              isDark={isDarkMode}
+              inputClass={`${inputClass(isDarkMode)} min-h-11`}
+            />
           </label>
-          <label className={`text-sm space-y-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-            <span>{isHe ? 'ארוחה אחרונה' : 'Last meal'}</span>
-            <input type="time" className={inputClass(isDarkMode)} value={answers.last_meal_time || '20:00'} onChange={(e) => setAnswer('last_meal_time', e.target.value)} />
+          <label className={`text-sm space-y-2 block ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+            <span className="font-medium">{isHe ? 'ארוחה אחרונה' : 'Last meal'}</span>
+            <SearchableSelect
+              options={EATING_WINDOW_TIME_OPTIONS}
+              value={answers.last_meal_time || '20:00'}
+              onChange={(time) => setAnswer('last_meal_time', time)}
+              placeholder={isHe ? 'בחרו שעה' : 'Select time'}
+              searchPlaceholder={isHe ? 'חיפוש...' : 'Search...'}
+              emptyText={isHe ? 'לא נמצאו תוצאות' : 'No matches'}
+              isDark={isDarkMode}
+              inputClass={`${inputClass(isDarkMode)} min-h-11`}
+            />
           </label>
         </div>
       );
@@ -778,7 +906,9 @@ export function validateStep(step, answers, { includeNursingStatus = true, isHe 
       if (!answers.activity_level) return t('Please select activity level', 'נא לבחור רמת פעילות');
       break;
     case 'goal':
-      if (!answers.goal) return t('Please select a goal', 'נא לבחור מטרה');
+      if (!isValidGoalValue(answers.goal)) {
+        return t('Please select a goal', 'נא לבחור מטרה');
+      }
       break;
     case 'eating_window':
       if (!answers.first_meal_time || !answers.last_meal_time) {

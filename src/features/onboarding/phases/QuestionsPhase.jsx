@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useOnboardingStore, PHASES } from '../onboarding.store';
-import { buildSteps } from '../steps/stepDefs';
+import { buildSteps, normalizeGoalValue } from '../steps/stepDefs';
 import StepFields, { validateStep } from '../steps/StepFields';
 import StepShell from '../components/StepShell';
 import { commitOnboarding, checkOnboardingPhone, saveOnboardingStep } from '../api/onboardingApi';
@@ -118,7 +118,10 @@ export default function QuestionsPhase({ userId, onCommitted }) {
     const timeoutId = setTimeout(() => controller.abort(), COMMIT_TIMEOUT_MS);
 
     try {
-      const result = await commitOnboarding({ answers, signal: controller.signal });
+      const result = await commitOnboarding({
+        answers: { ...answers, goal: normalizeGoalValue(answers.goal) },
+        signal: controller.signal,
+      });
       if (!result?.userCode) throw new Error(isHe ? 'שמירה נכשלה — נסו שוב' : 'Save failed — please try again');
       setUserCode(result.userCode);
       clearLocalDraft(userId);

@@ -8,6 +8,7 @@ export const PHASES = {
   PROMO: 'promo',
   PAYMENT: 'payment',
   PWA: 'pwa',
+  FINALIZING: 'finalizing',
   DONE: 'done',
 };
 
@@ -19,6 +20,7 @@ export const PHASE_ORDER = [
   PHASES.PROMO,
   PHASES.PAYMENT,
   PHASES.PWA,
+  PHASES.FINALIZING,
   PHASES.DONE,
 ];
 
@@ -31,8 +33,9 @@ export function canTransition(from, to) {
   if (from === PHASES.COMMITTING && (to === PHASES.PRODUCTS || to === PHASES.PWA || to === PHASES.QUESTIONS)) return true;
   if (from === PHASES.PRODUCTS && (to === PHASES.PROMO || to === PHASES.COMMITTING)) return true;
   if (from === PHASES.PROMO && (to === PHASES.PAYMENT || to === PHASES.PWA || to === PHASES.PRODUCTS)) return true;
-  if (from === PHASES.PAYMENT && (to === PHASES.PWA || to === PHASES.PROMO)) return true;
-  if (from === PHASES.PWA && to === PHASES.DONE) return true;
+  if (from === PHASES.PAYMENT && (to === PHASES.PWA || to === PHASES.PROMO || to === PHASES.FINALIZING)) return true;
+  if (from === PHASES.PWA && (to === PHASES.FINALIZING || to === PHASES.DONE)) return true;
+  if (from === PHASES.FINALIZING && to === PHASES.DONE) return true;
   const fi = PHASE_ORDER.indexOf(from);
   const ti = PHASE_ORDER.indexOf(to);
   return ti === fi + 1 || ti === fi;
@@ -68,6 +71,7 @@ export function phaseFromStatus(status) {
   }
 
   if (status.phase === PHASES.PWA) return PHASES.PWA;
+  if (status.phase === PHASES.FINALIZING) return PHASES.FINALIZING;
   if (status.phase === PHASES.PAYMENT) return PHASES.PAYMENT;
   if (status.phase === PHASES.PROMO) return PHASES.PROMO;
   if (status.phase === PHASES.PRODUCTS) return PHASES.PRODUCTS;

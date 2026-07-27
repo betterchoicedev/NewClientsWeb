@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { normalizeGoalValue } from './steps/stepDefs';
 import {
   PHASES as P,
   canTransition as canTx,
@@ -165,12 +166,16 @@ export const useOnboardingStore = create((set, get) => ({
     const commerce = draft.commerce || {};
     const draftStep = typeof draft.stepIndex === 'number' ? draft.stepIndex : 0;
     const hint = typeof status?.resumeStepHint === 'number' ? status.resumeStepHint : 0;
+    const mergedAnswers = { ...emptyAnswers(), ...draftAnswers };
+    if (mergedAnswers.goal) {
+      mergedAnswers.goal = normalizeGoalValue(mergedAnswers.goal);
+    }
     set({
       hydrated: true,
       phase: phase === P.DONE ? P.DONE : phase,
       userCode: status?.userCode || null,
       stepIndex: Math.max(draftStep, hint),
-      answers: { ...emptyAnswers(), ...draftAnswers },
+      answers: mergedAnswers,
       weightUnit: draft.weightUnit || 'kg',
       heightUnit: draft.heightUnit || 'cm',
       selectedProductIds: Array.isArray(commerce.selectedProductIds) && commerce.selectedProductIds.length

@@ -201,9 +201,6 @@ const ProfilePage = () => {
   const [saveStatus, setSaveStatus] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
-  // Dev: remount key + forceFresh for "Test onboarding" button
-  const [onboardingRemountKey, setOnboardingRemountKey] = useState(0);
-  const [forceFreshOnboarding, setForceFreshOnboarding] = useState(false);
   const [userCode, setUserCode] = useState(null);
   const [companyOptions, setCompanyOptions] = useState([]);
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
@@ -215,7 +212,6 @@ const ProfilePage = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isProfileDataReady, setIsProfileDataReady] = useState(false);
-  const onboardingDevForceOpenRef = useRef(false);
   const onboardingDismissedRef = useRef(false);
 
   const toCompanySlug = useCallback((companyName) => {
@@ -305,12 +301,11 @@ const ProfilePage = () => {
   ]);
 
   const checkOnboardingStatus = useCallback(async () => {
-    if (onboardingDevForceOpenRef.current) return;
     await refreshEntitlement();
   }, [refreshEntitlement]);
 
   useEffect(() => {
-    if (!user || onboardingDevForceOpenRef.current) return;
+    if (!user) return;
     if (entitlementStatus?.userCode) setUserCode(entitlementStatus.userCode);
     if (requiresWall) {
       onboardingDismissedRef.current = false;
@@ -325,8 +320,6 @@ const ProfilePage = () => {
   }, [user, requiresWall, entitlementStatus]);
 
   const handleOnboardingComplete = async (completed = true) => {
-    onboardingDevForceOpenRef.current = false;
-    setForceFreshOnboarding(false);
     if (completed) {
       onboardingDismissedRef.current = false;
       setShowOnboarding(false);
@@ -341,24 +334,6 @@ const ProfilePage = () => {
       setShowOnboarding(true);
     }
   };
-
-  const closeOnboardingForDev = useCallback(() => {
-    handleOnboardingComplete(false);
-  }, []);
-
-  const resetOnboardingForDev = useCallback(() => {
-    if (user?.id) {
-      try {
-        localStorage.removeItem(`onboarding_${user.id}`);
-      } catch (_) { /* ignore */ }
-    }
-    onboardingDismissedRef.current = false;
-    onboardingDevForceOpenRef.current = true;
-    setForceFreshOnboarding(true);
-    setOnboardingRemountKey((k) => k + 1);
-    setOnboardingCompleted(false);
-    setShowOnboarding(true);
-  }, [user?.id]);
 
   // Redirect to home page if not authenticated (only after auth loading is complete)
   useEffect(() => {
@@ -1281,37 +1256,14 @@ const ProfilePage = () => {
 
         {/* Onboarding Modal */}
         <OnboardingGate
-          key={onboardingRemountKey}
           isOpen={showOnboarding}
           onClose={handleOnboardingComplete}
           user={user}
           companyName={assignedCompanyName}
           companyConfig={assignedCompanyConfig}
           companyId={assignedCompanyId || null}
-          forceFresh={forceFreshOnboarding}
-          remountKey={onboardingRemountKey}
           allowDismiss={canDismiss}
         />
-
-        {process.env.NODE_ENV === 'development' ? (
-          <div className="fixed bottom-4 right-4 z-[5100] flex flex-wrap justify-end gap-2 max-w-[min(100vw-2rem,24rem)]">
-            <button
-              type="button"
-              onClick={resetOnboardingForDev}
-              className="min-h-11 px-4 rounded-full text-sm font-semibold bg-emerald-600 text-white shadow-lg hover:bg-emerald-700"
-            >
-              Test onboarding
-            </button>
-            <button
-              type="button"
-              onClick={closeOnboardingForDev}
-              disabled={!showOnboarding}
-              className="min-h-11 px-4 rounded-full text-sm font-semibold bg-slate-600 text-white shadow-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Close onboarding
-            </button>
-          </div>
-        ) : null}
 
         {/* Logout Confirmation Modal (AnimatePresence) */}
         <AnimatePresence>
