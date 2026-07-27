@@ -48,7 +48,7 @@ export async function saveOnboardingStep({ stepId, answers, stepIndex, phase, dr
 }
 
 export async function commitOnboarding({ answers, signal } = {}) {
-  const res = await fetch(`${'http://localhost:8080'}/api/onboarding/commit`, {
+  const res = await fetch(`${apiBase()}/api/onboarding/commit`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ answers }),
