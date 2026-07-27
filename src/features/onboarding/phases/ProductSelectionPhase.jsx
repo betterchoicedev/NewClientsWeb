@@ -42,7 +42,6 @@ export default function ProductSelectionPhase() {
             companyConfig: result.companyConfig,
             companyName: result.companyName,
             companyId: result.companyId,
-            includeNursingStatus: result.companyConfig?.onboarding?.includeNursingStatusQuestion !== false,
           });
         }
       } catch (e) {

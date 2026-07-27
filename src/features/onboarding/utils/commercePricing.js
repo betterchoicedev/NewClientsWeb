@@ -16,10 +16,11 @@ function defaultHomepageProducts() {
 export function resolveCatalogProducts(companyConfig) {
   const config = parseCompanyConfig(companyConfig);
   const customProducts = normalizeCustomProducts(extractRawCustomProducts(config));
+  const defaults = defaultHomepageProducts();
   if (customProducts.length > 0) {
-    return customProducts;
+    return [...customProducts, ...defaults];
   }
-  return defaultHomepageProducts();
+  return defaults;
 }
 
 export function getProductPriceCents(product) {

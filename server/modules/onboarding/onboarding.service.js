@@ -3,6 +3,8 @@
  * clientDB = main Supabase; adminDB = chat Supabase (separate projects).
  */
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.service');
 const { buildMealPlanStructure, sortMealPlanStructure, normalizeMealPlanStructureForDb } = require('../../utils/mealStructure');
 const { formatMacrosGramStrings } = require('../../utils/nutritionFormats');
@@ -10,6 +12,27 @@ const { formatMacrosGramStrings } = require('../../utils/nutritionFormats');
 const VALID_PHASES = new Set(['welcome', 'products', 'promo', 'payment', 'questions', 'committing', 'pwa', 'finalizing', 'done']);
 const MAX_DRAFT_BYTES = 48 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// #region agent log
+const DEBUG_LOG_PATH = path.resolve(__dirname, '../../../../.cursor/debug-6a05fb.log');
+function agentDebugLog(location, message, data, hypothesisId) {
+  try {
+    fs.appendFileSync(
+      DEBUG_LOG_PATH,
+      `${JSON.stringify({ sessionId: '6a05fb', location, message, data, hypothesisId, timestamp: Date.now() })}\n`
+    );
+  } catch (_) { /* ignore */ }
+}
+function countCustomStepsInConfig(companyConfig) {
+  const config = parseCompanyConfig(companyConfig);
+  const steps = config?.onboarding?.customSteps;
+  const raw = Array.isArray(steps) ? steps.length : 0;
+  const filtered = Array.isArray(steps)
+    ? steps.filter((s) => s && (s.question || s.title || s.titleEn || s.label)).length
+    : 0;
+  return { raw, filtered, hasOnboarding: Boolean(config?.onboarding) };
+}
+// #endregion
 
 const ACTIVITY_MULT = {
   sedentary: 1.2,
@@ -69,9 +92,40 @@ function normalizePhone(phone, countryCode = '+972') {
   return p;
 }
 
-function isDigitsOnlyPhone(phone) {
-  const digits = String(phone || '').replace(/\D/g, '');
-  return digits.length >= 7 && digits.length <= 15;
+const PHONE_DIGIT_RULES = {
+  '+972': { min: 9, max: 9, inputMaxLength: 10, stripLeadingZero: true },
+};
+
+const DEFAULT_PHONE_DIGIT_RULE = { min: 7, max: 15 };
+
+function getPhoneDigitRule(countryCode = '+972') {
+  return PHONE_DIGIT_RULES[countryCode] || DEFAULT_PHONE_DIGIT_RULE;
+}
+
+function normalizeLocalPhoneDigits(phone, countryCode = '+972') {
+  let digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const rule = getPhoneDigitRule(countryCode);
+  if (rule.stripLeadingZero && digits.startsWith('0')) {
+    digits = digits.substring(1);
+  }
+  return digits;
+}
+
+function phoneDigitValidationMessage(countryCode = '+972') {
+  const rule = getPhoneDigitRule(countryCode);
+  if (rule.stripLeadingZero && rule.min === rule.max) {
+    return `Enter ${rule.min} digits without the leading 0 (e.g. 501234567)`;
+  }
+  const { min, max } = rule;
+  if (min === max) return `Phone number must be exactly ${min} digits`;
+  return `Phone number must be ${min}–${max} digits`;
+}
+
+function isDigitsOnlyPhone(phone, countryCode = '+972') {
+  const localDigits = normalizeLocalPhoneDigits(phone, countryCode);
+  const { min, max } = getPhoneDigitRule(countryCode);
+  return localDigits.length >= min && localDigits.length <= max;
 }
 
 async function isPhoneTaken(phone, userId, userCode, { clientDB, adminDB }) {
@@ -155,10 +209,6 @@ function recomputeDailyCalories(answers) {
   const bmr = calculateBMR(age, gender, weightKg, heightCm);
   if (!bmr) return null;
   let tdee = bmr * (ACTIVITY_MULT[answers.activity_level] || 1.2);
-  if (answers.gender === 'female') {
-    if (answers.nursing_status === 'exclusive') tdee += 500;
-    else if (answers.nursing_status === 'partial') tdee += 300;
-  }
   const goal = answers.goal;
   if (goal === 'lose' || goal === 'cut') tdee -= 500;
   else if (goal === 'gain' || goal === 'muscle') tdee += 300;
@@ -349,6 +399,7 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
   if (weightKg != null) clientData.current_weight = weightKg;
   if (targetWeight != null) clientData.target_weight = targetWeight;
   if (heightCm != null) clientData.height = heightCm;
+  clientData.measurement_system = 'metric';
   if (foodAllergies !== null) clientData.food_allergies = foodAllergies;
   if (answers.food_limitations !== undefined) clientData.food_limitations = foodLimitations;
   if (answers.activity_level) clientData.activity_level = answers.activity_level;
@@ -371,7 +422,6 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
     date_of_birth: birthDate || undefined,
     age: age != null ? age : undefined,
     gender: genderValue || undefined,
-    nursing_status: answers.gender === 'female' ? (answers.nursing_status || null) : null,
     weight_kg: weightKg,
     height_cm: heightCm,
     food_allergies: foodAllergies,
@@ -460,7 +510,7 @@ const STEP_FIELD_MAP = {
   phone: { clientKeys: ['phone'], chatKeys: ['phone_number', 'whatsapp_number'] },
   city: { clientKeys: ['city', 'region', 'timezone'], chatKeys: ['city', 'region', 'timezone'] },
   dob: { clientKeys: ['birth_date', 'age'], chatKeys: ['date_of_birth', 'age'] },
-  gender: { clientKeys: ['gender'], chatKeys: ['gender', 'nursing_status'] },
+  gender: { clientKeys: ['gender'], chatKeys: ['gender'] },
   biometrics: { clientKeys: ['current_weight', 'height', 'target_weight'], chatKeys: ['weight_kg', 'height_cm'] },
   activity: { clientKeys: ['activity_level'], chatKeys: ['Activity_level', 'user_context'] },
   goal: { clientKeys: ['goal'], chatKeys: ['goal'] },
@@ -544,12 +594,13 @@ async function saveStep(userId, { stepId, answers, stepIndex, phase, draft, emai
 
   if (stepId === 'phone') {
     const localPhone = answers?.phone;
-    if (!isDigitsOnlyPhone(localPhone)) {
-      const err = new Error('Phone number must contain only digits (7–15)');
+    const phoneCountryCode = answers?.phoneCountryCode || '+972';
+    if (!isDigitsOnlyPhone(localPhone, phoneCountryCode)) {
+      const err = new Error(phoneDigitValidationMessage(phoneCountryCode));
       err.status = 400;
       throw err;
     }
-    const normalizedPhone = normalizePhone(localPhone, answers?.phoneCountryCode || '+972');
+    const normalizedPhone = normalizePhone(localPhone, phoneCountryCode);
     if (await isPhoneTaken(normalizedPhone, userId, userCode, { clientDB, adminDB })) {
       const err = new Error('This phone number is already registered');
       err.status = 409;
@@ -580,6 +631,9 @@ async function saveStep(userId, { stepId, answers, stepIndex, phase, draft, emai
     onboarding_completed: false,
     updated_at: new Date().toISOString(),
   };
+  if (stepId === 'biometrics') {
+    partialClient.measurement_system = 'metric';
+  }
   const partialChat = {
     ...pickPartialPayload(chatUserData, chatKeys),
     onboarding_done: false,
@@ -754,7 +808,7 @@ async function commitOnboarding(userId, body, { clientDB, adminDB }) {
   };
 }
 
-async function getStatus(userId, { clientDB, adminDB }) {
+async function getStatus(userId, { clientDB, adminDB, companyId: hintedCompanyId } = {}) {
   const { data: client, error } = await clientDB
     .from('clients')
     .select(
@@ -775,6 +829,9 @@ async function getStatus(userId, { clientDB, adminDB }) {
       draft: null,
       mealPlanReady: false,
       resumeStepHint: 0,
+      companyId: null,
+      companyName: null,
+      companyConfig: null,
     };
   }
 
@@ -841,6 +898,32 @@ async function getStatus(userId, { clientDB, adminDB }) {
     resumeStepHint = 6;
   }
 
+  let company = null;
+  if (adminDB && userId) {
+    company = await resolveUserCompany(userId, { clientDB, adminDB });
+    if (!company && hintedCompanyId) {
+      const rows = await fetchCompanies({ adminDB, clientDB, companyId: hintedCompanyId });
+      const row = rows[0];
+      if (row) {
+        company = {
+          companyId: row.id,
+          companyName: row.name,
+          companyConfig: parseCompanyConfig(row.config),
+        };
+      }
+    }
+  }
+
+  // #region agent log
+  agentDebugLog('onboarding.service.js:getStatus', 'status company context', {
+    hasCompany: Boolean(company),
+    companyId: company?.companyId || null,
+    ...(company?.companyConfig ? countCustomStepsInConfig(company.companyConfig) : { raw: 0, filtered: 0, hasOnboarding: false }),
+    resumeStepHint,
+    phase,
+  }, 'B');
+  // #endregion
+
   return {
     completed: client.onboarding_completed === true || subscriptionStatus === 'active',
     phase,
@@ -851,6 +934,9 @@ async function getStatus(userId, { clientDB, adminDB }) {
     draft: onboardingDraft,
     mealPlanReady,
     resumeStepHint,
+    companyId: company?.companyId || null,
+    companyName: company?.companyName || null,
+    companyConfig: company?.companyConfig || null,
     clientSummary: {
       first_name: client.first_name,
       last_name: client.last_name,
@@ -1116,37 +1202,71 @@ async function assignClientToCompanyManager(userId, companyId, { clientDB, admin
 }
 
 async function resolveUserCompany(userId, { clientDB, adminDB }) {
-  if (!adminDB || !userId) return null;
+  if (!adminDB || !userId) {
+    // #region agent log
+    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'no_admin_db_or_userId', hasAdminDB: Boolean(adminDB) }, 'A');
+    // #endregion
+    return null;
+  }
 
   const { data: client } = await clientDB
     .from('clients')
     .select('user_code')
     .eq('user_id', userId)
     .maybeSingle();
-  if (!client?.user_code) return null;
+  if (!client?.user_code) {
+    // #region agent log
+    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'no_user_code' }, 'A');
+    // #endregion
+    return null;
+  }
 
   const { data: chatUser } = await adminDB
     .from('chat_users')
     .select('provider_id')
     .eq('user_code', client.user_code)
     .maybeSingle();
-  if (!chatUser?.provider_id) return null;
+  if (!chatUser?.provider_id) {
+    // #region agent log
+    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'no_provider_id', userCodeLen: String(client.user_code).length }, 'A');
+    // #endregion
+    return null;
+  }
 
   const { data: provider } = await adminDB
     .from('profiles')
     .select('company_id')
     .eq('id', chatUser.provider_id)
     .maybeSingle();
-  if (!provider?.company_id) return null;
+  if (!provider?.company_id) {
+    // #region agent log
+    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'no_company_id_on_provider', hasProviderId: Boolean(chatUser.provider_id) }, 'A');
+    // #endregion
+    return null;
+  }
 
   const rows = await fetchCompanies({ adminDB, clientDB, companyId: provider.company_id });
   const company = rows[0];
-  if (!company) return null;
+  if (!company) {
+    // #region agent log
+    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'company_row_not_found', companyId: provider.company_id }, 'A');
+    // #endregion
+    return null;
+  }
+
+  const companyConfig = parseCompanyConfig(company.config);
+  // #region agent log
+  agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve ok', {
+    companyId: company.id,
+    companyName: company.name,
+    ...countCustomStepsInConfig(companyConfig),
+  }, 'A');
+  // #endregion
 
   return {
     companyId: company.id,
     companyName: company.name,
-    companyConfig: parseCompanyConfig(company.config),
+    companyConfig,
   };
 }
 
@@ -1168,6 +1288,16 @@ async function initCommerceSession(userId, { email, companyId: hintedCompanyId }
 
   const companyConfig = company?.companyConfig || null;
   const customProducts = extractRawCustomProducts(companyConfig);
+
+  // #region agent log
+  agentDebugLog('onboarding.service.js:initCommerceSession', 'commerce company context', {
+    hasCompany: Boolean(company),
+    companyId: company?.companyId || null,
+    usedHintedCompanyId: Boolean(hintedCompanyId),
+    hintedCompanyId: hintedCompanyId || null,
+    ...(companyConfig ? countCustomStepsInConfig(companyConfig) : { raw: 0, filtered: 0, hasOnboarding: false }),
+  }, 'B');
+  // #endregion
 
   return {
     userCode: client.user_code,

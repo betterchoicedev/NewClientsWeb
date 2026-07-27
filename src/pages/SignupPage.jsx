@@ -5,7 +5,31 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { checkEmailExists, signInWithGoogle, signUp } from '../supabase/auth';
 import { saveSessionFromAuthResponse } from '../lib/apiClient';
+import { readOnboardingCompanyContext, saveOnboardingCompanyContext } from '../features/onboarding/onboardingCompanyContext';
 import { motion, AnimatePresence } from 'framer-motion';
+
+async function ensureOnboardingCompanyContext(managerId, linkId) {
+  const existing = readOnboardingCompanyContext();
+  if (existing?.companyConfig?.onboarding?.customSteps?.length) return;
+  if (!managerId && !linkId) return;
+  const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+  try {
+    const response = await fetch(`${apiUrl}/api/landing/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ managerId: managerId || null, linkId: linkId || null }),
+    });
+    const resData = await response.json();
+    if (!response.ok) return;
+    saveOnboardingCompanyContext({
+      companyId: resData.company?.id,
+      companyName: resData.company?.name,
+      companyConfig: resData.company?.config || {},
+    });
+  } catch (_) {
+    /* ignore */
+  }
+}
 
 function SignupPage() {
   const { language, direction, t, isTransitioning, toggleLanguage } = useLanguage();
@@ -169,6 +193,11 @@ function SignupPage() {
             else if (!row.is_active) { setError(language === 'hebrew' ? 'קישור ההרשמה אינו פעיל' : 'This registration link is no longer active'); setHasInvitationToken(false); }
             else { sessionStorage.setItem('manager_link_data', JSON.stringify({ ...md, manager_id: row.manager_id })); }
           }
+          try {
+            const raw = sessionStorage.getItem('manager_link_data');
+            const latest = raw ? JSON.parse(raw) : md;
+            await ensureOnboardingCompanyContext(latest?.manager_id, latest?.link_id);
+          } catch (_) { /* ignore */ }
           // When only manager_id (no link_id): unlimited dietitian link — no DB check, always valid
         } catch (checkError) { console.error('Error checking registration link:', checkError); }
       }

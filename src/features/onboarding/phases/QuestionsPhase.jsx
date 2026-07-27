@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useOnboardingStore, PHASES } from '../onboarding.store';
-import { buildSteps, normalizeGoalValue } from '../steps/stepDefs';
+import { buildSteps, extractCustomSteps, normalizeGoalValue } from '../steps/stepDefs';
 import StepFields, { validateStep } from '../steps/StepFields';
 import StepShell from '../components/StepShell';
 import { commitOnboarding, checkOnboardingPhone, saveOnboardingStep } from '../api/onboardingApi';
@@ -25,16 +25,30 @@ function commitErrorMessage(err, isHe) {
   return err?.message || (isHe ? 'שגיאה בשמירה' : 'Failed to save');
 }
 
+function customStepKey(step) {
+  const custom = step?.custom || {};
+  return custom.id || step?.fields?.[0]?.replace(/^custom_/, '') || step?.id?.replace(/^custom_/, '');
+}
+
+function isCustomStepAnswered(step, customAnswers = {}) {
+  const key = customStepKey(step);
+  const type = step?.custom?.type || 'text';
+  const val = customAnswers?.[key];
+  if (type === 'multiselect') return Array.isArray(val) && val.length > 0;
+  if (type === 'select') return Boolean(val && String(val).trim());
+  return Boolean(val && String(val).trim());
+}
+
 export default function QuestionsPhase({ userId, onCommitted }) {
   const stepIndex = useOnboardingStore((s) => s.stepIndex);
   const answers = useOnboardingStore((s) => s.answers);
-  const includeNursingStatus = useOnboardingStore((s) => s.includeNursingStatus);
   const companyConfig = useOnboardingStore((s) => s.companyConfig);
   const draftSyncError = useOnboardingStore((s) => s.draftSyncError);
   const nextStep = useOnboardingStore((s) => s.nextStep);
   const prevStep = useOnboardingStore((s) => s.prevStep);
   const forcePhase = useOnboardingStore((s) => s.forcePhase);
   const setUserCode = useOnboardingStore((s) => s.setUserCode);
+  const setStepIndex = useOnboardingStore((s) => s.setStepIndex);
   const setError = useOnboardingStore((s) => s.setError);
   const setLoading = useOnboardingStore((s) => s.setLoading);
   const loading = useOnboardingStore((s) => s.loading);
@@ -44,14 +58,35 @@ export default function QuestionsPhase({ userId, onCommitted }) {
   const [localError, setLocalError] = useState(null);
   const committingRef = useRef(false);
 
+  const customSteps = useMemo(() => extractCustomSteps(companyConfig), [companyConfig]);
+
   const steps = useMemo(
-    () =>
-      buildSteps({
-        includeNursingStatus,
-        customSteps: companyConfig?.onboarding?.customSteps || [],
-      }),
-    [includeNursingStatus, companyConfig]
+    () => buildSteps({ customSteps }),
+    [customSteps]
   );
+
+  useEffect(() => {
+    const customStepIds = steps.filter((s) => s.isCustom).map((s) => s.id);
+    // #region agent log
+    fetch('http://127.0.0.1:7453/ingest/cfcdcc1a-63b4-43aa-b1e8-30e257becdab',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a05fb'},body:JSON.stringify({sessionId:'6a05fb',location:'QuestionsPhase.jsx:steps',message:'questions steps built',data:{hasCompanyConfig:Boolean(companyConfig),customStepsCount:customSteps.length,totalSteps:steps.length,stepIndex,currentStepId:steps[stepIndex]?.id||null,customStepIds,companyId:useOnboardingStore.getState().companyId||null,runId:'post-fix-2'},hypothesisId:'E',timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [companyConfig, customSteps, steps, stepIndex]);
+
+  useEffect(() => {
+    if (!customSteps.length) return;
+    const firstCustomIdx = steps.findIndex((s) => s.isCustom);
+    if (firstCustomIdx < 0) return;
+
+    const lastCustomIdx = steps.reduce((acc, step, idx) => (step.isCustom ? idx : acc), -1);
+    const unansweredIdx = steps.findIndex(
+      (step) => step.isCustom && !isCustomStepAnswered(step, answers.custom_answers)
+    );
+    if (unansweredIdx < 0) return;
+
+    if (stepIndex > lastCustomIdx || (stepIndex >= firstCustomIdx && stepIndex < unansweredIdx)) {
+      setStepIndex(unansweredIdx);
+    }
+  }, [customSteps, steps, answers.custom_answers, stepIndex, setStepIndex]);
 
   const step = steps[stepIndex] || steps[0];
   const title = isHe ? (step?.titleHe || step?.titleEn) : step?.titleEn;
@@ -62,7 +97,7 @@ export default function QuestionsPhase({ userId, onCommitted }) {
 
     setLocalError(null);
     setError(null);
-    const validationError = validateStep(step, answers, { includeNursingStatus, isHe });
+    const validationError = validateStep(step, answers, { isHe });
     if (validationError) {
       setLocalError(validationError);
       return;

@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 // Import our highly scalable Template Factory
 import { getTemplate } from '../company/templates';
 import { DEFAULT_LANDING_CONTENT, normalizeLandingContent } from '../company/templates/landingContent';
+import { saveOnboardingCompanyContext } from '../features/onboarding/onboardingCompanyContext';
 
 export default function LandingPage() {
   const location = useLocation();
@@ -135,6 +136,15 @@ export default function LandingPage() {
         setCompanyName(resData.company.name || 'BetterChoice');
         setManagerData(resData.manager);
         setDbConfig(safeConfig);
+
+        saveOnboardingCompanyContext({
+          companyId: resData.company.id,
+          companyName: resData.company.name || 'BetterChoice',
+          companyConfig: rawCompanyConfig,
+        });
+        // #region agent log
+        fetch('http://127.0.0.1:7453/ingest/cfcdcc1a-63b4-43aa-b1e8-30e257becdab',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a05fb'},body:JSON.stringify({sessionId:'6a05fb',location:'LandingPage.jsx:validate',message:'saved onboarding company context',data:{companyId:resData.company?.id||null,customStepsCount:Array.isArray(rawCompanyConfig?.onboarding?.customSteps)?rawCompanyConfig.onboarding.customSteps.length:0,runId:'post-fix-2'},hypothesisId:'C',timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         
         const tokenLimitedLink = !!(link_id && (max_clients != null || expiry_date));
         const resolvedMaxSlots = serverMaxSlots ?? (max_clients != null ? Number(max_clients) : null);

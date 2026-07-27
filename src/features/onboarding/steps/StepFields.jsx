@@ -18,8 +18,9 @@ import {
   glassOptionBtnClass,
 } from '../components/glassStyles';
 import { normalizeGoalValue, isValidGoalValue } from './stepDefs';
+import { displayWeightKg, parseWeightInputToKg } from '../biometricUtils';
 import { PHONE_PREFIX_OPTIONS } from '../phonePrefixOptions';
-import { isValidPhoneDigits, sanitizePhoneDigits } from '../phoneUtils';
+import { getPhoneDigitValidationMessage, getPhoneInputMaxLength, isValidPhoneDigits, sanitizePhoneDigits } from '../phoneUtils';
 
 const inputClass = glassInputClass;
 const optionBtn = glassOptionBtnClass;
@@ -346,7 +347,6 @@ export default function StepFields({ step }) {
   const answers = useOnboardingStore((s) => s.answers);
   const setAnswer = useOnboardingStore((s) => s.setAnswer);
   const setAnswers = useOnboardingStore((s) => s.setAnswers);
-  const includeNursing = useOnboardingStore((s) => s.includeNursingStatus);
   const weightUnit = useOnboardingStore((s) => s.weightUnit);
   const heightUnit = useOnboardingStore((s) => s.heightUnit);
   const setUnits = useOnboardingStore((s) => s.setUnits);
@@ -432,7 +432,8 @@ export default function StepFields({ step }) {
             inputMode="numeric"
             pattern="[0-9]*"
             autoComplete="tel-national"
-            placeholder={isHe ? 'מספר טלפון' : 'Phone number'}
+            maxLength={getPhoneInputMaxLength(answers.phoneCountryCode || '+972')}
+            placeholder={isHe ? '501234567' : '501234567'}
             value={answers.phone || ''}
             onChange={(e) => setAnswer('phone', sanitizePhoneDigits(e.target.value))}
           />
@@ -494,22 +495,6 @@ export default function StepFields({ step }) {
               placeholder={isHe ? 'פרט...' : 'Please specify...'}
               value={answers.gender_other || ''}
               onChange={(e) => setAnswer('gender_other', e.target.value)}
-            />
-          )}
-          {includeNursing && answers.gender === 'female' && (
-            <SearchableSelect
-              options={[
-                { value: 'none', label: isHe ? 'לא מניקה' : 'Not nursing' },
-                { value: 'partial', label: isHe ? 'הנקה חלקית' : 'Partial nursing' },
-                { value: 'exclusive', label: isHe ? 'הנקה מלאה' : 'Exclusive nursing' },
-              ]}
-              value={answers.nursing_status || ''}
-              onChange={(v) => setAnswer('nursing_status', v)}
-              placeholder={isHe ? 'מצב פיזיולוגי' : 'Physiological state'}
-              searchPlaceholder={isHe ? 'חיפוש...' : 'Search...'}
-              emptyText={isHe ? 'לא נמצאו תוצאות' : 'No matches'}
-              isDark={isDarkMode}
-              inputClass={inputClass(isDarkMode)}
             />
           )}
         </div>
@@ -607,19 +592,27 @@ export default function StepFields({ step }) {
                   ? 'משקל נוכחי (ליברות)'
                   : 'Current weight (lbs)'
             }
-            value={answers.weight_kg || ''}
+            value={displayWeightKg(answers.weight_kg, showKg ? 'kg' : 'lbs')}
             onChange={(e) => {
-              let v = e.target.value;
-              if (!showKg && v) v = String((parseFloat(v) / 2.20462).toFixed(1));
-              setAnswer('weight_kg', v);
+              setAnswer('weight_kg', parseWeightInputToKg(e.target.value, showKg ? 'kg' : 'lbs'));
             }}
           />
           <input
             type="number"
             className={inputClass(isDarkMode)}
-            placeholder={isHe ? 'משקל מטרה (ק״ג)' : 'Target weight (kg)'}
-            value={answers.target_weight || ''}
-            onChange={(e) => setAnswer('target_weight', e.target.value)}
+            placeholder={
+              showKg
+                ? isHe
+                  ? 'משקל מטרה (ק״ג)'
+                  : 'Target weight (kg)'
+                : isHe
+                  ? 'משקל מטרה (ליברות)'
+                  : 'Target weight (lbs)'
+            }
+            value={displayWeightKg(answers.target_weight, showKg ? 'kg' : 'lbs')}
+            onChange={(e) => {
+              setAnswer('target_weight', parseWeightInputToKg(e.target.value, showKg ? 'kg' : 'lbs'));
+            }}
           />
         </div>
       );
@@ -842,7 +835,7 @@ export default function StepFields({ step }) {
   }
 }
 
-export function validateStep(step, answers, { includeNursingStatus = true, isHe = false } = {}) {
+export function validateStep(step, answers, { isHe = false } = {}) {
   if (!step) return null;
   const t = (en, he) => (isHe ? he : en);
 
@@ -874,8 +867,8 @@ export function validateStep(step, answers, { includeNursingStatus = true, isHe 
       break;
     case 'phone':
       if (!answers.phone?.trim()) return t('Please enter a phone number', 'נא להזין מספר טלפון');
-      if (!isValidPhoneDigits(answers.phone)) {
-        return t('Phone number must contain only digits (7–15)', 'מספר הטלפון חייב להכיל ספרות בלבד (7–15)');
+      if (!isValidPhoneDigits(answers.phone, answers.phoneCountryCode || '+972')) {
+        return getPhoneDigitValidationMessage(answers.phoneCountryCode || '+972', isHe);
       }
       break;
     case 'city':
@@ -892,9 +885,6 @@ export function validateStep(step, answers, { includeNursingStatus = true, isHe 
     case 'gender':
       if (!answers.gender) return t('Please select gender', 'נא לבחור מין');
       if (answers.gender === 'other' && !answers.gender_other?.trim()) return t('Please specify', 'נא לפרט');
-      if (includeNursingStatus && answers.gender === 'female' && !answers.nursing_status) {
-        return t('Please select physiological state', 'נא לבחור מצב פיזיולוגי');
-      }
       break;
     case 'biometrics':
       if (!answers.height_cm || !answers.weight_kg) {

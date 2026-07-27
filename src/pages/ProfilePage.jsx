@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany, getWeightLogs, createWeightLog } from '../supabase/secondaryClient';
 import { normalizePhoneForDatabase, signOut } from '../supabase/auth';
 import OnboardingGate from '../features/onboarding/OnboardingGate';
+import { saveOnboardingCompanyContext } from '../features/onboarding/onboardingCompanyContext';
 import { useOnboardingEntitlement } from '../features/onboarding/OnboardingEntitlementContext';
 import DailyLogTab from '../components/profile/DailyLogTab';
 import PricingTab from '../components/profile/PricingTab';
@@ -262,6 +263,9 @@ const ProfilePage = () => {
       setAssignedCompanyId(companyId || '');
       setAssignedCompanyName(companyName || '');
       setAssignedCompanyConfig(companyConfig);
+      if (companyId || companyConfig) {
+        saveOnboardingCompanyContext({ companyId, companyName, companyConfig });
+      }
       setProfileData((prev) => ({
         ...prev,
         companyId: companyId || ''

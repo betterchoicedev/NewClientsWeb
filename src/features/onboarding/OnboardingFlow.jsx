@@ -7,7 +7,8 @@ import {
   readSessionDraft,
   draftSavedAtMs,
 } from './hooks/useOnboardingDraftSync';
-import { getOnboardingStatus } from './api/onboardingApi';
+import { getOnboardingStatus, initCommerceSession } from './api/onboardingApi';
+import { readOnboardingCompanyContext, pickBestCompanyContext } from './onboardingCompanyContext';
 import { phaseFromStatus } from './onboarding.machine';
 import WelcomeStep from './steps/WelcomeStep';
 import ProductSelectionPhase from './phases/ProductSelectionPhase';
@@ -40,6 +41,15 @@ function applyDraftToStore({
     setUnits({ weightUnit: draft.weightUnit, heightUnit: draft.heightUnit });
   }
   if (draft.commerce) hydrateCommerce(draft.commerce);
+}
+
+function applyCompanyToStore(setCompany, payload) {
+  if (!payload?.companyConfig && !payload?.companyId) return;
+  setCompany({
+    companyConfig: payload.companyConfig ?? null,
+    companyName: payload.companyName ?? null,
+    companyId: payload.companyId ?? null,
+  });
 }
 
 function OnboardingBootstrap({ isHe }) {
@@ -89,12 +99,13 @@ export default function OnboardingFlow({
   useOnboardingDraftSync(user?.id, Boolean(user?.id) && !forceFresh && hydrated);
 
   useEffect(() => {
-    setCompany({
-      companyConfig,
-      companyName,
-      companyId,
-      includeNursingStatus: companyConfig?.onboarding?.includeNursingStatusQuestion !== false,
-    });
+    if (companyConfig || companyName || companyId) {
+      setCompany({
+        companyConfig,
+        companyName,
+        companyId,
+      });
+    }
     setSkipPayment(skipPayment || Boolean(user?.user_metadata?.skip_pricing));
   }, [companyConfig, companyName, companyId, skipPayment, user, setCompany, setSkipPayment]);
 
@@ -122,11 +133,34 @@ export default function OnboardingFlow({
 
     const local = readLocalDraft(user.id);
     const session = readSessionDraft(user.id);
+    const storedCompany = readOnboardingCompanyContext();
+    const hintedCompanyId = companyId || storedCompany?.companyId || null;
+
+    if (storedCompany?.companyConfig || storedCompany?.companyId) {
+      applyCompanyToStore(setCompany, storedCompany);
+    }
 
     (async () => {
       try {
-        const status = await getOnboardingStatus();
+        const [status, commerce] = await Promise.all([
+          getOnboardingStatus({ companyId: hintedCompanyId }),
+          initCommerceSession({ companyId: hintedCompanyId }).catch((e) => {
+            console.warn('[OnboardingFlow] initCommerceSession failed', e);
+            return null;
+          }),
+        ]);
         if (cancelled) return;
+
+        const bestCompany = pickBestCompanyContext(storedCompany, status, commerce);
+        if (bestCompany) {
+          applyCompanyToStore(setCompany, bestCompany);
+        }
+
+        // #region agent log
+        fetch('http://127.0.0.1:7453/ingest/cfcdcc1a-63b4-43aa-b1e8-30e257becdab',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a05fb'},body:JSON.stringify({sessionId:'6a05fb',location:'OnboardingFlow.jsx:bootstrap',message:'company loaded at bootstrap',data:{bestCompanyId:bestCompany?.companyId||null,bestCustomSteps:Array.isArray(bestCompany?.companyConfig?.onboarding?.customSteps)?bestCompany.companyConfig.onboarding.customSteps.length:0,hintedCompanyId:hintedCompanyId||null,storedCompanyId:storedCompany?.companyId||null,storedCustomSteps:Array.isArray(storedCompany?.companyConfig?.onboarding?.customSteps)?storedCompany.companyConfig.onboarding.customSteps.length:0,runId:'post-fix-2'},hypothesisId:'C',timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+
+        if (commerce?.userCode) setUserCode(commerce.userCode);
 
         if (status.completed) {
           hydrateFromStatus(status);
@@ -205,7 +239,23 @@ export default function OnboardingFlow({
     return () => {
       cancelled = true;
     };
-  }, [user?.id, forceFresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, companyId, forceFresh]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!user?.id || !companyId || !hydrated) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const commerce = await initCommerceSession({ companyId });
+        if (!cancelled) applyCompanyToStore(setCompany, commerce);
+      } catch (e) {
+        console.warn('[OnboardingFlow] company refresh failed', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, companyId, hydrated, setCompany]);
 
   const handleDismiss = useCallback(() => {
     if (!allowDismiss) return;

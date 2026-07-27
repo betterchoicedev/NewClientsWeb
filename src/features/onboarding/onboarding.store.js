@@ -20,7 +20,6 @@ export const emptyAnswers = () => ({
   timezone: '',
   date_of_birth: '',
   gender: '',
-  nursing_status: '',
   height_cm: '',
   weight_kg: '',
   target_weight: '',
@@ -59,7 +58,6 @@ const initialState = {
   companyConfig: null,
   companyName: null,
   companyId: null,
-  includeNursingStatus: true,
   weightUnit: 'kg',
   heightUnit: 'cm',
   skipPayment: false,
@@ -75,7 +73,6 @@ export const useOnboardingStore = create((set, get) => ({
       companyConfig: get().companyConfig,
       companyName: get().companyName,
       companyId: get().companyId,
-      includeNursingStatus: get().includeNursingStatus,
     };
     set({ ...initialState, answers: emptyAnswers(), ...preservedCompany, ...overrides });
   },
@@ -127,12 +124,11 @@ export const useOnboardingStore = create((set, get) => ({
 
   setUserCode: (userCode) => set({ userCode }),
 
-  setCompany: ({ companyConfig, companyName, companyId, includeNursingStatus }) =>
+  setCompany: ({ companyConfig, companyName, companyId }) =>
     set({
       companyConfig: companyConfig ?? null,
       companyName: companyName ?? null,
       companyId: companyId ?? null,
-      includeNursingStatus: includeNursingStatus !== false,
     }),
 
   setSelectedProductIds: (selectedProductIds) => {

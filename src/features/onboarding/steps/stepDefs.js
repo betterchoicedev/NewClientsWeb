@@ -37,14 +37,10 @@ const ACTIVITY_MULT = {
   extra: 1.9,
 };
 
-export function calculateDailyCalories(age, gender, weightKg, heightCm, activityLevel, goal, nursingStatus) {
+export function calculateDailyCalories(age, gender, weightKg, heightCm, activityLevel, goal) {
   const bmr = calculateBMR(age, gender, weightKg, heightCm);
   if (!bmr) return null;
   let tdee = bmr * (ACTIVITY_MULT[activityLevel] || 1.2);
-  if (gender === 'female') {
-    if (nursingStatus === 'exclusive') tdee += 500;
-    else if (nursingStatus === 'partial') tdee += 300;
-  }
   if (goal === 'lose' || goal === 'cut') tdee -= 500;
   else if (goal === 'gain' || goal === 'muscle') tdee += 300;
   return Math.round(Math.max(1200, tdee));
@@ -115,7 +111,7 @@ export const STEP_DEFS = [
   { id: 'phone', titleEn: 'Phone Number', titleHe: 'מספר טלפון', fields: ['phone'] },
   { id: 'city', titleEn: 'Location', titleHe: 'מיקום', fields: ['country_code', 'city', 'timezone', 'region'] },
   { id: 'dob', titleEn: 'Date of Birth', titleHe: 'תאריך לידה', fields: ['date_of_birth'] },
-  { id: 'gender', titleEn: 'Gender', titleHe: 'מין', fields: ['gender', 'nursing_status'] },
+  { id: 'gender', titleEn: 'Gender', titleHe: 'מין', fields: ['gender'] },
   { id: 'biometrics', titleEn: 'Height & Weight', titleHe: 'גובה ומשקל', fields: ['height_cm', 'weight_kg', 'target_weight'] },
   { id: 'activity', titleEn: 'Activity', titleHe: 'פעילות', fields: ['activity_description', 'activity_level'] },
   { id: 'goal', titleEn: 'Goal', titleHe: 'מטרה', fields: ['goal'] },
@@ -127,16 +123,23 @@ export const STEP_DEFS = [
   { id: 'medical', titleEn: 'Medical Conditions', titleHe: 'מצבים רפואיים', fields: ['medical_conditions'] },
 ];
 
-export function buildSteps({ includeNursingStatus = true, customSteps = [] } = {}) {
-  const core = STEP_DEFS.map((s) => {
-    if (s.id === 'gender' && !includeNursingStatus) {
-      return {
-        ...s,
-        fields: ['gender'],
-      };
+export function extractCustomSteps(companyConfig) {
+  if (!companyConfig) return [];
+  let config = companyConfig;
+  if (typeof config === 'string') {
+    try {
+      config = JSON.parse(config);
+    } catch {
+      return [];
     }
-    return s;
-  });
+  }
+  const steps = config?.onboarding?.customSteps;
+  if (!Array.isArray(steps)) return [];
+  return steps.filter((step) => step && (step.question || step.title || step.titleEn || step.label));
+}
+
+export function buildSteps({ customSteps = [] } = {}) {
+  const core = STEP_DEFS;
 
   const customs = (customSteps || []).map((cs, i) => ({
     id: `custom_${cs.id || i}`,

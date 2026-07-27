@@ -35,8 +35,7 @@ export default function CaloriesMacrosFields({ isHe, isDark }) {
       answers.weight_kg,
       answers.height_cm,
       answers.activity_level,
-      answers.goal,
-      answers.nursing_status
+      answers.goal
     );
   }, [
     answers.date_of_birth,
@@ -45,7 +44,6 @@ export default function CaloriesMacrosFields({ isHe, isDark }) {
     answers.height_cm,
     answers.activity_level,
     answers.goal,
-    answers.nursing_status,
   ]);
 
   const calAnchor = computedCalories ?? null;

@@ -117,8 +117,10 @@ export async function completeOnboardingAfterPayment() {
   return parseJson(res);
 }
 
-export async function getOnboardingStatus() {
-  const res = await fetch(`${apiBase()}/api/onboarding/status`, {
+export async function getOnboardingStatus({ companyId } = {}) {
+  const url = new URL(`${apiBase()}/api/onboarding/status`);
+  if (companyId) url.searchParams.set('companyId', String(companyId));
+  const res = await fetch(url.toString(), {
     method: 'GET',
     headers: authHeaders(),
   });

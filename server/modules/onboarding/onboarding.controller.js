@@ -70,7 +70,8 @@ async function getStatus(req, res) {
   try {
     const userId = resolveUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    const status = await svc.getStatus(userId, { clientDB, adminDB });
+    const companyId = req.query?.companyId || req.body?.companyId || null;
+    const status = await svc.getStatus(userId, { clientDB, adminDB, companyId });
     return res.json(status);
   } catch (error) {
     console.error('GET /api/onboarding/status error:', error);
