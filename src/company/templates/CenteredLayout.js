@@ -1,91 +1,105 @@
 import React from 'react';
+import { Lock, ArrowRight } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { useTheme } from '../../context/ThemeContext';
 import ScarcityWidget from '../../components/ScarcityWidget';
-import { buildLayoutThemeStyles, getLayoutPageBackgroundClass } from './layoutTheme';
+import { getLocalizedLandingContent } from './landingContent';
+import LandingSections from './sections/LandingSections';
+import LandingFlow from './sections/LandingFlow';
+import HeroFlowBridge, { HERO_CONTENT_CLASS, HERO_VIEWPORT_CLASS } from './sections/HeroFlowBridge';
+import { glassCardClass, primaryButtonClass } from './sections/glassStyles';
 
 function CenteredLayout({ config, manager, campaign, navigate, hash }) {
   const { language } = useLanguage();
-  const { isDarkMode } = useTheme();
-  const content = config?.content || {};
   const colors = config?.ui?.themeSettings?.colors || {};
-  const themeStyles = buildLayoutThemeStyles(colors);
-  const pageBg = getLayoutPageBackgroundClass(!isDarkMode);
+  const content = getLocalizedLandingContent(config?.content, language);
+  const { hero } = content;
 
-  const title = content.heroTitle?.[language] || 'BetterChoice Portal';
-  const subtitle = content.heroSubtitle?.[language] || '';
-  const paragraph = content.heroParagraph?.[language] || '';
-  const ctaText = content.ctaText?.[language] || 'Get Started';
-  const features = content.features?.[language] || [];
+  const handleCta = () => navigate(`/signup${hash}`);
 
   return (
-    <main className={`flex-1 flex flex-col items-center justify-center min-h-full p-4 md:p-8 w-full animate-fadeIn select-none ${pageBg}`}>
-      <div style={themeStyles} className="w-full max-w-3xl mx-auto bg-[var(--theme-surface)] backdrop-blur-xl rounded-[2rem] p-8 md:p-14 shadow-2xl border border-[var(--theme-secondary)] relative transition-all duration-300">
-        <div className="flex justify-center mb-6">
-          <span className="px-4 py-1.5 rounded-full bg-[var(--theme-secondary)] text-[var(--theme-accent)] text-xs font-bold tracking-widest uppercase border border-[var(--theme-primary)]/20">
-            {language === 'hebrew' ? 'שלב 1 מתוך 3: הפעלה' : 'Step 1 of 3: Activation'}
-          </span>
-        </div>
-
-        <div className="text-center">
-          {manager?.name && (
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--theme-secondary)] border border-[var(--theme-primary)]/20 text-sm font-semibold text-[var(--theme-accent)] mb-6 tracking-wide">
-              <span className="h-2 w-2 rounded-full bg-[var(--theme-primary)] animate-pulse" />
-              <span>
-                {language === 'hebrew' ? 'יועצת פעילה:' : 'Active consultant:'} <strong>{manager.name}</strong>
+    <LandingFlow colors={colors}>
+      <section className={HERO_VIEWPORT_CLASS}>
+        <div className={HERO_CONTENT_CLASS}>
+          <div
+            className={`${glassCardClass('w-full max-w-4xl mx-auto p-5 sm:p-8 md:p-10 lg:p-12 relative z-10')} border-[color-mix(in_srgb,var(--theme-secondary)_35%,transparent)]`}
+          >
+            <div className="flex justify-center mb-4 md:mb-6">
+              <span className="px-3 py-1 md:px-4 md:py-1.5 rounded-full bg-[color-mix(in_srgb,var(--theme-secondary)_45%,transparent)] text-[var(--theme-accent)] text-[10px] md:text-xs font-bold tracking-widest uppercase border border-[var(--theme-glass-border)] backdrop-blur-sm">
+                {hero.badge}
               </span>
             </div>
-          )}
 
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-4 text-[var(--theme-text)] leading-tight">
-            {title}
-          </h1>
+            <div className={`${hero.imageUrl ? 'grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 lg:gap-10 items-center' : ''}`}>
+              <div className="text-center lg:text-start">
+                {manager?.name && (
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full bg-[color-mix(in_srgb,var(--theme-secondary)_40%,transparent)] border border-[var(--theme-glass-border)] text-xs md:text-sm font-semibold text-[var(--theme-accent)] mb-4 md:mb-6 tracking-wide backdrop-blur-sm">
+                    <span className="h-2 w-2 rounded-full bg-[var(--theme-primary)] animate-pulse" />
+                    <span>
+                      {language === 'hebrew' ? 'יועצת פעילה:' : 'Active consultant:'}{' '}
+                      <strong className="text-[var(--theme-text)]">{manager.name}</strong>
+                    </span>
+                  </div>
+                )}
 
-          <p className="text-xl md:text-2xl font-bold mb-4 max-w-xl mx-auto leading-snug text-[var(--theme-accent)]">
-            {subtitle}
-          </p>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight mb-3 md:mb-4 text-[var(--theme-text)] leading-tight">
+                  {hero.title}
+                </h1>
 
-          {paragraph && (
-            <p className="text-[var(--theme-text-muted)] text-base md:text-lg mb-8 max-w-xl mx-auto font-medium leading-relaxed">
-              {paragraph}
-            </p>
-          )}
-        </div>
+                {hero.subtitle && (
+                  <p className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold mb-3 md:mb-4 max-w-xl mx-auto lg:mx-0 leading-snug text-[var(--theme-accent)]">
+                    {hero.subtitle}
+                  </p>
+                )}
 
-        {features.length > 0 && (
-          <div className="flex flex-col items-center gap-3 mb-10 max-w-md mx-auto">
-            {features.map((feature, idx) => (
-              <div key={idx} className="flex items-center gap-3 w-full bg-[var(--theme-secondary)]/50 px-4 py-3 rounded-xl border border-[var(--theme-secondary)]">
-                <div className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-[var(--theme-primary)] text-stone-900 font-bold text-sm">
-                  ✓
+                {hero.paragraph && (
+                  <p className="text-sm md:text-base lg:text-lg text-[var(--theme-text-muted)] mb-6 md:mb-8 max-w-xl mx-auto lg:mx-0 font-medium leading-relaxed">
+                    {hero.paragraph}
+                  </p>
+                )}
+
+                <div className="pt-1 md:pt-2 flex flex-col items-center lg:items-start">
+                  <button type="button" onClick={handleCta} className={primaryButtonClass('w-full sm:w-auto sm:min-w-[240px] md:min-w-[280px] text-base md:text-lg py-3 md:py-4')}>
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      {hero.ctaText}
+                      <ArrowRight className="w-5 h-5" />
+                    </span>
+                    <div className="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
+                  </button>
+
+                  <span className="mt-3 md:mt-4 text-[var(--theme-text-muted)] text-[10px] md:text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5" />
+                    {content.finalCta.trustNote || (language === 'hebrew' ? 'חיבור מאובטח ומוצפן' : 'Secure & Encrypted Connection')}
+                  </span>
                 </div>
-                <span className="text-[var(--theme-text)] font-semibold text-sm md:text-base">{feature}</span>
               </div>
-            ))}
+
+              {hero.imageUrl && (
+                <div className="relative rounded-2xl overflow-hidden border border-[var(--theme-glass-border)] shadow-2xl shadow-[var(--theme-glow-primary)]/15 aspect-[16/10] sm:aspect-[4/3] lg:aspect-auto lg:min-h-[280px] max-h-56 sm:max-h-none mx-auto w-full">
+                  <img src={hero.imageUrl} alt={hero.title} className="w-full h-full object-cover" />
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      background:
+                        'linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 15%, transparent), transparent 60%)',
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {campaign?.isSmartLink && (
+              <div className="mt-6 md:mt-10 border-t border-[var(--theme-glass-border)] pt-6 md:pt-8 w-full">
+                <ScarcityWidget campaign={campaign} />
+              </div>
+            )}
           </div>
-        )}
-
-        <div className="pt-2 flex flex-col items-center">
-          <button
-            type="button"
-            onClick={() => navigate(`/signup${hash}`)}
-            className="w-full sm:w-4/5 px-10 py-5 rounded-2xl text-xl font-black transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 shadow-xl shadow-[var(--theme-primary)]/10 bg-[var(--theme-primary)] text-stone-900 hover:opacity-90"
-          >
-            {ctaText}
-          </button>
-
-          <span className="mt-4 text-[var(--theme-text-muted)] text-xs font-semibold uppercase tracking-wider flex items-center gap-1">
-            🔒 {language === 'hebrew' ? 'חיבור מאובטח ומוצפן' : 'Secure & Encrypted Connection'}
-          </span>
         </div>
 
-        {campaign?.isSmartLink && (
-          <div className="mt-10 border-t border-[var(--theme-secondary)] pt-8 w-full">
-            <ScarcityWidget campaign={campaign} />
-          </div>
-        )}
-      </div>
-    </main>
+        <HeroFlowBridge />
+      </section>
+
+      <LandingSections content={content} onCtaClick={handleCta} campaign={campaign} variant="default" />
+    </LandingFlow>
   );
 }
 

@@ -16,7 +16,6 @@ const legacyDefaultConfig = {
     mealPlanTrigger: "after_subscription_path",
     showUsageBasedOffer: true,
     sendWelcomeDuringOnboarding: true,
-    includeNursingStatusQuestion: true,
     setPendingPaymentAfterSubmit: true
   }
 };

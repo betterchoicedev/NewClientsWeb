@@ -641,11 +641,6 @@ const PricingTab = ({
                     : 'Reactivation is not automatic and requires a manual review by our team.'
                   }
                 </p>
-                {!!userCode && (
-                  <p className={`${themeClasses.textPrimary} text-sm font-medium mb-4`}>
-                    {language === 'hebrew' ? 'קוד משתמש: ' : 'User Code: '}{userCode}
-                  </p>
-                )}
                 <button
                   type="button"
                   onClick={handleContactSupport}

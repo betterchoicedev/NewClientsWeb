@@ -288,7 +288,7 @@ export const getClientRecord = async (userId) => {
  * Ensure a `clients` row (and matching `chat_users` row with provider_id) exists for
  * the currently authenticated user. Called from the OAuth callback path so that
  * Google sign-ups have a user_code + company assignment by the time the
- * OnboardingModal opens. Safe to call when a row already exists — returns early.
+ * OnboardingGate opens. Safe to call when a row already exists — returns early.
  *
  * Returns: { ok: boolean, alreadyExisted?: boolean, data?: any, error?: any }
  */

@@ -1,7 +1,10 @@
 const { randomUUID } = require('crypto');
+const OpenAI = require('openai');
 const { clientDB, adminDB } = require('../../config/db');
 const { parseTimeToFloat } = require('../../utils/helpers');
+const { formatCityLabel } = require('../../utils/cityDisplay');
 const { generateUpdatedMealPlan, createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.service');
+const { formatMacrosGramStrings, normalizeMealPlanForDb, normalizeChatUserPayloadForDb } = require('../../utils/nutritionFormats');
 
 // ─── Resolve user_code helper ─────────────────────────────────────────────────
 async function _resolveUserCode(authUserId, email) {
@@ -82,9 +85,9 @@ async function updateUserSettings(req, res) {
 
 async function getOnboardingClientData(req, res) {
   try {
-    const { user_id } = req.query;
-    if (!user_id) return res.status(400).json({ error: 'user_id is required' });
-    const { data, error } = await clientDB.from('clients').select('*').eq('user_id', user_id).single();
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { data, error } = await clientDB.from('clients').select('*').eq('user_id', userId).single();
     if (error) {
       if (error.code === 'PGRST116') return res.json({ data: null });
       return res.status(500).json({ error: 'Failed to fetch client data', message: error.message });
@@ -97,10 +100,10 @@ async function getOnboardingClientData(req, res) {
 
 async function getOnboardingChatUserMealData(req, res) {
   try {
-    const { user_code } = req.query;
-    if (!user_code) return res.status(400).json({ error: 'user_code is required' });
+    const userCode = req.userCode;
+    if (!userCode) return res.status(400).json({ error: 'user_code is required' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
-    const { data, error } = await adminDB.from('chat_users').select('number_of_meals, meal_plan_structure, first_meal_time, last_meal_time, client_preference').eq('user_code', user_code).single();
+    const { data, error } = await adminDB.from('chat_users').select('number_of_meals, meal_plan_structure, first_meal_time, last_meal_time, client_preference').eq('user_code', userCode).single();
     if (error) {
       if (error.code === 'PGRST116') return res.json({ data: null });
       return res.status(500).json({ error: 'Failed to fetch chat user meal data', message: error.message });
@@ -113,7 +116,9 @@ async function getOnboardingChatUserMealData(req, res) {
 
 async function checkOnboardingPhone(req, res) {
   try {
-    const { phone, user_id, user_code } = req.body;
+    const { phone } = req.body;
+    const user_id = req.userId;
+    const user_code = req.userCode;
     if (!phone) return res.status(400).json({ error: 'phone is required' });
 
     const { data: clientData } = await clientDB.from('clients').select('phone, user_id').eq('phone', phone).maybeSingle();
@@ -136,8 +141,9 @@ async function checkOnboardingPhone(req, res) {
 
 async function updateOnboardingClient(req, res) {
   try {
-    const { user_id, clientData } = req.body;
-    if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+    const user_id = req.userId;
+    if (!user_id) return res.status(401).json({ error: 'Unauthorized' });
+    const { clientData } = req.body;
     if (!clientData) return res.status(400).json({ error: 'clientData is required' });
     const { data, error } = await clientDB.from('clients').update(clientData).eq('user_id', user_id).select();
     if (error) return res.status(500).json({ error: 'Failed to update client', message: error.message });
@@ -149,15 +155,16 @@ async function updateOnboardingClient(req, res) {
 
 async function updateOnboardingChatUser(req, res) {
   try {
-    const { user_code, chatUserData } = req.body;
+    const user_code = req.userCode;
     if (!user_code) return res.status(400).json({ error: 'user_code is required' });
+    const { chatUserData } = req.body;
     if (!chatUserData) return res.status(400).json({ error: 'chatUserData is required' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
 
     const { data: chatUser, error: chatUserError } = await adminDB.from('chat_users').select('id').eq('user_code', user_code).single();
     if (chatUserError || !chatUser) return res.status(404).json({ error: 'Chat user not found', message: chatUserError?.message });
 
-    const { error } = await adminDB.from('chat_users').update(chatUserData).eq('id', chatUser.id);
+    const { error } = await adminDB.from('chat_users').update(normalizeChatUserPayloadForDb(chatUserData)).eq('id', chatUser.id);
     if (error) return res.status(500).json({ error: 'Failed to update chat user', message: error.message });
     res.json({ success: true, message: 'Chat user updated successfully' });
   } catch (error) {
@@ -167,7 +174,8 @@ async function updateOnboardingChatUser(req, res) {
 
 async function startAsyncMealPlan(req, res) {
   try {
-    const { user_id, user_code } = req.body || {};
+    const user_id = req.userId;
+    const user_code = req.userCode;
     if (!user_id && !user_code) return res.status(400).json({ error: 'user_id or user_code is required' });
     setImmediate(() => {
       createAndSaveOnboardingMealPlanForUser(user_id || null, user_code || null, { clientDB, adminDB }).catch((err) => {
@@ -185,55 +193,83 @@ async function classifyActivity(req, res) {
     const { activityDescription } = req.body;
     if (!activityDescription || !activityDescription.trim()) return res.status(400).json({ error: 'activityDescription is required' });
 
-    const apiBase = (process.env.AZURE_OPENAI_API_BASE || '').replace(/\/$/, '');
-    const apiKey = process.env.AZURE_OPENAI_API_KEY;
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+    const apiKey = process.env.CLASSIFY_ACTIVITY_KEY;
+    const apiBase = (process.env.CLASSIFY_ACTIVITY_BASE || '').replace(/\/$/, '');
+    const model = process.env.CLASSIFY_ACTIVITY_DEPLOYMENT || 'gpt-4o-mini';
 
-    if (!apiBase || !apiKey || !deployment) return res.status(500).json({ error: 'Azure OpenAI is not configured on the server' });
+    if (!apiKey) return res.status(500).json({ error: 'CLASSIFY_ACTIVITY_KEY is not configured on the server' });
 
-    const url = `${apiBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
-
-    const systemPrompt = `You are an expert fitness and nutrition routing AI. Your exact task is to analyze a user's open-text description of their daily physical activity, job, and lifestyle, and accurately assign them the correct Harris-Benedict Activity Level.
-
-Use the following strict classifications:
-- "sedentary": Little to no intentional exercise. Desk jobs, mostly sitting or lying down. (Equivalent to 1.2)
-- "light": Light exercise or sports 1-3 days a week. (Equivalent to 1.375)
-- "moderate": Moderate exercise or sports 3-5 days a week. (Equivalent to 1.55)
-- "very": Hard exercise or sports 6-7 days a week. (Equivalent to 1.725)
-- "extra": Very hard exercise, physical job AND daily training, or 2x a day training. (Equivalent to 1.9)
-
-Analyze the input carefully. If a user's description falls between two categories, default to the lower category to prevent overestimating caloric burn.`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-      body: JSON.stringify({
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `User Input:\n"${activityDescription.trim()}"` }],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'activity_classification',
-            strict: true,
-            schema: { type: 'object', properties: { activity_factor: { type: 'string', enum: ['sedentary', 'light', 'moderate', 'very', 'extra'] }, reasoning: { type: 'string' } }, required: ['activity_factor', 'reasoning'], additionalProperties: false }
-          }
-        },
-        max_tokens: 200,
-      }),
+    const client = new OpenAI({
+      apiKey,
+      ...(apiBase ? { baseURL: apiBase } : {}),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(502).json({ error: 'AI classification failed', details: errText });
-    }
+    const systemPrompt = `You are an expert fitness and nutrition routing AI. Assign the Harris-Benedict activity level from the user's description of their job(s) AND intentional exercise.
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+Strict levels:
+- "sedentary" (1.2): Desk/seated work almost all day AND little or no intentional exercise.
+- "light" (1.375): Mostly seated or light standing work with only light exercise ~1–3 days/week. NEVER use for anyone with a physically demanding job.
+- "moderate" (1.55): On-feet retail/hospitality, lots of daily walking, OR moderate exercise 3–5 days/week, OR a desk-only job with regular training most weekdays. NEVER use when a physical/manual/labor job is mentioned.
+- "very" (1.725): Physically demanding job (construction, warehouse, farming, lifting, trades, "physical job", manual labor, strenuous work) OR hard exercise 6–7 days/week. This is the DEFAULT whenever a physical job appears — even part-time, mornings-only, or combined with a desk job.
+- "extra" (1.9): Very hard daily training AND a physical job, OR 2×/day training, OR elite-level volume.
+
+Hard rules (never break):
+1. Physical/manual/labor/strenuous job keywords ("physical job", construction, warehouse, trades, lifting, manual labor, active work, etc.) → output "very" by default. Do NOT output "moderate" or "light" for these profiles unless the user explicitly says the physical work is very mild/light AND there is no sport.
+2. Physical job + ANY intentional sport or exercise (including weekends only, casual sport, gym sometimes) → MUST be "very", never "moderate".
+3. Multiple jobs or split shifts: classify from the MOST demanding segment, never average. "Physical job + office afternoons" = physical job wins → "very".
+4. Weekend sports ADD to job load — they never downgrade a physical job. Physical job + office job + sport on weekends → "very" (mandatory; "moderate" is wrong).
+5. "light" is ONLY for genuinely low-load profiles: sedentary/light office work with light occasional exercise and NO physical job.
+6. "moderate" is ONLY for non-physical occupations (desk, retail on feet, walking-heavy office) plus moderate exercise. If ANY physical job is present, "moderate" is forbidden.
+
+Decision order:
+1. Scan for physical/manual/labor keywords → if found, start at "very".
+2. If physical job + any sport/exercise → lock "very".
+3. Else score on-feet vs seated occupation for moderate/light.
+4. Bump for exercise frequency only when no physical job is present.
+
+Mandatory mappings (do not override):
+- "physical job and an afternoon office job and sport on weekends" → "very"
+- Physical 9–5 + office afternoon + weekend sport → "very"
+- Physical labor with no extra gym → "very"
+- Office 9–5 + weekend sport only (no physical job) → "light" or "moderate"
+- Desk job + gym 4–5 days (no physical job) → "moderate" or "very"
+
+In reasoning, cite which rule and job segment drove the level. If you considered "moderate" but a physical job was mentioned, explain why "very" was chosen instead.`;
+
+    const response = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `User Input:\n"${activityDescription.trim()}"` },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'activity_classification',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              activity_factor: { type: 'string', enum: ['sedentary', 'light', 'moderate', 'very', 'extra'] },
+              reasoning: { type: 'string' },
+            },
+            required: ['activity_factor', 'reasoning'],
+            additionalProperties: false,
+          },
+        },
+      },
+      temperature: 1,
+      max_completion_tokens: 200,
+    });
+
+    const content = response.choices?.[0]?.message?.content;
     if (!content) return res.status(502).json({ error: 'Empty response from AI' });
 
     const parsed = JSON.parse(content);
     return res.json({ activity_factor: parsed.activity_factor, reasoning: parsed.reasoning });
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error', message: error.message });
+    console.error('[classifyActivity] AI error', error?.message || error);
+    res.status(502).json({ error: 'AI classification failed', details: error?.message || String(error) });
   }
 }
 
@@ -309,26 +345,61 @@ async function getOnboardingStatus(req, res) {
 async function searchCities(req, res) {
   try {
     if (!adminDB) return res.status(503).json({ error: 'City search is unavailable', message: 'adminDB is not configured' });
+
+    // Progressive disclosure: country/region must be chosen before searching 230k cities.
+    const country = (req.query.country || '').toString().trim();
+    const countryCodes = country
+      ? country.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean)
+      : [];
+    if (countryCodes.length === 0) {
+      return res.status(400).json({
+        error: 'country is required',
+        message: 'Pass country (ISO 3166-1 alpha-2), e.g. ?country=IL&q=Tel',
+      });
+    }
+
     const rawQ = (req.query.q || '').toString().trim();
     if (rawQ.length < 1) return res.json({ data: [] });
 
-    const safe = rawQ.replace(/[,()*]/g, '').trim();
+    const safe = rawQ.replace(/[,()*"]/g, '').trim();
     if (safe.length < 1) return res.json({ data: [] });
 
+    const mode = (req.query.mode || 'full').toString().trim().toLowerCase() === 'quick' ? 'quick' : 'full';
     const limitParam = parseInt(req.query.limit, 10);
-    const limit = Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 10, 1), 25);
-    const country = (req.query.country || '').toString().trim();
-    const countryCodes = country ? country.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean) : [];
+    // quick: confident probe (max 2). full: autocomplete list (default 12, max 15).
+    const limit =
+      mode === 'quick'
+        ? Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 2, 1), 2)
+        : Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 12, 1), 15);
 
-    const orFilter = [`name.ilike.${safe}%`, `asciiname.ilike.${safe}%`, `alternatenames.ilike.%${safe}%`].join(',');
-    let query = adminDB.from('cities500').select('geonameid, name, asciiname, alternatenames, country_code, latitude, longitude, timezone, population').or(orFilter).order('population', { ascending: false, nullsFirst: false }).limit(limit);
+    // Prefix on name/asciiname (index-friendly). Mid-match on alternatenames so local
+    // scripts work (e.g. "תל אביב") — scoped by country so the scan stays small.
+    // Quote patterns so spaces / unicode survive PostgREST or= parsing.
+    const orFilter = [
+      `name.ilike."${safe}%"`,
+      `asciiname.ilike."${safe}%"`,
+      `alternatenames.ilike."%${safe}%"`,
+    ].join(',');
+
+    let query = adminDB
+      .from('cities500')
+      .select(
+        'geonameid, name, asciiname, alternatenames, country_code, latitude, longitude, timezone, population'
+      )
+      .or(orFilter)
+      .order('population', { ascending: false, nullsFirst: false })
+      .limit(limit);
 
     if (countryCodes.length === 1) query = query.eq('country_code', countryCodes[0]);
-    else if (countryCodes.length > 1) query = query.in('country_code', countryCodes);
+    else query = query.in('country_code', countryCodes);
 
-    const { data, error } = await query;
+    const { data: rows, error } = await query;
     if (error) return res.status(500).json({ error: 'Failed to search cities', message: error.message });
-    res.json({ data: data || [] });
+    const data = (rows || []).map((row) => ({
+      ...row,
+      display_label: formatCityLabel(row),
+    }));
+    res.json({ data, mode });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error', message: error.message });
   }
@@ -398,7 +469,9 @@ async function saveEditedMealPlan(req, res) {
     const { data: planData, error: planError } = await clientDB.from('client_meal_plans').select('user_code, dietitian_meal_plan, client_edited_meal_plan').eq('id', planId).single();
     if (planError) throw planError;
 
-    const { error: clientMealPlanError } = await clientDB.from('client_meal_plans').update({ client_edited_meal_plan: mealPlan, edited_plan_date: today }).eq('id', planId);
+    const normalizedMealPlan = normalizeMealPlanForDb(mealPlan);
+
+    const { error: clientMealPlanError } = await clientDB.from('client_meal_plans').update({ client_edited_meal_plan: normalizedMealPlan, edited_plan_date: today }).eq('id', planId);
     if (clientMealPlanError) throw clientMealPlanError;
 
     if (adminDB && planData) {
@@ -407,11 +480,11 @@ async function saveEditedMealPlan(req, res) {
 
       if (schemaPlan) {
         const updateField = schemaPlan.client_edited_meal_plan ? 'client_edited_meal_plan' : 'dietitian_meal_plan';
-        await adminDB.from('meal_plans_and_schemas').update({ [updateField]: mealPlan, updated_at: today }).eq('id', schemaPlan.id);
+        await adminDB.from('meal_plans_and_schemas').update({ [updateField]: normalizedMealPlan, updated_at: today }).eq('id', schemaPlan.id);
       }
 
       const { data: chatUser } = await adminDB.from('chat_users').select('id').eq('user_code', userCodeToUse).maybeSingle();
-      if (chatUser) await adminDB.from('chat_users').update({ meal_plan: mealPlan, updated_at: today }).eq('id', chatUser.id);
+      if (chatUser) await adminDB.from('chat_users').update({ meal_plan: normalizedMealPlan, updated_at: today }).eq('id', chatUser.id);
     }
     res.json({ success: true });
   } catch (error) {
@@ -453,7 +526,9 @@ async function aiUpdateMealPlan(req, res) {
       language: chatProfile?.user_language || chatProfile?.language || 'english',
     };
 
-    const updatedMealPlan = await generateUpdatedMealPlan(JSON.stringify(baseMealPlan), String(requestText).trim(), userProfileObj);
+    const updatedMealPlan = normalizeMealPlanForDb(
+      await generateUpdatedMealPlan(JSON.stringify(baseMealPlan), String(requestText).trim(), userProfileObj)
+    );
     const now = new Date().toISOString();
 
     const { error: saveMainError } = await clientDB.from('client_meal_plans').update({ client_edited_meal_plan: updatedMealPlan, edited_plan_date: now, ai_plan_change_used: true, ai_plan_change_used_at: now, updated_at: now }).eq('id', planId);
@@ -493,8 +568,11 @@ async function aiUpdateMealPlan(req, res) {
 
 async function getProfileClient(req, res) {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.query?.userId && req.query.userId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const { data, error } = await clientDB.from('clients').select('*').eq('user_id', userId).maybeSingle();
     if (error && error.code !== 'PGRST116') throw error;
     res.json({ data });
@@ -505,8 +583,11 @@ async function getProfileClient(req, res) {
 
 async function loadProfile(req, res) {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.query?.userId && req.query.userId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const { data, error } = await clientDB.from('clients').select('*').eq('user_id', userId).maybeSingle();
     if (error && error.code !== 'PGRST116') throw error;
     res.json({ data });
@@ -583,7 +664,7 @@ async function syncChatUser(req, res) {
     const { data: chatUser, error: chatUserError } = await adminDB.from('chat_users').select('id').eq('user_code', userCode).maybeSingle();
     if (chatUserError) throw chatUserError;
     if (!chatUser) return res.status(404).json({ error: 'Chat user not found' });
-    const { error } = await adminDB.from('chat_users').update(chatUserData).eq('id', chatUser.id);
+    const { error } = await adminDB.from('chat_users').update(normalizeChatUserPayloadForDb(chatUserData)).eq('id', chatUser.id);
     if (error) throw error;
     res.json({ success: true });
   } catch (error) {
@@ -600,7 +681,7 @@ async function saveNutritional(req, res) {
     const updatePayload = {};
     if (daily_target_total_calories != null) updatePayload.daily_target_total_calories = Number(daily_target_total_calories);
     if (base_daily_total_calories != null) updatePayload.base_daily_total_calories = Number(base_daily_total_calories);
-    if (macros != null) updatePayload.macros = macros;
+    if (macros != null) updatePayload.macros = formatMacrosGramStrings(macros) || macros;
     if (height_cm != null && height_cm !== '') { const p = parseFloat(height_cm); if (!isNaN(p)) updatePayload.height_cm = p; }
     if (Activity_level != null && Activity_level !== '') updatePayload.Activity_level = Activity_level;
 
@@ -742,18 +823,20 @@ async function createMealPlan(req, res) {
     if (!planId || !userCode || !mealPlanName || !menuData) return res.status(400).json({ error: 'Missing required fields' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
     const now = new Date().toISOString();
+    const normalizedMenu = normalizeMealPlanForDb(menuData);
+    const macrosTarget = formatMacrosGramStrings(macros) || macros;
 
     const { error: secondaryError } = await adminDB.from('meal_plans_and_schemas').insert({
       id: planId, record_type: 'meal_plan', user_code: userCode, meal_plan_name: mealPlanName,
-      schema: template, meal_plan: menuData, status: 'active', daily_total_calories: dailyCalories,
-      macros_target: macros, active_from: now, created_at: now, updated_at: now,
+      schema: template, meal_plan: normalizedMenu, status: 'active', daily_total_calories: dailyCalories,
+      macros_target: macrosTarget, active_from: now, created_at: now, updated_at: now,
     });
     if (secondaryError) throw secondaryError;
 
     const { error: mainError } = await clientDB.from('client_meal_plans').insert({
       id: planId, user_code: userCode, original_meal_plan_id: planId, meal_plan_name: mealPlanName,
-      dietitian_meal_plan: menuData, active: true, daily_total_calories: dailyCalories,
-      macros_target: macros, created_at: now, updated_at: now,
+      dietitian_meal_plan: normalizedMenu, active: true, daily_total_calories: dailyCalories,
+      macros_target: macrosTarget, created_at: now, updated_at: now,
     });
     if (mainError) {
       await adminDB.from('meal_plans_and_schemas').delete().eq('id', planId);

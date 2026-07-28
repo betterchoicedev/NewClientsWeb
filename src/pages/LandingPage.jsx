@@ -3,22 +3,27 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import Navigation from '../components/Navigation';
+import LandingNavigation from '../components/LandingNavigation';
+import { buildLayoutThemeStyles } from '../company/templates/layoutTheme';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Import our highly scalable Template Factory
 import { getTemplate } from '../company/templates';
+import { DEFAULT_LANDING_CONTENT, normalizeLandingContent } from '../company/templates/landingContent';
+import { saveOnboardingCompanyContext } from '../features/onboarding/onboardingCompanyContext';
 
 export default function LandingPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { language, direction } = useLanguage();
-  const { isDarkMode } = useTheme();
+  const { language, direction, toggleLanguage } = useLanguage();
+  const { isDarkMode, toggleTheme } = useTheme();
 
   const [isValidating, setIsValidating] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [managerData, setManagerData] = useState(null);
   const [campaignData, setCampaignData] = useState(null);
   const [companySlug, setCompanySlug] = useState('default');
+  const [companyName, setCompanyName] = useState('BetterChoice');
   const [dbConfig, setDbConfig] = useState(null);
 
   useEffect(() => {
@@ -124,18 +129,22 @@ export default function LandingPage() {
               },
             },
           },
-          content: rawCompanyConfig.content || {
-            heroTitle: { english: 'Welcome', hebrew: 'ברוכים הבאים' },
-            heroSubtitle: { english: '', hebrew: '' },
-            heroParagraph: { english: '', hebrew: '' },
-            ctaText: { english: 'Continue', hebrew: 'המשך' },
-            features: { english: [], hebrew: [] },
-          },
+          content: normalizeLandingContent(rawCompanyConfig.content || DEFAULT_LANDING_CONTENT),
         };
 
         setCompanySlug(resData.company.slug);
+        setCompanyName(resData.company.name || 'BetterChoice');
         setManagerData(resData.manager);
         setDbConfig(safeConfig);
+
+        saveOnboardingCompanyContext({
+          companyId: resData.company.id,
+          companyName: resData.company.name || 'BetterChoice',
+          companyConfig: rawCompanyConfig,
+        });
+        // #region agent log
+        fetch('http://127.0.0.1:7453/ingest/cfcdcc1a-63b4-43aa-b1e8-30e257becdab',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a05fb'},body:JSON.stringify({sessionId:'6a05fb',location:'LandingPage.jsx:validate',message:'saved onboarding company context',data:{companyId:resData.company?.id||null,customStepsCount:Array.isArray(rawCompanyConfig?.onboarding?.customSteps)?rawCompanyConfig.onboarding.customSteps.length:0,runId:'post-fix-2'},hypothesisId:'C',timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         
         const tokenLimitedLink = !!(link_id && (max_clients != null || expiry_date));
         const resolvedMaxSlots = serverMaxSlots ?? (max_clients != null ? Number(max_clients) : null);
@@ -173,16 +182,18 @@ export default function LandingPage() {
 
   // Safely retrieve template only if we have configurations to prevent factory execution errors during load
   const SelectedTemplate = (!isValidating && !errorMessage) ? getTemplate(dbConfig?.ui?.layout) : null;
+  const landingColors = dbConfig?.ui?.themeSettings?.colors || {};
+  const landingThemeStyle = (!isValidating && !errorMessage)
+    ? buildLayoutThemeStyles(landingColors)
+    : undefined;
 
   return (
     <div 
       className={`min-h-screen language-transition language-text-transition flex flex-col ${
-        isDarkMode 
-          ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' 
-          : 'bg-gradient-to-br from-emerald-50 via-teal-50 to-slate-100'
+        landingThemeStyle ? '' : isDarkMode ? 'bg-slate-950' : 'bg-slate-50'
       }`} 
       dir={direction} 
-      style={{ height: '100vh', overflow: 'hidden' }}
+      style={{ height: '100vh', overflow: 'hidden', ...landingThemeStyle }}
     >
       <AnimatePresence>
         {!isValidating && (
@@ -192,13 +203,26 @@ export default function LandingPage() {
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             className="z-50 shrink-0"
           >
-            <Navigation />
+            {errorMessage ? (
+              <Navigation />
+            ) : (
+              <LandingNavigation
+                companyName={companyName}
+                logoUrl={dbConfig?.ui?.branding?.logoUrl || ''}
+                themeStyle={buildLayoutThemeStyles(landingColors)}
+                isDarkMode={isDarkMode}
+                language={language}
+                onToggleTheme={toggleTheme}
+                onToggleLanguage={toggleLanguage}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
       
       <main 
-        className="flex-1 overflow-y-auto custom-scrollbar flex flex-col relative z-10" 
+        data-landing-scroll
+        className="flex-1 overflow-y-auto scroll-smooth custom-scrollbar flex flex-col relative z-10"
         style={{ minHeight: 0 }}
       >
         <AnimatePresence mode="wait">

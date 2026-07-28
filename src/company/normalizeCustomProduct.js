@@ -159,6 +159,7 @@ export const normalizeCustomProduct = (product, index = 0) => {
     featuresHebrew: featuresHe.length ? featuresHe : featuresEn,
     prices,
     category: String(product.category || 'nutrition').toLowerCase(),
+    logoUrl: product.logoUrl || product.imageUrl || '',
     isCustomProduct: true,
   };
 };
