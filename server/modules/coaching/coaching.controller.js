@@ -1,4 +1,5 @@
 const { adminDB } = require('../../config/db');
+const { formatMacrosGramStrings, normalizeMealPlanForDb } = require('../../utils/nutritionFormats');
 
 async function getChatMessages(req, res) {
   try {
@@ -123,12 +124,14 @@ async function createMealPlan(req, res) {
     const { dietitianId, userCode, mealPlanData } = req.body;
     if (!userCode || !mealPlanData) return res.status(400).json({ error: 'User code and meal plan data are required' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
+    const normalizedMealPlan = normalizeMealPlanForDb(mealPlanData.meal_plan || {});
+    const macrosTarget = formatMacrosGramStrings(mealPlanData.macros_target) || mealPlanData.macros_target || null;
     const { data, error } = await adminDB.from('meal_plans_and_schemas').insert([{
       record_type: 'meal_plan', dietitian_id: dietitianId, user_code: userCode,
-      meal_plan_name: mealPlanData.meal_plan_name, meal_plan: mealPlanData.meal_plan,
+      meal_plan_name: mealPlanData.meal_plan_name, meal_plan: normalizedMealPlan,
       status: mealPlanData.status || 'draft', active_from: mealPlanData.active_from,
       active_until: mealPlanData.active_until, daily_total_calories: mealPlanData.daily_total_calories,
-      macros_target: mealPlanData.macros_target, recommendations: mealPlanData.recommendations,
+      macros_target: macrosTarget, recommendations: mealPlanData.recommendations,
       dietary_restrictions: mealPlanData.dietary_restrictions,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }]).select();
@@ -145,11 +148,13 @@ async function updateMealPlan(req, res) {
     const { mealPlanData } = req.body;
     if (!mealPlanData) return res.status(400).json({ error: 'Meal plan data is required' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
+    const normalizedMealPlan = normalizeMealPlanForDb(mealPlanData.meal_plan || {});
+    const macrosTarget = formatMacrosGramStrings(mealPlanData.macros_target) || mealPlanData.macros_target || null;
     const { data, error } = await adminDB.from('meal_plans_and_schemas').update({
-      meal_plan_name: mealPlanData.meal_plan_name, meal_plan: mealPlanData.meal_plan,
+      meal_plan_name: mealPlanData.meal_plan_name, meal_plan: normalizedMealPlan,
       status: mealPlanData.status, active_from: mealPlanData.active_from,
       active_until: mealPlanData.active_until, daily_total_calories: mealPlanData.daily_total_calories,
-      macros_target: mealPlanData.macros_target, recommendations: mealPlanData.recommendations,
+      macros_target: macrosTarget, recommendations: mealPlanData.recommendations,
       dietary_restrictions: mealPlanData.dietary_restrictions,
       updated_at: new Date().toISOString(),
     }).eq('id', id).select();

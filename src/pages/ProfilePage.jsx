@@ -16,7 +16,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { debugMealPlans, getFoodLogs, createFoodLog, updateFoodLog, deleteFoodLog, createChatMessage, getCompaniesWithManagers, getClientCompanyAssignment, assignClientToCompany, getWeightLogs, createWeightLog } from '../supabase/secondaryClient';
 import { normalizePhoneForDatabase, signOut } from '../supabase/auth';
-import OnboardingModal from '../components/OnboardingModal';
+import OnboardingGate from '../features/onboarding/OnboardingGate';
+import { saveOnboardingCompanyContext } from '../features/onboarding/onboardingCompanyContext';
+import { useOnboardingEntitlement } from '../features/onboarding/OnboardingEntitlementContext';
 import DailyLogTab from '../components/profile/DailyLogTab';
 import PricingTab from '../components/profile/PricingTab';
 import MessagesTab from '../components/profile/MessagesTab';
@@ -158,6 +160,8 @@ export const getClientMealPlan = async (userCode) => {
 
 const ProfilePage = () => {
   const { user, isAuthenticated, loading } = useAuth();
+  const { requiresWall, canDismiss, refresh: refreshEntitlement, status: entitlementStatus } =
+    useOnboardingEntitlement();
   const navigate = useNavigate();
   const location = useLocation();
   const { companySlug: routeCompanySlug } = useParams();
@@ -209,6 +213,7 @@ const ProfilePage = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isProfileDataReady, setIsProfileDataReady] = useState(false);
+  const onboardingDismissedRef = useRef(false);
 
   const toCompanySlug = useCallback((companyName) => {
     const normalized = String(companyName || '')
@@ -258,6 +263,9 @@ const ProfilePage = () => {
       setAssignedCompanyId(companyId || '');
       setAssignedCompanyName(companyName || '');
       setAssignedCompanyConfig(companyConfig);
+      if (companyId || companyConfig) {
+        saveOnboardingCompanyContext({ companyId, companyName, companyConfig });
+      }
       setProfileData((prev) => ({
         ...prev,
         companyId: companyId || ''
@@ -296,68 +304,38 @@ const ProfilePage = () => {
     toCompanySlug
   ]);
 
-  // Check onboarding status
   const checkOnboardingStatus = useCallback(async () => {
-    try {
-      if (!user) return;
+    await refreshEntitlement();
+  }, [refreshEntitlement]);
 
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
-      const response = await fetch(`${apiUrl}/api/profile/client?userId=${encodeURIComponent(user.id)}`);
-      const result = await response.json();
-
-      if (!response.ok) {
-        console.error('Error checking onboarding status:', result.error);
-        return;
-      }
-
-      const data = result.data;
-
-      if (data) {
-        setUserCode(data.user_code);
-        
-        // Track onboarding completion status
-        setOnboardingCompleted(data.onboarding_completed === true);
-        
-        // Show onboarding ONLY if onboarding_completed is not true
-        // Once onboarding is completed (onboarding_completed === true), never show it again
-        // regardless of missing fields - user can fill them later in the profile
-        if (data.onboarding_completed !== true) {
-          setShowOnboarding(true);
-        } else {
-          // Onboarding is completed - don't show it again
-          setShowOnboarding(false);
-        }
-      } else {
-        // No profile data at all - show onboarding
-        setOnboardingCompleted(false);
-        setShowOnboarding(true);
-      }
-    } catch (error) {
-      console.error('Error checking onboarding status:', error);
+  useEffect(() => {
+    if (!user) return;
+    if (entitlementStatus?.userCode) setUserCode(entitlementStatus.userCode);
+    if (requiresWall) {
+      onboardingDismissedRef.current = false;
+      setShowOnboarding(true);
+      setOnboardingCompleted(false);
+      return;
     }
-  }, [user]);
+    if (entitlementStatus) {
+      setOnboardingCompleted(entitlementStatus.completed === true);
+      setShowOnboarding(false);
+    }
+  }, [user, requiresWall, entitlementStatus]);
 
-  // Callback to handle onboarding completion
   const handleOnboardingComplete = async (completed = true) => {
     if (completed) {
-      // Onboarding was completed - close the modal first to prevent reopening
+      onboardingDismissedRef.current = false;
       setShowOnboarding(false);
-      
-      // Set state immediately to allow editing
       setOnboardingCompleted(true);
-      
-      // Reload profile data to show the updated information
-      // Don't call checkOnboardingStatus() here since we know onboarding is complete
-      // This prevents the modal from reopening
       await loadProfileData();
-      await checkOnboardingStatus();
-    } else {
-      // Onboarding was skipped - just close the modal without re-checking
-      // This prevents the modal from immediately reopening
+      await refreshEntitlement();
+    } else if (canDismiss) {
+      onboardingDismissedRef.current = true;
       setShowOnboarding(false);
-      
-      // Keep onboardingCompleted as false so fields remain read-only
       setOnboardingCompleted(false);
+    } else {
+      setShowOnboarding(true);
     }
   };
 
@@ -390,11 +368,15 @@ const ProfilePage = () => {
     }
   }, [activeTab, user]);
 
-  // Listen for profile tour completion to show onboarding
+  // Listen for profile tour completion to show onboarding (skip tour wait when wall required)
   useEffect(() => {
     if (!user) return;
 
-    // Check if tour is already completed
+    if (requiresWall) {
+      checkOnboardingStatus();
+      return undefined;
+    }
+
     const profileTourCompleted = localStorage.getItem('profileTourCompleted');
     if (profileTourCompleted === 'true') {
       // Tour already completed, check onboarding
@@ -440,7 +422,7 @@ const ProfilePage = () => {
       clearInterval(pollInterval);
       clearTimeout(timeout);
     };
-  }, [user, checkOnboardingStatus]);
+  }, [user, requiresWall, checkOnboardingStatus]);
 
   useEffect(() => {
     loadCompanyOptions();
@@ -1277,13 +1259,14 @@ const ProfilePage = () => {
         </div>
 
         {/* Onboarding Modal */}
-        <OnboardingModal
+        <OnboardingGate
           isOpen={showOnboarding}
           onClose={handleOnboardingComplete}
           user={user}
-          userCode={userCode}
           companyName={assignedCompanyName}
           companyConfig={assignedCompanyConfig}
+          companyId={assignedCompanyId || null}
+          allowDismiss={canDismiss}
         />
 
         {/* Logout Confirmation Modal (AnimatePresence) */}

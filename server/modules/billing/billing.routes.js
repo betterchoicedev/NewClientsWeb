@@ -20,7 +20,7 @@ router.use(express.json({ limit: '20mb' }));
 router.get( '/exchange-rates',                                   ctrl.getExchangeRates);
 router.post('/stripe/check-commitment-periods',    requireAuth,  ctrl.checkCommitmentPeriods);
 router.post('/stripe/sync-to-database',            requireAuth,  ctrl.syncToDatabase);
-router.post('/stripe/create-checkout-session',                   ctrl.createCheckoutSession);
+router.post('/stripe/create-checkout-session',     requireAuth,  ctrl.createCheckoutSession);
 router.get( '/stripe/checkout-session/:sessionId', requireAuth,  ctrl.getCheckoutSession);
 router.post('/stripe/create-payment-intent',                     ctrl.createPaymentIntent);
 router.post(['/subscription/validate-access-code', '/pricing/validate-access-code'], ctrl.validateAccessCode);

@@ -1,5 +1,5 @@
 // API URL helper (auth token attached via installAuthFetch)
-const getApiUrl = () => process.env.REACT_APP_API_URL || 'https://newclientsweb-615263253386.me-west1.run.app';
+import { getApiUrl } from '../lib/apiClient';
 
 // MEAL PLANS
 export const getMealPlan = async (userCode) => {
