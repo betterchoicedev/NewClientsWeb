@@ -361,7 +361,7 @@ async function searchCities(req, res) {
     const rawQ = (req.query.q || '').toString().trim();
     if (rawQ.length < 1) return res.json({ data: [] });
 
-    const safe = rawQ.replace(/[,()*]/g, '').trim();
+    const safe = rawQ.replace(/[,()*"]/g, '').trim();
     if (safe.length < 1) return res.json({ data: [] });
 
     const mode = (req.query.mode || 'full').toString().trim().toLowerCase() === 'quick' ? 'quick' : 'full';
@@ -372,8 +372,14 @@ async function searchCities(req, res) {
         ? Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 2, 1), 2)
         : Math.min(Math.max(Number.isFinite(limitParam) ? limitParam : 12, 1), 15);
 
-    // Prefix-only (no alternatenames mid-match) so indexes on name/asciiname can be used.
-    const orFilter = [`name.ilike.${safe}%`, `asciiname.ilike.${safe}%`].join(',');
+    // Prefix on name/asciiname (index-friendly). Mid-match on alternatenames so local
+    // scripts work (e.g. "תל אביב") — scoped by country so the scan stays small.
+    // Quote patterns so spaces / unicode survive PostgREST or= parsing.
+    const orFilter = [
+      `name.ilike."${safe}%"`,
+      `asciiname.ilike."${safe}%"`,
+      `alternatenames.ilike."%${safe}%"`,
+    ].join(',');
 
     let query = adminDB
       .from('cities500')
