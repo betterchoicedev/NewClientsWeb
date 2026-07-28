@@ -123,6 +123,7 @@ ${planBlock}
 
 **WHEN is_food IS TRUE:**
 
+
 1.  **PARSE FOOD ITEMS** — Identify each distinct food/beverage.
 
 2.  **PORTION ESTIMATION FROM WORDING (CRITICAL):**
