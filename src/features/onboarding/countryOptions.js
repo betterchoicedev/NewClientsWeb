@@ -327,3 +327,23 @@ export function regionFromCountry(code) {
   if (!code) return '';
   return COUNTRY_TO_REGION[String(code).toUpperCase()] || 'other';
 }
+
+const hebrewNames = new Intl.DisplayNames(['he'], { type: 'region' });
+
+export function getCountryOptionsEnriched() {
+  return COUNTRY_OPTIONS.map((c) => {
+    let labelHe = c.label;
+    try {
+      labelHe = hebrewNames.of(c.code) || c.label;
+    } catch (e) {
+      // fallback
+    }
+    return {
+      ...c,
+      labelHe,
+      searchText: `${c.label} ${labelHe}`,
+    };
+  });
+}
+
+export const COUNTRY_OPTIONS_ENRICHED = getCountryOptionsEnriched();

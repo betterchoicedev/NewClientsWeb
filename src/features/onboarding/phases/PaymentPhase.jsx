@@ -70,8 +70,12 @@ export default function PaymentPhase({ onComplete }) {
       setError(isHe ? 'משתמש לא מחובר' : 'Not signed in');
       return;
     }
-    if (!selectedProductIds.length || !primaryPriceId) {
+    if (!selectedProductIds.length) {
       setError(isHe ? 'בחרו מוצר לפני התשלום' : 'Select a product before checkout');
+      return;
+    }
+    if (!primaryPriceId) {
+      setError(isHe ? 'למוצר זה נדרש קוד קופון' : 'A promo code is required for this product');
       return;
     }
     setCheckoutLoading(true);

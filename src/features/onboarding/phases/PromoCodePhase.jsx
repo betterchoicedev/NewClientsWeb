@@ -96,6 +96,11 @@ export default function PromoCodePhase() {
     clearPromo();
     setCode('');
     setError(null);
+    const primaryPriceId = selectedProducts[0]?.prices?.[0]?.id;
+    if (!primaryPriceId && selectedProducts.length > 0) {
+      setError(isHe ? 'למוצר זה נדרש קוד קופון' : 'A promo code is required for this product');
+      return;
+    }
     forcePhase(PHASES.PAYMENT);
   };
 

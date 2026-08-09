@@ -72,22 +72,6 @@ export default function QuestionsPhase({ userId, onCommitted }) {
     // #endregion
   }, [companyConfig, customSteps, steps, stepIndex]);
 
-  useEffect(() => {
-    if (!customSteps.length) return;
-    const firstCustomIdx = steps.findIndex((s) => s.isCustom);
-    if (firstCustomIdx < 0) return;
-
-    const lastCustomIdx = steps.reduce((acc, step, idx) => (step.isCustom ? idx : acc), -1);
-    const unansweredIdx = steps.findIndex(
-      (step) => step.isCustom && !isCustomStepAnswered(step, answers.custom_answers)
-    );
-    if (unansweredIdx < 0) return;
-
-    if (stepIndex > lastCustomIdx || (stepIndex >= firstCustomIdx && stepIndex < unansweredIdx)) {
-      setStepIndex(unansweredIdx);
-    }
-  }, [customSteps, steps, answers.custom_answers, stepIndex, setStepIndex]);
-
   const step = steps[stepIndex] || steps[0];
   const title = isHe ? (step?.titleHe || step?.titleEn) : step?.titleEn;
   const isLast = stepIndex >= steps.length - 1;
@@ -130,18 +114,34 @@ export default function QuestionsPhase({ userId, onCommitted }) {
     }
 
     if (!isLast) {
-      const nextIndex = stepIndex + 1;
+      let targetIndex = stepIndex + 1;
+
+      // Skip custom questions that are already answered when advancing forward
+      while (targetIndex < steps.length) {
+        const targetStep = steps[targetIndex];
+        if (targetStep.isCustom && isCustomStepAnswered(targetStep, answers.custom_answers)) {
+          targetIndex++;
+        } else {
+          break;
+        }
+      }
+
+      // Safeguard if everything remaining is already answered
+      if (targetIndex >= steps.length) {
+        targetIndex = steps.length - 1;
+      }
+
       const draft = useOnboardingStore.getState().getDraftPayload();
       saveOnboardingStep({
         stepId: step.id,
         answers,
-        stepIndex: nextIndex,
+        stepIndex: targetIndex,
         phase: PHASES.QUESTIONS,
         draft,
       }).catch((e) => {
         console.warn('Step progress persistence warning:', e);
       });
-      nextStep(steps.length);
+      setStepIndex(targetIndex);
       return;
     }
 

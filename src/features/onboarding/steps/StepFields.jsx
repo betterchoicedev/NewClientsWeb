@@ -109,7 +109,7 @@ const ALLERGIES = [
   { value: 'soy', en: 'Soy', he: 'סויה' },
   { value: 'fish', en: 'Fish', he: 'דגים' },
   { value: 'seafood', en: 'Seafood', he: 'פירות ים' },
-  { value: 'other', en: 'Other', he: 'אחר' },
+  { value: 'other', en: '+ Custom', he: '+ אחר' },
 ];
 
 const LIMITATIONS = [
@@ -120,6 +120,14 @@ const LIMITATIONS = [
   { value: 'halal', en: 'Halal', he: 'חלאל' },
   { value: 'gluten_free', en: 'Gluten-free', he: 'ללא גלוטן' },
   { value: 'dairy_free', en: 'Dairy-free', he: 'ללא חלב' },
+  { value: 'other', en: '+ Custom', he: '+ אחר' },
+];
+
+const DIET_STYLES = [
+  { value: 'balanced', en: 'Balanced', he: 'מאוזן' },
+  { value: 'high_protein', en: 'High Protein', he: 'עשיר בחלבון' },
+  { value: 'keto', en: 'Keto / Low Carb', he: 'קטו / דל פחמימה' },
+  { value: 'vegan', en: 'Vegan', he: 'טבעוני' },
   { value: 'other', en: 'Other', he: 'אחר' },
 ];
 
@@ -518,13 +526,11 @@ export default function StepFields({ step }) {
       };
 
       return (
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2 text-sm">
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2 text-sm mb-4">
             {[
               { label: 'cm', on: showCm, fn: () => setUnits({ heightUnit: 'cm' }) },
               { label: 'ft/in', on: !showCm, fn: () => setUnits({ heightUnit: 'in' }) },
-              { label: 'kg', on: showKg, fn: () => setUnits({ weightUnit: 'kg' }) },
-              { label: 'lbs', on: !showKg, fn: () => setUnits({ weightUnit: 'lbs' }) },
             ].map((u) => (
               <button key={u.label} type="button" onClick={u.fn} className={chipBtn(u.on, isDarkMode)}>
                 {u.label}
@@ -580,40 +586,52 @@ export default function StepFields({ step }) {
               ) : null}
             </div>
           )}
-          <input
-            type="number"
-            className={inputClass(isDarkMode)}
-            placeholder={
-              showKg
-                ? isHe
-                  ? 'משקל נוכחי (ק״ג)'
-                  : 'Current weight (kg)'
-                : isHe
-                  ? 'משקל נוכחי (ליברות)'
-                  : 'Current weight (lbs)'
-            }
-            value={displayWeightKg(answers.weight_kg, showKg ? 'kg' : 'lbs')}
-            onChange={(e) => {
-              setAnswer('weight_kg', parseWeightInputToKg(e.target.value, showKg ? 'kg' : 'lbs'));
-            }}
-          />
-          <input
-            type="number"
-            className={inputClass(isDarkMode)}
-            placeholder={
-              showKg
-                ? isHe
-                  ? 'משקל מטרה (ק״ג)'
-                  : 'Target weight (kg)'
-                : isHe
-                  ? 'משקל מטרה (ליברות)'
-                  : 'Target weight (lbs)'
-            }
-            value={displayWeightKg(answers.target_weight, showKg ? 'kg' : 'lbs')}
-            onChange={(e) => {
-              setAnswer('target_weight', parseWeightInputToKg(e.target.value, showKg ? 'kg' : 'lbs'));
-            }}
-          />
+          <div className="relative flex items-center">
+            <input
+              type="number"
+              className={`${inputClass(isDarkMode)} ${isHe ? 'pl-20' : 'pr-20'}`}
+              placeholder={
+                showKg
+                  ? isHe
+                    ? 'משקל נוכחי (ק״ג)'
+                    : 'Current weight (kg)'
+                  : isHe
+                    ? 'משקל נוכחי (ליברות)'
+                    : 'Current weight (lbs)'
+              }
+              value={displayWeightKg(answers.weight_kg, showKg ? 'kg' : 'lbs')}
+              onChange={(e) => {
+                setAnswer('weight_kg', parseWeightInputToKg(e.target.value, showKg ? 'kg' : 'lbs'));
+              }}
+            />
+            <div className={`absolute ${isHe ? 'left-2' : 'right-2'} flex gap-1 p-0.5 rounded-lg ${isDarkMode ? 'bg-white/10' : 'bg-black/5'}`}>
+              <button type="button" onClick={() => setUnits({ weightUnit: 'kg' })} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${showKg ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>kg</button>
+              <button type="button" onClick={() => setUnits({ weightUnit: 'lbs' })} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${!showKg ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>lbs</button>
+            </div>
+          </div>
+          <div className="relative flex items-center">
+            <input
+              type="number"
+              className={`${inputClass(isDarkMode)} ${isHe ? 'pl-20' : 'pr-20'}`}
+              placeholder={
+                showKg
+                  ? isHe
+                    ? 'משקל מטרה (ק״ג)'
+                    : 'Target weight (kg)'
+                  : isHe
+                    ? 'משקל מטרה (ליברות)'
+                    : 'Target weight (lbs)'
+              }
+              value={displayWeightKg(answers.target_weight, showKg ? 'kg' : 'lbs')}
+              onChange={(e) => {
+                setAnswer('target_weight', parseWeightInputToKg(e.target.value, showKg ? 'kg' : 'lbs'));
+              }}
+            />
+            <div className={`absolute ${isHe ? 'left-2' : 'right-2'} flex gap-1 p-0.5 rounded-lg ${isDarkMode ? 'bg-white/10' : 'bg-black/5'}`}>
+              <button type="button" onClick={() => setUnits({ weightUnit: 'kg' })} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${showKg ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>kg</button>
+              <button type="button" onClick={() => setUnits({ weightUnit: 'lbs' })} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${!showKg ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>lbs</button>
+            </div>
+          </div>
         </div>
       );
     }
@@ -747,7 +765,6 @@ export default function StepFields({ step }) {
               onToggle={(v) => toggleList('food_allergies', v)}
               otherText={answers.allergies_other}
               onOtherText={(t) => setAnswer('allergies_other', t)}
-              otherAsText
               isHe={isHe}
               isDark={isDarkMode}
             />
@@ -762,7 +779,6 @@ export default function StepFields({ step }) {
               onToggle={(v) => toggleList('food_limitations', v)}
               otherText={answers.limitations_other}
               onOtherText={(t) => setAnswer('limitations_other', t)}
-              otherAsText
               isHe={isHe}
               isDark={isDarkMode}
             />
@@ -772,7 +788,33 @@ export default function StepFields({ step }) {
 
     case 'preferences':
       return (
-        <textarea className={inputClass(isDarkMode)} rows={4} placeholder={isHe ? 'מה אתה אוהב / לא אוהב' : 'Likes and dislikes'} value={answers.client_preference || ''} onChange={(e) => setAnswer('client_preference', e.target.value)} />
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+              {isHe ? 'סגנון תזונה מועדף' : 'Preferred Diet Style'}
+            </p>
+            <ChoiceOptionList
+              options={DIET_STYLES}
+              selectedValues={answers.diet_style}
+              onToggle={(v) => setAnswer('diet_style', v)}
+              isHe={isHe}
+              isDark={isDarkMode}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+              {isHe ? 'דגשים נוספים (אוהב/לא אוהב)' : 'Additional preferences (Likes / Dislikes)'}
+            </p>
+            <textarea 
+              className={inputClass(isDarkMode)} 
+              rows={3} 
+              placeholder={isHe ? 'פרט כאן...' : 'Type here...'} 
+              value={answers.client_preference || ''} 
+              onChange={(e) => setAnswer('client_preference', e.target.value)} 
+            />
+          </div>
+        </div>
       );
 
     case 'eating_window':

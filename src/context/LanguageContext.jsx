@@ -1524,6 +1524,12 @@ export const LanguageProvider = ({ children }) => {
     return 'ltr'; // Default to LTR for English
   });
   
+  // Sync the document element direction and language natively
+  React.useEffect(() => {
+    document.documentElement.dir = direction;
+    document.documentElement.lang = language === 'hebrew' ? 'he' : 'en';
+  }, [direction, language]);
+
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const toggleLanguage = () => {

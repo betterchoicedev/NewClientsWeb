@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOnboardingStore, PHASES } from './onboarding.store';
 import { OnboardingDismissProvider } from './onboardingDismissContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { applyPreferredLanguageToApp } from './onboardingLocale';
 import {
   useOnboardingDraftSync,
   readLocalDraft,
@@ -95,6 +97,15 @@ export default function OnboardingFlow({
 
   const [bootstrapError, setBootstrapError] = useState(null);
   const isHe = answers.language === 'he';
+
+  const { setLanguage, setDirection } = useLanguage();
+
+  // Sync the restored Zustand draft language back to LanguageContext so the whole app translates
+  useEffect(() => {
+    if (answers?.language) {
+      applyPreferredLanguageToApp(answers.language, { setLanguage, setDirection });
+    }
+  }, [answers?.language, setLanguage, setDirection]);
 
   useOnboardingDraftSync(user?.id, Boolean(user?.id) && !forceFresh && hydrated);
 

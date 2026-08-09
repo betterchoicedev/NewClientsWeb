@@ -4,9 +4,9 @@ const IOS_URL = 'https://apps.apple.com/il/app/betterchoice-ai-co/id6770512379';
 const ANDROID_URL = 'https://play.google.com/store/apps/details?id=live.betterchoice.betterchoiceai';
 
 const linkClass =
-  'flex w-full sm:flex-1 items-center justify-center min-h-[3.5rem] px-2 py-3 rounded-xl transition-transform hover:opacity-90 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500';
+  'flex items-center justify-center min-h-[2.75rem] px-3 py-3 rounded-xl transition-all duration-200 hover:opacity-90 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500';
 
-const badgeClass = 'w-full h-auto max-h-14 sm:max-h-16';
+const badgeClass = 'h-10 sm:h-12 w-auto aspect-[135/40] object-contain';
 
 function AppStoreBadgeSvg({ className = badgeClass }) {
   return (
@@ -87,7 +87,7 @@ function GooglePlayBadgeSvg({ className = badgeClass }) {
 export default function AppStoreBadges({ className = '' }) {
   return (
     <div
-      className={`flex flex-col sm:flex-row items-stretch justify-center gap-3 w-full ${className}`}
+      className={`grid grid-cols-1 sm:grid-cols-2 gap-3 w-full min-w-0 ${className}`}
     >
       <a
         href={IOS_URL}

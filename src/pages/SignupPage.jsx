@@ -716,9 +716,9 @@ function SignupPage() {
                           <div className="ms-3 text-sm">
                             <span className={`font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
                               {language === 'hebrew' ? (
-                                <>אני מסכים ל<a href="#terms" className="text-emerald-500 hover:text-emerald-400 underline decoration-emerald-500/30 underline-offset-2">תנאי השימוש</a> ו<a href="#privacy" className="text-emerald-500 hover:text-emerald-400 underline decoration-emerald-500/30 underline-offset-2">מדיניות הפרטיות</a></>
+                                <>אני מסכים ל<Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:text-emerald-400 underline decoration-emerald-500/30 underline-offset-2">תנאי השימוש</Link> ו<Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:text-emerald-400 underline decoration-emerald-500/30 underline-offset-2">מדיניות הפרטיות</Link></>
                               ) : (
-                                <>I agree to the <a href="#terms" className="text-emerald-600 hover:text-emerald-500 underline decoration-emerald-500/30 underline-offset-2">Terms of Service</a> and <a href="#privacy" className="text-emerald-600 hover:text-emerald-500 underline decoration-emerald-500/30 underline-offset-2">Privacy Policy</a></>
+                                <>I agree to the <Link to="/terms" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-500 underline decoration-emerald-500/30 underline-offset-2">Terms of Service</Link> and <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-500 underline decoration-emerald-500/30 underline-offset-2">Privacy Policy</Link></>
                               )}
                             </span>
                           </div>
@@ -832,18 +832,18 @@ function SignupPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 mb-2 md:mb-0 text-center">
-              <a 
-                href="#privacy" 
+              <Link 
+                to="/privacy-policy" target="_blank" rel="noopener noreferrer"
                 className={`text-sm font-medium ${isDarkMode ? 'text-slate-400 hover:text-emerald-400' : 'text-emerald-700/70 hover:text-emerald-700'} transition-colors duration-300`}
               >
                 {t.footer.privacy}
-              </a>
-              <a 
-                href="#terms" 
+              </Link>
+              <Link 
+                to="/terms" target="_blank" rel="noopener noreferrer"
                 className={`text-sm font-medium ${isDarkMode ? 'text-slate-400 hover:text-emerald-400' : 'text-emerald-700/70 hover:text-emerald-700'} transition-colors duration-300`}
               >
                 {t.footer.terms}
-              </a>
+              </Link>
             </div>
             <div className={`text-center text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-emerald-600/60'}`}>
               <p>{t.footer.copyright}</p>

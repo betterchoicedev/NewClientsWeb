@@ -6,6 +6,10 @@ const MOBILE_APP_OAUTH_REDIRECT = (
   process.env.MOBILE_OAUTH_REDIRECT || 'betterchoicemobile://auth/callback'
 ).trim();
 
+const MOBILE_APP_RESET_REDIRECT = (
+  process.env.MOBILE_RESET_REDIRECT || 'betterchoicemobile://reset-password'
+).trim();
+
 function getFrontendOrigin() {
   return (
     process.env.FRONTEND_URL ||
@@ -33,6 +37,62 @@ function buildMobileAppOAuthRedirect(session) {
   }).toString();
   const joiner = MOBILE_APP_OAUTH_REDIRECT.includes('#') ? '&' : '#';
   return `${MOBILE_APP_OAUTH_REDIRECT}${joiner}${fragment}`;
+}
+
+function buildMobileAppResetRedirect(session) {
+  // Query-string (not hash) so expo-router can read tokens via useLocalSearchParams.
+  const qs = new URLSearchParams({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: String(session.expires_at ?? ''),
+    expires_in: String(session.expires_in ?? ''),
+    token_type: session.token_type || 'bearer',
+    type: 'recovery',
+  }).toString();
+  const joiner = MOBILE_APP_RESET_REDIRECT.includes('?') ? '&' : '?';
+  return `${MOBILE_APP_RESET_REDIRECT}${joiner}${qs}`;
+}
+
+function sendMobileDeepLinkBridge(res, targetUrl) {
+  const targetJs = JSON.stringify(targetUrl);
+  const fallbackJs = JSON.stringify(
+    `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}error=bridge_failed`
+  );
+  res.set('Cache-Control', 'no-store');
+  return res.status(200).send(`<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening BetterChoice…</title>
+<style>
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+       background:#0f172a;color:#e2e8f0;display:flex;align-items:center;
+       justify-content:center;flex-direction:column;gap:14px}
+  .spinner{width:28px;height:28px;border:3px solid #334155;border-top-color:#10b981;
+           border-radius:50%;animation:spin 0.9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  p{font-size:15px;margin:0;opacity:0.85}
+</style>
+</head><body>
+<div class="spinner" aria-hidden="true"></div>
+<p>Opening BetterChoice&hellip;</p>
+<script>
+(function(){
+  try {
+    var target = ${targetJs};
+    var qs = (window.location.search || '').replace(/^\\?/, '');
+    var fr = (window.location.hash   || '').replace(/^#/,  '');
+    var url = target;
+    if (qs) url += (url.indexOf('?') >= 0 ? '&' : '?') + qs;
+    if (fr) url += (url.indexOf('?') >= 0 ? '&' : '?') + fr;
+    window.location.replace(url);
+  } catch (e) {
+    window.location.replace(${fallbackJs});
+  }
+})();
+</script>
+</body></html>`);
 }
 
 function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAnonKey, supabaseDb }) {
@@ -75,20 +135,63 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
 
   app.post('/api/auth/reset-password', async (req, res) => {
     try {
-      const { email } = req.body;
-      if (!email) {
+      const { email, platform } = req.body || {};
+      if (!email || typeof email !== 'string' || !email.trim()) {
         return res.status(400).json({ error: 'Email is required' });
       }
-      const redirectTo = `${getFrontendOrigin()}/reset-password`;
+
+      const isMobile = platform === 'mobile' || platform === 'app';
+      const redirectTo = isMobile
+        ? `${getApiPublicOrigin(req)}/api/auth/recovery/mobile-callback`
+        : `${getFrontendOrigin()}/reset-password`;
+
       const { error } = await supabaseAuth.auth.resetPasswordForEmail(
         email.toLowerCase().trim(),
         { redirectTo }
       );
-      if (error) throw error;
+      if (error) {
+        // Anti-enumeration: never reveal whether the address exists.
+        console.error('POST /api/auth/reset-password error:', error);
+      }
       res.json({ error: null });
     } catch (error) {
       console.error('POST /api/auth/reset-password error:', error);
-      res.status(400).json({ error: error.message });
+      res.json({ error: null });
+    }
+  });
+
+  /**
+   * Mobile password-recovery bridge (PKCE code exchange or implicit fragment).
+   * Must be listed under Supabase Auth → Redirect URLs.
+   */
+  app.get('/api/auth/recovery/mobile-callback', async (req, res) => {
+    try {
+      const recoveryError = req.query.error || req.query.error_description;
+      if (recoveryError) {
+        const msg = typeof recoveryError === 'string' ? recoveryError : 'recovery_failed';
+        return res.redirect(
+          `${MOBILE_APP_RESET_REDIRECT}${MOBILE_APP_RESET_REDIRECT.includes('?') ? '&' : '?'}error=${encodeURIComponent(msg)}`
+        );
+      }
+
+      const code = req.query.code;
+      if (code) {
+        const { data, error } = await supabaseAuth.auth.exchangeCodeForSession(code);
+        if (error) throw error;
+        if (!data?.session?.access_token || !data?.session?.refresh_token) {
+          throw new Error('Recovery exchange returned no session');
+        }
+        return res.redirect(buildMobileAppResetRedirect(data.session));
+      }
+
+      return sendMobileDeepLinkBridge(res, MOBILE_APP_RESET_REDIRECT);
+    } catch (error) {
+      console.error('GET /api/auth/recovery/mobile-callback error:', error);
+      return res.redirect(
+        `${MOBILE_APP_RESET_REDIRECT}${MOBILE_APP_RESET_REDIRECT.includes('?') ? '&' : '?'}error=${encodeURIComponent(
+          error.message || 'recovery_failed'
+        )}`
+      );
     }
   });
 
@@ -103,6 +206,9 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
         refresh_token,
       });
       if (error) throw error;
+      if (!data?.session?.access_token) {
+        return res.status(401).json({ error: 'Invalid or expired recovery link' });
+      }
       res.json({
         session: data.session,
         user: data.user,

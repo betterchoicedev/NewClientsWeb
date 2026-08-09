@@ -5,10 +5,10 @@ import { glassMenuClass, glassMenuHeaderClass, glassOptionClass, ONBOARDING_DROP
 
 const MENU_MAX_H = 280;
 
-function rankMatch(label, val, q) {
-  if (label.startsWith(q)) return 0;
+function rankMatch(label, val, extra, q) {
+  if (label.startsWith(q) || extra.startsWith(q)) return 0;
   if (val.startsWith(q)) return 1;
-  if (label.includes(q)) return 2;
+  if (label.includes(q) || extra.includes(q)) return 2;
   if (val.includes(q)) return 3;
   return 4;
 }
@@ -34,10 +34,18 @@ export default function SearchableSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [menuStyle, setMenuStyle] = useState(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
   const listRef = useRef(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 200);
+    return () => clearTimeout(t);
+  }, [query]);
 
   const selected = options.find((o) => getValue(o) === value);
   const selectedLabel = selected ? getLabel(selected) : '';
@@ -46,21 +54,20 @@ export default function SearchableSelect({
     : '';
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery.trim().toLowerCase();
     if (!q) return options;
     return options
       .map((o) => {
         const label = String(getLabel(o)).toLowerCase();
         const val = String(getValue(o)).toLowerCase();
         const extra = String(o.searchText || '').toLowerCase();
-        let rank = rankMatch(label, val, q);
-        if (rank === 4 && extra.includes(q)) rank = 2;
+        let rank = rankMatch(label, val, extra, q);
         return { o, rank, label };
       })
       .filter((row) => row.rank < 4)
       .sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label))
       .map((row) => row.o);
-  }, [options, query, getLabel, getValue]);
+  }, [options, debouncedQuery, getLabel, getValue]);
 
   const updatePosition = () => {
     const el = triggerRef.current;

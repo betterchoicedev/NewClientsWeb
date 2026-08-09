@@ -116,7 +116,7 @@ export const STEP_DEFS = [
   { id: 'activity', titleEn: 'Activity', titleHe: 'פעילות', fields: ['activity_description', 'activity_level'] },
   { id: 'goal', titleEn: 'Goal', titleHe: 'מטרה', fields: ['goal'] },
   { id: 'dietary', titleEn: 'Allergies & Limitations', titleHe: 'אלרגיות והגבלות', fields: ['food_allergies', 'food_limitations'] },
-  { id: 'preferences', titleEn: 'Food likes & dislikes', titleHe: 'מה אתה אוהב/לא אוהב לאכול?', fields: ['client_preference'] },
+  { id: 'preferences', titleEn: 'Diet & Preferences', titleHe: 'תזונה והעדפות', fields: ['diet_style', 'client_preference'] },
   { id: 'eating_window', titleEn: 'Daily Eating Window', titleHe: 'חלון האכילה היומי', fields: ['first_meal_time', 'last_meal_time'] },
   { id: 'calories', titleEn: 'Daily Calories & Macros', titleHe: 'קלוריות ומקרו יומיים', fields: ['daily_calories', 'macros'] },
   { id: 'meals', titleEn: 'Meal Planning', titleHe: 'תכנון ארוחות', fields: ['number_of_meals', 'meal_descriptions'] },

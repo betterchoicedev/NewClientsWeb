@@ -133,6 +133,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/auth/oauth/google/start',
     '/api/auth/reset-password',
     '/api/auth/recovery/session',
+    '/api/auth/recovery/mobile-callback',
     '/api/webhooks/',
     '/api/exchange-rates',
     '/api/waiting-list/',
