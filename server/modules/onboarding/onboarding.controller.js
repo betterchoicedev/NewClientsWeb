@@ -176,6 +176,18 @@ async function applyBypassPromo(req, res) {
   }
 }
 
+async function grantFreeMonth(req, res) {
+  try {
+    const userId = resolveUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const status = await svc.grantFreeMonth(userId, { clientDB, adminDB });
+    return res.json(status);
+  } catch (error) {
+    console.error('POST /api/onboarding/grant-free-month error:', error);
+    return res.status(error.status || 500).json({ error: error.message || 'Failed to grant free month' });
+  }
+}
+
 module.exports = {
   saveDraft,
   saveStep,
@@ -186,5 +198,6 @@ module.exports = {
   initCommerce,
   validatePromo,
   applyBypassPromo,
+  grantFreeMonth,
   complete,
 };

@@ -88,16 +88,36 @@ export function isValidGoalValue(goal) {
   return Boolean(normalizeGoalValue(goal));
 }
 
-export function defaultMacros(calories, goal) {
+export function defaultMacros(calories, goal, dietStyle) {
   if (!calories) return { protein: null, carbs: null, fat: null };
   let pPct = 0.3;
   let cPct = 0.4;
   let fPct = 0.3;
-  if (goal === 'muscle' || goal === 'cut') {
-    pPct = 0.35;
+
+  if (dietStyle === 'high_protein') {
+    pPct = 0.40;
     cPct = 0.35;
-    fPct = 0.3;
+    fPct = 0.25;
+  } else if (dietStyle === 'low_carb') {
+    pPct = 0.40;
+    cPct = 0.20;
+    fPct = 0.40;
+  } else if (dietStyle === 'keto') {
+    pPct = 0.20;
+    cPct = 0.05;
+    fPct = 0.75;
+  } else if (dietStyle === 'endurance') {
+    pPct = 0.20;
+    cPct = 0.60;
+    fPct = 0.20;
+  } else if (dietStyle === 'balanced' || !dietStyle || dietStyle === 'other') {
+    if (goal === 'muscle' || goal === 'cut') {
+      pPct = 0.35;
+      cPct = 0.35;
+      fPct = 0.3;
+    }
   }
+
   return {
     protein: Math.round((calories * pPct) / 4),
     carbs: Math.round((calories * cPct) / 4),

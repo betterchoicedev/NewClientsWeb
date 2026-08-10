@@ -3,7 +3,7 @@ import { ArrowRight, Package } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../context/ThemeContext';
 import { useOnboardingStore, PHASES } from '../onboarding.store';
-import { initCommerceSession } from '../api/onboardingApi';
+import { initCommerceSession, grantFreeMonth } from '../api/onboardingApi';
 import { isOnboardingHebrew } from '../onboardingLocale';
 import { useOnboardingCommerce } from '../hooks/useOnboardingCommerce';
 import OnboardingPanel, { GlassPrimaryButton } from '../components/OnboardingPanel';
@@ -26,6 +26,8 @@ export default function ProductSelectionPhase() {
     useOnboardingCommerce(user?.id);
 
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [bypassMode, setBypassMode] = useState(false);
+  const [bypassing, setBypassing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,8 +57,19 @@ export default function ProductSelectionPhase() {
     };
   }, [user?.id, companyId, setUserCode, setCompany, setError, isHe]);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     setError(null);
+    if (bypassMode) {
+      setBypassing(true);
+      try {
+        await grantFreeMonth();
+        forcePhase(PHASES.PWA);
+      } catch (err) {
+        setError(err.message || 'Failed to apply free month');
+        setBypassing(false);
+      }
+      return;
+    }
     if (!selectedProductIds.length) {
       setError(isHe ? 'בחרו תוכנית' : 'Select a plan');
       return;
@@ -68,14 +81,20 @@ export default function ProductSelectionPhase() {
     <OnboardingPanel
       maxWidthClass="max-w-2xl"
       footer={
-        <GlassPrimaryButton
-          className="w-full min-h-[3.25rem]"
-          disabled={bootstrapping || !selectedProductIds.length}
-          onClick={handleContinue}
-        >
-          {isHe ? 'המשך לקופון' : 'Continue to promo'}
-          <ArrowRight size={18} aria-hidden />
-        </GlassPrimaryButton>
+        <div className="flex flex-col gap-2">
+          <GlassPrimaryButton
+            className="w-full min-h-[3.25rem]"
+            disabled={bootstrapping || bypassing || (!bypassMode && !selectedProductIds.length)}
+            onClick={handleContinue}
+          >
+            {bypassing ? (isHe ? 'מעבד...' : 'Processing...') : (isHe ? 'המשך לקופון' : 'Continue to promo')}
+            <ArrowRight size={18} aria-hidden />
+          </GlassPrimaryButton>
+          <label className="flex items-center gap-2 opacity-30 hover:opacity-100 transition-opacity cursor-pointer self-start -mt-1 -ml-1">
+            <input type="checkbox" checked={bypassMode} onChange={(e) => setBypassMode(e.target.checked)} className="w-3 h-3 cursor-pointer" />
+            <span className="text-[10px]">Free</span>
+          </label>
+        </div>
       }
     >
       <div className="space-y-5">
