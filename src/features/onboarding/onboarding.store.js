@@ -32,6 +32,7 @@ export const emptyAnswers = () => ({
   limitations_other: '',
   region_other: '',
   gender_other: '',
+  diet_style: '',
   client_preference: '',
   first_meal_time: '08:00',
   last_meal_time: '20:00',

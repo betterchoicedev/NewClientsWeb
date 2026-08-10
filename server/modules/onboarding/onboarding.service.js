@@ -379,7 +379,9 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
 
   const foodAllergiesArr = mergeOtherList(answers.food_allergies, answers.allergies_other);
   const foodAllergies = foodAllergiesArr && foodAllergiesArr.length ? foodAllergiesArr.join(', ') : null;
-  const foodLimitations = mergeOtherList(answers.food_limitations, answers.limitations_other);
+  
+  const foodLimitationsArr = mergeOtherList(answers.food_limitations, answers.limitations_other);
+  const foodLimitations = foodLimitationsArr && foodLimitationsArr.length ? foodLimitationsArr.join(', ') : null;
 
   const clientData = {
     onboarding_completed: false,
@@ -408,9 +410,16 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
   if (answers.custom_answers && typeof answers.custom_answers === 'object') {
     clientData.custom_answers = answers.custom_answers;
   }
-  if (answers.client_preference) {
-    clientData.client_preference = { dietary_preferences: String(answers.client_preference).trim() };
-    clientData.dietary_preferences = String(answers.client_preference).trim();
+  if (answers.client_preference || answers.diet_style) {
+    const prefs = {};
+    if (answers.client_preference) prefs.dietary_preferences = String(answers.client_preference).trim();
+    if (answers.diet_style) prefs.diet_style = String(answers.diet_style).trim();
+    
+    clientData.client_preference = prefs;
+    
+    if (answers.client_preference) {
+      clientData.dietary_preferences = String(answers.client_preference).trim();
+    }
   }
 
   const chatUserData = {
@@ -440,8 +449,11 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
     daily_target_total_calories: dailyCalories || undefined,
     base_daily_total_calories: bmr != null ? Math.round(bmr) : undefined,
     macros: macros ? formatMacrosGramStrings(macros) : undefined,
-    client_preference: answers.client_preference
-      ? { dietary_preferences: String(answers.client_preference).trim() }
+    client_preference: (answers.client_preference || answers.diet_style)
+      ? { 
+          ...(answers.client_preference ? { dietary_preferences: String(answers.client_preference).trim() } : {}),
+          ...(answers.diet_style ? { diet_style: String(answers.diet_style).trim() } : {})
+        }
       : undefined,
     phone_number: phone || undefined,
     whatsapp_number: phone || undefined,
@@ -1413,6 +1425,37 @@ async function applyBypassPromo(userId, { code, companyId, productIds = [] }, { 
   return getStatus(userId, { clientDB, adminDB });
 }
 
+async function grantFreeMonth(userId, { clientDB, adminDB }) {
+  const client = await ensureClientAndChatUser(userId, { clientDB, adminDB });
+  const userCode = client.user_code;
+  if (!userCode) {
+    const err = new Error('user_code is missing');
+    err.status = 500;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  const expires = new Date();
+  expires.setMonth(expires.getMonth() + 1);
+  const entitlement = {
+    subscription_type: 'free_tier',
+    subscription_status: 'active',
+    subscription_expires_at: expires.toISOString(),
+    updated_at: nowIso,
+  };
+
+  await clientDB.from('clients').update({ ...entitlement, onboarding_completed: false }).eq('user_id', userId);
+
+  const { data: chatUser } = await adminDB.from('chat_users').select('id').eq('user_code', userCode).maybeSingle();
+  if (chatUser?.id) {
+    await adminDB.from('chat_users').update(entitlement).eq('id', chatUser.id);
+  } else {
+    await adminDB.from('chat_users').insert([{ user_code: userCode, ...entitlement }]);
+  }
+
+  return getStatus(userId, { clientDB, adminDB });
+}
+
 module.exports = {
   VALID_PHASES,
   saveDraft,
@@ -1428,4 +1471,5 @@ module.exports = {
   initCommerceSession,
   validateCompanyPromo,
   applyBypassPromo,
+  grantFreeMonth,
 };

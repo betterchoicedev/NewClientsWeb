@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, MapPin, Search } from 'lucide-react';
 import { searchCities } from '../api/onboardingApi';
 import SearchableSelect from './SearchableSelect';
-import { COUNTRY_OPTIONS } from '../countryOptions';
+import { COUNTRY_OPTIONS, COUNTRY_OPTIONS_ENRICHED } from '../countryOptions';
 import { formatCityLabel } from '../cityDisplayUtils';
 import { glassMenuClass, glassMenuHeaderClass, glassOptionClass, ONBOARDING_DROPDOWN_MENU_Z } from './glassStyles';
 
@@ -11,22 +11,59 @@ const MENU_MAX_H = 280;
 const SEARCH_LIMIT = 12;
 const DEBOUNCE_MS = 320;
 
-function isConfidentHit(rows, q) {
+function isConfidentHit(rows, q, isHe = false) {
   if (!rows?.length) return false;
   if (rows.length === 1) return true;
   const needle = q.trim().toLowerCase();
   const top = rows[0];
   const name = String(top.name || '').toLowerCase();
   const ascii = String(top.asciiname || '').toLowerCase();
-  return name === needle || ascii === needle;
+  const alts = String(top.alternatenames || '').toLowerCase();
+  
+  if (name === needle || ascii === needle) return true;
+  if (isHe && alts.split(',').some(alt => alt.trim() === needle)) return true;
+  return false;
 }
 
-function mergeFullHits(optimistic, full) {
+function mergeFullHits(optimistic, full, isHe = false, q = '') {
   if (!optimistic?.geonameid || !full?.length) return full || [];
   const rest = full.filter((c) => c.geonameid !== optimistic.geonameid);
   const stillThere = full.some((c) => c.geonameid === optimistic.geonameid);
-  if (stillThere) return [optimistic, ...rest];
-  return full;
+  const combined = stillThere ? [optimistic, ...rest] : full;
+  
+  const qLower = (q || '').trim().toLowerCase();
+  if (!qLower) return combined;
+
+  combined.sort((a, b) => {
+    const getRank = (city) => {
+      const name = String(city.name || '').toLowerCase();
+      const ascii = String(city.asciiname || '').toLowerCase();
+      const alts = String(city.alternatenames || '').toLowerCase();
+      
+      if (name === qLower || ascii === qLower) return 0;
+      if (isHe && alts.split(',').some(alt => alt.trim() === qLower)) return 0;
+      
+      if (name.startsWith(qLower) || ascii.startsWith(qLower)) return 1;
+      if (isHe && alts.split(',').some(alt => alt.trim().startsWith(qLower))) return 1;
+      
+      return 2;
+    };
+
+    const rankA = getRank(a);
+    const rankB = getRank(b);
+    
+    if (rankA !== rankB) return rankA - rankB;
+    
+    const locale = isHe ? 'he' : 'en';
+    const displayA = a.display_label || '';
+    const displayB = b.display_label || '';
+    const labelCmp = displayA.localeCompare(displayB, locale);
+    if (labelCmp !== 0) return labelCmp;
+    
+    return (b.population || 0) - (a.population || 0);
+  });
+  
+  return combined;
 }
 
 /**
@@ -89,7 +126,7 @@ export default function CitySearchSelect({
       const apply = () => {
         if (signal.aborted) return;
         if (phase.full) {
-          setHits(mergeFullHits(phase.optimistic, phase.full));
+          setHits(mergeFullHits(phase.optimistic, phase.full, isHe, reqQ));
           return;
         }
         if (phase.optimistic) {
@@ -106,7 +143,7 @@ export default function CitySearchSelect({
         .then((quick) => {
           if (signal.aborted) return;
           const quickRows = quick.data || [];
-          if (isConfidentHit(quickRows, reqQ)) {
+          if (isConfidentHit(quickRows, reqQ, isHe)) {
             phase.optimistic = quickRows[0];
             apply();
             if (!phase.full) {
@@ -210,9 +247,11 @@ export default function CitySearchSelect({
     setLoadingMore(false);
   };
 
-  const countryOptions = COUNTRY_OPTIONS.map((c) => ({
+  const countryOptions = COUNTRY_OPTIONS_ENRICHED.map((c) => ({
     value: c.code,
     label: `${c.label} (${c.code})`,
+    labelHe: c.labelHe ? `${c.labelHe} (${c.code})` : undefined,
+    searchText: c.searchText,
   }));
 
   const showInitialSpinner = query.trim().length >= 1 && loading && hits.length === 0;
@@ -246,6 +285,7 @@ export default function CitySearchSelect({
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-1"
               style={{ maxHeight: (menuStyle.maxHeight || MENU_MAX_H) - 48 }}
               role="listbox"
+              dir={isHe ? 'rtl' : 'ltr'}
             >
               {query.trim().length < 1 && (
                 <li className={`px-4 py-3 text-sm ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
@@ -314,6 +354,8 @@ export default function CitySearchSelect({
           matchesLabel={(n) => (isHe ? `${n} תוצאות` : `${n} match${n === 1 ? '' : 'es'}`)}
           isDark={isDark}
           inputClass={inputClass}
+          inputDir={isHe ? 'rtl' : 'ltr'}
+          getLabel={(o) => (isHe && o.labelHe ? o.labelHe : o.label)}
         />
       </div>
 

@@ -38,9 +38,20 @@ export default function StepShell({
     </div>
   );
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      if (e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        if (!nextDisabled && !loading) {
+          onNext();
+        }
+      }
+    }
+  };
+
   return (
     <OnboardingPanel footer={footer}>
-      <div className="space-y-4">
+      <div className="space-y-4" onKeyDown={handleKeyDown}>
         <div>
           <div
             className={`h-1.5 rounded-full overflow-hidden backdrop-blur-sm ${

@@ -400,8 +400,8 @@ function LoginPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex gap-6 text-sm font-medium">
-              <a href="#privacy" className={`${isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'} transition-colors`}>{t.footer.privacy}</a>
-              <a href="#terms" className={`${isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'} transition-colors`}>{t.footer.terms}</a>
+              <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className={`${isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'} transition-colors`}>{t.footer.privacy}</Link>
+              <Link to="/terms" target="_blank" rel="noopener noreferrer" className={`${isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'} transition-colors`}>{t.footer.terms}</Link>
             </div>
             <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>
               {t.footer.copyright}

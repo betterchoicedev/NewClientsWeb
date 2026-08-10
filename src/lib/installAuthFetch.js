@@ -15,6 +15,7 @@ const PUBLIC_API_PATHS = [
   '/api/auth/oauth/callback',
   '/api/auth/reset-password',
   '/api/auth/recovery/session',
+  '/api/auth/recovery/mobile-callback',
   '/api/webhooks/',
   '/api/exchange-rates',
   '/api/waiting-list/',

@@ -337,18 +337,18 @@ function WaitingListPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 md:gap-8 mb-2 md:mb-0 text-center">
-              <a 
-                href="#privacy" 
+              <Link 
+                to="/privacy-policy" target="_blank" rel="noopener noreferrer"
                 className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm`}
               >
                 {t.footer.privacy}
-              </a>
-              <a 
-                href="#terms" 
+              </Link>
+              <Link 
+                to="/terms" target="_blank" rel="noopener noreferrer"
                 className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-emerald-700 hover:text-emerald-800'} transition-colors duration-300 text-sm`}
               >
                 {t.footer.terms}
-              </a>
+              </Link>
             </div>
             <div className={`${isDarkMode ? 'text-gray-400' : 'text-emerald-600/80'} text-center`}>
               <p className="text-xs sm:text-sm">{t.footer.copyright}</p>

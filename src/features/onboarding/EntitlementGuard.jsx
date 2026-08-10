@@ -5,6 +5,8 @@ import { useOnboardingEntitlement } from './OnboardingEntitlementContext';
 
 const PAYMENT_RETURN_PATHS = new Set(['/payment-success', '/payment-cancel']);
 
+const PUBLIC_LEGAL_PATHS = new Set(['/terms', '/privacy-policy', '/accessibility-statement']);
+
 function isProfilePath(pathname) {
   return pathname === '/profile' || /^\/c\/[^/]+\/profile\/?$/.test(pathname);
 }
@@ -22,7 +24,7 @@ export default function EntitlementGuard({ children }) {
     if (authLoading || entitlementLoading || !isAuthenticated || !requiresWall) return;
 
     const path = location.pathname;
-    if (isProfilePath(path) || PAYMENT_RETURN_PATHS.has(path)) return;
+    if (isProfilePath(path) || PAYMENT_RETURN_PATHS.has(path) || PUBLIC_LEGAL_PATHS.has(path)) return;
 
     navigate('/profile', { replace: true, state: { onboardingWall: true } });
   }, [

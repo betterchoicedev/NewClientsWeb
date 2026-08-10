@@ -375,6 +375,7 @@ async function searchCities(req, res) {
     // Prefix on name/asciiname (index-friendly). Mid-match on alternatenames so local
     // scripts work (e.g. "תל אביב") — scoped by country so the scan stays small.
     // Quote patterns so spaces / unicode survive PostgREST or= parsing.
+    const isHebrew = /[\u0590-\u05FF]/.test(safe);
     const orFilter = [
       `name.ilike."${safe}%"`,
       `asciiname.ilike."${safe}%"`,
@@ -395,10 +396,41 @@ async function searchCities(req, res) {
 
     const { data: rows, error } = await query;
     if (error) return res.status(500).json({ error: 'Failed to search cities', message: error.message });
-    const data = (rows || []).map((row) => ({
+    
+    // Re-rank prefix matches to the top, then alphabetically, then by population
+    let data = (rows || []).map((row) => ({
       ...row,
       display_label: formatCityLabel(row),
     }));
+
+    const qLower = safe.toLowerCase();
+    data.sort((a, b) => {
+      const getRank = (city) => {
+        const name = String(city.name || '').toLowerCase();
+        const ascii = String(city.asciiname || '').toLowerCase();
+        const alts = String(city.alternatenames || '').toLowerCase();
+        
+        if (name === qLower || ascii === qLower) return 0;
+        if (isHebrew && alts.split(',').some(alt => alt.trim() === qLower)) return 0;
+        
+        if (name.startsWith(qLower) || ascii.startsWith(qLower)) return 1;
+        if (isHebrew && alts.split(',').some(alt => alt.trim().startsWith(qLower))) return 1;
+        
+        return 2;
+      };
+
+      const rankA = getRank(a);
+      const rankB = getRank(b);
+      
+      if (rankA !== rankB) return rankA - rankB;
+      
+      const locale = isHebrew ? 'he' : 'en';
+      const labelCmp = a.display_label.localeCompare(b.display_label, locale);
+      if (labelCmp !== 0) return labelCmp;
+      
+      return (b.population || 0) - (a.population || 0);
+    });
+
     res.json({ data, mode });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error', message: error.message });

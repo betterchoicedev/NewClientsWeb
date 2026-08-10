@@ -9,6 +9,7 @@ router.post('/onboarding/commit', ctrl.commit);
 router.post('/onboarding/init-commerce', ctrl.initCommerce);
 router.post('/onboarding/validate-promo', ctrl.validatePromo);
 router.post('/onboarding/apply-bypass-promo', ctrl.applyBypassPromo);
+router.post('/onboarding/grant-free-month', ctrl.grantFreeMonth);
 router.post('/onboarding/complete', ctrl.complete);
 router.get('/onboarding/status', ctrl.getStatus);
 router.post('/onboarding/redeem-access-code', ctrl.redeemAccessCode);
