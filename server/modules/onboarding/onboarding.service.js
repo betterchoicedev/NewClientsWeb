@@ -1425,6 +1425,37 @@ async function applyBypassPromo(userId, { code, companyId, productIds = [] }, { 
   return getStatus(userId, { clientDB, adminDB });
 }
 
+async function grantFreeMonth(userId, { clientDB, adminDB }) {
+  const client = await ensureClientAndChatUser(userId, { clientDB, adminDB });
+  const userCode = client.user_code;
+  if (!userCode) {
+    const err = new Error('user_code is missing');
+    err.status = 500;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  const expires = new Date();
+  expires.setMonth(expires.getMonth() + 1);
+  const entitlement = {
+    subscription_type: 'free_tier',
+    subscription_status: 'active',
+    subscription_expires_at: expires.toISOString(),
+    updated_at: nowIso,
+  };
+
+  await clientDB.from('clients').update({ ...entitlement, onboarding_completed: false }).eq('user_id', userId);
+
+  const { data: chatUser } = await adminDB.from('chat_users').select('id').eq('user_code', userCode).maybeSingle();
+  if (chatUser?.id) {
+    await adminDB.from('chat_users').update(entitlement).eq('id', chatUser.id);
+  } else {
+    await adminDB.from('chat_users').insert([{ user_code: userCode, ...entitlement }]);
+  }
+
+  return getStatus(userId, { clientDB, adminDB });
+}
+
 module.exports = {
   VALID_PHASES,
   saveDraft,
@@ -1440,4 +1471,5 @@ module.exports = {
   initCommerceSession,
   validateCompanyPromo,
   applyBypassPromo,
+  grantFreeMonth,
 };

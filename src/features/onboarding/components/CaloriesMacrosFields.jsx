@@ -58,12 +58,12 @@ export default function CaloriesMacrosFields({ isHe, isDark }) {
 
   const defaultGrams = useMemo(() => {
     if (!computedCalories) return null;
-    return parseMacroGrams(defaultMacros(computedCalories, answers.goal));
-  }, [computedCalories, answers.goal]);
+    return parseMacroGrams(defaultMacros(computedCalories, answers.goal, answers.diet_style));
+  }, [computedCalories, answers.goal, answers.diet_style]);
 
   useEffect(() => {
     if (!computedCalories || answers.daily_calories) return;
-    const defs = defaultMacros(computedCalories, answers.goal);
+    const defs = defaultMacros(computedCalories, answers.goal, answers.diet_style);
     setAnswers({ daily_calories: computedCalories, macros: defs });
   }, [computedCalories]); // eslint-disable-line react-hooks/exhaustive-deps
 

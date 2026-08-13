@@ -17,7 +17,7 @@ import {
   glassInputClass,
   glassOptionBtnClass,
 } from '../components/glassStyles';
-import { normalizeGoalValue, isValidGoalValue } from './stepDefs';
+import { normalizeGoalValue, isValidGoalValue, defaultMacros } from './stepDefs';
 import { displayWeightKg, parseWeightInputToKg } from '../biometricUtils';
 import { PHONE_PREFIX_OPTIONS } from '../phonePrefixOptions';
 import { getPhoneDigitValidationMessage, getPhoneInputMaxLength, isValidPhoneDigits, sanitizePhoneDigits } from '../phoneUtils';
@@ -124,10 +124,11 @@ const LIMITATIONS = [
 ];
 
 const DIET_STYLES = [
-  { value: 'balanced', en: 'Balanced', he: 'מאוזן' },
-  { value: 'high_protein', en: 'High Protein', he: 'עשיר בחלבון' },
-  { value: 'keto', en: 'Keto / Low Carb', he: 'קטו / דל פחמימה' },
-  { value: 'vegan', en: 'Vegan', he: 'טבעוני' },
+  { value: 'balanced', en: 'Balanced (Fitness Standard)', he: 'מאוזן (סטנדרט פיטנס)' },
+  { value: 'high_protein', en: 'High Protein (Muscle Gain)', he: 'עשיר בחלבון (עלייה במסת שריר)' },
+  { value: 'low_carb', en: 'Low Carb', he: 'דל פחמימה' },
+  { value: 'keto', en: 'Keto (Ketogenic)', he: 'קטו (קטוגני)' },
+  { value: 'endurance', en: 'Endurance (High Energy)', he: 'סיבולת (אנרגיה גבוהה)' },
   { value: 'other', en: 'Other', he: 'אחר' },
 ];
 
@@ -796,7 +797,13 @@ export default function StepFields({ step }) {
             <ChoiceOptionList
               options={DIET_STYLES}
               selectedValues={answers.diet_style}
-              onToggle={(v) => setAnswer('diet_style', v)}
+              onToggle={(v) => {
+                const nextAnswers = { diet_style: v };
+                if (answers.daily_calories) {
+                  nextAnswers.macros = defaultMacros(answers.daily_calories, answers.goal, v);
+                }
+                setAnswers(nextAnswers);
+              }}
               isHe={isHe}
               isDark={isDarkMode}
             />

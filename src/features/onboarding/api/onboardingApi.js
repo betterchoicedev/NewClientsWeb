@@ -84,6 +84,14 @@ export async function applyBypassPromo({ code, companyId, productIds = [] }) {
   return parseJson(res);
 }
 
+export async function grantFreeMonth() {
+  const res = await fetch(`${apiBase()}/api/onboarding/grant-free-month`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
 export async function createCheckoutSession({
   priceId = USAGE_BASED_PRICE_ID,
   priceIds = [],
