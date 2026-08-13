@@ -154,6 +154,15 @@ export async function classifyActivity(activityDescription) {
   return parseJson(res);
 }
 
+export async function autoGenerateMeals(params = {}) {
+  const res = await fetch(`${apiBase()}/api/onboarding/auto-generate-meals`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(params),
+  });
+  return parseJson(res);
+}
+
 export async function checkOnboardingPhone(phone) {
   const res = await fetch(`${apiBase()}/api/onboarding/check-phone`, {
     method: 'POST',

@@ -3,6 +3,7 @@ const OpenAI = require('openai');
 const { clientDB, adminDB } = require('../../config/db');
 const { parseTimeToFloat } = require('../../utils/helpers');
 const { formatCityLabel } = require('../../utils/cityDisplay');
+const { getMealRecommendationForCalories } = require('../../utils/mealStructure');
 const { generateUpdatedMealPlan, createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.service');
 const { formatMacrosGramStrings, normalizeMealPlanForDb, normalizeChatUserPayloadForDb } = require('../../utils/nutritionFormats');
 
@@ -188,6 +189,196 @@ async function startAsyncMealPlan(req, res) {
   }
 }
 
+async function autoGenerateMeals(req, res) {
+  try {
+    const body = req.body || {};
+
+    const dailyCalories = body.dailyCalories ?? body.daily_calories ?? null;
+    const dietStyle = body.dietStyle ?? body.diet_style ?? '';
+    const clientPreference = body.clientPreference ?? body.client_preference ?? '';
+    const goal = body.goal ?? '';
+    const language = body.language ?? body.user_language ?? 'en';
+    const activityLevel = body.activityLevel ?? body.activity_level ?? '';
+    const activityDescription = body.activityDescription ?? body.activity_description ?? '';
+    const medicalConditions = body.medicalConditions ?? body.medical_conditions ?? '';
+    const firstMealTime = body.firstMealTime ?? body.first_meal_time ?? '';
+    const lastMealTime = body.lastMealTime ?? body.last_meal_time ?? '';
+    const gender = body.gender ?? '';
+    const macros = body.macros ?? null;
+    const preferredMealCount = body.numberOfMeals ?? body.number_of_meals ?? null;
+
+    const foodAllergies = normalizeStringList(body.foodAllergies ?? body.food_allergies);
+    const foodLimitations = normalizeStringList(body.foodLimitations ?? body.food_limitations);
+
+    const apiKey = process.env.CLASSIFY_ACTIVITY_KEY || process.env.OPENAI_API_KEY;
+    const apiBase = (process.env.CLASSIFY_ACTIVITY_BASE || '').replace(/\/$/, '');
+    const model = process.env.CLASSIFY_ACTIVITY_DEPLOYMENT || 'gpt-4o-mini';
+
+    if (!apiKey) return res.status(500).json({ error: 'AI key is not configured on the server' });
+
+    const client = new OpenAI({
+      apiKey,
+      ...(apiBase ? { baseURL: apiBase } : {}),
+    });
+
+    const isHe = language === 'he' || language === 'hebrew';
+    const langInstructions = isHe
+      ? 'Write meal names and descriptions in Hebrew.'
+      : 'Write meal names and descriptions in English.';
+
+    const calsNum = Number(dailyCalories);
+    const rec = Number.isFinite(calsNum) ? getMealRecommendationForCalories(calsNum) : null;
+    const minMeals = rec?.min ?? 2;
+    const maxMeals = rec?.max ?? 6;
+    const suggestedMeals = rec?.suggested ?? 3;
+
+    const macroLine = macros && typeof macros === 'object'
+      ? `Protein ${macros.protein ?? '?'}g, Carbs ${macros.carbs ?? '?'}g, Fat ${macros.fat ?? '?'}g`
+      : 'Not provided';
+
+    const eatingWindow = firstMealTime && lastMealTime
+      ? `${firstMealTime} – ${lastMealTime}`
+      : 'Not provided';
+
+    const systemPrompt = `You are an expert sports nutritionist designing a daily meal structure for onboarding.
+Recommend the ideal number of meals/snacks per day, a clear meal name for each slot (e.g. Breakfast, Morning Snack, Lunch, Post-Workout Snack, Dinner), and a short description of typical foods for that slot (e.g. "2 eggs, whole-grain toast, salad").
+
+Rules:
+1. number_of_meals MUST equal meals.length.
+2. Choose number_of_meals between ${minMeals} and ${maxMeals} based on daily calories${rec ? ` (recommended ~${suggestedMeals})` : ''}. Never exceed 10.
+3. NEVER include or suggest foods that conflict with listed allergies.
+4. Respect all dietary limitations (vegan, kosher, halal, gluten-free, etc.).
+5. Honor diet style and client food preferences/likes-dislikes when choosing example foods.
+6. Spread meals logically across the eating window${eatingWindow !== 'Not provided' ? ` (${eatingWindow})` : ''}.
+7. For high activity ("very"/"extra") or muscle-gain goals, consider a Post-Workout or extra snack slot when meal count allows.
+8. Descriptions are 1 short sentence each — concrete foods, not vague categories.
+9. VERY IMPORTANT: All meal names MUST be strictly unique. Never generate duplicate names (e.g. do not output two meals named "Breakfast").
+10. ${langInstructions}
+
+Respond with a single JSON object only, no markdown, in this exact shape:
+{"number_of_meals":4,"meals":[{"name":"Breakfast","description":"..."},{"name":"Lunch","description":"..."}]}
+
+User profile:
+- Daily calories: ${Number.isFinite(calsNum) ? calsNum : 'Not provided'}
+- Macros: ${macroLine}
+- Goal: ${goal || 'Not provided'}
+- Gender: ${gender || 'Not provided'}
+- Activity level: ${activityLevel || 'Not provided'}
+- Activity description: ${activityDescription || 'Not provided'}
+- Diet style: ${dietStyle || 'Balanced / not specified'}
+- Food preferences (likes/dislikes): ${clientPreference || 'None specified'}
+- Food allergies (STRICT — never violate): ${foodAllergies.length ? foodAllergies.join(', ') : 'None reported'}
+- Food limitations / restrictions: ${foodLimitations.length ? foodLimitations.join(', ') : 'None reported'}
+- Medical conditions: ${medicalConditions || 'None reported'}
+- Eating window: ${eatingWindow}
+${preferredMealCount ? `- User already picked ${preferredMealCount} meals — prefer that count unless clearly wrong for their calories.` : ''}`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: 'Generate the personalized daily meal structure as JSON.' },
+    ];
+
+    // Prefer simple json_object — nested strict json_schema often returns empty content via BetterProxy.
+    let content = await callMealStructureLlm(client, model, messages, { type: 'json_object' });
+
+    if (!content) {
+      console.warn('[autoGenerateMeals] json_object empty — retrying without response_format');
+      content = await callMealStructureLlm(client, model, messages, null);
+    }
+
+    if (!content) {
+      console.error('[autoGenerateMeals] Empty content after retries');
+      return res.status(502).json({ error: 'Empty response from AI' });
+    }
+
+    const parsed = parseMealStructureJson(content);
+    if (!parsed) {
+      console.error('[autoGenerateMeals] Failed to parse AI JSON:', content.slice(0, 500));
+      return res.status(502).json({ error: 'AI returned invalid JSON' });
+    }
+
+    let n = Math.round(Number(parsed.number_of_meals));
+    if (!Number.isFinite(n) || n < 1) n = suggestedMeals;
+    n = Math.max(1, Math.min(10, n));
+
+    const rawMeals = Array.isArray(parsed.meals) ? parsed.meals : [];
+    const meals = Array.from({ length: n }, (_, i) => ({
+      name: String(rawMeals[i]?.name || (isHe ? `ארוחה ${i + 1}` : `Meal ${i + 1}`)).trim(),
+      description: String(rawMeals[i]?.description || '').trim(),
+    }));
+
+    return res.json({ number_of_meals: n, meals });
+  } catch (error) {
+    console.error('[autoGenerateMeals] AI error', error?.message || error);
+    res.status(502).json({ error: 'AI generation failed', details: error?.message || String(error) });
+  }
+}
+
+async function callMealStructureLlm(client, model, messages, responseFormat) {
+  const params = {
+    model,
+    messages,
+    temperature: 0.6,
+    max_tokens: 800,
+  };
+  if (responseFormat) params.response_format = responseFormat;
+
+  const response = await client.chat.completions.create(params);
+  const choice = response.choices?.[0];
+  const message = choice?.message;
+  const content = typeof message?.content === 'string' ? message.content.trim() : '';
+
+  if (!content) {
+    console.warn('[autoGenerateMeals] empty choice', {
+      finish_reason: choice?.finish_reason,
+      refusal: message?.refusal || null,
+      hasContent: !!message?.content,
+    });
+  }
+  return content || null;
+}
+
+function parseMealStructureJson(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  let text = raw.trim();
+  // Strip markdown fences if the model wrapped JSON
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) text = fence[1].trim();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+/** Coerce allergies/limitations from arrays, JSON strings, or comma-separated text. */
+function normalizeStringList(value) {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim()).filter(Boolean);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => String(v).trim()).filter(Boolean);
+      }
+    } catch {
+      /* not JSON */
+    }
+    return value.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 async function classifyActivity(req, res) {
   try {
     const { activityDescription } = req.body;
@@ -354,9 +545,10 @@ async function searchCities(req, res) {
     if (countryCodes.length === 0) {
       return res.status(400).json({
         error: 'country is required',
-        message: 'Pass country (ISO 3166-1 alpha-2), e.g. ?country=IL&q=Tel',
+        message: 'Pass country (ISO 3166-1 alpha-2) or GLOBAL, e.g. ?country=IL&q=Tel',
       });
     }
+    const isGlobal = countryCodes.includes('GLOBAL');
 
     const rawQ = (req.query.q || '').toString().trim();
     if (rawQ.length < 1) return res.json({ data: [] });
@@ -391,8 +583,10 @@ async function searchCities(req, res) {
       .order('population', { ascending: false, nullsFirst: false })
       .limit(limit);
 
-    if (countryCodes.length === 1) query = query.eq('country_code', countryCodes[0]);
-    else query = query.in('country_code', countryCodes);
+    if (!isGlobal) {
+      if (countryCodes.length === 1) query = query.eq('country_code', countryCodes[0]);
+      else query = query.in('country_code', countryCodes);
+    }
 
     const { data: rows, error } = await query;
     if (error) return res.status(500).json({ error: 'Failed to search cities', message: error.message });
@@ -953,7 +1147,7 @@ module.exports = {
   getUserCode, getUserLanguage, getUserSettings, updateUserSettings,
   getOnboardingClientData, getOnboardingChatUserMealData, checkOnboardingPhone,
   updateOnboardingClient, updateOnboardingChatUser, startAsyncMealPlan,
-  classifyActivity, getOnboardingStatus, searchCities,
+  classifyActivity, getOnboardingStatus, searchCities, autoGenerateMeals,
   getProfileMealPlan, clearEditedMealPlan, saveEditedMealPlan, aiUpdateMealPlan, createMealPlan,
   getProfileClient, loadProfile, getProfileChatUser, getProfileChatUserMe,
   getMealWindow, saveProfile, syncChatUser, saveNutritional, savePersonal,

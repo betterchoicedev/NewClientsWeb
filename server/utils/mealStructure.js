@@ -198,6 +198,50 @@ function buildMealPlanStructure(answers) {
   return sortMealPlanStructure(structure);
 }
 
+/** Meal-count guidance from daily calories (mirrors web onboarding nutrition/mealStructure.js). */
+function getMealRecommendationForCalories(calories) {
+  const cals = Number(calories);
+  if (!Number.isFinite(cals) || cals < 1200) return null;
+  if (cals >= 4000) {
+    return {
+      min: 6, max: 10, suggested: 6,
+      rangeLabelHe: '6+', rangeLabelEn: '6+',
+      rationaleHe: 'בטווח הזה מומלץ 6 ארוחות ומעלה (כולל שייקים). קל יותר לפזר את הקלוריות.',
+      rationaleEn: 'At this range we recommend 6+ meals (including shakes). Easier to spread calories.',
+    };
+  }
+  if (cals >= 2800) {
+    return {
+      min: 5, max: 6, suggested: 5,
+      rangeLabelHe: '5–6', rangeLabelEn: '5–6',
+      rationaleHe: 'כדי לא להעמיס על הקיבה – ארוחות בינוניות כל 3 שעות נוחות יותר מארוחות ענק.',
+      rationaleEn: 'To avoid overloading your stomach – medium meals every ~3 hours are easier than huge meals.',
+    };
+  }
+  if (cals >= 2000) {
+    return {
+      min: 4, max: 5, suggested: 4,
+      rangeLabelHe: '4–5', rangeLabelEn: '4–5',
+      rationaleHe: '3 ארוחות עיקריות + 1–2 נשנושים. האיזון הנוח לרוב האנשים.',
+      rationaleEn: '3 main meals + 1–2 snacks. The most comfortable balance for most people.',
+    };
+  }
+  if (cals >= 1500) {
+    return {
+      min: 3, max: 3, suggested: 3,
+      rangeLabelHe: '3', rangeLabelEn: '3',
+      rationaleHe: 'ארוחות גדולות ומשביעות (כ־500–600 קלוריות לארוחה) עדיפות על הרבה ארוחות קטנות.',
+      rationaleEn: 'Larger, satiating meals (~500–600 kcal each) work better than many small meals.',
+    };
+  }
+  return {
+    min: 2, max: 3, suggested: 3,
+    rangeLabelHe: '2–3', rangeLabelEn: '2–3',
+    rationaleHe: 'פחות קלוריות – פחות ארוחות, כדי שכל ארוחה תהיה משביעה.',
+    rationaleEn: 'Fewer calories – fewer meals, so each meal stays satisfying.',
+  };
+}
+
 module.exports = {
   buildMealPlanStructure,
   normalizeMealPlanStructureEntry,
@@ -205,4 +249,5 @@ module.exports = {
   sortMealPlanStructure,
   sortMealPlanMeals,
   getMealOrderIndex,
+  getMealRecommendationForCalories,
 };

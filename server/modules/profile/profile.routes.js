@@ -18,6 +18,7 @@ router.post('/onboarding/update-client',       requireAuth, ctrl.updateOnboardin
 router.post('/onboarding/update-chat-user',    requireAuth, ctrl.updateOnboardingChatUser);
 router.post('/onboarding/start-async-meal-plan', requireAuth, ctrl.startAsyncMealPlan);
 router.post('/onboarding/classify-activity',     ctrl.classifyActivity);
+router.post('/onboarding/auto-generate-meals',   ctrl.autoGenerateMeals);
 // GET /onboarding/status is served by modules/onboarding (richer contract).
 
 // ─── Cities ───────────────────────────────────────────────────────────────────
