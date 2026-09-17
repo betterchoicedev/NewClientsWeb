@@ -9,6 +9,14 @@ const {
   buildFoodAnalysisResponseBody, buildImageAnalysisResponseBody,
 } = require('../../services/ai.service');
 
+function normalizeFoodLogImageData(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  if (/^data:image\/[\w.+-]+;base64,/i.test(raw)) return raw;
+  const mime = raw.startsWith('iVBOR') ? 'image/png' : 'image/jpeg';
+  return `data:${mime};base64,${raw}`;
+}
+
 const ANALYZE_IMAGE_LOG = '[analyze-image]';
 function logAnalyzeImage(step, payload) {
   if (payload === undefined) { console.log(`${ANALYZE_IMAGE_LOG} ${step}`); return; }
@@ -57,6 +65,7 @@ async function createFoodLog(req, res) {
       meal_label: foodLogData.meal_label || null,
       food_items: foodLogData.food_items || null,
       image_url: foodLogData.image_url || null,
+      image_data: normalizeFoodLogImageData(foodLogData.image_data),
       total_calories: foodLogData.total_calories || null,
       total_protein_g: foodLogData.total_protein_g || null,
       total_carbs_g: foodLogData.total_carbs_g || null,
@@ -84,9 +93,12 @@ async function updateFoodLog(req, res) {
     if (!req.userCode || !(await verifyFoodLogOwnership(id, req.userCode))) return res.status(403).json({ error: 'Forbidden' });
 
     const updateData = { updated_at: new Date().toISOString() };
-    const fields = ['meal_label', 'food_items', 'image_url', 'total_calories', 'total_protein_g', 'total_carbs_g', 'total_fat_g', 'log_date', 'created_at', 'updated_at'];
+    const fields = ['meal_label', 'food_items', 'image_url', 'image_data', 'total_calories', 'total_protein_g', 'total_carbs_g', 'total_fat_g', 'log_date', 'created_at', 'updated_at'];
     for (const field of fields) {
-      if (foodLogData[field] !== undefined) updateData[field] = foodLogData[field];
+      if (foodLogData[field] !== undefined) {
+        updateData[field] =
+          field === 'image_data' ? normalizeFoodLogImageData(foodLogData[field]) : foodLogData[field];
+      }
     }
 
     const { data, error } = await adminDB.from('food_logs').update(updateData).eq('id', id).select();
