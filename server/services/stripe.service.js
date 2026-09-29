@@ -28,6 +28,26 @@ function resolveSubscriptionType(productId, priceId) {
   return 'unknown';
 }
 
+function stripeId(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && typeof value.id === 'string') return value.id;
+  return null;
+}
+
+function subscriptionPriceFields(subscription) {
+  const price = subscription.items?.data?.[0]?.price;
+  const priceId = stripeId(price);
+  const productId = price && typeof price === 'object' ? stripeId(price.product) : null;
+  const amount = price && typeof price === 'object' && price.unit_amount != null
+    ? price.unit_amount / 100
+    : null;
+  const currency = price && typeof price === 'object' && price.currency
+    ? price.currency.toUpperCase()
+    : 'USD';
+  return { priceId, productId, amount, currency };
+}
+
 function membershipExpiresIso(subscription, commitmentEndDate, priceId) {
   if (commitmentEndDate) return commitmentEndDate.toISOString();
   if (!isMembershipPrice(priceId)) return null;
@@ -168,11 +188,19 @@ async function handleCheckoutCompleted(session, { clientDB }) {
       if (clientData?.user_id) { userId = clientData.user_id; console.log('✅ Found client, using user_id:', userId); }
     }
 
+    const subscriptionId = stripeId(session.subscription);
+    const amount = session.amount_total ? session.amount_total / 100 : 0;
+    // A trial checkout is $0. The subscription row is the record that matters.
+    if (!amount || session.payment_status === 'no_payment_required') {
+      console.log('ℹ️ Trial checkout, skipping stripe_payments insert:', session.id);
+      return;
+    }
+
     const paymentData = {
       user_id: userId || null,
       stripe_checkout_session_id: session.id,
-      stripe_subscription_id: session.subscription,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
+      stripe_subscription_id: subscriptionId,
+      amount,
       currency: session.currency?.toUpperCase() || 'USD',
       status: 'succeeded',
       payment_method_type: session.payment_method_types?.[0] || 'card',
@@ -197,10 +225,17 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
     const userId  = subscription.metadata?.user_id;
     if (!userId) { console.warn('⚠️ No user_id found in subscription metadata'); return; }
 
-    const priceId   = subscription.items.data[0]?.price?.id;
-    const productId = subscription.items.data[0]?.price?.product;
-    const amount    = subscription.items.data[0]?.price?.unit_amount / 100;
-    const currency  = subscription.items.data[0]?.price?.currency?.toUpperCase() || 'USD';
+    const { priceId, productId, amount, currency } = subscriptionPriceFields(subscription);
+    const { data: existingRow } = await clientDB
+      .from('stripe_subscriptions')
+      .select('id')
+      .eq('stripe_subscription_id', subscription.id)
+      .maybeSingle();
+    const alreadySaved = Boolean(existingRow?.id);
+    if (alreadySaved) {
+      console.log('ℹ️ Subscription already saved, skipping welcome:', subscription.id);
+      return;
+    }
 
     const subscriptionType   = resolveSubscriptionType(productId, priceId);
     const commitmentMonths   = resolveCommitmentMonths(priceId);
@@ -226,7 +261,7 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
 
     const subscriptionData = {
       user_id: userId,
-      stripe_customer_id: subscription.customer,
+      stripe_customer_id: stripeId(subscription.customer),
       stripe_subscription_id: subscription.id,
       stripe_product_id: productId,
       stripe_price_id: priceId,
@@ -409,6 +444,10 @@ async function handlePaymentSucceeded(invoice, { clientDB }) {
   console.log('✅ Processing successful payment:', invoice.id);
   try {
     if (!invoice.subscription) return;
+    if (!invoice.amount_paid) {
+      console.log('ℹ️ $0 invoice, skipping stripe_payments insert:', invoice.id);
+      return;
+    }
 
     const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
     const userId = subscription.metadata?.user_id;
