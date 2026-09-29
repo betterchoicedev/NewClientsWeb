@@ -497,6 +497,71 @@ async function processCheckoutSession(req, res) {
   }
 }
 
+async function findCurrentSubscription(userId) {
+  const { data, error } = await clientDB
+    .from('stripe_subscriptions')
+    .select('stripe_subscription_id, stripe_price_id, status, cancel_at_period_end, current_period_end, created_at')
+    .eq('user_id', userId)
+    .in('status', ['trialing', 'active', 'past_due'])
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return data?.[0] || null;
+}
+
+function presentSubscription(row) {
+  if (!row) return null;
+  let plan = null;
+  if (row.stripe_price_id === MEMBERSHIP_YEARLY_PRICE_ID) plan = 'yearly';
+  else if (row.stripe_price_id === MEMBERSHIP_MONTHLY_PRICE_ID) plan = 'monthly';
+  return {
+    status: row.status,
+    plan,
+    cancelAtPeriodEnd: Boolean(row.cancel_at_period_end),
+    currentPeriodEnd: row.current_period_end || null,
+  };
+}
+
+async function getMySubscription(req, res) {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const row = await findCurrentSubscription(userId);
+    res.json({ subscription: presentSubscription(row) });
+  } catch (error) {
+    console.error('Error loading subscription:', error);
+    res.status(500).json({ error: error.message || 'Failed to load subscription' });
+  }
+}
+
+async function cancelMySubscription(req, res) {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const row = await findCurrentSubscription(userId);
+    if (!row?.stripe_subscription_id) {
+      return res.status(404).json({ error: 'No subscription' });
+    }
+
+    if (!row.cancel_at_period_end) {
+      await stripe.subscriptions.update(row.stripe_subscription_id, { cancel_at_period_end: true });
+      const { error } = await clientDB
+        .from('stripe_subscriptions')
+        .update({ cancel_at_period_end: true, updated_at: new Date().toISOString() })
+        .eq('stripe_subscription_id', row.stripe_subscription_id);
+      if (error) console.error('Error marking subscription cancel_at_period_end:', error);
+    }
+
+    res.json({
+      subscription: presentSubscription({ ...row, cancel_at_period_end: true }),
+    });
+  } catch (error) {
+    console.error('Error canceling subscription:', error);
+    res.status(500).json({ error: error.message || 'Failed to cancel subscription' });
+  }
+}
+
 async function createPortalSession(req, res) {
   try {
     const userId = req.userId;
@@ -526,5 +591,5 @@ module.exports = {
   createCheckoutSession, getCheckoutSession, createPaymentIntent,
   validateAccessCode, getSubscriptions, cancelSubscription,
   reactivateSubscription, updatePaymentMethod, processCheckoutSession,
-  createPortalSession,
+  createPortalSession, getMySubscription, cancelMySubscription,
 };
