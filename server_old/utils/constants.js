@@ -3,13 +3,6 @@ const DIGITAL_ONLY_PRODUCT_ID = 'prod_TrcVkwBC0wmqKp';
 const DIGITAL_ONLY_PRICE_ID   = 'price_1SyHX0HIeYfvCylDZyb1Lb3L';
 const DIGITAL_ONLY_BASE_AMOUNT_USD = 48;
 
-// Flat membership. Trial length is applied on the Checkout Session, not on the Price.
-const MEMBERSHIP_PRODUCT_ID = 'prod_VLgM5kLRoMPn33';
-const MEMBERSHIP_MONTHLY_PRICE_ID = 'price_1UKyzmHIeYfvCylDHxx1erob';
-const MEMBERSHIP_YEARLY_PRICE_ID = 'price_1UKyznHIeYfvCylDkwDqipAl';
-const MEMBERSHIP_PORTAL_CONFIGURATION_ID = 'bpc_1UKyznHIeYfvCylDek80muWO';
-const MEMBERSHIP_TRIAL_DAYS = 30;
-
 // ─── External API URLs ────────────────────────────────────────────────────────
 const CREATE_MEAL_PLAN_API_URL = 'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
 const BOI_EXCHANGE_RATES_URL   = 'https://boi.org.il/PublicApi/GetExchangeRates?asXml=false';
@@ -275,11 +268,6 @@ module.exports = {
   DIGITAL_ONLY_PRODUCT_ID,
   DIGITAL_ONLY_PRICE_ID,
   DIGITAL_ONLY_BASE_AMOUNT_USD,
-  MEMBERSHIP_PRODUCT_ID,
-  MEMBERSHIP_MONTHLY_PRICE_ID,
-  MEMBERSHIP_YEARLY_PRICE_ID,
-  MEMBERSHIP_PORTAL_CONFIGURATION_ID,
-  MEMBERSHIP_TRIAL_DAYS,
   CREATE_MEAL_PLAN_API_URL,
   BOI_EXCHANGE_RATES_URL,
   HEALTH_MAX_EVENTS_PER_REQUEST,

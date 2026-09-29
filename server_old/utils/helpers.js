@@ -1,26 +1,10 @@
 const sharp = require('sharp');
 
 // ─── Stripe helpers ───────────────────────────────────────────────────────────
-const {
-  DIGITAL_ONLY_PRODUCT_ID,
-  DIGITAL_ONLY_PRICE_ID,
-  DIGITAL_ONLY_BASE_AMOUNT_USD,
-  MEMBERSHIP_MONTHLY_PRICE_ID,
-  MEMBERSHIP_YEARLY_PRICE_ID,
-} = require('./constants');
+const { DIGITAL_ONLY_PRODUCT_ID, DIGITAL_ONLY_PRICE_ID, DIGITAL_ONLY_BASE_AMOUNT_USD } = require('./constants');
 
 function isDigitalOnlyPlan(productId, priceId) {
   return productId === DIGITAL_ONLY_PRODUCT_ID || priceId === DIGITAL_ONLY_PRICE_ID;
-}
-
-function isMembershipPrice(priceId) {
-  return priceId === MEMBERSHIP_MONTHLY_PRICE_ID || priceId === MEMBERSHIP_YEARLY_PRICE_ID;
-}
-
-function membershipPlanKey(priceId) {
-  if (priceId === MEMBERSHIP_YEARLY_PRICE_ID) return 'yearly';
-  if (priceId === MEMBERSHIP_MONTHLY_PRICE_ID) return 'monthly';
-  return null;
 }
 
 function getDigitalOnlyAmount(subscription) {
@@ -466,8 +450,6 @@ function formatPlanMealForPrompt(planMeal) {
 
 module.exports = {
   isDigitalOnlyPlan,
-  isMembershipPrice,
-  membershipPlanKey,
   getDigitalOnlyAmount,
   parseTimeToFloat,
   isIsoDate,

@@ -1,14 +1,7 @@
 const stripe = require('../../config/stripe');
 const { clientDB, adminDB } = require('../../config/db');
-const { isDigitalOnlyPlan, isMembershipPrice, membershipPlanKey, getDigitalOnlyAmount } = require('../../utils/helpers');
-const {
-  DIGITAL_ONLY_PRICE_ID,
-  MEMBERSHIP_MONTHLY_PRICE_ID,
-  MEMBERSHIP_YEARLY_PRICE_ID,
-  MEMBERSHIP_PORTAL_CONFIGURATION_ID,
-  MEMBERSHIP_TRIAL_DAYS,
-  BOI_EXCHANGE_RATES_URL,
-} = require('../../utils/constants');
+const { isDigitalOnlyPlan, getDigitalOnlyAmount } = require('../../utils/helpers');
+const { DIGITAL_ONLY_PRICE_ID, BOI_EXCHANGE_RATES_URL } = require('../../utils/constants');
 const { handleCheckoutCompleted, handleSubscriptionCreated } = require('../../services/stripe.service');
 
 async function getExchangeRates(req, res) {
@@ -86,7 +79,6 @@ async function syncToDatabase(req, res) {
         else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
         else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
         else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-        else if (isMembershipPrice(priceId)) subscriptionType = 'membership';
         else if (isDigitalOnlyPlan(productId, priceId)) subscriptionType = 'digital_only';
 
         // Commitment period mapping
@@ -173,11 +165,7 @@ async function createCheckoutSession(req, res) {
     } = req.body || {};
     if (!priceId) return res.status(400).json({ error: 'Price ID is required' });
 
-    const allowedPrices = new Set([
-      DIGITAL_ONLY_PRICE_ID,
-      MEMBERSHIP_MONTHLY_PRICE_ID,
-      MEMBERSHIP_YEARLY_PRICE_ID,
-    ]);
+    const allowedPrices = new Set([DIGITAL_ONLY_PRICE_ID]);
     if (adminDB && companyId) {
       const { data: companyRow } = await adminDB.from('companies').select('config').eq('id', companyId).maybeSingle();
       const products = companyRow?.config?.pricing?.customProducts || [];
@@ -196,17 +184,12 @@ async function createCheckoutSession(req, res) {
 
     const customerEmail = req.authUser?.email || req.clientRecord?.email || null;
     const origin = typeof req.headers.origin === 'string' ? req.headers.origin.replace(/\/$/, '') : null;
-    const returnToApp = req.body?.returnToApp === true;
-    const successUrl = returnToApp
-      ? 'betterchoicemobile://onboarding?checkout=success&session_id={CHECKOUT_SESSION_ID}'
-      : origin
-        ? `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`
-        : 'https://betterchoice.one/payment-success?session_id={CHECKOUT_SESSION_ID}';
-    const cancelUrl = returnToApp
-      ? 'betterchoicemobile://onboarding?checkout=cancel'
-      : origin
-        ? `${origin}/profile?onboarding=payment`
-        : 'https://betterchoice.one/payment-cancel';
+    const successUrl = origin
+      ? `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`
+      : 'https://betterchoice.one/payment-success?session_id={CHECKOUT_SESSION_ID}';
+    const cancelUrl = origin
+      ? `${origin}/profile?onboarding=payment`
+      : 'https://betterchoice.one/payment-cancel';
 
     const safeMeta = {};
     if (clientMeta && typeof clientMeta === 'object') {
@@ -264,22 +247,8 @@ async function createCheckoutSession(req, res) {
     }
 
     const boundMeta = { user_id: userId, price_id: priceId, created_at: new Date().toISOString(), ...safeMeta };
-    const membershipPlan = membershipPlanKey(priceId);
-    if (membershipPlan) {
-      // Trial length is a server constant. Ignore any trial value sent by the app.
-      boundMeta.plan = membershipPlan;
-      boundMeta.from = 'onboarding_commerce';
-      sessionConfig.metadata = { ...sessionConfig.metadata, plan: membershipPlan, from: 'onboarding_commerce' };
-      sessionConfig.payment_method_collection = 'always';
-    }
     if (mode === 'subscription') {
       sessionConfig.subscription_data = { metadata: boundMeta };
-      if (membershipPlan) {
-        sessionConfig.subscription_data.trial_period_days = MEMBERSHIP_TRIAL_DAYS;
-        sessionConfig.subscription_data.trial_settings = {
-          end_behavior: { missing_payment_method: 'cancel' },
-        };
-      }
     } else if (mode === 'payment') {
       sessionConfig.payment_intent_data = { metadata: boundMeta };
     }
@@ -463,31 +432,17 @@ async function processCheckoutSession(req, res) {
     if (!sessionId) return res.status(400).json({ error: 'Session ID is required' });
 
     const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['subscription', 'line_items'] });
-    const subscriptionRef = session.subscription;
-    const subscriptionId = typeof subscriptionRef === 'string' ? subscriptionRef : subscriptionRef?.id || null;
-    // A 30-day trial completes Checkout with no charge. payment_status is then "no_payment_required".
-    const checkoutFinished = session.status === 'complete' && (
-      session.payment_status === 'paid' ||
-      session.payment_status === 'no_payment_required' ||
-      Boolean(subscriptionId)
-    );
 
-    if (checkoutFinished) {
+    if (session.payment_status === 'paid') {
       await handleCheckoutCompleted(session, { clientDB });
 
-      if (subscriptionId) {
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items.data.price'] });
+      if (session.subscription) {
+        const subscription = await stripe.subscriptions.retrieve(session.subscription, { expand: ['items.data.price'] });
         const { sendWhatsAppWelcomeByUserId } = require('../../services/whatsapp.service');
         await handleSubscriptionCreated(subscription, { clientDB, adminDB, sendWhatsAppWelcomeByUserId });
       }
 
-      res.json({
-        success: true,
-        message: 'Checkout session processed successfully',
-        sessionId: session.id,
-        subscriptionId,
-        subscriptionStatus: typeof subscriptionRef === 'object' ? subscriptionRef?.status || null : null,
-      });
+      res.json({ success: true, message: 'Checkout session processed successfully', sessionId: session.id, subscriptionId: session.subscription });
     } else {
       res.json({ success: false, message: 'Payment not completed', paymentStatus: session.payment_status });
     }
@@ -497,34 +452,9 @@ async function processCheckoutSession(req, res) {
   }
 }
 
-async function createPortalSession(req, res) {
-  try {
-    const userId = req.userId;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const customers = await stripe.customers.search({
-      query: `metadata['user_id']:'${userId}'`,
-      limit: 1,
-    });
-    const customer = customers.data[0];
-    if (!customer) return res.status(404).json({ error: 'No billing account yet' });
-
-    const session = await stripe.billingPortal.sessions.create({
-      customer: customer.id,
-      return_url: 'https://betterchoice.one/profile',
-      configuration: MEMBERSHIP_PORTAL_CONFIGURATION_ID,
-    });
-    res.json({ url: session.url });
-  } catch (error) {
-    console.error('Error creating portal session:', error);
-    res.status(500).json({ error: error.message || 'Failed to open billing portal' });
-  }
-}
-
 module.exports = {
   getExchangeRates, checkCommitmentPeriods, syncToDatabase,
   createCheckoutSession, getCheckoutSession, createPaymentIntent,
   validateAccessCode, getSubscriptions, cancelSubscription,
   reactivateSubscription, updatePaymentMethod, processCheckoutSession,
-  createPortalSession,
 };

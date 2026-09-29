@@ -1,0 +1,5 @@
+loggingEnabled: true
+devErrorsEnabled: true
+flushResponse: true
+nodeProcessCountPerApplication: 1
+

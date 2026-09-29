@@ -738,7 +738,7 @@ async function commitOnboarding(userId, body, { clientDB, adminDB }) {
 
   const subscriptionStatus =
     existingChatStatus?.subscription_status || existingClient?.subscription_status || null;
-  const alreadyEntitled = subscriptionStatus === 'active' || subscriptionStatus === 'trialing' || skipPayment;
+  const alreadyEntitled = subscriptionStatus === 'active' || skipPayment;
 
   let phase = 'pwa';
   if (!alreadyEntitled) {
@@ -805,18 +805,16 @@ async function commitOnboarding(userId, body, { clientDB, adminDB }) {
     throw err;
   }
 
-  if (alreadyEntitled) {
-    setImmediate(() => {
-      createAndSaveOnboardingMealPlanForUser(userId, userCode, { clientDB, adminDB }).catch((e) => {
-        console.warn('⚠️ Async onboarding meal plan failed:', e?.message || e);
-      });
+  setImmediate(() => {
+    createAndSaveOnboardingMealPlanForUser(userId, userCode, { clientDB, adminDB }).catch((e) => {
+      console.warn('⚠️ Async onboarding meal plan failed:', e?.message || e);
     });
-  }
+  });
 
   return {
     userCode,
     phase,
-    mealPlanQueued: Boolean(alreadyEntitled),
+    mealPlanQueued: true,
     completed: Boolean(alreadyEntitled),
     subscriptionStatus: alreadyEntitled ? 'active' : 'pending_payment',
   };
@@ -881,10 +879,10 @@ async function getStatus(userId, { clientDB, adminDB, companyId: hintedCompanyId
 
   const subscriptionStatus = chatUser?.subscription_status || client.subscription_status || null;
   const subscriptionType = chatUser?.subscription_type || client.subscription_type || null;
-  const entitled = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
 
   let phase = 'questions';
-  if (client.onboarding_completed || entitled) phase = 'done';
+  if (client.onboarding_completed) phase = 'done';
+  else if (subscriptionStatus === 'active') phase = 'done';
   else if (subscriptionStatus === 'pending_payment') {
     const commerce = onboardingDraft?.commerce;
     if (onboardingDraft?.phase === 'payment') phase = 'payment';
@@ -939,7 +937,7 @@ async function getStatus(userId, { clientDB, adminDB, companyId: hintedCompanyId
   // #endregion
 
   return {
-    completed: client.onboarding_completed === true || subscriptionStatus === 'active' || subscriptionStatus === 'trialing',
+    completed: client.onboarding_completed === true || subscriptionStatus === 'active',
     phase,
     userCode: client.user_code || null,
     subscriptionStatus,
@@ -956,8 +954,6 @@ async function getStatus(userId, { clientDB, adminDB, companyId: hintedCompanyId
       last_name: client.last_name,
       language: client.user_language,
       email: client.email,
-      goal: client.goal || null,
-      dailyCalories: chatUser?.daily_target_total_calories ?? null,
     },
   };
 }
@@ -1084,12 +1080,6 @@ async function redeemAccessCode(userId, { code }, { clientDB, adminDB }) {
     // Keep entitlement on clients; do not unburn — prefer limiting reuse over losing paid access
   }
 
-  setImmediate(() => {
-    createAndSaveOnboardingMealPlanForUser(userId, userCode, { clientDB, adminDB }).catch((e) => {
-      console.warn('⚠️ Async onboarding meal plan failed:', e?.message || e);
-    });
-  });
-
   return getStatus(userId, { clientDB, adminDB });
 }
 
@@ -1158,12 +1148,6 @@ async function completeOnboardingAfterPaidSubscription(userId, { clientDB, admin
 
     if (chatErr) throw chatErr;
   }
-
-  setImmediate(() => {
-    createAndSaveOnboardingMealPlanForUser(userId, userCode, { clientDB, adminDB }).catch((e) => {
-      console.warn('⚠️ Async onboarding meal plan failed:', e?.message || e);
-    });
-  });
 }
 
 function parseCompanyConfig(config) {
@@ -1437,12 +1421,6 @@ async function applyBypassPromo(userId, { code, companyId, productIds = [] }, { 
   if (validation.companyId) {
     await assignClientToCompanyManager(userId, validation.companyId, { clientDB, adminDB });
   }
-
-  setImmediate(() => {
-    createAndSaveOnboardingMealPlanForUser(userId, userCode, { clientDB, adminDB }).catch((e) => {
-      console.warn('⚠️ Async onboarding meal plan failed:', e?.message || e);
-    });
-  });
 
   return getStatus(userId, { clientDB, adminDB });
 }

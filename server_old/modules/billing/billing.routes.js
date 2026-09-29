@@ -29,6 +29,5 @@ router.post('/stripe/subscriptions/:subscriptionId/cancel',           requireAut
 router.post('/stripe/subscriptions/:subscriptionId/reactivate',       requireAuth, ctrl.reactivateSubscription);
 router.post('/stripe/subscriptions/:subscriptionId/payment-method',   requireAuth, ctrl.updatePaymentMethod);
 router.post('/stripe/process-checkout-session',    requireAuth,  ctrl.processCheckoutSession);
-router.post('/stripe/create-portal-session',       requireAuth,  ctrl.createPortalSession);
 
 module.exports = router;

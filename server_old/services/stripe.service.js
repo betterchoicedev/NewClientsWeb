@@ -1,5 +1,5 @@
 const stripe = require('../config/stripe');
-const { isDigitalOnlyPlan, isMembershipPrice, getDigitalOnlyAmount } = require('../utils/helpers');
+const { isDigitalOnlyPlan, getDigitalOnlyAmount } = require('../utils/helpers');
 const { DIGITAL_ONLY_PRICE_ID } = require('../utils/constants');
 
 // ─── Subscription helpers (used by several webhook handlers) ──────────────────
@@ -19,22 +19,12 @@ function resolveCommitmentMonths(priceId) {
 }
 
 function resolveSubscriptionType(productId, priceId) {
-  if (isMembershipPrice(priceId)) return 'membership';
   if (productId === 'prod_SbI1Lu7FWbybUO') return 'nutrition_training_once_month';
   if (productId === 'prod_SbI1dssS5NElLZ') return 'nutrition_only';
   if (productId === 'prod_SbI1AIv2A46oJ9') return 'nutrition_training';
   if (productId === 'prod_SbI0A23T20wul3') return 'nutrition_only_2x_month';
   if (isDigitalOnlyPlan(productId, priceId)) return 'digital_only';
   return 'unknown';
-}
-
-function membershipExpiresIso(subscription, commitmentEndDate, priceId) {
-  if (commitmentEndDate) return commitmentEndDate.toISOString();
-  if (!isMembershipPrice(priceId)) return null;
-  const unix = subscription.status === 'trialing' && subscription.trial_end
-    ? subscription.trial_end
-    : subscription.current_period_end;
-  return unix ? new Date(unix * 1000).toISOString() : null;
 }
 
 async function updateClientsSubscription(customerEmail, subscriptionStatus, subscriptionType, subscriptionExpiresAt, clientDB) {
@@ -244,7 +234,7 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
       updated_at: new Date().toISOString(),
     };
 
-    const { error: subscriptionError } = await clientDB.from('stripe_subscriptions').upsert([subscriptionData], { onConflict: 'stripe_subscription_id', ignoreDuplicates: false }).select();
+    const { error: subscriptionError } = await clientDB.from('stripe_subscriptions').insert([subscriptionData]).select();
     if (subscriptionError) {
       console.error('❌ Error saving subscription:', subscriptionError);
       return;
@@ -258,7 +248,7 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
           customer.email,
           subscription.status,
           subscriptionType,
-          membershipExpiresIso(subscription, commitmentEndDate, priceId),
+          commitmentEndDate ? commitmentEndDate.toISOString() : null,
           { clientDB, adminDB, userId }
         );
       }
@@ -269,8 +259,7 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
     const fromOnboarding =
       subscription.metadata?.from === 'onboarding_upsell' ||
       subscription.metadata?.from === 'onboarding_commerce' ||
-      priceId === DIGITAL_ONLY_PRICE_ID ||
-      isMembershipPrice(priceId);
+      priceId === DIGITAL_ONLY_PRICE_ID;
 
     if (fromOnboarding && userId) {
       await completeOnboardingAfterPaid(userId, { clientDB, adminDB });
@@ -341,16 +330,15 @@ async function handleSubscriptionUpdated(subscription, { clientDB, adminDB }) {
           customer.email,
           subscription.status,
           subscriptionType,
-          membershipExpiresIso(subscription, commitmentEndDate, priceId),
+          commitmentEndDate ? commitmentEndDate.toISOString() : null,
           { clientDB, adminDB, userId: metaUserId }
         );
       }
       if (
         metaUserId &&
-        (subscription.status === 'active' || subscription.status === 'trialing') &&
+        subscription.status === 'active' &&
         (subscription.metadata?.from === 'onboarding_upsell' ||
-          subscription.metadata?.from === 'onboarding_commerce' ||
-          isMembershipPrice(priceId))
+          subscription.metadata?.from === 'onboarding_commerce')
       ) {
         await completeOnboardingAfterPaid(metaUserId, { clientDB, adminDB });
       }
@@ -440,14 +428,13 @@ async function handlePaymentSucceeded(invoice, { clientDB }) {
       console.log('✅ Payment record saved successfully');
     }
 
-    const nextStatus = subscription.status === 'trialing' ? 'trialing' : 'active';
-    await clientDB.from('stripe_subscriptions').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('stripe_subscription_id', invoice.subscription);
+    await clientDB.from('stripe_subscriptions').update({ status: 'active', updated_at: new Date().toISOString() }).eq('stripe_subscription_id', invoice.subscription);
   } catch (error) {
     console.error('❌ Error processing payment success:', error);
   }
 }
 
-async function handlePaymentFailed(invoice, { clientDB, adminDB }) {
+async function handlePaymentFailed(invoice, { clientDB }) {
   console.log('❌ Processing failed payment:', invoice.id);
   try {
     if (!invoice.subscription) return;
@@ -481,8 +468,6 @@ async function handlePaymentFailed(invoice, { clientDB, adminDB }) {
     }
 
     await clientDB.from('stripe_subscriptions').update({ status: 'past_due', updated_at: new Date().toISOString() }).eq('stripe_subscription_id', invoice.subscription);
-    const priceId = subscription.items?.data?.[0]?.price?.id;
-    await updateSubscriptionInfo(null, 'past_due', resolveSubscriptionType(subscription.items?.data?.[0]?.price?.product, priceId), null, { clientDB, adminDB, userId });
   } catch (error) {
     console.error('❌ Error processing payment failure:', error);
   }
@@ -529,7 +514,7 @@ function buildStripeWebhookHandler({ clientDB, adminDB, sendWhatsAppWelcomeByUse
           await handlePaymentSucceeded(event.data.object, { clientDB });
           break;
         case 'invoice.payment_failed':
-          await handlePaymentFailed(event.data.object, { clientDB, adminDB });
+          await handlePaymentFailed(event.data.object, { clientDB });
           break;
         default:
           console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
