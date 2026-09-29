@@ -19,7 +19,7 @@ function resolveCommitmentMonths(priceId) {
 }
 
 function resolveSubscriptionType(productId, priceId) {
-  if (isMembershipPrice(priceId)) return 'membership';
+  if (isMembershipPrice(priceId, productId)) return 'membership';
   if (productId === 'prod_SbI1Lu7FWbybUO') return 'nutrition_training_once_month';
   if (productId === 'prod_SbI1dssS5NElLZ') return 'nutrition_only';
   if (productId === 'prod_SbI1AIv2A46oJ9') return 'nutrition_training';
@@ -50,7 +50,8 @@ function subscriptionPriceFields(subscription) {
 
 function membershipExpiresIso(subscription, commitmentEndDate, priceId) {
   if (commitmentEndDate) return commitmentEndDate.toISOString();
-  if (!isMembershipPrice(priceId)) return null;
+  const productId = subscription?.items?.data?.[0]?.price?.product;
+  if (!isMembershipPrice(priceId, productId)) return null;
   const unix = subscription.status === 'trialing' && subscription.trial_end
     ? subscription.trial_end
     : subscription.current_period_end;
@@ -305,7 +306,7 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
       subscription.metadata?.from === 'onboarding_upsell' ||
       subscription.metadata?.from === 'onboarding_commerce' ||
       priceId === DIGITAL_ONLY_PRICE_ID ||
-      isMembershipPrice(priceId);
+      isMembershipPrice(priceId, productId);
 
     if (fromOnboarding && userId) {
       await completeOnboardingAfterPaid(userId, { clientDB, adminDB });
@@ -385,7 +386,7 @@ async function handleSubscriptionUpdated(subscription, { clientDB, adminDB }) {
         (subscription.status === 'active' || subscription.status === 'trialing') &&
         (subscription.metadata?.from === 'onboarding_upsell' ||
           subscription.metadata?.from === 'onboarding_commerce' ||
-          isMembershipPrice(priceId))
+          isMembershipPrice(priceId, productId))
       ) {
         await completeOnboardingAfterPaid(metaUserId, { clientDB, adminDB });
       }

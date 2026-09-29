@@ -5,16 +5,30 @@ const {
   DIGITAL_ONLY_PRODUCT_ID,
   DIGITAL_ONLY_PRICE_ID,
   DIGITAL_ONLY_BASE_AMOUNT_USD,
+  MEMBERSHIP_PRODUCT_ID,
   MEMBERSHIP_MONTHLY_PRICE_ID,
   MEMBERSHIP_YEARLY_PRICE_ID,
 } = require('./constants');
 
-function isDigitalOnlyPlan(productId, priceId) {
-  return productId === DIGITAL_ONLY_PRODUCT_ID || priceId === DIGITAL_ONLY_PRICE_ID;
+function stripeObjectId(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && typeof value.id === 'string') return value.id;
+  return null;
 }
 
-function isMembershipPrice(priceId) {
-  return priceId === MEMBERSHIP_MONTHLY_PRICE_ID || priceId === MEMBERSHIP_YEARLY_PRICE_ID;
+function isDigitalOnlyPlan(productId, priceId) {
+  return stripeObjectId(productId) === DIGITAL_ONLY_PRODUCT_ID || stripeObjectId(priceId) === DIGITAL_ONLY_PRICE_ID;
+}
+
+function isMembershipPrice(priceId, productId) {
+  const price = stripeObjectId(priceId);
+  const product = stripeObjectId(productId);
+  return (
+    price === MEMBERSHIP_MONTHLY_PRICE_ID ||
+    price === MEMBERSHIP_YEARLY_PRICE_ID ||
+    product === MEMBERSHIP_PRODUCT_ID
+  );
 }
 
 function membershipPlanKey(priceId) {

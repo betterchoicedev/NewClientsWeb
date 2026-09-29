@@ -30,6 +30,7 @@ router.post('/stripe/subscriptions/:subscriptionId/reactivate',       requireAut
 router.post('/stripe/subscriptions/:subscriptionId/payment-method',   requireAuth, ctrl.updatePaymentMethod);
 router.post('/stripe/process-checkout-session',    requireAuth,  ctrl.processCheckoutSession);
 router.post('/stripe/create-portal-session',       requireAuth,  ctrl.createPortalSession);
+router.get( '/stripe/membership-prices',          requireAuth,  ctrl.getMembershipPrices);
 router.get( '/stripe/my-subscription',             requireAuth,  ctrl.getMySubscription);
 router.post('/stripe/cancel-my-subscription',      requireAuth,  ctrl.cancelMySubscription);
 

@@ -10,6 +10,7 @@ const {
   BOI_EXCHANGE_RATES_URL,
 } = require('../../utils/constants');
 const { handleCheckoutCompleted, handleSubscriptionCreated } = require('../../services/stripe.service');
+const { getMembershipOffer, toPublicOffer } = require('../../services/membership-pricing');
 
 async function getExchangeRates(req, res) {
   try {
@@ -86,7 +87,7 @@ async function syncToDatabase(req, res) {
         else if (productId === 'prod_SbI1dssS5NElLZ') subscriptionType = 'nutrition_only';
         else if (productId === 'prod_SbI1AIv2A46oJ9') subscriptionType = 'nutrition_training';
         else if (productId === 'prod_SbI0A23T20wul3') subscriptionType = 'nutrition_only_2x_month';
-        else if (isMembershipPrice(priceId)) subscriptionType = 'membership';
+        else if (isMembershipPrice(priceId, productId)) subscriptionType = 'membership';
         else if (isDigitalOnlyPlan(productId, priceId)) subscriptionType = 'digital_only';
 
         // Commitment period mapping
@@ -164,13 +165,26 @@ async function createCheckoutSession(req, res) {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const {
-      priceId,
+      priceId: rawPriceId,
+      plan: rawPlan,
       priceIds = [],
       mode = 'subscription',
       promoCode,
       companyId,
       metadata: clientMeta = {},
     } = req.body || {};
+
+    const requestedPlan = rawPlan === 'yearly' || rawPlan === 'monthly' ? rawPlan : null;
+    let priceId = rawPriceId;
+    let membershipPlan = null;
+    let offer = null;
+    if (requestedPlan || isMembershipPrice(priceId)) {
+      offer = await getMembershipOffer();
+      membershipPlan = requestedPlan
+        || membershipPlanKey(priceId)
+        || (priceId === offer.yearlyPriceId ? 'yearly' : 'monthly');
+      priceId = membershipPlan === 'yearly' ? offer.yearlyPriceId : offer.monthlyPriceId;
+    }
     if (!priceId) return res.status(400).json({ error: 'Price ID is required' });
 
     const allowedPrices = new Set([
@@ -178,6 +192,10 @@ async function createCheckoutSession(req, res) {
       MEMBERSHIP_MONTHLY_PRICE_ID,
       MEMBERSHIP_YEARLY_PRICE_ID,
     ]);
+    if (offer) {
+      allowedPrices.add(offer.monthlyPriceId);
+      allowedPrices.add(offer.yearlyPriceId);
+    }
     if (adminDB && companyId) {
       const { data: companyRow } = await adminDB.from('companies').select('config').eq('id', companyId).maybeSingle();
       const products = companyRow?.config?.pricing?.customProducts || [];
@@ -264,7 +282,7 @@ async function createCheckoutSession(req, res) {
     }
 
     const boundMeta = { user_id: userId, price_id: priceId, created_at: new Date().toISOString(), ...safeMeta };
-    const membershipPlan = membershipPlanKey(priceId);
+    if (!membershipPlan) membershipPlan = membershipPlanKey(priceId);
     if (membershipPlan) {
       // Trial length is a server constant. Ignore any trial value sent by the app.
       boundMeta.plan = membershipPlan;
@@ -509,11 +527,29 @@ async function findCurrentSubscription(userId) {
   return data?.[0] || null;
 }
 
-function presentSubscription(row) {
+async function presentSubscription(row) {
   if (!row) return null;
+  let yearlyId = MEMBERSHIP_YEARLY_PRICE_ID;
+  let monthlyId = MEMBERSHIP_MONTHLY_PRICE_ID;
+  try {
+    const offer = await getMembershipOffer();
+    yearlyId = offer.yearlyPriceId;
+    monthlyId = offer.monthlyPriceId;
+  } catch (err) {
+    console.warn('Could not load live membership prices for plan label', err.message);
+  }
   let plan = null;
-  if (row.stripe_price_id === MEMBERSHIP_YEARLY_PRICE_ID) plan = 'yearly';
-  else if (row.stripe_price_id === MEMBERSHIP_MONTHLY_PRICE_ID) plan = 'monthly';
+  if (row.stripe_price_id === yearlyId || row.stripe_price_id === MEMBERSHIP_YEARLY_PRICE_ID) plan = 'yearly';
+  else if (row.stripe_price_id === monthlyId || row.stripe_price_id === MEMBERSHIP_MONTHLY_PRICE_ID) plan = 'monthly';
+  else if (row.stripe_price_id) {
+    try {
+      const price = await stripe.prices.retrieve(row.stripe_price_id);
+      if (price.recurring?.interval === 'year') plan = 'yearly';
+      else if (price.recurring?.interval === 'month') plan = 'monthly';
+    } catch {
+      plan = null;
+    }
+  }
   return {
     status: row.status,
     plan,
@@ -522,12 +558,22 @@ function presentSubscription(row) {
   };
 }
 
+async function getMembershipPrices(req, res) {
+  try {
+    const offer = await getMembershipOffer();
+    res.json(toPublicOffer(offer));
+  } catch (error) {
+    console.error('Error loading membership prices:', error);
+    res.status(500).json({ error: error.message || 'Failed to load prices' });
+  }
+}
+
 async function getMySubscription(req, res) {
   try {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const row = await findCurrentSubscription(userId);
-    res.json({ subscription: presentSubscription(row) });
+    res.json({ subscription: await presentSubscription(row) });
   } catch (error) {
     console.error('Error loading subscription:', error);
     res.status(500).json({ error: error.message || 'Failed to load subscription' });
@@ -554,7 +600,7 @@ async function cancelMySubscription(req, res) {
     }
 
     res.json({
-      subscription: presentSubscription({ ...row, cancel_at_period_end: true }),
+      subscription: await presentSubscription({ ...row, cancel_at_period_end: true }),
     });
   } catch (error) {
     console.error('Error canceling subscription:', error);
@@ -591,5 +637,5 @@ module.exports = {
   createCheckoutSession, getCheckoutSession, createPaymentIntent,
   validateAccessCode, getSubscriptions, cancelSubscription,
   reactivateSubscription, updatePaymentMethod, processCheckoutSession,
-  createPortalSession, getMySubscription, cancelMySubscription,
+  createPortalSession, getMySubscription, cancelMySubscription, getMembershipPrices,
 };
