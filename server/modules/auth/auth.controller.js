@@ -297,12 +297,6 @@ async function googleStart(req, res) {
   }
 }
 
-function chunkIds(ids, size = 100) {
-  const chunks = [];
-  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
-  return chunks;
-}
-
 // PostgREST caps one DELETE at db-max-rows, so keep going until none remain.
 async function deleteByEq(db, table, column, value) {
   if (value == null || value === '') return;
@@ -315,36 +309,6 @@ async function deleteByEq(db, table, column, value) {
     if (error) throw new Error(`Failed to delete ${table}: ${error.message}`);
   }
   throw new Error(`Could not finish deleting rows from ${table}`);
-}
-
-async function deleteByIn(db, table, column, values) {
-  const ids = [...new Set(values.filter((value) => value != null && value !== ''))];
-  for (const chunk of chunkIds(ids, 100)) {
-    for (let round = 0; round < 100; round++) {
-      const { count, error: countError } = await db.from(table).select('*', { count: 'exact', head: true }).in(column, chunk);
-      if (countError) throw new Error(`Failed to read ${table}: ${countError.message}`);
-      if (count == null) throw new Error(`Failed to read ${table}: missing row count`);
-      if (count === 0) break;
-      const { error } = await db.from(table).delete().in(column, chunk);
-      if (error) throw new Error(`Failed to delete ${table}: ${error.message}`);
-      if (round === 99) throw new Error(`Could not finish deleting rows from ${table}`);
-    }
-  }
-}
-
-async function collectIds(db, table, column, value) {
-  if (value == null || value === '') return [];
-  const ids = [];
-  let from = 0;
-  for (;;) {
-    const { data, error } = await db.from(table).select('id').eq(column, value).range(from, from + 999);
-    if (error) throw new Error(`Failed to list ${table}: ${error.message}`);
-    if (!data?.length) break;
-    for (const row of data) ids.push(row.id);
-    if (data.length < 1000) break;
-    from += 1000;
-  }
-  return ids;
 }
 
 async function deleteChatThreads(db, chatUserId) {
@@ -362,29 +326,10 @@ async function deleteChatThreads(db, chatUserId) {
 }
 
 async function deleteMealPlansForUser(db, userCode, chatUserIds) {
-  const planIds = new Set();
-  for (const id of await collectIds(db, 'meal_plans_and_schemas', 'user_code', userCode)) planIds.add(id);
+  if (userCode) await deleteByEq(db, 'meal_plans_and_schemas', 'user_code', userCode);
   for (const chatUserId of chatUserIds) {
-    for (const id of await collectIds(db, 'meal_plans_and_schemas', 'user_id', chatUserId)) planIds.add(id);
+    await deleteByEq(db, 'meal_plans_and_schemas', 'user_id', chatUserId);
   }
-  const ids = [...planIds];
-  if (!ids.length) return;
-
-  const definitionIds = [];
-  for (const chunk of chunkIds(ids, 100)) {
-    let from = 0;
-    for (;;) {
-      const { data, error } = await db.from('reminder_definitions').select('reminder_definition_id').in('user_plan_id', chunk).range(from, from + 999);
-      if (error) throw new Error(`Failed to list reminder_definitions: ${error.message}`);
-      if (!data?.length) break;
-      for (const row of data) if (row.reminder_definition_id) definitionIds.push(row.reminder_definition_id);
-      if (data.length < 1000) break;
-      from += 1000;
-    }
-  }
-  await deleteByIn(db, 'reminder_instances', 'definition_id', definitionIds);
-  await deleteByIn(db, 'reminder_definitions', 'reminder_definition_id', definitionIds);
-  await deleteByIn(db, 'meal_plans_and_schemas', 'id', ids);
 }
 
 // Child rows first. chat_users is last: several FKs have no ON DELETE CASCADE,
@@ -424,7 +369,6 @@ async function deleteChatProjectData(db, userCode, chatUserIds) {
     await deleteByEq(db, 'weight_logs', 'user_code', userCode);
     await deleteByEq(db, 'llm_usage_daily', 'user_code', userCode);
     await deleteByEq(db, 'calendar_events', 'user_code', userCode);
-    await deleteByEq(db, 'meal_plans_and_schemas', 'user_code', userCode);
   }
 
   for (const textId of textIds) {
