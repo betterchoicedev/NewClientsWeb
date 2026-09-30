@@ -297,62 +297,194 @@ async function googleStart(req, res) {
   }
 }
 
+function chunkIds(ids, size = 100) {
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
+  return chunks;
+}
+
+// PostgREST caps one DELETE at db-max-rows, so keep going until none remain.
+async function deleteByEq(db, table, column, value) {
+  if (value == null || value === '') return;
+  for (let round = 0; round < 100; round++) {
+    const { count, error: countError } = await db.from(table).select('*', { count: 'exact', head: true }).eq(column, value);
+    if (countError) throw new Error(`Failed to read ${table}: ${countError.message}`);
+    if (count == null) throw new Error(`Failed to read ${table}: missing row count`);
+    if (count === 0) return;
+    const { error } = await db.from(table).delete().eq(column, value);
+    if (error) throw new Error(`Failed to delete ${table}: ${error.message}`);
+  }
+  throw new Error(`Could not finish deleting rows from ${table}`);
+}
+
+async function deleteByIn(db, table, column, values) {
+  const ids = [...new Set(values.filter((value) => value != null && value !== ''))];
+  for (const chunk of chunkIds(ids, 100)) {
+    for (let round = 0; round < 100; round++) {
+      const { count, error: countError } = await db.from(table).select('*', { count: 'exact', head: true }).in(column, chunk);
+      if (countError) throw new Error(`Failed to read ${table}: ${countError.message}`);
+      if (count == null) throw new Error(`Failed to read ${table}: missing row count`);
+      if (count === 0) break;
+      const { error } = await db.from(table).delete().in(column, chunk);
+      if (error) throw new Error(`Failed to delete ${table}: ${error.message}`);
+      if (round === 99) throw new Error(`Could not finish deleting rows from ${table}`);
+    }
+  }
+}
+
+async function collectIds(db, table, column, value) {
+  if (value == null || value === '') return [];
+  const ids = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await db.from(table).select('id').eq(column, value).range(from, from + 999);
+    if (error) throw new Error(`Failed to list ${table}: ${error.message}`);
+    if (!data?.length) break;
+    for (const row of data) ids.push(row.id);
+    if (data.length < 1000) break;
+    from += 1000;
+  }
+  return ids;
+}
+
+async function deleteChatThreads(db, chatUserId) {
+  for (let round = 0; round < 100; round++) {
+    const { data: conversations, error } = await db.from('chat_conversations').select('id').eq('user_id', chatUserId).limit(200);
+    if (error) throw new Error(`Failed to list chat_conversations: ${error.message}`);
+    if (!conversations?.length) return;
+    for (const conversation of conversations) {
+      await deleteByEq(db, 'chat_messages', 'conversation_id', conversation.id);
+    }
+    const { error: deleteError } = await db.from('chat_conversations').delete().in('id', conversations.map((row) => row.id));
+    if (deleteError) throw new Error(`Failed to delete chat_conversations: ${deleteError.message}`);
+  }
+  throw new Error('Could not finish deleting chat_conversations');
+}
+
+async function deleteMealPlansForUser(db, userCode, chatUserIds) {
+  const planIds = new Set();
+  for (const id of await collectIds(db, 'meal_plans_and_schemas', 'user_code', userCode)) planIds.add(id);
+  for (const chatUserId of chatUserIds) {
+    for (const id of await collectIds(db, 'meal_plans_and_schemas', 'user_id', chatUserId)) planIds.add(id);
+  }
+  const ids = [...planIds];
+  if (!ids.length) return;
+
+  const definitionIds = [];
+  for (const chunk of chunkIds(ids, 100)) {
+    let from = 0;
+    for (;;) {
+      const { data, error } = await db.from('reminder_definitions').select('reminder_definition_id').in('user_plan_id', chunk).range(from, from + 999);
+      if (error) throw new Error(`Failed to list reminder_definitions: ${error.message}`);
+      if (!data?.length) break;
+      for (const row of data) if (row.reminder_definition_id) definitionIds.push(row.reminder_definition_id);
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+  }
+  await deleteByIn(db, 'reminder_instances', 'definition_id', definitionIds);
+  await deleteByIn(db, 'reminder_definitions', 'reminder_definition_id', definitionIds);
+  await deleteByIn(db, 'meal_plans_and_schemas', 'id', ids);
+}
+
+// Child rows first. chat_users is last: several FKs have no ON DELETE CASCADE,
+// and weight_logs only nulls user_id, so those rows have to be removed explicitly.
+async function deleteChatProjectData(db, userCode, chatUserIds) {
+  const textIds = [...new Set([userCode, ...chatUserIds].filter((value) => value != null && value !== ''))];
+
+  for (const chatUserId of chatUserIds) {
+    await deleteChatThreads(db, chatUserId);
+  }
+
+  await deleteMealPlansForUser(db, userCode, chatUserIds);
+
+  for (const chatUserId of chatUserIds) {
+    await deleteByEq(db, 'food_logs', 'user_id', chatUserId);
+    await deleteByEq(db, 'life_events', 'user_id', chatUserId);
+    await deleteByEq(db, 'training_logs', 'user_id', chatUserId);
+    await deleteByEq(db, 'training_plans', 'user_id', chatUserId);
+    await deleteByEq(db, 'training_progress_analytics', 'user_id', chatUserId);
+    await deleteByEq(db, 'user_daily_scores', 'user_id', chatUserId);
+    await deleteByEq(db, 'user_habits', 'user_id', chatUserId);
+    await deleteByEq(db, 'user_health_events', 'user_id', chatUserId);
+    await deleteByEq(db, 'user_health_daily_summary', 'user_id', chatUserId);
+    await deleteByEq(db, 'user_programs', 'user_id', chatUserId);
+    await deleteByEq(db, 'user_reminders', 'user_id', chatUserId);
+    await deleteByEq(db, 'weight_logs', 'user_id', chatUserId);
+    await deleteByEq(db, 'llm_usage_daily', 'user_id', chatUserId);
+    await deleteByEq(db, 'calendar_events', 'user_id', chatUserId);
+  }
+
+  if (userCode) {
+    await deleteByEq(db, 'training_logs', 'user_code', userCode);
+    await deleteByEq(db, 'training_plans', 'user_code', userCode);
+    await deleteByEq(db, 'training_progress_analytics', 'user_code', userCode);
+    await deleteByEq(db, 'user_health_events', 'user_code', userCode);
+    await deleteByEq(db, 'user_health_daily_summary', 'user_code', userCode);
+    await deleteByEq(db, 'weight_logs', 'user_code', userCode);
+    await deleteByEq(db, 'llm_usage_daily', 'user_code', userCode);
+    await deleteByEq(db, 'calendar_events', 'user_code', userCode);
+    await deleteByEq(db, 'meal_plans_and_schemas', 'user_code', userCode);
+  }
+
+  for (const textId of textIds) {
+    await deleteByEq(db, 'cbt_persona_state', 'user_id', textId);
+    await deleteByEq(db, 'daily_scores', 'user_id', textId);
+    await deleteByEq(db, 'weekly_scores', 'user_id', textId);
+  }
+
+  for (const chatUserId of chatUserIds) {
+    await deleteByEq(db, 'chat_users', 'id', chatUserId);
+  }
+}
+
 async function deleteAccount(req, res) {
   try {
     const authUserId = req.authUser?.id;
     if (!authUserId) return res.status(401).json({ error: 'Not authenticated' });
+    if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
 
     const email = (req.authUser?.email || '').trim().toLowerCase();
-
     let userCode = req.userCode || null;
+
+    if (!userCode) {
+      const { data: byUserId, error: byUserIdError } = await clientDB.from('clients').select('user_code').eq('user_id', authUserId).maybeSingle();
+      if (byUserIdError) throw new Error(`Failed to look up client: ${byUserIdError.message}`);
+      if (byUserId?.user_code) userCode = byUserId.user_code;
+    }
     if (!userCode && email) {
-      try {
-        const { data: clientRow } = await clientDB.from('clients').select('user_code').eq('email', email).maybeSingle();
-        if (clientRow?.user_code) userCode = clientRow.user_code;
-      } catch (e) { console.warn('Account deletion: user_code lookup by email failed:', e?.message); }
+      const { data: byEmail, error: byEmailError } = await clientDB.from('clients').select('user_code').eq('email', email).maybeSingle();
+      if (byEmailError) throw new Error(`Failed to look up client: ${byEmailError.message}`);
+      if (byEmail?.user_code) userCode = byEmail.user_code;
     }
 
-    let chatUserId = null;
-    if (adminDB && email) {
-      try {
-        const { data: chatUser } = await adminDB.from('chat_users').select('id, user_code').eq('email', email).maybeSingle();
-        if (chatUser?.id) chatUserId = chatUser.id;
-        if (!userCode && chatUser?.user_code) userCode = chatUser.user_code;
-      } catch (e) { console.warn('Account deletion: chat_users lookup by email failed:', e?.message); }
-    }
-
-    // Delete reminders, meal plans, food logs, etc.
-    if (adminDB && userCode) {
-      const { data: mealPlans } = await adminDB.from('meal_plans_and_schemas').select('id').eq('user_code', userCode).eq('record_type', 'meal_plan');
-      if (mealPlans && mealPlans.length > 0) {
-        const mealPlanIds = mealPlans.map((p) => p.id);
-        const { data: reminderDefs } = await adminDB.from('reminder_definitions').select('reminder_definition_id').in('user_plan_id', mealPlanIds);
-        if (reminderDefs && reminderDefs.length > 0) {
-          const definitionIds = reminderDefs.map((r) => r.reminder_definition_id);
-          const { error: instancesError } = await adminDB.from('reminder_instances').delete().in('definition_id', definitionIds);
-          if (instancesError) return res.status(500).json({ error: `Failed to delete reminder instances: ${instancesError.message}` });
-          const { error: defsError } = await adminDB.from('reminder_definitions').delete().in('reminder_definition_id', definitionIds);
-          if (defsError) return res.status(500).json({ error: `Failed to delete reminder definitions: ${defsError.message}` });
-        }
-        const { error: plansError } = await adminDB.from('meal_plans_and_schemas').delete().in('id', mealPlanIds);
-        if (plansError) return res.status(500).json({ error: `Failed to delete meal plans: ${plansError.message}` });
-      }
-      await adminDB.from('food_logs').delete().eq('user_code', userCode).catch(() => { });
-    }
-
-    if (adminDB && chatUserId) {
-      await adminDB.from('food_logs').delete().eq('user_id', chatUserId).catch(() => { });
-      await adminDB.from('weight_logs').delete().eq('user_code', userCode || chatUserId).catch(() => { });
-      await adminDB.from('calendar_events').delete().eq('user_id', chatUserId).catch(() => { });
-      await adminDB.from('chat_users').delete().eq('id', chatUserId).catch(() => { });
-    }
-
+    const chatUserIds = [];
     if (userCode) {
-      await clientDB.from('client_meal_plans').delete().eq('user_code', userCode).catch(() => { });
-      await clientDB.from('stripe_subscriptions').delete().eq('user_id', authUserId).catch(() => { });
-      await clientDB.from('stripe_payments').delete().eq('user_id', authUserId).catch(() => { });
-      await clientDB.from('clients').delete().eq('user_code', userCode).catch(() => { });
+      const { data: byCode, error: byCodeError } = await adminDB.from('chat_users').select('id').eq('user_code', userCode).maybeSingle();
+      if (byCodeError) throw new Error(`Failed to look up chat user: ${byCodeError.message}`);
+      if (byCode?.id) chatUserIds.push(byCode.id);
     }
+    if (email) {
+      const { data: byEmail, error: byEmailError } = await adminDB.from('chat_users').select('id, user_code').eq('email', email);
+      if (byEmailError) throw new Error(`Failed to look up chat user: ${byEmailError.message}`);
+      const emailCodes = [...new Set((byEmail || []).map((row) => row.user_code).filter(Boolean))];
+      if (!userCode && emailCodes.length > 1) {
+        throw new Error('Multiple chat accounts share this email; account was not deleted');
+      }
+      for (const row of byEmail || []) {
+        if (userCode && row.user_code && row.user_code !== userCode) continue;
+        if (!chatUserIds.includes(row.id)) chatUserIds.push(row.id);
+        if (!userCode && row.user_code) userCode = row.user_code;
+      }
+    }
+
+    await deleteChatProjectData(adminDB, userCode, chatUserIds);
+
+    if (userCode) await deleteByEq(clientDB, 'client_meal_plans', 'user_code', userCode);
+    await deleteByEq(clientDB, 'stripe_subscriptions', 'user_id', authUserId);
+    await deleteByEq(clientDB, 'stripe_payments', 'user_id', authUserId);
+    if (userCode) await deleteByEq(clientDB, 'clients', 'user_code', userCode);
+    await deleteByEq(clientDB, 'clients', 'user_id', authUserId);
 
     const { error: authDeleteError } = await clientDB.auth.admin.deleteUser(authUserId);
     if (authDeleteError) {
