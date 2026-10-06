@@ -5,7 +5,7 @@ import { useOnboardingEntitlement } from './OnboardingEntitlementContext';
 
 const PAYMENT_RETURN_PATHS = new Set(['/payment-success', '/payment-cancel']);
 
-const PUBLIC_LEGAL_PATHS = new Set(['/terms', '/privacy-policy', '/accessibility-statement']);
+const PUBLIC_LEGAL_PATHS = new Set(['/terms', '/privacy-policy', '/accessibility-statement', '/app']);
 
 function isProfilePath(pathname) {
   return pathname === '/profile' || /^\/c\/[^/]+\/profile\/?$/.test(pathname);
