@@ -341,6 +341,33 @@ async function ensureClientAndChatUser(userId, { clientDB, adminDB, email }) {
   return created;
 }
 
+/**
+ * Target weight is no longer asked in onboarding (less friction); we estimate it from the goal.
+ * lose/cut: a first milestone 10% down, never below a healthy BMI of 18.5 (or above current);
+ * gain: +5%; muscle: +3%; maintain / health / performance: current weight. Rounded to 0.5 kg.
+ * Needs current weight and goal — the goal is asked after biometrics, so this lands on the goal step.
+ */
+function estimateTargetWeight(goal, weightKg, heightCm) {
+  if (!(weightKg > 0)) return null;
+  const g = normalizeGoalValue(goal);
+  if (!g) return null;
+  const roundHalf = (v) => Math.round(v * 2) / 2;
+  const meters = heightCm > 0 ? heightCm / 100 : null;
+  switch (g) {
+    case 'lose':
+    case 'cut': {
+      const healthyFloor = meters ? 18.5 * meters * meters : 0;
+      return roundHalf(Math.min(weightKg, Math.max(weightKg * 0.9, healthyFloor)));
+    }
+    case 'gain':
+      return roundHalf(weightKg * 1.05);
+    case 'muscle':
+      return roundHalf(weightKg * 1.03);
+    default:
+      return roundHalf(weightKg);
+  }
+}
+
 function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {}) {
   const age = calculateAgeFromDob(answers.date_of_birth);
   const birthDate = toYYYYMMDD(answers.date_of_birth);
@@ -348,7 +375,8 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
   const fullName = `${answers.first_name || ''} ${answers.last_name || ''}`.trim() || null;
   const weightKg = answers.weight_kg != null && answers.weight_kg !== '' ? parseFloat(answers.weight_kg) : null;
   const heightCm = answers.height_cm != null && answers.height_cm !== '' ? parseFloat(answers.height_cm) : null;
-  const targetWeight = answers.target_weight != null && answers.target_weight !== '' ? parseFloat(answers.target_weight) : null;
+  // Estimated, never client-entered (the question was removed from onboarding).
+  const targetWeight = estimateTargetWeight(answers.goal, weightKg, heightCm);
   const { dailyCalories, macros } = clampClientCalories(answers);
   const mealPlanStructure = buildMealPlanStructure({
     ...answers,
@@ -523,9 +551,9 @@ const STEP_FIELD_MAP = {
   city: { clientKeys: ['city', 'region', 'timezone'], chatKeys: ['city', 'region', 'timezone'] },
   dob: { clientKeys: ['birth_date', 'age'], chatKeys: ['date_of_birth', 'age'] },
   gender: { clientKeys: ['gender'], chatKeys: ['gender'] },
-  biometrics: { clientKeys: ['current_weight', 'height', 'target_weight'], chatKeys: ['weight_kg', 'height_cm'] },
+  biometrics: { clientKeys: ['current_weight', 'height'], chatKeys: ['weight_kg', 'height_cm'] },
   activity: { clientKeys: ['activity_level'], chatKeys: ['Activity_level', 'user_context'] },
-  goal: { clientKeys: ['goal'], chatKeys: ['goal'] },
+  goal: { clientKeys: ['goal', 'target_weight'], chatKeys: ['goal'] },
   dietary: { clientKeys: ['food_allergies', 'food_limitations'], chatKeys: ['food_allergies', 'food_limitations'] },
   preferences: { clientKeys: [], chatKeys: ['client_preference'] },
   eating_window: { clientKeys: [], chatKeys: ['first_meal_time', 'last_meal_time'] },
