@@ -33,7 +33,7 @@ export const ThemeProvider = ({ children }) => {
     }
 
     // Update theme-color meta so mobile browser chrome (status bar, address bar) matches app
-    const themeColor = isDarkMode ? '#111827' : '#e0e7ff';
+    const themeColor = isDarkMode ? '#121915' : '#F2F2F7'; // NAV_THEME base
     let meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) {
       meta = document.createElement('meta');

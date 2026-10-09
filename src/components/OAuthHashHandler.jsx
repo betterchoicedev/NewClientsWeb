@@ -40,7 +40,7 @@ function OAuthHashHandler() {
     ranRef.current = true;
 
     // Mirrors AuthCallbackPage: ensure the clients/chat_users rows exist with the
-    // right provider_id before the user lands on /profile, so onboarding
+    // right provider_id before the user lands on /account, so onboarding
     // has a real companyConfig.
     (async () => {
       try {
@@ -48,7 +48,7 @@ function OAuthHashHandler() {
       } catch (e) {
         console.warn('[OAuthHashHandler] client bootstrap failed (non-blocking):', e);
       }
-      navigate('/profile', { replace: true });
+      navigate('/account', { replace: true });
     })();
   }, [location.pathname, location.hash, navigate]);
 

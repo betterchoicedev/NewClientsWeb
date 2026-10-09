@@ -18,10 +18,8 @@ const PUBLIC_API_PATHS = [
   '/api/auth/recovery/mobile-callback',
   '/api/webhooks/',
   '/api/exchange-rates',
-  '/api/waiting-list/',
   '/api/contact',
   '/api/ingredient-reports',
-  '/api/onboarding/classify-activity',
 ];
 
 function isPublicApiUrl(urlString) {

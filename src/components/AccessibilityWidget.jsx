@@ -1,6 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { Accessibility, FileText, Heading, Link2, Pause, RotateCcw, Type, X } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+
+// Colors: site pages use the BetterApp tokens. On /landing the company page sets
+// its DB-configured colors as --theme-* variables on its own root, so the widget
+// reads them from there and follows each company's palette.
+const SITE_COLORS = {
+  '--aw-accent': 'var(--bc-accent)',
+  '--aw-on-accent': 'var(--bc-on-accent)',
+  '--aw-surface': 'var(--bc-surface)',
+  '--aw-well': 'var(--bc-surface-2)',
+  '--aw-text': 'var(--bc-text)',
+  '--aw-muted': 'var(--bc-muted)',
+  '--aw-border': 'var(--bc-border)',
+};
+
+function readLandingColors() {
+  const root = document.querySelector('[data-landing-scroll]')?.parentElement;
+  if (!root) return null;
+  const cs = getComputedStyle(root);
+  const v = (name) => cs.getPropertyValue(name).trim();
+  const primary = v('--theme-primary');
+  if (!primary) return null;
+  const text = v('--theme-text') || '#FFFFFF';
+  return {
+    '--aw-accent': primary,
+    '--aw-on-accent': v('--theme-text-on-primary') || '#FFFFFF',
+    '--aw-surface': v('--theme-surface') || '#181412',
+    '--aw-well': `color-mix(in srgb, ${text} 10%, transparent)`,
+    '--aw-text': text,
+    '--aw-muted': v('--theme-text-muted') || text,
+    '--aw-border': `color-mix(in srgb, ${primary} 30%, transparent)`,
+  };
+}
 
 /**
  * Accessibility Widget - Required by Israeli Law
@@ -8,7 +41,29 @@ import { useLanguage } from '../context/LanguageContext';
  */
 const AccessibilityWidget = () => {
   const { language, direction } = useLanguage();
+  const location = useLocation();
+  const [colors, setColors] = useState(SITE_COLORS);
   const [isOpen, setIsOpen] = useState(false);
+
+  // On /landing, wait for the campaign's theme to load, then take its colors.
+  useEffect(() => {
+    if (location.pathname !== '/landing') {
+      setColors(SITE_COLORS);
+      return undefined;
+    }
+    let tries = 0;
+    const apply = () => {
+      const landing = readLandingColors();
+      if (landing) setColors(landing);
+      return Boolean(landing);
+    };
+    if (apply()) return undefined;
+    const id = setInterval(() => {
+      tries += 1;
+      if (apply() || tries > 40) clearInterval(id);
+    }, 250);
+    return () => clearInterval(id);
+  }, [location.pathname, location.hash]);
   const [fontSize, setFontSize] = useState(100);
   const [contrast, setContrast] = useState('normal');
   const [highlightLinks, setHighlightLinks] = useState(false);
@@ -215,237 +270,138 @@ const AccessibilityWidget = () => {
 
   const t = text[language === 'hebrew' ? 'hebrew' : 'english'];
 
+  const side = direction === 'rtl' ? 'left-4' : 'right-4';
+  const focus = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--aw-accent)]';
+  const option = (selected) =>
+    `min-h-[40px] px-3 rounded-[16px] text-[14px] font-semibold border transition-colors duration-150 ${focus} ${
+      selected
+        ? 'bg-[var(--aw-accent)] text-[var(--aw-on-accent)] border-transparent'
+        : 'bg-[var(--aw-well)] text-[var(--aw-text)] border-transparent hover:border-[var(--aw-border)]'
+    }`;
+  const toggleRow = (selected) => `w-full flex items-center justify-between gap-3 py-2.5 ${option(selected)} px-4`;
+  const label = 'block text-[13px] font-semibold text-[var(--aw-muted)] mb-2';
+
   return (
-    <>
-      {/* Accessibility Button */}
+    <div style={colors}>
+      {/* Accessibility button */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed ${direction === 'rtl' ? 'left-4' : 'right-4'} bottom-20 z-50 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-4 focus:ring-blue-300`}
+        className={`fixed ${side} bottom-20 z-50 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--aw-accent)] text-[var(--aw-on-accent)] transition-opacity duration-150 hover:opacity-90 active:opacity-75 ${focus}`}
         aria-label={t.title}
         aria-expanded={isOpen}
         title={t.title}
       >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
+        <Accessibility size={24} aria-hidden="true" />
       </button>
 
-      {/* Accessibility Panel */}
+      {/* Accessibility panel */}
       {isOpen && (
-        <div 
-          className={`fixed ${direction === 'rtl' ? 'left-4' : 'right-4'} bottom-36 z-50 bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-80 max-h-96 overflow-y-auto border-2 border-blue-600`}
+        <div
+          className={`fixed ${side} bottom-36 z-50 w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto rounded-[24px] border border-[var(--aw-border)] bg-[var(--aw-surface)] p-5 text-start text-[var(--aw-text)]`}
           role="dialog"
           aria-label={t.title}
+          dir={direction}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--aw-border)]">
+            <h2 className="text-[17px] font-bold flex items-center gap-2">
+              <Accessibility size={18} aria-hidden="true" />
               {t.title}
             </h2>
             <button
+              type="button"
               onClick={() => setIsOpen(false)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
+              className={`flex h-9 w-9 items-center justify-center rounded-full text-[var(--aw-muted)] hover:text-[var(--aw-text)] ${focus}`}
               aria-label={t.close}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X size={18} aria-hidden="true" />
             </button>
           </div>
 
-          {/* Font Size Controls */}
           <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              {t.increaseFontSize} / {t.decreaseFontSize}
-            </label>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={decreaseFontSize}
-                className="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white px-4 py-2 rounded-lg font-bold text-xl"
-                aria-label={t.decreaseFontSize}
-              >
+            <span className={label}>{t.increaseFontSize} / {t.decreaseFontSize}</span>
+            <div className="flex items-center gap-2" dir="ltr">
+              <button type="button" onClick={decreaseFontSize} className={`flex-1 ${option(false)} text-[17px] font-bold`} aria-label={t.decreaseFontSize}>
                 A-
               </button>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem] text-center">
-                {fontSize}%
-              </span>
-              <button
-                onClick={increaseFontSize}
-                className="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white px-4 py-2 rounded-lg font-bold text-xl"
-                aria-label={t.increaseFontSize}
-              >
+              <span className="min-w-[3rem] text-center text-[14px] font-semibold tabular-nums">{fontSize}%</span>
+              <button type="button" onClick={increaseFontSize} className={`flex-1 ${option(false)} text-[17px] font-bold`} aria-label={t.increaseFontSize}>
                 A+
               </button>
             </div>
           </div>
 
-          {/* Contrast Controls */}
           <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              {t.contrast}
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => toggleContrast('normal')}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                  contrast === 'normal'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t.normalContrast}
-              </button>
-              <button
-                onClick={() => toggleContrast('high')}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                  contrast === 'high'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t.highContrast}
-              </button>
-              <button
-                onClick={() => toggleContrast('invert')}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                  contrast === 'invert'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t.invertContrast}
-              </button>
+            <span className={label}>{t.contrast}</span>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={t.contrast}>
+              {[
+                ['normal', t.normalContrast],
+                ['high', t.highContrast],
+                ['invert', t.invertContrast],
+              ].map(([mode, name]) => (
+                <button key={mode} type="button" role="radio" aria-checked={contrast === mode} onClick={() => toggleContrast(mode)} className={option(contrast === mode)}>
+                  {name}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Toggle Options */}
           <div className="space-y-2 mb-4">
-            {/* Highlight Links */}
-            <button
-              onClick={toggleLinkHighlight}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${
-                highlightLinks
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-              }`}
-            >
-              <span>{t.highlightLinks}</span>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-            </button>
-
-            {/* Readable Font */}
-            <button
-              onClick={toggleReadableFont}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${
-                readableFont
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-              }`}
-            >
-              <span>{t.readableFont}</span>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </button>
-
-            {/* Highlight Headings */}
-            <button
-              onClick={toggleHeadingHighlight}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${
-                highlightHeadings
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-              }`}
-            >
-              <span>{t.highlightHeadings}</span>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-              </svg>
-            </button>
-
-            {/* Stop Animations */}
-            <button
-              onClick={toggleAnimations}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${
-                stopAnimations
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-              }`}
-            >
-              <span>{t.stopAnimations}</span>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
+            {[
+              [highlightLinks, toggleLinkHighlight, t.highlightLinks, Link2],
+              [readableFont, toggleReadableFont, t.readableFont, Type],
+              [highlightHeadings, toggleHeadingHighlight, t.highlightHeadings, Heading],
+              [stopAnimations, toggleAnimations, t.stopAnimations, Pause],
+            ].map(([on, onToggle, name, Icon]) => (
+              <button key={name} type="button" aria-pressed={on} onClick={onToggle} className={toggleRow(on)}>
+                <span>{name}</span>
+                <Icon size={18} aria-hidden="true" />
+              </button>
+            ))}
           </div>
 
-          {/* Cursor Size */}
           <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              {t.cursor}
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => toggleCursor('normal')}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                  cursor === 'normal'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t.normalCursor}
-              </button>
-              <button
-                onClick={() => toggleCursor('large')}
-                className={`px-3 py-2 rounded-lg text-sm font-medium ${
-                  cursor === 'large'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t.bigCursor}
-              </button>
+            <span className={label}>{t.cursor}</span>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t.cursor}>
+              {[
+                ['normal', t.normalCursor],
+                ['large', t.bigCursor],
+              ].map(([size, name]) => (
+                <button key={size} type="button" role="radio" aria-checked={cursor === size} onClick={() => toggleCursor(size)} className={option(cursor === size)}>
+                  {name}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Reset Button */}
           <button
+            type="button"
             onClick={resetSettings}
-            className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 mb-3"
+            className={`w-full min-h-[44px] mb-3 flex items-center justify-center gap-2 rounded-[24px] border border-[var(--aw-border)] text-[14px] font-semibold text-[var(--aw-text)] hover:opacity-80 ${focus}`}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <RotateCcw size={16} aria-hidden="true" />
             {t.reset}
           </button>
 
-          {/* Accessibility Statement Link */}
           <Link
             to="/accessibility-statement"
-            className="block w-full text-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium underline"
+            className={`flex items-center justify-center gap-2 text-[14px] font-semibold text-[var(--aw-text)] underline underline-offset-4 decoration-[var(--aw-border)] hover:decoration-[var(--aw-accent)] rounded ${focus}`}
             onClick={() => setIsOpen(false)}
           >
-            📄 {t.statement}
+            <FileText size={16} aria-hidden="true" />
+            {t.statement}
           </Link>
 
-          {/* Keyboard Shortcut Info */}
-          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {language === 'hebrew' 
-                ? 'לחץ Tab לניווט עם מקלדת' 
-                : 'Press Tab for keyboard navigation'}
+          <div className="mt-3 pt-3 border-t border-[var(--aw-border)]">
+            <p className="text-[12px] font-semibold text-[var(--aw-muted)] text-center">
+              {language === 'hebrew' ? 'לחצו Tab לניווט עם מקלדת' : 'Press Tab for keyboard navigation'}
             </p>
           </div>
         </div>
       )}
 
       {/* Accessibility CSS Styles */}
-      <style jsx>{`
+      <style>{`
         /* High Contrast Mode */
         :root[data-contrast="high"] {
           filter: contrast(150%);
@@ -509,7 +465,7 @@ const AccessibilityWidget = () => {
           font-weight: bold !important;
         }
       `}</style>
-    </>
+    </div>
   );
 };
 

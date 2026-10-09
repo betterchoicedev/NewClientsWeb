@@ -622,7 +622,7 @@ async function createPortalSession(req, res) {
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customer.id,
-      return_url: 'https://betterchoice.one/profile',
+      return_url: 'https://betterchoice.one/account',
       configuration: MEMBERSHIP_PORTAL_CONFIGURATION_ID,
     });
     res.json({ url: session.url });

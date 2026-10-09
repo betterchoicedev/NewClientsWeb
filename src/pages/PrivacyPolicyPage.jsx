@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { useTheme } from '../context/ThemeContext';
-import Navigation from '../components/Navigation';
+import MarketingShell from '../components/brand/MarketingShell';
+import { focusClass, secondaryButton, titleFont } from '../components/brand/ui';
 import * as CookieConsent from 'vanilla-cookieconsent';
 
 const content = {
@@ -1540,7 +1540,7 @@ function Rich({ text }) {
   let key = 0;
   while ((match = pattern.exec(source))) {
     if (match.index > last) nodes.push(<PlaceholderText key={key++} text={source.slice(last, match.index)} />);
-    nodes.push(<strong key={key++}>{match[0].slice(2, -2)}</strong>);
+    nodes.push(<strong key={key++} className="font-bold">{match[0].slice(2, -2)}</strong>);
     last = match.index + match[0].length;
   }
   if (last < source.length) nodes.push(<PlaceholderText key={key++} text={source.slice(last)} />);
@@ -1551,23 +1551,23 @@ function PlaceholderText({ text }) {
   const parts = String(text).split(/(\[[^\]]+\])/g);
   return parts.map((part, index) =>
     part.startsWith('[') && part.endsWith(']')
-      ? <span key={index} className="text-amber-800 dark:text-amber-300">{part}</span>
+      ? <span key={index} className="font-semibold text-bc-muted">{part}</span>
       : <React.Fragment key={index}>{part}</React.Fragment>
   );
 }
 
-function Blocks({ blocks, direction, themeClasses }) {
+function Blocks({ blocks }) {
   return blocks.map((block, index) => {
     if (block.type === 'p') {
       return (
-        <p key={index} className={`${themeClasses.textSecondary} leading-relaxed text-sm sm:text-base`}>
+        <p key={index} className="text-[15px] leading-relaxed text-bc-text">
           <Rich text={block.text} />
         </p>
       );
     }
     if (block.type === 'h') {
       return (
-        <h3 key={index} className={`text-base sm:text-lg font-semibold ${themeClasses.textPrimary} pt-2`}>
+        <h3 key={index} className="pt-2 text-[16px] font-bold text-bc-text">
           <Rich text={block.text} />
         </h3>
       );
@@ -1576,12 +1576,12 @@ function Blocks({ blocks, direction, themeClasses }) {
       const Tag = block.ordered ? 'ol' : 'ul';
       const marker = block.ordered ? 'list-decimal' : 'list-disc';
       return (
-        <Tag key={index} className={`${marker} ${direction === 'rtl' ? 'mr-5' : 'ml-5'} space-y-2 ${themeClasses.textSecondary} text-sm sm:text-base`}>
+        <Tag key={index} className={`${marker} ps-5 space-y-2 text-[15px] text-bc-text marker:text-bc-accent`}>
           {block.items.map((item, itemIndex) => (
             <li key={itemIndex} className="leading-relaxed">
               <Rich text={item.text} />
               {item.children.length > 0 && (
-                <ul className={`list-disc ${direction === 'rtl' ? 'mr-5' : 'ml-5'} mt-2 space-y-1`}>
+                <ul className="list-disc ps-5 mt-2 space-y-1 marker:text-bc-accent">
                   {item.children.map((child, childIndex) => (
                     <li key={childIndex} className="leading-relaxed"><Rich text={child} /></li>
                   ))}
@@ -1594,22 +1594,22 @@ function Blocks({ blocks, direction, themeClasses }) {
     }
     if (block.type === 'table') {
       return (
-        <div key={index} className="overflow-x-auto">
-          <table className={`w-full text-xs sm:text-sm border-collapse ${themeClasses.textSecondary}`}>
-            <thead>
+        <div key={index} className="overflow-x-auto rounded-bc-field border border-bc-border">
+          <table className="w-full text-[13px] sm:text-[14px] border-collapse text-bc-text">
+            <thead className="bg-bc-surface2">
               <tr>
                 {block.headers.map((header, headerIndex) => (
-                  <th key={headerIndex} className={`border ${themeClasses.borderSecondary} px-2 py-2 text-start font-semibold ${themeClasses.textPrimary} align-top`}>
+                  <th key={headerIndex} className="border-b border-e last:border-e-0 border-bc-border px-3 py-2.5 text-start font-bold text-bc-text align-top">
                     <Rich text={header} />
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-bc-border">
               {block.rows.map((row, rowIndex) => (
                 <tr key={rowIndex}>
                   {row.map((cell, cellIndex) => (
-                    <td key={cellIndex} className={`border ${themeClasses.borderSecondary} px-2 py-2 align-top`}>
+                    <td key={cellIndex} className="border-e last:border-e-0 border-bc-border px-3 py-2.5 align-top text-start leading-relaxed">
                       <Rich text={cell} />
                     </td>
                   ))}
@@ -1627,70 +1627,70 @@ function Blocks({ blocks, direction, themeClasses }) {
 const PrivacyPolicyPage = () => {
   const navigate = useNavigate();
   const { language, direction } = useLanguage();
-  const { isDarkMode, themeClasses } = useTheme();
   const current = content[language] || content.english;
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900' : 'bg-gradient-to-br from-emerald-50 via-green-50 to-amber-50'} language-transition`} dir={direction}>
-      <Navigation />
-
-      <div className="container mx-auto px-4 py-8 sm:py-12 md:py-16 lg:py-24 max-w-4xl min-h-screen">
+    <MarketingShell>
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-12">
         <button
+          type="button"
           onClick={() => navigate(-1)}
-          className={`mb-4 sm:mb-6 ${themeClasses.textPrimary} hover:text-green-600 dark:hover:text-green-400 flex items-center gap-2 transition-colors text-sm sm:text-base`}
+          className={`mb-8 inline-flex items-center gap-2 rounded text-[15px] font-semibold text-bc-text underline underline-offset-4 decoration-bc-border hover:decoration-bc-accent transition-colors ${focusClass}`}
         >
           {direction === 'rtl' ? '→' : '←'} {language === 'hebrew' ? 'חזרה' : 'Back'}
         </button>
 
-        <div className={`${themeClasses.bgCard} rounded-2xl ${themeClasses.shadowCard} p-4 sm:p-6 md:p-8 lg:p-12`}>
-          <h1 className={`text-2xl sm:text-3xl md:text-4xl font-bold ${themeClasses.textPrimary} mb-3 sm:mb-4`}>
-            {language === 'hebrew' ? 'מדיניות פרטיות' : 'Privacy Policy'}
-          </h1>
-          <p className={`${themeClasses.textSecondary} text-sm sm:text-base`}>{current.lastUpdated}</p>
-          <p className={`${themeClasses.textSecondary} mb-3 text-sm sm:text-base`}>{current.version}</p>
-          <p className={`${themeClasses.textSecondary} mb-6 sm:mb-8 leading-relaxed text-sm sm:text-base`}>{current.note}</p>
+        <h1 className={`text-[32px] sm:text-[40px] leading-tight font-bold text-bc-text text-start ${titleFont(language)}`}>
+          {language === 'hebrew' ? 'מדיניות פרטיות' : 'Privacy Policy'}
+        </h1>
+        <div className="mt-4 space-y-1">
+          <p className="text-[13px] font-semibold text-bc-muted">{current.lastUpdated}</p>
+          <p className="text-[13px] font-semibold text-bc-muted">{current.version}</p>
+        </div>
+        <p className="mt-4 text-[15px] leading-relaxed text-bc-muted">{current.note}</p>
 
-          <div className="space-y-6 sm:space-y-8">
+        <article className="mt-8 bg-bc-surface border border-bc-border rounded-bc-card p-6 sm:p-10 text-start">
+          <div className="divide-y divide-bc-border">
             {current.sections.map((section, index) => (
-              <div key={index} className={`border-b ${themeClasses.borderSecondary} pb-4 sm:pb-6 last:border-b-0`}>
-                <h2 className={`text-lg sm:text-xl md:text-2xl font-semibold ${themeClasses.textPrimary} mb-3`}>
+              <section key={index} className="py-8 first:pt-0 last:pb-0">
+                <h2 className="text-[19px] font-bold text-bc-text mb-4">
                   {section.title}
                 </h2>
                 <div className="space-y-3">
-                  <Blocks blocks={section.blocks} direction={direction} themeClasses={themeClasses} />
+                  <Blocks blocks={section.blocks} />
                 </div>
-              </div>
+              </section>
             ))}
+            <section className="py-8 first:pt-0 last:pb-0">
+              <h2 className="text-[19px] font-bold text-bc-text mb-3">
+                {language === 'hebrew' ? 'הגדרות עוגיות' : 'Cookie settings'}
+              </h2>
+              <p className="text-[15px] leading-relaxed text-bc-muted mb-5">
+                {language === 'hebrew'
+                  ? 'הכפתור הזה משנה את בחירת העוגיות באתר בלבד. האפליקציה לא משתמשת בעוגיות.'
+                  : 'This button changes your cookie choice on the website only. The app does not use cookies.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    CookieConsent.showPreferences();
+                  } catch (error) {
+                    console.error('Cookie consent error:', error);
+                    alert(language === 'hebrew'
+                      ? 'אנא רענן את העמוד ונסה שוב'
+                      : 'Please refresh the page and try again');
+                  }
+                }}
+                className={secondaryButton}
+              >
+                {language === 'hebrew' ? 'הגדרות עוגיות' : 'Cookie settings'}
+              </button>
+            </section>
           </div>
-
-          <div className={`mt-6 sm:mt-8 p-4 sm:p-6 ${themeClasses.sectionBg} rounded-lg border ${themeClasses.borderSecondary} text-center`}>
-            <h3 className={`text-lg sm:text-xl font-semibold ${themeClasses.textPrimary} mb-2 sm:mb-3`}>
-              {language === 'hebrew' ? 'הגדרות עוגיות' : 'Cookie settings'}
-            </h3>
-            <p className={`${themeClasses.textSecondary} mb-3 sm:mb-4 text-sm sm:text-base`}>
-              {language === 'hebrew'
-                ? 'הכפתור הזה משנה את בחירת העוגיות באתר בלבד. האפליקציה לא משתמשת בעוגיות.'
-                : 'This button changes your cookie choice on the website only. The app does not use cookies.'}
-            </p>
-            <button
-              onClick={() => {
-                try {
-                  CookieConsent.showPreferences();
-                } catch (error) {
-                  console.error('Cookie consent error:', error);
-                  alert(language === 'hebrew'
-                    ? 'אנא רענן את העמוד ונסה שוב'
-                    : 'Please refresh the page and try again');
-                }
-              }}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-medium transition-all duration-300 shadow-lg hover:shadow-xl cursor-pointer text-sm sm:text-base"
-            >
-              {language === 'hebrew' ? 'הגדרות עוגיות' : 'Cookie settings'}
-            </button>
-          </div>
-        </div>
+        </article>
       </div>
-    </div>
+    </MarketingShell>
   );
 };
 

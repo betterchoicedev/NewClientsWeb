@@ -76,10 +76,7 @@ function Navigation() {
           {/* Desktop Navigation Links */}
           <div data-tour="nav-links" className="hidden lg:flex items-center gap-2">
             {[
-              { path: '/', label: language === 'hebrew' ? 'בית' : 'Home', tour: 'nav-home' },
-              { path: '/knowledge', label: language === 'hebrew' ? 'ידע והשראה' : 'Knowledge & Inspiration', tour: 'nav-knowledge' },
-              { path: '/recipes', label: language === 'hebrew' ? 'מתכונים' : 'Recipes', tour: 'nav-recipes' },
-              { path: '/about', label: language === 'hebrew' ? 'אודות' : t.nav.about, tour: 'nav-about' }
+              { path: '/', label: language === 'hebrew' ? 'בית' : 'Home', tour: 'nav-home' }
             ].map((link) => (
               <Link 
                 key={link.path}
@@ -219,10 +216,7 @@ function Navigation() {
             <div className="px-4 py-6 flex flex-col gap-2">
               {/* Navigation Links */}
               {[
-                { path: '/', label: language === 'hebrew' ? 'בית' : 'Home' },
-                { path: '/knowledge', label: language === 'hebrew' ? 'ידע והשראה' : 'Knowledge & Inspiration' },
-                { path: '/recipes', label: language === 'hebrew' ? 'מתכונים' : 'Recipes' },
-                { path: '/about', label: language === 'hebrew' ? 'אודות' : t.nav.about }
+                { path: '/', label: language === 'hebrew' ? 'בית' : 'Home' }
               ].map((link) => (
                 <Link 
                   key={link.path}
