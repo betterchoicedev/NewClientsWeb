@@ -164,7 +164,12 @@ function Hero({ language }) {
           }`}
         >
           {isHebrew ? (
-            c.title
+            // Fixed two-line break: "עשו את" / "הבחירה הטובה יותר."
+            <>
+              עשו את
+              <br />
+              הבחירה הטובה יותר.
+            </>
           ) : (
             <>
               {/* "Make the" + the real wordmark. The logo's lettering replaces "better choice". */}
