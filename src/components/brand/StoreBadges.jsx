@@ -85,7 +85,8 @@ function GooglePlayBadgeSvg({ className = badgeClass }) {
 
 export default function StoreBadges({ className = '' }) {
   return (
-    <div className={`flex flex-wrap items-center gap-3 ${className}`}>
+    // Store artwork is Latin: keep it LTR so RTL pages don't push the SVG text out of the badge.
+    <div dir="ltr" className={`flex flex-wrap items-center gap-3 ${className}`}>
       <a
         href={IOS_URL}
         target="_blank"

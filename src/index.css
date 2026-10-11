@@ -2,22 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Choice Sans (BetterApp signature face). Basic Latin only, so the unicode-range
-   keeps Hebrew on the system face even inside a mixed string. */
+/* Choice Sans (BetterApp signature face) with the Choice Sans Hebrew draft:
+   Latin from BetterApp plus Hebrew drawn in the same construction
+   (scripts/fonts/build-choice-sans-hebrew.js). Glyphs it lacks fall back per character. */
 @font-face {
   font-family: 'Choice Sans';
-  src: url('./assets/fonts/ChoiceSans-Regular.ttf') format('truetype');
+  src: url('./assets/fonts/ChoiceSans-Regular.otf') format('opentype');
   font-weight: 400;
   font-display: swap;
-  unicode-range: U+0000-007F;
 }
 
 @font-face {
   font-family: 'Choice Sans';
-  src: url('./assets/fonts/ChoiceSans-Medium.ttf') format('truetype');
+  src: url('./assets/fonts/ChoiceSans-Medium.otf') format('opentype');
   font-weight: 500;
   font-display: swap;
-  unicode-range: U+0000-007F;
 }
 
 /* BetterApp tokens, from NAV_THEME in BetterApp/src/core/config/nav-theme.ts */
