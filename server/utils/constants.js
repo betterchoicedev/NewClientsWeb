@@ -3,12 +3,13 @@ const DIGITAL_ONLY_PRODUCT_ID = 'prod_TrcVkwBC0wmqKp';
 const DIGITAL_ONLY_PRICE_ID   = 'price_1SyHX0HIeYfvCylDZyb1Lb3L';
 const DIGITAL_ONLY_BASE_AMOUNT_USD = 48;
 
-// Flat membership. Trial length is applied on the Checkout Session, not on the Price.
+// Flat membership. Checkout applies MEMBERSHIP_TRIAL_DAYS. New prices also
+// store that trial so Stripe and the app stay on the same offer.
 const MEMBERSHIP_PRODUCT_ID = 'prod_VLgM5kLRoMPn33';
-const MEMBERSHIP_MONTHLY_PRICE_ID = 'price_1UKyzmHIeYfvCylDHxx1erob';
-const MEMBERSHIP_YEARLY_PRICE_ID = 'price_1UKyznHIeYfvCylDkwDqipAl';
+const MEMBERSHIP_MONTHLY_PRICE_ID = 'price_1UPHYJHIeYfvCylDx4nX2gVS';
+const MEMBERSHIP_YEARLY_PRICE_ID = 'price_1UPHYKHIeYfvCylDuCeb8toE';
 const MEMBERSHIP_PORTAL_CONFIGURATION_ID = 'bpc_1UKyznHIeYfvCylDek80muWO';
-const MEMBERSHIP_TRIAL_DAYS = 30;
+const MEMBERSHIP_TRIAL_DAYS = 3;
 
 // ─── External API URLs ────────────────────────────────────────────────────────
 const CREATE_MEAL_PLAN_API_URL = 'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';

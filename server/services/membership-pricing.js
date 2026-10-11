@@ -5,6 +5,7 @@ const {
   MEMBERSHIP_MONTHLY_PRICE_ID,
   MEMBERSHIP_YEARLY_PRICE_ID,
   MEMBERSHIP_PORTAL_CONFIGURATION_ID,
+  MEMBERSHIP_TRIAL_DAYS,
 } = require('../utils/constants');
 
 const DEFAULT_MONTHLY_DOLLARS = 15;
@@ -77,7 +78,14 @@ async function ensurePrice(desired, which) {
     current = null;
   }
 
-  if (current && current.active && current.unit_amount === wanted && current.currency === 'usd') {
+  const trialMatches = current?.recurring?.trial_period_days === MEMBERSHIP_TRIAL_DAYS;
+  if (
+    current &&
+    current.active &&
+    current.unit_amount === wanted &&
+    current.currency === 'usd' &&
+    trialMatches
+  ) {
     verifiedAmounts.set(current.id, wanted);
     return { id: current.id, created: false };
   }
@@ -86,8 +94,12 @@ async function ensurePrice(desired, which) {
     product: MEMBERSHIP_PRODUCT_ID,
     unit_amount: wanted,
     currency: 'usd',
-    recurring: { interval },
-    metadata: { plan: which, app_plan: 'betterchoice_membership' },
+    recurring: { interval, trial_period_days: MEMBERSHIP_TRIAL_DAYS },
+    metadata: {
+      plan: which,
+      app_plan: 'betterchoice_membership',
+      trial_days: String(MEMBERSHIP_TRIAL_DAYS),
+    },
   });
   verifiedAmounts.set(created.id, wanted);
   desired[idKey] = created.id;
@@ -100,6 +112,7 @@ async function persist(desired) {
     yearly_dollars: String(desired.yearly_cents / 100),
     monthly_price_id: desired.monthly_price_id,
     yearly_price_id: desired.yearly_price_id,
+    trial_days: String(MEMBERSHIP_TRIAL_DAYS),
   };
 
   try {
