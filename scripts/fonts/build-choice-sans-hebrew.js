@@ -58,12 +58,12 @@ function ringStroke(pts, w) {
 // Letter shapes. Coordinates are stroke CENTERLINES in font units (y up).
 // x: 0..W (advance adds side bearings), baseline 0, top line at H.
 function letters(w) {
-  const sb = 48;                 // side bearing like the Latin
-  const H = 560;                 // Hebrew letter height: between x-height (507) and cap (657)
+  const sb = 56;                 // side bearing: a touch more air than the Latin (Hebrew strokes are denser)
+  const H = 600;                 // Hebrew letter height: between x-height (507) and cap (657); 600 reads at body sizes
   const T = H - w / 2;           // top centerline
   const B = w / 2;               // bottom centerline
   const D = -210;                // descender (final forms, qof)
-  const A = 760;                 // ascender (lamed)
+  const A = 800;                 // ascender (lamed)
   const c = 96;                  // 30-degree corner cut width
   const ct = c * T30;            // ...and its height
   const L = (x) => x;            // readability
