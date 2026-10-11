@@ -100,7 +100,7 @@ export function Pricing({ language }) {
         <SectionHead
           language={language}
           eyebrow={{ hebrew: 'מחיר', english: 'Price' }}
-          title={{ hebrew: 'חודש ראשון עלינו.', english: 'The first month is on us.' }}
+          title={{ hebrew: `${PRICING.trialDays} ימים עלינו.`, english: `${PRICING.trialDays} days on us.` }}
           sub={{
             hebrew: 'מנסים את הכל. אפשר לבטל בכל רגע מהגדרות החשבון.',
             english: 'Try everything. Cancel any time from your account settings.',
@@ -108,7 +108,7 @@ export function Pricing({ language }) {
         />
         <div className="rounded-bc-card border border-bc-border bg-bc-surface p-6 sm:p-8">
           <p className="font-choice font-medium text-[44px] sm:text-[56px] leading-none text-bc-text">
-            {he ? `${trialDays} יום חינם` : `${trialDays} days free`}
+            {he ? `${trialDays} ${trialDays > 10 ? 'יום' : 'ימים'} חינם` : `${trialDays} ${trialDays === 1 ? 'day' : 'days'} free`}
           </p>
           <div className="mt-6 grid grid-cols-2 gap-3">
             <div className="rounded-bc-field border border-bc-border p-4">
