@@ -2,11 +2,76 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Choice Sans (BetterApp signature face). Basic Latin only, so the unicode-range
+   keeps Hebrew on the system face even inside a mixed string. */
+@font-face {
+  font-family: 'Choice Sans';
+  src: url('./assets/fonts/ChoiceSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+0000-007F;
+}
+
+@font-face {
+  font-family: 'Choice Sans';
+  src: url('./assets/fonts/ChoiceSans-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-display: swap;
+  unicode-range: U+0000-007F;
+}
+
+/* BetterApp tokens, from NAV_THEME in BetterApp/src/core/config/nav-theme.ts */
+:root {
+  --bc-canvas: #F2F2F7;
+  --bc-surface: #FFFFFF;
+  --bc-surface-2: #E8F5E9;
+  --bc-border: #E5E5EA;
+  --bc-accent: #34C759;
+  --bc-on-accent: #0E1A14;
+  --bc-text: #0E1A14;
+  --bc-muted: #8E8E93;
+  --bc-wellness: #6D4FC2;
+  --bc-wellness-well: rgba(124, 92, 214, 0.10);
+  --bc-danger: #ef4444;
+  --bc-danger-well: #fef2f2;
+  /* Green well, same alpha pattern as the wellness well; light uses surface2 */
+  --bc-accent-well: #E8F5E9;
+  /* NAV_THEME.macros */
+  --bc-protein: #AF52DE;
+  --bc-protein-well: rgba(175, 82, 222, 0.12);
+  --bc-carbs: #007AFF;
+  --bc-carbs-well: rgba(0, 122, 255, 0.12);
+  --bc-fat: #FF9500;
+  --bc-fat-well: rgba(255, 149, 0, 0.12);
+}
+
+.dark {
+  --bc-canvas: #121915;
+  --bc-surface: #1A241F;
+  --bc-surface-2: #2E3A34;
+  --bc-border: #3E4F47;
+  --bc-accent: #81C784;
+  --bc-on-accent: #0E1A14;
+  --bc-text: #EEF3F0;
+  --bc-muted: #9FB3A8;
+  --bc-wellness: #B9A3F5;
+  --bc-wellness-well: rgba(167, 139, 250, 0.14);
+  --bc-danger: #F87171;
+  --bc-danger-well: rgba(239, 68, 68, 0.1);
+  --bc-accent-well: rgba(129, 199, 132, 0.14);
+  --bc-protein: #AF52DE;
+  --bc-protein-well: rgba(175, 82, 222, 0.15);
+  --bc-carbs: #0A84FF;
+  --bc-carbs-well: rgba(0, 122, 255, 0.15);
+  --bc-fat: #FF9F0A;
+  --bc-fat-well: rgba(255, 149, 0, 0.15);
+}
+
 html,
 body {
   margin: 0;
-  /* Match app dark background so mobile browser chrome and initial paint aren't white */
-  background-color: #111827;
+  /* App canvas, so mobile browser chrome and initial paint match the app */
+  background-color: var(--bc-canvas);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;

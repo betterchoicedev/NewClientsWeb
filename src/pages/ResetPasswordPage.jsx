@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { useTheme } from '../context/ThemeContext';
 import { establishRecoverySession, updatePassword } from '../supabase/auth';
 import { parseHashParams } from '../lib/apiClient';
+import { AuthShell, AuthField, AuthNotice } from '../components/brand/AuthShell';
+import { primaryButton } from '../components/brand/ui';
 
 function ResetPasswordPage() {
-  const { language, direction, t, toggleLanguage } = useLanguage();
+  const { language } = useLanguage();
+  const isHebrew = language === 'hebrew';
   const navigate = useNavigate();
-  const { isDarkMode, toggleTheme, themeClasses } = useTheme();
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: '',
@@ -35,7 +36,7 @@ function ResetPasswordPage() {
             setValidSession(false);
             setError(
               language === 'hebrew'
-                ? 'קישור איפוס הסיסמה לא תקין או פג תוקפו. אנא בקש קישור חדש.'
+                ? 'קישור איפוס הסיסמה לא תקין או פג תוקפו. בקשו קישור חדש.'
                 : 'Invalid or expired password reset link. Please request a new one.'
             );
           } else {
@@ -46,7 +47,7 @@ function ResetPasswordPage() {
           setValidSession(false);
           setError(
             language === 'hebrew'
-              ? 'קישור איפוס הסיסמה לא תקין או פג תוקפו. אנא בקש קישור חדש.'
+              ? 'קישור איפוס הסיסמה לא תקין או פג תוקפו. בקשו קישור חדש.'
               : 'Invalid or expired password reset link. Please request a new one.'
           );
         }
@@ -106,7 +107,7 @@ function ResetPasswordPage() {
       if (updateError) {
         setError(
           language === 'hebrew'
-            ? 'שגיאה בעדכון הסיסמה. אנא נסה שוב.'
+            ? 'שגיאה בעדכון הסיסמה. נסו שוב.'
             : 'Error updating password. Please try again.'
         );
       } else {
@@ -116,7 +117,7 @@ function ResetPasswordPage() {
     } catch (err) {
       console.error('Password update error:', err);
       setError(
-        language === 'hebrew' ? 'אירעה שגיאה. אנא נסה שוב.' : 'An error occurred. Please try again.'
+        language === 'hebrew' ? 'אירעה שגיאה. נסו שוב.' : 'An error occurred. Please try again.'
       );
     } finally {
       setLoading(false);
@@ -125,86 +126,80 @@ function ResetPasswordPage() {
 
   if (checkingSession) {
     return (
-      <div className={`min-h-screen ${themeClasses.bgPrimary} flex items-center justify-center`} dir={direction}>
-        <p className={themeClasses.textPrimary}>
-          {language === 'hebrew' ? 'בודק קישור...' : 'Checking link...'}
-        </p>
-      </div>
+      <AuthShell footer={false}>
+        <div role="status" className="flex flex-col items-center gap-4">
+          <span className="h-8 w-8 rounded-full border-2 border-bc-border border-t-bc-accent animate-spin" aria-hidden="true" />
+          <p className="text-[15px] font-semibold text-bc-muted">
+            {isHebrew ? 'בודקים את הקישור…' : 'Checking your link…'}
+          </p>
+        </div>
+      </AuthShell>
     );
   }
 
   if (!validSession) {
     return (
-      <div className={`min-h-screen ${themeClasses.bgPrimary} flex items-center justify-center p-6`} dir={direction}>
-        <div className="max-w-md text-center">
-          <p className="text-red-500 mb-4">{error}</p>
-          <Link to="/login" className="text-emerald-600 hover:underline">
-            {language === 'hebrew' ? 'חזרה להתחברות' : 'Back to login'}
+      <AuthShell
+        title={isHebrew ? 'הקישור לא תקין' : 'This link is not valid'}
+        subtitle={isHebrew ? 'בקשו קישור חדש ממסך ההתחברות.' : 'Request a new one from the login screen.'}
+      >
+        <div className="flex flex-col gap-6">
+          {error ? <AuthNotice>{error}</AuthNotice> : null}
+          <Link to="/login" className={`${primaryButton} w-full`}>
+            {isHebrew ? 'חזרה להתחברות' : 'Back to login'}
           </Link>
         </div>
-      </div>
+      </AuthShell>
+    );
+  }
+
+  if (success) {
+    return (
+      <AuthShell
+        title={isHebrew ? 'הסיסמה עודכנה' : 'Password updated'}
+        subtitle={isHebrew ? 'מעבירים אתכם להתחברות…' : 'Taking you to login…'}
+      >
+        <AuthNotice tone="success">
+          {isHebrew ? 'אפשר להתחבר עכשיו עם הסיסמה החדשה.' : 'You can now log in with your new password.'}
+        </AuthNotice>
+      </AuthShell>
     );
   }
 
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary} language-transition`} dir={direction}>
-      {/* Rest of UI unchanged — reuse existing layout from original file below success state */}
-      <div className="max-w-md mx-auto pt-20 px-4">
-        <h1 className={`text-2xl font-bold mb-6 ${themeClasses.textPrimary}`}>
-          {language === 'hebrew' ? 'איפוס סיסמה' : 'Reset password'}
-        </h1>
-        {success ? (
-          <p className="text-emerald-600">
-            {language === 'hebrew'
-              ? 'הסיסמה עודכנה בהצלחה! מעביר להתחברות...'
-              : 'Password updated! Redirecting to login...'}
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            <div>
-              <label className={`block mb-1 ${themeClasses.textSecondary}`}>
-                {language === 'hebrew' ? 'סיסמה חדשה' : 'New password'}
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 rounded-lg border"
-                required
-              />
-            </div>
-            <div>
-              <label className={`block mb-1 ${themeClasses.textSecondary}`}>
-                {language === 'hebrew' ? 'אימות סיסמה' : 'Confirm password'}
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 rounded-lg border"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {loading
-                ? language === 'hebrew'
-                  ? 'שומר...'
-                  : 'Saving...'
-                : language === 'hebrew'
-                  ? 'עדכן סיסמה'
-                  : 'Update password'}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
+    <AuthShell
+      title={isHebrew ? 'בחירת סיסמה חדשה' : 'Set a new password'}
+      subtitle={isHebrew ? 'לפחות 6 תווים.' : 'At least 6 characters.'}
+    >
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        {error ? <AuthNotice>{error}</AuthNotice> : null}
+        <AuthField
+          id="password"
+          name="password"
+          type="password"
+          dir="ltr"
+          autoComplete="new-password"
+          required
+          label={isHebrew ? 'סיסמה חדשה' : 'New password'}
+          value={formData.password}
+          onChange={handleInputChange}
+        />
+        <AuthField
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          dir="ltr"
+          autoComplete="new-password"
+          required
+          label={isHebrew ? 'אימות סיסמה' : 'Confirm password'}
+          value={formData.confirmPassword}
+          onChange={handleInputChange}
+        />
+        <button type="submit" disabled={loading} className={`${primaryButton} w-full mt-2`}>
+          {loading ? (isHebrew ? 'שומרים…' : 'Saving…') : isHebrew ? 'עדכון סיסמה' : 'Update password'}
+        </button>
+      </form>
+    </AuthShell>
   );
 }
 

@@ -1,8 +1,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { useTheme } from '../context/ThemeContext';
-import Navigation from '../components/Navigation';
+import MarketingShell from '../components/brand/MarketingShell';
+import { focusClass, titleFont } from '../components/brand/ui';
+
+const sectionClass = 'py-8 first:pt-0 last:pb-0';
+const h2Class = 'text-[19px] font-bold text-bc-text mb-4';
+const h3Class = 'text-[15px] font-bold text-bc-text mb-3';
+const bodyClass = 'text-[15px] leading-relaxed text-bc-text';
+const listClass = 'list-disc ps-5 space-y-2 text-[15px] leading-relaxed text-bc-text marker:text-bc-accent';
+const wellClass = 'bg-bc-surface2 rounded-bc-field p-4 sm:p-5 space-y-2';
+const linkClass = `rounded underline underline-offset-4 text-bc-text decoration-bc-border hover:decoration-bc-accent transition-colors ${focusClass}`;
+
 
 /**
  * Accessibility Statement Page
@@ -11,7 +20,6 @@ import Navigation from '../components/Navigation';
  */
 const AccessibilityStatementPage = () => {
   const { language, direction } = useLanguage();
-  const { themeClasses } = useTheme();
 
   const content = language === 'hebrew' ? {
     title: 'הצהרת נגישות',
@@ -208,225 +216,208 @@ const AccessibilityStatementPage = () => {
   };
 
   return (
-    <div className={`min-h-screen ${themeClasses.bgPrimary}`} dir={direction}>
-      <Navigation />
-      
-      <main id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+    <MarketingShell>
+      <div id="main-content" className="mx-auto max-w-3xl px-4 sm:px-6 py-12">
         {/* Page Header */}
-        <div className="mb-8">
-          <h1 className={`text-3xl sm:text-4xl font-bold ${themeClasses.textPrimary} mb-3`}>
-            ♿ {content.title}
-          </h1>
-          <p className={`text-sm ${themeClasses.textSecondary} italic`}>
-            {content.lastUpdated}
-          </p>
-        </div>
+        <h1 className={`text-[32px] sm:text-[40px] leading-tight font-bold text-bc-text text-start ${titleFont(language)}`}>
+          {content.title}
+        </h1>
+        <p className="mt-4 text-[13px] font-semibold text-bc-muted">
+          {content.lastUpdated}
+        </p>
 
-        {/* Commitment Section */}
-        <section className={`${themeClasses.bgCard} rounded-xl p-6 sm:p-8 mb-6 shadow-md`}>
-          <h2 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4 flex items-center gap-2`}>
-            <span>✓</span>
-            {content.commitment.title}
-          </h2>
-          {content.commitment.paragraphs.map((para, idx) => (
-            <p key={idx} className={`${themeClasses.textSecondary} mb-3 leading-relaxed`}>
-              {para}
-            </p>
-          ))}
-        </section>
+        <article className="mt-8 bg-bc-surface border border-bc-border rounded-bc-card p-6 sm:p-10 text-start">
+          <div className="divide-y divide-bc-border">
+            {/* Commitment Section */}
+            <section className={sectionClass}>
+              <h2 className={h2Class}>
+                {content.commitment.title}
+              </h2>
+              <div className="space-y-3">
+                {content.commitment.paragraphs.map((para, idx) => (
+                  <p key={idx} className={bodyClass}>
+                    {para}
+                  </p>
+                ))}
+              </div>
+            </section>
 
-        {/* Standards Section */}
-        <section className={`${themeClasses.bgCard} rounded-xl p-6 sm:p-8 mb-6 shadow-md`}>
-          <h2 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>
-            📜 {content.standards.title}
-          </h2>
-          <p className={`${themeClasses.textSecondary} mb-4`}>
-            {content.standards.intro}
-          </p>
-          <ul className={`${direction === 'rtl' ? 'mr-6' : 'ml-6'} space-y-2`}>
-            {content.standards.items.map((item, idx) => (
-              <li key={idx} className={`${themeClasses.textSecondary} flex items-start gap-2`}>
-                <span className="text-emerald-600 font-bold">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+            {/* Standards Section */}
+            <section className={sectionClass}>
+              <h2 className={h2Class}>
+                {content.standards.title}
+              </h2>
+              <p className={`${bodyClass} mb-4`}>
+                {content.standards.intro}
+              </p>
+              <ul className={listClass}>
+                {content.standards.items.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            </section>
 
-        {/* Features Section */}
-        <section className={`${themeClasses.bgCard} rounded-xl p-6 sm:p-8 mb-6 shadow-md`}>
-          <h2 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>
-            ⚙️ {content.features.title}
-          </h2>
-          
-          <h3 className={`text-lg font-semibold ${themeClasses.textPrimary} mb-3 mt-4`}>
-            {content.features.mandatory}
-          </h3>
-          <ul className={`${direction === 'rtl' ? 'mr-6' : 'ml-6'} space-y-2 mb-6`}>
-            {content.features.mandatoryItems.map((item, idx) => (
-              <li key={idx} className={`${themeClasses.textSecondary} flex items-start gap-2`}>
-                <span className="text-red-600 font-bold">✓</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
+            {/* Features Section */}
+            <section className={sectionClass}>
+              <h2 className={h2Class}>
+                {content.features.title}
+              </h2>
 
-          <h3 className={`text-lg font-semibold ${themeClasses.textPrimary} mb-3`}>
-            {content.features.additional}
-          </h3>
-          <ul className={`${direction === 'rtl' ? 'mr-6' : 'ml-6'} space-y-2`}>
-            {content.features.additionalItems.map((item, idx) => (
-              <li key={idx} className={`${themeClasses.textSecondary} flex items-start gap-2`}>
-                <span className="text-emerald-600 font-bold">+</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+              <h3 className={h3Class}>
+                {content.features.mandatory}
+              </h3>
+              <ul className={`${listClass} mb-6`}>
+                {content.features.mandatoryItems.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
 
-        {/* Implementation Section */}
-        <section className={`${themeClasses.bgCard} rounded-xl p-6 sm:p-8 mb-6 shadow-md`}>
-          <h2 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>
-            🔍 {content.implementation.title}
-          </h2>
-          <p className={`${themeClasses.textSecondary} mb-4 font-medium`}>
-            {content.implementation.date}
-          </p>
-          <ul className={`${direction === 'rtl' ? 'mr-6' : 'ml-6'} space-y-2`}>
-            {content.implementation.items.map((item, idx) => (
-              <li key={idx} className={`${themeClasses.textSecondary} flex items-start gap-2`}>
-                <span className="text-blue-600 font-bold">→</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+              <h3 className={h3Class}>
+                {content.features.additional}
+              </h3>
+              <ul className={listClass}>
+                {content.features.additionalItems.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            </section>
 
-        {/* Known Limitations Section */}
-        <section className={`${themeClasses.bgCard} rounded-xl p-6 sm:p-8 mb-6 shadow-md`}>
-          <h2 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>
-            ⚠️ {content.known.title}
-          </h2>
-          <p className={`${themeClasses.textSecondary} mb-4`}>
-            {content.known.intro}
-          </p>
-          <ul className={`${direction === 'rtl' ? 'mr-6' : 'ml-6'} space-y-2`}>
-            {content.known.items.map((item, idx) => (
-              <li key={idx} className={`${themeClasses.textSecondary} flex items-start gap-2`}>
-                <span className="text-yellow-600 font-bold">⚠</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+            {/* Implementation Section */}
+            <section className={sectionClass}>
+              <h2 className={h2Class}>
+                {content.implementation.title}
+              </h2>
+              <p className="mb-4 text-[13px] font-semibold text-bc-muted">
+                {content.implementation.date}
+              </p>
+              <ul className={listClass}>
+                {content.implementation.items.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            </section>
 
-        {/* Contact Section */}
-        <section className={`${themeClasses.bgCard} rounded-xl p-6 sm:p-8 mb-6 shadow-md border-2 border-emerald-500`}>
-          <h2 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>
-            📧 {content.contact.title}
-          </h2>
-          <p className={`${themeClasses.textSecondary} mb-4`}>
-            {content.contact.intro}
-          </p>
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-4 space-y-2">
-            <p className={`${themeClasses.textPrimary} font-semibold`}>
-              {content.contact.coordinator}
-            </p>
-            <p className={themeClasses.textSecondary}>
-              <strong>{content.contact.email}</strong>{' '}
-              <a 
-                href="mailto:info@betterchoice.live"
-                className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 underline font-medium"
-              >
-                {content.contact.emailAddress}
-              </a>
-            </p>
-            <p className={themeClasses.textSecondary}>
-              {content.contact.phone}
-            </p>
-            <p className={`${themeClasses.textSecondary} text-sm font-medium text-emerald-700 dark:text-emerald-400`}>
-              {content.contact.response}
-            </p>
-            <p className={`${themeClasses.textSecondary} text-sm italic mt-3`}>
-              {content.contact.note}
-            </p>
+            {/* Known Limitations Section */}
+            <section className={sectionClass}>
+              <h2 className={h2Class}>
+                {content.known.title}
+              </h2>
+              <p className={`${bodyClass} mb-4`}>
+                {content.known.intro}
+              </p>
+              <ul className={listClass}>
+                {content.known.items.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            </section>
+
+            {/* Contact Section */}
+            <section className={sectionClass}>
+              <h2 className={h2Class}>
+                {content.contact.title}
+              </h2>
+              <p className={`${bodyClass} mb-4`}>
+                {content.contact.intro}
+              </p>
+              <div className={wellClass}>
+                <p className="text-[15px] font-bold text-bc-text">
+                  {content.contact.coordinator}
+                </p>
+                <p className={bodyClass}>
+                  <strong className="font-bold">{content.contact.email}</strong>{' '}
+                  <a href="mailto:info@betterchoice.live" className={linkClass}>
+                    {content.contact.emailAddress}
+                  </a>
+                </p>
+                <p className={bodyClass}>
+                  {content.contact.phone}
+                </p>
+                <p className="text-[13px] font-semibold text-bc-text">
+                  {content.contact.response}
+                </p>
+                <p className="pt-2 text-[13px] leading-relaxed text-bc-muted">
+                  {content.contact.note}
+                </p>
+              </div>
+            </section>
+
+            {/* Complaints Section */}
+            <section className={sectionClass}>
+              <h2 className={h2Class}>
+                {content.complaints.title}
+              </h2>
+              <p className={`${bodyClass} mb-4`}>
+                {content.complaints.intro}
+              </p>
+              <div className={wellClass}>
+                <p className="text-[15px] font-bold text-bc-text">
+                  {content.complaints.commissioner}
+                </p>
+                <p className={bodyClass}>
+                  {content.complaints.ministry}
+                </p>
+                <p className={bodyClass}>
+                  {content.complaints.phone}
+                </p>
+                <p className={bodyClass}>
+                  {content.complaints.email}
+                </p>
+                <p className={bodyClass}>
+                  {content.complaints.website}
+                </p>
+                <p className="pt-2 text-[13px] leading-relaxed text-bc-muted">
+                  {content.complaints.note}
+                </p>
+              </div>
+            </section>
+
+            {/* Updates Section */}
+            <section className={sectionClass}>
+              <h2 className={h2Class}>
+                {content.updates.title}
+              </h2>
+              <p className={bodyClass}>
+                {content.updates.text}
+              </p>
+              <div className="mt-4 space-y-1">
+                <p className="text-[13px] font-semibold text-bc-muted">
+                  {content.updates.lastAudit}
+                </p>
+                <p className="text-[13px] font-semibold text-bc-muted">
+                  {content.updates.nextAudit}
+                </p>
+              </div>
+            </section>
           </div>
-        </section>
-
-        {/* Complaints Section */}
-        <section className={`${themeClasses.bgCard} rounded-xl p-6 sm:p-8 mb-6 shadow-md`}>
-          <h2 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>
-            ⚖️ {content.complaints.title}
-          </h2>
-          <p className={`${themeClasses.textSecondary} mb-4`}>
-            {content.complaints.intro}
-          </p>
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-2">
-            <p className={`${themeClasses.textPrimary} font-semibold`}>
-              {content.complaints.commissioner}
-            </p>
-            <p className={themeClasses.textSecondary}>
-              {content.complaints.ministry}
-            </p>
-            <p className={themeClasses.textSecondary}>
-              {content.complaints.phone}
-            </p>
-            <p className={themeClasses.textSecondary}>
-              {content.complaints.email}
-            </p>
-            <p className={themeClasses.textSecondary}>
-              {content.complaints.website}
-            </p>
-            <p className={`${themeClasses.textSecondary} text-sm italic mt-3`}>
-              {content.complaints.note}
-            </p>
-          </div>
-        </section>
-
-        {/* Updates Section */}
-        <section className={`${themeClasses.bgCard} rounded-xl p-6 sm:p-8 mb-8 shadow-md`}>
-          <h2 className={`text-2xl font-bold ${themeClasses.textPrimary} mb-4`}>
-            🔄 {content.updates.title}
-          </h2>
-          <p className={`${themeClasses.textSecondary} mb-3 leading-relaxed`}>
-            {content.updates.text}
-          </p>
-          <div className="space-y-1 mt-4">
-            <p className={`${themeClasses.textSecondary} text-sm`}>
-              <strong>{content.updates.lastAudit}</strong>
-            </p>
-            <p className={`${themeClasses.textSecondary} text-sm`}>
-              <strong>{content.updates.nextAudit}</strong>
-            </p>
-          </div>
-        </section>
+        </article>
 
         {/* Back to Home Link */}
-        <div className="text-center">
-          <Link 
+        <div className="mt-8">
+          <Link
             to="/"
-            className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-semibold text-lg"
+            className={`inline-flex items-center gap-2 text-[15px] font-semibold ${linkClass}`}
           >
-            <svg 
-              className={`w-5 h-5 ${direction === 'rtl' ? 'rotate-180' : ''}`}
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className={`w-4 h-4 ${direction === 'rtl' ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M10 19l-7-7m0 0l7-7m-7 7h18" 
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
               />
             </svg>
             {language === 'hebrew' ? 'חזרה לעמוד הבית' : 'Back to Home'}
           </Link>
         </div>
-      </main>
-    </div>
+      </div>
+    </MarketingShell>
   );
 };
 
 export default AccessibilityStatementPage;
-

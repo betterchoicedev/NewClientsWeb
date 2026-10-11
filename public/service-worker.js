@@ -63,6 +63,9 @@ self.addEventListener('activate', (event) => {
 });
 
 function isStaticAsset(url) {
+  // Landing footage keeps stable names (hero.mp4 / hero.jpg) and can be swapped,
+  // so it must not be cached forever like the hashed build assets.
+  if (url.pathname.startsWith('/footage/')) return false;
   return (
     url.pathname.startsWith('/static/') ||
     /\.(?:js|css|woff2?|ttf|otf|eot|png|jpg|jpeg|gif|svg|webp|ico)$/i.test(
