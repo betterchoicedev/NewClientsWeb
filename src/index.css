@@ -4,17 +4,19 @@
 
 /* Choice Sans (BetterApp signature face) with the Choice Sans Hebrew draft:
    Latin from BetterApp plus Hebrew drawn in the same construction
-   (scripts/fonts/build-choice-sans-hebrew.js). Glyphs it lacks fall back per character. */
+   (scripts/fonts/build-choice-sans-hebrew.js). Glyphs it lacks fall back per character.
+   The .web.ttf files are TrueType. The CFF .otf drops tittles and counters
+   at every browser zoom except 100%. */
 @font-face {
   font-family: 'Choice Sans';
-  src: url('./assets/fonts/ChoiceSans-Regular.otf') format('opentype');
+  src: url('./assets/fonts/ChoiceSans-Regular.web.ttf') format('truetype');
   font-weight: 400;
   font-display: swap;
 }
 
 @font-face {
   font-family: 'Choice Sans';
-  src: url('./assets/fonts/ChoiceSans-Medium.otf') format('opentype');
+  src: url('./assets/fonts/ChoiceSans-Medium.web.ttf') format('truetype');
   font-weight: 500;
   font-display: swap;
 }
@@ -76,6 +78,11 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Keep Choice Sans tittles and counters intact when the page isn't at 100% zoom. */
+.font-choice {
+  text-rendering: geometricPrecision;
 }
 
 code {

@@ -8,6 +8,7 @@
 const ot = require('opentype.js');
 const pc = require('polygon-clipping');
 const fs = require('fs');
+const { execFileSync } = require('child_process');
 
 const path = require('path');
 const SRC = path.join(__dirname, '../../src/assets/fonts/');
@@ -173,3 +174,7 @@ for (const weight of ['Regular', 'Medium']) {
   fs.writeFileSync(path.join(OUT, 'ChoiceSans-' + weight + '.otf'), Buffer.from(font.toArrayBuffer()));
   console.log('wrote', weight, glyphs.length, 'glyphs');
 }
+
+// The CFF file above drops tittles and counters away from 100% zoom.
+// Ship the TrueType copy that the site actually loads.
+execFileSync('python', [path.join(__dirname, 'otf-to-ttf.py')], { stdio: 'inherit' });
