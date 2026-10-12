@@ -1,3 +1,8 @@
+# Store landing. Static file so the Smart App Banner meta tag is in the
+# first HTML response. Must stay above the SPA fallback.
+/get    /get/index.html   200
+/get/   /get/index.html   200
+
 # Handle client-side routing for React Router
 /*    /index.html   200
 

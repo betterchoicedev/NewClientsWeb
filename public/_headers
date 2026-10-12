@@ -28,6 +28,12 @@
   Cache-Control: no-cache, must-revalidate
 /index.html
   Cache-Control: no-cache, must-revalidate
+/get
+  Cache-Control: no-cache, must-revalidate
+/get/
+  Cache-Control: no-cache, must-revalidate
+/get/index.html
+  Cache-Control: no-cache, must-revalidate
 
 # Service worker file itself must always be revalidated so new versions are
 # picked up promptly on the next page load.

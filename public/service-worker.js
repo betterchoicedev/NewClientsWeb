@@ -98,7 +98,10 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const fresh = await fetch(request);
-          if (fresh && fresh.ok) {
+          // /get is a separate HTML document. Caching it under `/` would
+          // replace the app shell used as the offline fallback.
+          const storeLanding = url.pathname === '/get' || url.pathname === '/get/' || url.pathname === '/get.html';
+          if (fresh && fresh.ok && !storeLanding) {
             const copy = fresh.clone();
             caches.open(CACHE_NAME).then((c) => c.put('/', copy)).catch(() => {});
           }

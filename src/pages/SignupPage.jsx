@@ -92,6 +92,8 @@ function SignupPage() {
 
     const metaContent = `app-id=${APPLE_APP_ID}, app-argument=https://betterchoice.one/signup#d=${token}`;
     let meta = document.querySelector('meta[name="apple-itunes-app"]');
+    const existed = Boolean(meta);
+    const previous = meta ? meta.getAttribute('content') : null;
     if (!meta) {
       meta = document.createElement('meta');
       meta.setAttribute('name', 'apple-itunes-app');
@@ -100,7 +102,8 @@ function SignupPage() {
     meta.setAttribute('content', metaContent);
 
     return () => {
-      meta.remove();
+      if (!existed) meta.remove();
+      else if (previous) meta.setAttribute('content', previous);
     };
   }, [isIOS, hasInvitationToken, invitationToken]);
 

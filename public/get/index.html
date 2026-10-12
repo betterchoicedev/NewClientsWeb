@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#121915" />
+    <title>BetterChoice | הורדת האפליקציה</title>
+    <meta name="description" content="הורידו את BetterChoice לאייפון ולאנדרואיד." />
+    <!--
+      Smart App Banner. Safari reads this while parsing the page.
+      It does not appear inside Instagram's in-app browser.
+    -->
+    <meta name="apple-itunes-app" content="app-id=6770512379" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="BetterChoice | הורדת האפליקציה" />
+    <meta property="og:description" content="תזונה, אימון ומאמן. באפליקציה." />
+    <meta property="og:image" content="https://betterchoice.one/betterchoice.png" />
+    <meta property="og:url" content="https://betterchoice.one/get" />
+    <script>
+      (function () {
+        var ua = navigator.userAgent || '';
+        var inApp = /Instagram|FBAN|FBAV|FB_IAB|TikTok/i.test(ua);
+        if (!inApp) return;
+        if (/iPhone|iPad|iPod/i.test(ua)) {
+          location.replace('https://apps.apple.com/il/app/betterchoice-ai-co/id6770512379');
+          return;
+        }
+        if (/Android/i.test(ua)) {
+          location.replace('https://play.google.com/store/apps/details?id=live.betterchoice.betterchoiceai');
+        }
+      })();
+    </script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #121915;
+        --text: #eef3f0;
+        --muted: #9fb3a8;
+        --accent: #81c784;
+        --on-accent: #0e1a14;
+        --line: #3e4f47;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; background: var(--canvas); }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 20px calc(32px + env(safe-area-inset-bottom));
+      }
+      main { width: min(100%, 420px); text-align: center; }
+      img { width: 72px; height: 72px; border-radius: 18px; }
+      h1 { margin: 20px 0 8px; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+      p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.45; }
+      .stores { display: flex; flex-direction: column; gap: 12px; margin-top: 28px; }
+      a {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 52px;
+        padding: 0 18px;
+        border-radius: 14px;
+        text-decoration: none;
+        font-size: 17px;
+        font-weight: 700;
+      }
+      a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+      .ios { background: var(--accent); color: var(--on-accent); }
+      .ios:active { opacity: 0.82; }
+      .android { background: transparent; color: var(--text); border: 1.5px solid var(--line); }
+      .android:active { background: rgba(255, 255, 255, 0.04); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/betterchoice.png" width="72" height="72" alt="" />
+      <h1>BetterChoice</h1>
+      <p>תזונה, אימון ומאמן. באפליקציה.</p>
+      <div class="stores">
+        <a class="ios" href="https://apps.apple.com/il/app/betterchoice-ai-co/id6770512379">הורדה ב-App Store</a>
+        <a class="android" href="https://play.google.com/store/apps/details?id=live.betterchoice.betterchoiceai">הורדה ב-Google Play</a>
+      </div>
+    </main>
+  </body>
+</html>

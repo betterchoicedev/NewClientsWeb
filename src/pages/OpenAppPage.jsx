@@ -76,7 +76,8 @@ function OpenAppPage() {
 
     const metaContent = `app-id=${APPLE_APP_ID}, app-argument=https://betterchoice.one/app`;
     let meta = document.querySelector('meta[name="apple-itunes-app"]');
-    const created = !meta;
+    const existed = Boolean(meta);
+    const previous = meta ? meta.getAttribute('content') : null;
     if (!meta) {
       meta = document.createElement('meta');
       meta.setAttribute('name', 'apple-itunes-app');
@@ -85,7 +86,8 @@ function OpenAppPage() {
     meta.setAttribute('content', metaContent);
 
     return () => {
-      if (created) meta.remove();
+      if (!existed) meta.remove();
+      else if (previous) meta.setAttribute('content', previous);
     };
   }, [isIOS]);
 
