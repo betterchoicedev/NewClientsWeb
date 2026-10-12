@@ -109,4 +109,56 @@ function formatCityLabel(row = {}) {
   return `${en} - ${local}`;
 }
 
-module.exports = { formatCityLabel, pickLocalName };
+// Script of the user's search text → test for alternates in that same script.
+const QUERY_SCRIPTS = [
+  { key: 'hebrew', re: /[֐-׿]/ },
+  { key: 'arabic', re: /[؀-ۿ]/ },
+  { key: 'cyrillic', re: /[Ѐ-ӿ]/ },
+  { key: 'greek', re: /[Ͱ-Ͽ]/ },
+  { key: 'cjk', re: /[぀-ヿ一-鿿가-힯]/ },
+];
+
+/** Detect the script of the search text; null = Latin / unknown (show name only). */
+function detectQueryScript(query) {
+  const text = String(query || '');
+  const hit = QUERY_SCRIPTS.find((s) => s.re.test(text));
+  return hit ? hit.key : null;
+}
+
+function scoreAlternateForScript(alt, en, script) {
+  const c = (alt || '').trim();
+  if (!c) return -1;
+  if (script === 'hebrew') return scoreLocalAlternate(c, en, 'IL');
+  const def = QUERY_SCRIPTS.find((s) => s.key === script);
+  if (!def || !def.re.test(c) || /[A-Za-z]/.test(c)) return -1;
+  return c.replace(/[\s\-–]/g, '').length;
+}
+
+/**
+ * Label in the language the user typed: "name - <alternate in same script>".
+ * Latin query, or no alternate in that script → just "name".
+ */
+function formatCityLabelForQuery(row = {}, query = '') {
+  const { name, asciiname, alternatenames } = row || {};
+  const en = (name || asciiname || '').trim();
+  if (!en) return { label: '', local_name: null };
+
+  const script = detectQueryScript(query);
+  if (!script) return { label: en, local_name: null };
+
+  let best = '';
+  let bestScore = -1;
+  for (const alt of parseAlternateNames(alternatenames)) {
+    if (alt.toLowerCase() === en.toLowerCase()) continue;
+    const score = scoreAlternateForScript(alt, en, script);
+    if (score > bestScore) {
+      bestScore = score;
+      best = alt;
+    }
+  }
+
+  if (!best) return { label: en, local_name: null };
+  return { label: `${en} - ${best}`, local_name: best };
+}
+
+module.exports = { formatCityLabel, formatCityLabelForQuery, detectQueryScript, pickLocalName };

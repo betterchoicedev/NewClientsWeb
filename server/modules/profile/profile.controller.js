@@ -2,7 +2,7 @@ const { randomUUID } = require('crypto');
 const OpenAI = require('openai');
 const { clientDB, adminDB } = require('../../config/db');
 const { parseTimeToFloat } = require('../../utils/helpers');
-const { formatCityLabel } = require('../../utils/cityDisplay');
+const { formatCityLabelForQuery } = require('../../utils/cityDisplay');
 const { getMealRecommendationForCalories } = require('../../utils/mealStructure');
 const { generateUpdatedMealPlan, createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.service');
 const { formatMacrosGramStrings, normalizeMealPlanForDb, normalizeChatUserPayloadForDb } = require('../../utils/nutritionFormats');
@@ -592,10 +592,12 @@ async function searchCities(req, res) {
     if (error) return res.status(500).json({ error: 'Failed to search cities', message: error.message });
     
     // Re-rank prefix matches to the top, then alphabetically, then by population
-    let data = (rows || []).map((row) => ({
-      ...row,
-      display_label: formatCityLabel(row),
-    }));
+    // Label in the language the user typed: Hebrew query → "Tel Aviv - תל אביב-יפו",
+    // English query → "Tel Aviv" only.
+    let data = (rows || []).map((row) => {
+      const { label, local_name } = formatCityLabelForQuery(row, safe);
+      return { ...row, display_label: label, local_name };
+    });
 
     const qLower = safe.toLowerCase();
     data.sort((a, b) => {

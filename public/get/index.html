@@ -21,15 +21,15 @@
     <script>
       (function () {
         var ua = navigator.userAgent || '';
-        var inApp = /Instagram|FBAN|FBAV|FB_IAB|TikTok/i.test(ua);
-        if (!inApp) return;
+        var store = '';
         if (/iPhone|iPad|iPod/i.test(ua)) {
-          location.replace('https://apps.apple.com/il/app/betterchoice-ai-co/id6770512379');
-          return;
+          store = 'https://apps.apple.com/il/app/betterchoice-ai-co/id6770512379';
+        } else if (/Android/i.test(ua)) {
+          store = 'https://play.google.com/store/apps/details?id=live.betterchoice.betterchoiceai';
         }
-        if (/Android/i.test(ua)) {
-          location.replace('https://play.google.com/store/apps/details?id=live.betterchoice.betterchoiceai');
-        }
+        if (!store) return;
+        document.documentElement.style.background = '#121915';
+        location.replace(store);
       })();
     </script>
     <style>

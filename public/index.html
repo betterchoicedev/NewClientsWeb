@@ -6,6 +6,23 @@
     <link rel="icon" type="image/png" sizes="192x192" href="%PUBLIC_URL%/image.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="%PUBLIC_URL%/image.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover" />
+    <script>
+      (function () {
+        var path = (location.pathname || '/').replace(/\/+$/, '') || '/';
+        if (path !== '/') return;
+        var ua = navigator.userAgent || '';
+        if (!/Instagram|FBAN|FBAV|FB_IAB|TikTok/i.test(ua)) return;
+        var store = '';
+        if (/iPhone|iPad|iPod/i.test(ua)) {
+          store = 'https://apps.apple.com/il/app/betterchoice-ai-co/id6770512379';
+        } else if (/Android/i.test(ua)) {
+          store = 'https://play.google.com/store/apps/details?id=live.betterchoice.betterchoiceai';
+        }
+        if (!store) return;
+        document.documentElement.style.background = '#121915';
+        location.replace(store);
+      })();
+    </script>
     <meta name="theme-color" content="#121915" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
