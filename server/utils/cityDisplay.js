@@ -110,12 +110,21 @@ function formatCityLabel(row = {}) {
 }
 
 // Script of the user's search text → test for alternates in that same script.
+// Order matters: kana/hangul are checked before han so Japanese/Korean text isn't labelled Chinese.
 const QUERY_SCRIPTS = [
   { key: 'hebrew', re: /[֐-׿]/ },
-  { key: 'arabic', re: /[؀-ۿ]/ },
+  { key: 'arabic', re: /[؀-ۿݐ-ݿ]/ },
   { key: 'cyrillic', re: /[Ѐ-ӿ]/ },
-  { key: 'greek', re: /[Ͱ-Ͽ]/ },
-  { key: 'cjk', re: /[぀-ヿ一-鿿가-힯]/ },
+  { key: 'greek', re: /[Ͱ-Ͽἀ-῿]/ },
+  { key: 'kana', re: /[぀-ヿ]/ },
+  { key: 'hangul', re: /[가-힯ᄀ-ᇿ]/ },
+  { key: 'han', re: /[一-鿿]/ },
+  { key: 'thai', re: /[฀-๿]/ },
+  { key: 'devanagari', re: /[ऀ-ॿ]/ },
+  { key: 'bengali', re: /[ঀ-৿]/ },
+  { key: 'tamil', re: /[஀-௿]/ },
+  { key: 'georgian', re: /[Ⴀ-ჿ]/ },
+  { key: 'armenian', re: /[԰-֏]/ },
 ];
 
 /** Detect the script of the search text; null = Latin / unknown (show name only). */
@@ -123,6 +132,15 @@ function detectQueryScript(query) {
   const text = String(query || '');
   const hit = QUERY_SCRIPTS.find((s) => s.re.test(text));
   return hit ? hit.key : null;
+}
+
+/** Lowercase, drop vowel marks / diacritics and separators so "תֵּל־אָבִיב" ≈ "תל אביב". */
+function normalizeForMatch(text) {
+  return String(text || '')
+    .normalize('NFD')
+    .replace(/[̀-֑ͯ-ׇً-ٰٟ]/g, '')
+    .toLowerCase()
+    .replace(/[\s\-‐-―־_'’]/g, '');
 }
 
 function scoreAlternateForScript(alt, en, script) {
@@ -137,6 +155,11 @@ function scoreAlternateForScript(alt, en, script) {
 /**
  * Label in the language the user typed: "name - <alternate in same script>".
  * Latin query, or no alternate in that script → just "name".
+ *
+ * Among alternates in the typed script, the one that matches the typed text wins
+ * (exact, then prefix, then contains) — so "Москва" shows "Москва", not a variant
+ * spelling or another language that shares the script. Hebrew keeps its
+ * "fullest official name" preference (תל אביב → תל אביב-יפו).
  */
 function formatCityLabelForQuery(row = {}, query = '') {
   const { name, asciiname, alternatenames } = row || {};
@@ -146,19 +169,31 @@ function formatCityLabelForQuery(row = {}, query = '') {
   const script = detectQueryScript(query);
   if (!script) return { label: en, local_name: null };
 
-  let best = '';
-  let bestScore = -1;
+  const q = normalizeForMatch(query);
+  const candidates = [];
   for (const alt of parseAlternateNames(alternatenames)) {
     if (alt.toLowerCase() === en.toLowerCase()) continue;
     const score = scoreAlternateForScript(alt, en, script);
-    if (score > bestScore) {
-      bestScore = score;
-      best = alt;
-    }
+    if (score < 0) continue;
+    const n = normalizeForMatch(alt);
+    const tier = n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 3;
+    candidates.push({ alt, score, tier });
   }
+  if (!candidates.length) return { label: en, local_name: null };
 
-  if (!best) return { label: en, local_name: null };
-  return { label: `${en} - ${best}`, local_name: best };
+  // Hebrew: any alternate containing the typed text is eligible (so the fullest name wins);
+  // other scripts: only the best match tier.
+  const bestTier = Math.min(...candidates.map((c) => c.tier));
+  const matching = candidates.filter((c) => c.tier <= 2);
+  const pool = script === 'hebrew' && matching.length
+    ? matching
+    : candidates.filter((c) => c.tier === bestTier);
+  // Hebrew: fullest official name among matches; others: exact match first, else shortest prefix match.
+  const pick = pool.reduce((a, b) => {
+    if (script === 'hebrew') return b.score > a.score ? b : a;
+    return b.score < a.score ? b : a;
+  });
+  return { label: `${en} - ${pick.alt}`, local_name: pick.alt };
 }
 
 module.exports = { formatCityLabel, formatCityLabelForQuery, detectQueryScript, pickLocalName };

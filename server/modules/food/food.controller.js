@@ -25,16 +25,24 @@ function logAnalyzeImage(step, payload) {
 
 // ─── Food Logs CRUD ───────────────────────────────────────────────────────────
 
+// image_data is a base64 blob (often hundreds of KB per row). Selecting it for a whole
+// history made list queries take >10s and hit the Postgres statement timeout, so lists
+// omit it unless the caller passes includeImageData=true. image_url is still returned.
+const FOOD_LOG_LIST_COLUMNS =
+  'id,user_id,meal_label,food_items,image_url,total_calories,total_protein_g,total_carbs_g,total_fat_g,' +
+  'log_date,created_at,updated_at,dietary_warnings,plan_score,health_score';
+
 async function getFoodLogs(req, res) {
   try {
-    const { userCode, date, startDate, endDate } = req.query;
+    const { userCode, date, startDate, endDate, includeImageData } = req.query;
     if (!userCode) return res.status(400).json({ error: 'User code is required' });
     if (!adminDB) return res.status(500).json({ error: 'Chat database not configured' });
 
     const { data: userData, error: userError } = await adminDB.from('chat_users').select('id').eq('user_code', userCode).maybeSingle();
     if (userError || !userData) return res.status(404).json({ error: 'User not found' });
 
-    let query = adminDB.from('food_logs').select('*').eq('user_id', userData.id).order('log_date', { ascending: false }).order('created_at', { ascending: false });
+    const columns = String(includeImageData) === 'true' ? '*' : FOOD_LOG_LIST_COLUMNS;
+    let query = adminDB.from('food_logs').select(columns).eq('user_id', userData.id).order('log_date', { ascending: false }).order('created_at', { ascending: false });
     if (date) {
       query = query.eq('log_date', date);
     } else {
