@@ -14,7 +14,7 @@ import TermsOfServicePage from './pages/TermsOfServicePage';
 import AccessibilityStatementPage from './pages/AccessibilityStatementPage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
 import NotFoundPage from './pages/NotFoundPage';
-import { LanguageProvider } from './context/LanguageContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import RequireAuth from './components/brand/RequireAuth';
@@ -22,6 +22,17 @@ import CookieConsent from './components/CookieConsent';
 import AccessibilityWidget from './components/AccessibilityWidget';
 import OAuthHashHandler from './components/OAuthHashHandler';
 import './App.css';
+
+/** /he and /en: shareable links (ads, SEO) that set the language, then show the landing page. */
+function LanguageRedirect({ lang }) {
+  const { setLanguage, setDirection } = useLanguage();
+  React.useEffect(() => {
+    try { localStorage.setItem('language', lang); } catch (e) { /* storage blocked */ }
+    setLanguage(lang);
+    setDirection(lang === 'hebrew' ? 'rtl' : 'ltr');
+  }, [lang, setLanguage, setDirection]);
+  return <Navigate to="/" replace />;
+}
 
 function App() {
   return (
@@ -36,6 +47,8 @@ function App() {
               <Routes>
                 {/* Marketing */}
                 <Route path="/" element={<HomePage />} />
+                <Route path="/he" element={<LanguageRedirect lang="hebrew" />} />
+                <Route path="/en" element={<LanguageRedirect lang="english" />} />
                 <Route path="/app" element={<OpenAppPage />} />
 
                 {/* Account access */}

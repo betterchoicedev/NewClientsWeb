@@ -653,7 +653,7 @@ export default function AccountPage() {
         </aside>
 
         <div className="min-w-0 max-w-2xl">
-          <h1 className={`text-[32px] leading-tight text-bc-text ${language === 'hebrew' ? 'font-bold' : `${titleFont(language)} font-medium`}`}>
+          <h1 className={`text-[32px] leading-tight text-bc-text font-choice font-medium`}>
             {c.pageTitle}
           </h1>
           {user?.email ? (

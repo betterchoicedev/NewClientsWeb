@@ -57,7 +57,7 @@ export function AuthShell({ title, subtitle, children, footer = true }) {
             <Wordmark height={22} />
           </div>
           {title ? (
-            <h1 className={`mt-8 text-center text-[28px] leading-tight text-bc-text ${isHebrew ? 'font-bold' : 'font-choice font-medium'}`}>
+            <h1 className={`mt-8 text-center text-[28px] leading-tight text-bc-text font-choice font-medium`}>
               {title}
             </h1>
           ) : null}

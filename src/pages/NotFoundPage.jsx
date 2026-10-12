@@ -18,7 +18,7 @@ const NotFoundPage = () => {
         className="mx-auto max-w-xl px-4 sm:px-6 py-24 flex flex-col items-center text-center"
       >
         <p className="text-[13px] font-semibold text-bc-muted" dir="ltr">404</p>
-        <h1 className={`mt-3 text-[32px] leading-tight text-bc-text ${isHebrew ? 'font-bold' : `${titleFont(language)} font-medium`}`}>
+        <h1 className={`mt-3 text-[32px] leading-tight text-bc-text font-choice font-medium`}>
           {isHebrew ? 'העמוד לא נמצא' : 'Page not found'}
         </h1>
         <p className="mt-3 text-[15px] font-semibold text-bc-muted leading-relaxed">

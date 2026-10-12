@@ -9,6 +9,8 @@ import StoreBadges from '../components/brand/StoreBadges';
 import { primaryButton } from '../components/brand/ui';
 import { Mark, Wordmark } from '../components/brand/Logo';
 import { PhoneFrame, PhoneFootage } from '../features/marketing/PhoneFrame';
+import ScanStory from '../features/marketing/ScanStory';
+import { LogMethods, Pricing, Faq, StickyDownload } from '../features/marketing/Sections';
 
 // Motion rule from BetterApp/DESIGN.md: enter is a 400ms fade.
 const FADE = { duration: 0.4, ease: 'easeOut' };
@@ -69,7 +71,9 @@ const copy = {
     cta: 'Download the app',
     platforms: 'For iPhone and Android',
     heroPhone: 'BetterChoice app on iPhone',
-    tourLabel: 'What is in the app',
+    tourEyebrow: 'In the app',
+    tourTitle: 'Everything around the scan, in one app.',
+    qr: 'On a computer? Scan to get the app.',
     finalTitle: 'Get the app.',
     finalBody: 'Available on the App Store and Google Play.',
   },
@@ -80,7 +84,9 @@ const copy = {
     cta: 'הורידו את האפליקציה',
     platforms: 'לאייפון ולאנדרואיד',
     heroPhone: 'אפליקציית BetterChoice באייפון',
-    tourLabel: 'מה יש באפליקציה',
+    tourEyebrow: 'באפליקציה',
+    tourTitle: 'כל מה שמסביב לסריקה, באפליקציה אחת.',
+    qr: 'במחשב? סרקו כדי להוריד.',
     finalTitle: 'הורידו את האפליקציה.',
     finalBody: 'זמינה ב-App Store וב-Google Play.',
   },
@@ -94,8 +100,8 @@ const SECTIONS = [
     icon: Utensils,
     label: { english: 'Nutrition', hebrew: 'תזונה' },
     line: {
-      english: 'A meal plan built around you. Snap a photo to log a meal.',
-      hebrew: 'תפריט שנבנה סביבכם. צלמו ארוחה כדי לתעד אותה.',
+      english: 'A meal plan built to your calorie and macro targets, with alternatives when you want a swap.',
+      hebrew: 'תפריט שנבנה ליעדי הקלוריות והמאקרו שלכם, עם חלופות כשבא לכם להחליף.',
     },
   },
   {
@@ -103,26 +109,26 @@ const SECTIONS = [
     icon: Dumbbell,
     label: { english: 'Training', hebrew: 'אימון' },
     line: {
-      english: 'Pick a plan for your goal and train with it every week.',
-      hebrew: 'בחרו תוכנית למטרה שלכם והתאמנו איתה כל שבוע.',
+      english: 'Six plans for fat loss or muscle, two to four days a week. Log your weights as you train.',
+      hebrew: 'שש תוכניות לחיטוב או לשריר, יומיים עד ארבעה בשבוע. רושמים משקלים תוך כדי אימון.',
     },
   },
   {
     key: 'chat',
     icon: MessageCircle,
-    label: { english: 'AI chat', hebrew: 'צ׳אט AI' },
+    label: { english: 'Beti, your coach', hebrew: 'Beti, המאמנת שלכם' },
     line: {
-      english: 'Ask your coach anything, at any hour.',
-      hebrew: 'שאלו את המאמן כל דבר, בכל שעה.',
+      english: 'Beti knows your plan and your day, and answers with both in mind. By text or voice.',
+      hebrew: 'Beti מכירה את התוכנית שלכם ואת היום שלכם, ועונה בהתאם. בכתיבה או בקול.',
     },
   },
   {
     key: 'diary',
     icon: BookOpen,
-    label: { english: 'Health diary', hebrew: 'יומן בריאות' },
+    label: { english: 'Progress', hebrew: 'התקדמות' },
     line: {
-      english: 'Every meal and every day, kept in one diary.',
-      hebrew: 'כל ארוחה וכל יום, שמורים ביומן אחד.',
+      english: 'Calories and macros against your plan, your weight and measurements, and your streak.',
+      hebrew: 'קלוריות ומאקרו מול התוכנית, משקל ומדידות, והרצף שלכם.',
     },
   },
 ];
@@ -154,11 +160,16 @@ function Hero({ language }) {
       >
         <h1
           className={`text-bc-text text-[44px] sm:text-[72px] lg:text-[88px] leading-[1.02] tracking-[-0.02em] ${
-            isHebrew ? 'font-bold' : 'font-choice font-medium'
+            'font-choice font-medium'
           }`}
         >
           {isHebrew ? (
-            c.title
+            // Fixed two-line break: "עשו את" / "הבחירה הטובה יותר."
+            <>
+              עשו את
+              <br />
+              הבחירה הטובה יותר.
+            </>
           ) : (
             <>
               {/* "Make the" + the real wordmark. The logo's lettering replaces "better choice". */}
@@ -177,7 +188,7 @@ function Hero({ language }) {
         </p>
         <p className="mt-3 text-bc-muted text-[15px] sm:text-[17px] font-semibold">{c.features}</p>
         {/* Choice Sans ships 400/500 only and has no Hebrew, so it applies to the English label at 500. */}
-        <DownloadLink className={`${primaryButton} mt-8 px-10 ${isHebrew ? '' : '!font-medium font-choice text-[16px] tracking-[0.01em]'}`}>
+        <DownloadLink className={`${primaryButton} mt-8 px-10 !font-medium font-choice text-[16px] tracking-[0.01em]`}>
           {c.cta}
         </DownloadLink>
         <span className="mt-3 text-[13px] font-semibold text-bc-muted">{c.platforms}</span>
@@ -246,7 +257,7 @@ function SectionBlock({ section, index, language, onActive }) {
       </p>
       <h2
         className={`mt-4 text-bc-text text-[28px] sm:text-[36px] lg:text-[40px] leading-[1.15] tracking-[-0.01em] max-w-[28rem] ${
-          isHebrew ? 'font-bold' : 'font-choice font-medium'
+          'font-choice font-medium'
         }`}
       >
         {pick(section.line, language)}
@@ -276,7 +287,13 @@ function ProductTour({ language }) {
   const currentLabel = pick(current.label, language);
 
   return (
-    <section aria-label={c.tourLabel} className="border-t border-bc-border">
+    <section aria-labelledby="tour-title" className="border-t border-bc-border">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-28">
+        <p className="text-[13px] font-bold text-bc-accent">{c.tourEyebrow}</p>
+        <h2 id="tour-title" className="mt-3 font-choice font-medium text-[32px] sm:text-[48px] leading-[1.08] text-bc-text max-w-3xl">
+          {c.tourTitle}
+        </h2>
+      </div>
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:grid lg:grid-cols-2 lg:gap-16">
         <div className="lg:py-[10vh]">
           {SECTIONS.map((section, index) => (
@@ -355,11 +372,15 @@ function FinalDownload({ language }) {
           color="var(--bc-on-accent)"
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none"
         />
-        <h2 className={`relative text-[32px] sm:text-[44px] leading-[1.1] ${language === 'hebrew' ? 'font-bold' : 'font-choice font-medium'}`}>
+        <h2 className={`relative text-[32px] sm:text-[44px] leading-[1.1] font-choice font-medium`}>
           {c.finalTitle}
         </h2>
         <p className="relative mt-3 text-[16px] sm:text-[17px] font-semibold opacity-75">{c.finalBody}</p>
         <StoreBadges className="relative mt-8 justify-center" />
+        <div className="relative mt-8 hidden lg:flex items-center gap-4">
+          <img src="/qr-app.svg" alt="" width="96" height="96" className="rounded-[12px] bg-white p-1.5" />
+          <span className="max-w-[12rem] text-start text-[14px] font-semibold opacity-80">{c.qr}</span>
+        </div>
       </motion.div>
     </section>
   );
@@ -382,8 +403,13 @@ export default function HomePage() {
     <MotionConfig reducedMotion="user">
       <MarketingShell>
         <Hero language={language} />
+        <ScanStory language={language} />
+        <LogMethods language={language} />
         <ProductTour language={language} />
+        <Pricing language={language} />
+        <Faq language={language} />
         <FinalDownload language={language} />
+        <StickyDownload language={language} />
       </MarketingShell>
     </MotionConfig>
   );

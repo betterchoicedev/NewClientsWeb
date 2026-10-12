@@ -1507,22 +1507,17 @@ export const useLanguage = () => {
 };
 
 export const LanguageProvider = ({ children }) => {
-  const [language, setLanguage] = useState(() => {
-    // Check localStorage first, then default to English
+  // First visit: Hebrew (most clients). Company campaign pages (/landing) keep
+  // their original English default. A saved choice always wins.
+  const defaultLanguage = () => {
     const savedLanguage = localStorage.getItem('language');
-    if (savedLanguage) {
-      return savedLanguage;
-    }
-    return 'english'; // Default to English
-  });
-  
-  const [direction, setDirection] = useState(() => {
-    const savedLanguage = localStorage.getItem('language');
-    if (savedLanguage) {
-      return savedLanguage === 'hebrew' ? 'rtl' : 'ltr';
-    }
-    return 'ltr'; // Default to LTR for English
-  });
+    if (savedLanguage) return savedLanguage;
+    return window.location.pathname.startsWith('/landing') ? 'english' : 'hebrew';
+  };
+
+  const [language, setLanguage] = useState(defaultLanguage);
+
+  const [direction, setDirection] = useState(() => (defaultLanguage() === 'hebrew' ? 'rtl' : 'ltr'));
   
   // Sync the document element direction and language natively
   React.useEffect(() => {

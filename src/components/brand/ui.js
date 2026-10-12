@@ -31,5 +31,5 @@ export const fieldLabel = 'block text-[13px] font-semibold text-bc-muted mb-2';
 
 export const focusClass = focusRing;
 
-/** Choice Sans is Latin only: apply it to titles only when the UI is English. */
-export const titleFont = (language) => (language === 'hebrew' ? '' : 'font-choice');
+/** Choice Sans now covers Latin and Hebrew (draft Hebrew): titles use it in both languages. */
+export const titleFont = () => 'font-choice !font-medium';

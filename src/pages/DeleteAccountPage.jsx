@@ -124,7 +124,7 @@ function DeleteAccountPage() {
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="mx-auto max-w-2xl px-4 sm:px-6 py-12 sm:py-16"
       >
-        <h1 className={`text-[32px] leading-tight text-bc-text ${isHebrew ? 'font-bold' : `${titleFont(language)} font-medium`}`}>
+        <h1 className={`text-[32px] leading-tight text-bc-text font-choice font-medium`}>
           {pageContent.title}
         </h1>
         <p className={`mt-3 ${bodyClass}`}>{pageContent.intro}</p>
