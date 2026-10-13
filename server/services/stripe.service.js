@@ -1,6 +1,7 @@
 const stripe = require('../config/stripe');
 const { isDigitalOnlyPlan, isMembershipPrice, getDigitalOnlyAmount } = require('../utils/helpers');
 const { DIGITAL_ONLY_PRICE_ID } = require('../utils/constants');
+const { COMPANY_OFFER_SUBSCRIPTION_TYPE, isCompanyOfferSubscription } = require('./company-offer');
 
 // ─── Subscription helpers (used by several webhook handlers) ──────────────────
 
@@ -18,7 +19,8 @@ function resolveCommitmentMonths(priceId) {
   return map[priceId] ?? null;
 }
 
-function resolveSubscriptionType(productId, priceId) {
+function resolveSubscriptionType(productId, priceId, subscription) {
+  if (isCompanyOfferSubscription(subscription)) return COMPANY_OFFER_SUBSCRIPTION_TYPE;
   if (isMembershipPrice(priceId, productId)) return 'membership';
   if (productId === 'prod_SbI1Lu7FWbybUO') return 'nutrition_training_once_month';
   if (productId === 'prod_SbI1dssS5NElLZ') return 'nutrition_only';
@@ -51,7 +53,7 @@ function subscriptionPriceFields(subscription) {
 function membershipExpiresIso(subscription, commitmentEndDate, priceId) {
   if (commitmentEndDate) return commitmentEndDate.toISOString();
   const productId = subscription?.items?.data?.[0]?.price?.product;
-  if (!isMembershipPrice(priceId, productId)) return null;
+  if (!isMembershipPrice(priceId, productId) && !isCompanyOfferSubscription(subscription)) return null;
   const unix = subscription.status === 'trialing' && subscription.trial_end
     ? subscription.trial_end
     : subscription.current_period_end;
@@ -167,9 +169,13 @@ async function completeOnboardingAfterPaid(userId, { clientDB, adminDB }) {
   console.log('✅ Onboarding marked complete after paid subscription for', userId);
 }
 
+// stripe_usage_log is keyed by user_code (it has no user_id column).
 async function removeUserFromStripeUsageLog(userId, clientDB) {
   try {
-    await clientDB.from('stripe_usage_log').delete().eq('user_id', userId);
+    const { data: client } = await clientDB.from('clients').select('user_code').eq('user_id', userId).maybeSingle();
+    if (!client?.user_code) return;
+    const { error } = await clientDB.from('stripe_usage_log').delete().eq('user_code', client.user_code);
+    if (error) throw error;
     console.log('✅ Removed user from stripe_usage_log:', userId);
   } catch (error) {
     console.error('❌ Error removing user from stripe_usage_log:', error);
@@ -238,7 +244,7 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
       return;
     }
 
-    const subscriptionType   = resolveSubscriptionType(productId, priceId);
+    const subscriptionType   = resolveSubscriptionType(productId, priceId, subscription);
     const commitmentMonths   = resolveCommitmentMonths(priceId);
     const subscriptionStartDate = new Date(subscription.created * 1000);
 
@@ -286,6 +292,9 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
       return;
     }
     console.log('✅ Subscription record saved successfully');
+
+    // A company offer counts active days from the start of this trial; drop any older counter row.
+    if (subscriptionType === COMPANY_OFFER_SUBSCRIPTION_TYPE) await removeUserFromStripeUsageLog(userId, clientDB);
 
     try {
       const customer = await stripe.customers.retrieve(subscription.customer);
@@ -335,7 +344,7 @@ async function handleSubscriptionUpdated(subscription, { clientDB, adminDB }) {
     const price     = subscription.items.data[0]?.price;
     const priceId   = price?.id;
     const productId = price?.product;
-    const subscriptionType   = resolveSubscriptionType(productId, priceId);
+    const subscriptionType   = resolveSubscriptionType(productId, priceId, subscription);
     const commitmentMonths   = resolveCommitmentMonths(priceId);
     const subscriptionStartDate = new Date(subscription.created * 1000);
 

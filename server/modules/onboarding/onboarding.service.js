@@ -1494,4 +1494,5 @@ module.exports = {
   validateCompanyPromo,
   applyBypassPromo,
   grantFreeMonth,
+  resolveUserCompany,
 };

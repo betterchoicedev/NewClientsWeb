@@ -11,6 +11,19 @@ const {
 } = require('../../utils/constants');
 const { handleCheckoutCompleted, handleSubscriptionCreated } = require('../../services/stripe.service');
 const { getMembershipOffer, toPublicOffer } = require('../../services/membership-pricing');
+const {
+  COMPANY_OFFER_SUBSCRIPTION_TYPE,
+  offerPlanForPrice,
+  toPublicCompanyOffer,
+  offerSubscriptionMetadata,
+  buildOfferProgress,
+  getUserCompanyOffer,
+} = require('../../services/company-offer');
+
+function loadUserCompanyOffer(userId) {
+  const { resolveUserCompany } = require('../onboarding/onboarding.service');
+  return getUserCompanyOffer(userId, { clientDB, adminDB, resolveUserCompany });
+}
 
 async function getExchangeRates(req, res) {
   try {
@@ -178,7 +191,25 @@ async function createCheckoutSession(req, res) {
     let priceId = rawPriceId;
     let membershipPlan = null;
     let offer = null;
-    if (requestedPlan || isMembershipPrice(priceId)) {
+    let trialDays = MEMBERSHIP_TRIAL_DAYS;
+    let offerMeta = null;
+
+    // A user whose company has its own offer gets the company prices instead of the
+    // global membership. The server decides; the app only sends monthly / yearly.
+    const companyOffer = await loadUserCompanyOffer(userId);
+    const companyOfferPlan = companyOffer
+      ? requestedPlan
+        || offerPlanForPrice(companyOffer.offer, priceId)
+        || membershipPlanKey(priceId)
+        || (isMembershipPrice(priceId) ? 'monthly' : null)
+      : null;
+
+    if (companyOffer && companyOfferPlan) {
+      membershipPlan = companyOfferPlan;
+      priceId = companyOfferPlan === 'yearly' ? companyOffer.offer.yearlyPriceId : companyOffer.offer.monthlyPriceId;
+      trialDays = companyOffer.offer.trialDays;
+      offerMeta = offerSubscriptionMetadata(companyOffer.offer, companyOffer.companyId);
+    } else if (requestedPlan || isMembershipPrice(priceId)) {
       offer = await getMembershipOffer();
       membershipPlan = requestedPlan
         || membershipPlanKey(priceId)
@@ -196,6 +227,7 @@ async function createCheckoutSession(req, res) {
       allowedPrices.add(offer.monthlyPriceId);
       allowedPrices.add(offer.yearlyPriceId);
     }
+    if (offerMeta) allowedPrices.add(priceId);
     if (adminDB && companyId) {
       const { data: companyRow } = await adminDB.from('companies').select('config').eq('id', companyId).maybeSingle();
       const products = companyRow?.config?.pricing?.customProducts || [];
@@ -281,7 +313,8 @@ async function createCheckoutSession(req, res) {
       if (customerEmail) sessionConfig.customer_email = customerEmail;
     }
 
-    const boundMeta = { user_id: userId, price_id: priceId, created_at: new Date().toISOString(), ...safeMeta };
+    const boundMeta = { user_id: userId, price_id: priceId, created_at: new Date().toISOString(), ...safeMeta, ...(offerMeta || {}) };
+    if (offerMeta) sessionConfig.metadata = { ...sessionConfig.metadata, offer_company_id: offerMeta.offer_company_id };
     if (!membershipPlan) membershipPlan = membershipPlanKey(priceId);
     if (membershipPlan) {
       // Trial length is a server constant. Ignore any trial value sent by the app.
@@ -292,8 +325,8 @@ async function createCheckoutSession(req, res) {
     }
     if (mode === 'subscription') {
       sessionConfig.subscription_data = { metadata: boundMeta };
-      if (membershipPlan) {
-        sessionConfig.subscription_data.trial_period_days = MEMBERSHIP_TRIAL_DAYS;
+      if (membershipPlan && trialDays > 0) {
+        sessionConfig.subscription_data.trial_period_days = trialDays;
         sessionConfig.subscription_data.trial_settings = {
           end_behavior: { missing_payment_method: 'cancel' },
         };
@@ -518,7 +551,7 @@ async function processCheckoutSession(req, res) {
 async function findCurrentSubscription(userId) {
   const { data, error } = await clientDB
     .from('stripe_subscriptions')
-    .select('stripe_subscription_id, stripe_price_id, status, cancel_at_period_end, current_period_end, created_at')
+    .select('stripe_subscription_id, stripe_price_id, subscription_type, status, cancel_at_period_end, current_period_end, created_at')
     .eq('user_id', userId)
     .in('status', ['trialing', 'active', 'past_due'])
     .order('created_at', { ascending: false })
@@ -558,10 +591,36 @@ async function presentSubscription(row) {
   };
 }
 
+// Progress toward the earned free month for company-offer subscriptions, or null.
+async function loadOfferProgress(userId, row) {
+  if (row?.subscription_type !== COMPANY_OFFER_SUBSCRIPTION_TYPE || !row.stripe_subscription_id) return null;
+  try {
+    const subscription = await stripe.subscriptions.retrieve(row.stripe_subscription_id);
+    const { data: client } = await clientDB.from('clients').select('user_code').eq('user_id', userId).maybeSingle();
+    let usageRow = null;
+    if (client?.user_code) {
+      const { data } = await clientDB
+        .from('stripe_usage_log')
+        .select('quantity, period_ends_at')
+        .eq('user_code', client.user_code)
+        .maybeSingle();
+      usageRow = data || null;
+    }
+    return buildOfferProgress(subscription, usageRow);
+  } catch (err) {
+    console.warn('Could not load offer progress', err.message);
+    return null;
+  }
+}
+
 async function getMembershipPrices(req, res) {
   try {
+    const companyOffer = await loadUserCompanyOffer(req.userId);
+    if (companyOffer) {
+      return res.json(toPublicCompanyOffer(companyOffer.offer, companyOffer.companyName));
+    }
     const offer = await getMembershipOffer();
-    res.json(toPublicOffer(offer));
+    res.json({ ...toPublicOffer(offer), trialDays: MEMBERSHIP_TRIAL_DAYS, earnedFreeMonth: null, companyName: null });
   } catch (error) {
     console.error('Error loading membership prices:', error);
     res.status(500).json({ error: error.message || 'Failed to load prices' });
@@ -573,7 +632,9 @@ async function getMySubscription(req, res) {
     const userId = req.userId;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const row = await findCurrentSubscription(userId);
-    res.json({ subscription: await presentSubscription(row) });
+    const subscription = await presentSubscription(row);
+    if (subscription) subscription.offerProgress = await loadOfferProgress(userId, row);
+    res.json({ subscription });
   } catch (error) {
     console.error('Error loading subscription:', error);
     res.status(500).json({ error: error.message || 'Failed to load subscription' });
