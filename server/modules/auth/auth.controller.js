@@ -382,6 +382,53 @@ async function deleteChatProjectData(db, userCode, chatUserIds) {
   }
 }
 
+const CANCELABLE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused', 'incomplete']);
+
+// Cancels every live Stripe subscription of the user right away, found through the
+// stripe_subscriptions rows and through Stripe customers tagged with metadata.user_id.
+// Throws if a cancel fails, so the account is not deleted while the card is still billed.
+async function cancelStripeSubscriptionsForUser(authUserId, { stripe, clientDB }) {
+  if (!stripe || !authUserId) return 0;
+  const subscriptionIds = new Set();
+  const customerIds = new Set();
+
+  const { data: rows, error } = await clientDB
+    .from('stripe_subscriptions')
+    .select('stripe_customer_id, stripe_subscription_id, status')
+    .eq('user_id', authUserId);
+  if (error) throw new Error(`Failed to read subscriptions: ${error.message}`);
+  for (const row of rows || []) {
+    if (row.stripe_customer_id) customerIds.add(row.stripe_customer_id);
+    if (row.stripe_subscription_id && (!row.status || CANCELABLE_SUBSCRIPTION_STATUSES.has(String(row.status).toLowerCase()))) {
+      subscriptionIds.add(row.stripe_subscription_id);
+    }
+  }
+
+  const customers = await stripe.customers.search({ query: `metadata['user_id']:'${authUserId}'`, limit: 20 });
+  for (const customer of customers.data || []) customerIds.add(customer.id);
+
+  for (const customerId of customerIds) {
+    const list = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100 });
+    for (const sub of list.data || []) {
+      if (CANCELABLE_SUBSCRIPTION_STATUSES.has(sub.status)) subscriptionIds.add(sub.id);
+    }
+  }
+
+  let canceled = 0;
+  for (const subscriptionId of subscriptionIds) {
+    try {
+      await stripe.subscriptions.cancel(subscriptionId);
+      canceled++;
+    } catch (err) {
+      // Already gone or already canceled: nothing left to bill.
+      if (err?.code === 'resource_missing') continue;
+      if (/canceled subscription/i.test(err?.message || '')) continue;
+      throw new Error(`Failed to cancel subscription ${subscriptionId}: ${err.message}`);
+    }
+  }
+  return canceled;
+}
+
 async function deleteAccount(req, res) {
   try {
     const authUserId = req.authUser?.id;
@@ -422,9 +469,19 @@ async function deleteAccount(req, res) {
       }
     }
 
+    // Stop billing first. If this fails nothing is deleted and the user can try again.
+    try {
+      const canceled = await cancelStripeSubscriptionsForUser(authUserId, { stripe: require('../../config/stripe'), clientDB });
+      if (canceled) console.log(`🛑 Canceled ${canceled} Stripe subscription(s) before deleting account:`, authUserId);
+    } catch (stripeErr) {
+      console.error('❌ Could not cancel Stripe subscriptions, account not deleted:', stripeErr.message);
+      return res.status(500).json({ error: 'Could not cancel your subscription. Your account was not deleted. Please try again.' });
+    }
+
     await deleteChatProjectData(adminDB, userCode, chatUserIds);
 
     if (userCode) await deleteByEq(clientDB, 'client_meal_plans', 'user_code', userCode);
+    if (userCode) await deleteByEq(clientDB, 'stripe_usage_log', 'user_code', userCode);
     await deleteByEq(clientDB, 'stripe_subscriptions', 'user_id', authUserId);
     await deleteByEq(clientDB, 'stripe_payments', 'user_id', authUserId);
     if (userCode) await deleteByEq(clientDB, 'clients', 'user_code', userCode);
