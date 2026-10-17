@@ -12,6 +12,7 @@ router.post('/onboarding/apply-bypass-promo', ctrl.applyBypassPromo);
 router.post('/onboarding/grant-free-month', ctrl.grantFreeMonth);
 router.post('/onboarding/complete', ctrl.complete);
 router.get('/onboarding/status', ctrl.getStatus);
+router.get('/onboarding/paywall-flow', ctrl.getPaywallFlow);
 router.post('/onboarding/redeem-access-code', ctrl.redeemAccessCode);
 router.post('/onboarding/opt-out', ctrl.optOut);
 

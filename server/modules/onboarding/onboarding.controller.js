@@ -188,7 +188,20 @@ async function grantFreeMonth(req, res) {
   }
 }
 
+async function getPaywallFlow(req, res) {
+  try {
+    const userId = resolveUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const flow = await svc.getPaywallFlow(userId, { clientDB, adminDB });
+    return res.json({ flow });
+  } catch (error) {
+    console.error('GET /api/onboarding/paywall-flow error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to load paywall flow' });
+  }
+}
+
 module.exports = {
+  getPaywallFlow,
   saveDraft,
   saveStep,
   commit,

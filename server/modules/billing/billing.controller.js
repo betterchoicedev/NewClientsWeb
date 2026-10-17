@@ -19,10 +19,33 @@ const {
   buildOfferProgress,
   getUserCompanyOffer,
 } = require('../../services/company-offer');
+const { isFreeMonthRow, freeMonthCheckoutTrialEnd } = require('../../services/paywall-flow');
 
 function loadUserCompanyOffer(userId) {
   const { resolveUserCompany } = require('../onboarding/onboarding.service');
   return getUserCompanyOffer(userId, { clientDB, adminDB, resolveUserCompany });
+}
+
+// The clients row when the user is on the no-card free month, else null.
+async function loadFreeMonthRow(userId) {
+  if (!userId) return null;
+  try {
+    const { data } = await clientDB
+      .from('clients')
+      .select('subscription_type, subscription_status, subscription_expires_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+    return isFreeMonthRow(data) ? data : null;
+  } catch (err) {
+    console.warn('Could not load free month state', err.message);
+    return null;
+  }
+}
+
+// Days until a free-month user's first charge if they pay now (0 = charged at once).
+function freeMonthTrialDays(row, now = Date.now()) {
+  const trialEnd = freeMonthCheckoutTrialEnd(row, new Date(now));
+  return trialEnd ? Math.ceil((trialEnd * 1000 - now) / 86_400_000) : 0;
 }
 
 async function getExchangeRates(req, res) {
@@ -323,9 +346,25 @@ async function createCheckoutSession(req, res) {
       sessionConfig.metadata = { ...sessionConfig.metadata, plan: membershipPlan, from: 'onboarding_commerce' };
       sessionConfig.payment_method_collection = 'always';
     }
+    // A free-month user already had their trial: no Stripe trial on top of it. If they
+    // pay before the free month ends, the first charge waits for its last day.
+    const freeMonthRow = membershipPlan ? await loadFreeMonthRow(userId) : null;
     if (mode === 'subscription') {
       sessionConfig.subscription_data = { metadata: boundMeta };
-      if (membershipPlan && trialDays > 0) {
+      const freeMonthTrialEnd = freeMonthRow ? freeMonthCheckoutTrialEnd(freeMonthRow) : null;
+      if (freeMonthRow) {
+        boundMeta.from_free_month = 'true';
+        // The earned-free-month reward is for the card trial, not on top of the free month.
+        delete boundMeta.offer_active_days_needed;
+        delete boundMeta.offer_window_days;
+        delete boundMeta.offer_extra_days;
+        if (freeMonthTrialEnd) {
+          sessionConfig.subscription_data.trial_end = freeMonthTrialEnd;
+          sessionConfig.subscription_data.trial_settings = {
+            end_behavior: { missing_payment_method: 'cancel' },
+          };
+        }
+      } else if (membershipPlan && trialDays > 0) {
         sessionConfig.subscription_data.trial_period_days = trialDays;
         sessionConfig.subscription_data.trial_settings = {
           end_behavior: { missing_payment_method: 'cancel' },
@@ -616,11 +655,20 @@ async function loadOfferProgress(userId, row) {
 async function getMembershipPrices(req, res) {
   try {
     const companyOffer = await loadUserCompanyOffer(req.userId);
+    const freeMonthRow = await loadFreeMonthRow(req.userId);
+    // Free-month users see when they would be charged, not another trial.
+    const freeMonthOverride = freeMonthRow ? { trialDays: freeMonthTrialDays(freeMonthRow), earnedFreeMonth: null } : {};
     if (companyOffer) {
-      return res.json(toPublicCompanyOffer(companyOffer.offer, companyOffer.companyName));
+      return res.json({ ...toPublicCompanyOffer(companyOffer.offer, companyOffer.companyName), ...freeMonthOverride });
     }
     const offer = await getMembershipOffer();
-    res.json({ ...toPublicOffer(offer), trialDays: MEMBERSHIP_TRIAL_DAYS, earnedFreeMonth: null, companyName: null });
+    res.json({
+      ...toPublicOffer(offer),
+      trialDays: MEMBERSHIP_TRIAL_DAYS,
+      earnedFreeMonth: null,
+      companyName: null,
+      ...freeMonthOverride,
+    });
   } catch (error) {
     console.error('Error loading membership prices:', error);
     res.status(500).json({ error: error.message || 'Failed to load prices' });

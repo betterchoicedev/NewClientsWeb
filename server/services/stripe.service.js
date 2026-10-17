@@ -317,7 +317,10 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
       priceId === DIGITAL_ONLY_PRICE_ID ||
       isMembershipPrice(priceId, productId);
 
-    if (fromOnboarding && userId) {
+    // A user paying after the free month already finished onboarding and has a meal plan.
+    const afterFreeMonth = subscription.metadata?.from_free_month === 'true';
+
+    if (fromOnboarding && userId && !afterFreeMonth) {
       await completeOnboardingAfterPaid(userId, { clientDB, adminDB });
       try {
         const r = await sendWhatsAppWelcomeByUserId(userId, clientDB);

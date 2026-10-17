@@ -75,6 +75,19 @@ app.use((err, _req, res, _next) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  startFreeMonthSweep();
 });
+
+// Ends no-card free months whose date passed, so the WhatsApp/Telegram bot stops too
+// for users who do not open the app. /onboarding/status also ends them on the spot.
+function startFreeMonthSweep() {
+  if (process.env.NODE_ENV === 'test') return;
+  const { expireFreeMonths } = require('./services/paywall-flow');
+  const run = () => expireFreeMonths({ clientDB, adminDB })
+    .then((n) => { if (n) console.log(`Free month ended for ${n} user(s)`); })
+    .catch((err) => console.warn('Free month sweep failed', err.message));
+  run();
+  setInterval(run, 15 * 60 * 1000).unref();
+}
 
 module.exports = app;

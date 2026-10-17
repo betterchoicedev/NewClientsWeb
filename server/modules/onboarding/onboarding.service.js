@@ -8,6 +8,15 @@ const path = require('path');
 const { createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.service');
 const { buildMealPlanStructure, sortMealPlanStructure, normalizeMealPlanStructureForDb } = require('../../utils/mealStructure');
 const { formatMacrosGramStrings } = require('../../utils/nutritionFormats');
+const {
+  FREE_MONTH_FLOW,
+  TRIAL_EXPIRED_STATUS,
+  getUserPaywallFlow,
+  freeMonthState,
+  freeMonthEntitlement,
+  expireFreeMonthForUser,
+  loadFreeMonthProgress,
+} = require('../../services/paywall-flow');
 
 const VALID_PHASES = new Set(['welcome', 'products', 'promo', 'payment', 'questions', 'committing', 'pwa', 'finalizing', 'done']);
 const MAX_DRAFT_BYTES = 48 * 1024;
@@ -879,8 +888,20 @@ async function getStatus(userId, { clientDB, adminDB, companyId: hintedCompanyId
     mealPlanReady = Array.isArray(plans) && plans.length > 0;
   }
 
-  const subscriptionStatus = chatUser?.subscription_status || client.subscription_status || null;
+  let subscriptionStatus = chatUser?.subscription_status || client.subscription_status || null;
   const subscriptionType = chatUser?.subscription_type || client.subscription_type || null;
+
+  // No-card free month: end it here as soon as the date passes, without waiting for the sweep.
+  const freeMonth = freeMonthState({
+    subscription_type: subscriptionType,
+    subscription_status: subscriptionStatus,
+    subscription_expires_at: client.subscription_expires_at,
+  });
+  if (freeMonth?.expired && subscriptionStatus !== TRIAL_EXPIRED_STATUS) {
+    await expireFreeMonthForUser({ userId, userCode: client.user_code }, { clientDB, adminDB });
+    subscriptionStatus = TRIAL_EXPIRED_STATUS;
+  }
+
   const entitled = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
 
   let phase = 'questions';
@@ -945,6 +966,12 @@ async function getStatus(userId, { clientDB, adminDB, companyId: hintedCompanyId
     subscriptionStatus,
     subscriptionType,
     subscriptionExpiresAt: client.subscription_expires_at || null,
+    freeMonth: freeMonth
+      ? {
+        ...freeMonth,
+        progress: await loadFreeMonthProgress({ clientDB, adminDB, userId, userCode: client.user_code }),
+      }
+      : null,
     draft: onboardingDraft,
     mealPlanReady,
     resumeStepHint,
@@ -1447,7 +1474,22 @@ async function applyBypassPromo(userId, { code, companyId, productIds = [] }, { 
   return getStatus(userId, { clientDB, adminDB });
 }
 
+function getPaywallFlow(userId, { clientDB, adminDB }) {
+  return getUserPaywallFlow(userId, { clientDB, adminDB, resolveUserCompany });
+}
+
+/**
+ * Start the no-card free month. Only while the switch is on free_month and the user
+ * did not come through a company link, and only once per user: calling it again returns the status without extending it.
+ */
 async function grantFreeMonth(userId, { clientDB, adminDB }) {
+  const flow = await getPaywallFlow(userId, { clientDB, adminDB });
+  if (flow.flow !== FREE_MONTH_FLOW) {
+    const err = new Error('Free month is not offered for this account');
+    err.status = 403;
+    throw err;
+  }
+
   const client = await ensureClientAndChatUser(userId, { clientDB, adminDB });
   const userCode = client.user_code;
   if (!userCode) {
@@ -1456,16 +1498,20 @@ async function grantFreeMonth(userId, { clientDB, adminDB }) {
     throw err;
   }
 
-  const nowIso = new Date().toISOString();
-  const expires = new Date();
-  expires.setMonth(expires.getMonth() + 1);
-  const entitlement = {
-    subscription_type: 'free_tier',
-    subscription_status: 'active',
-    subscription_expires_at: expires.toISOString(),
-    updated_at: nowIso,
-  };
+  const now = new Date();
+  // Claim the free month atomically so two quick taps cannot start it twice.
+  const { data: claimed, error: claimErr } = await clientDB
+    .from('clients')
+    .update({ app_trial_started_at: now.toISOString() })
+    .eq('user_id', userId)
+    .is('app_trial_started_at', null)
+    .select('user_id');
+  if (claimErr) throw claimErr;
+  if (!claimed || claimed.length === 0) {
+    return getStatus(userId, { clientDB, adminDB });
+  }
 
+  const entitlement = freeMonthEntitlement(flow.trialDays, now);
   await clientDB.from('clients').update({ ...entitlement, onboarding_completed: false }).eq('user_id', userId);
 
   const { data: chatUser } = await adminDB.from('chat_users').select('id').eq('user_code', userCode).maybeSingle();
@@ -1474,6 +1520,15 @@ async function grantFreeMonth(userId, { clientDB, adminDB }) {
   } else {
     await adminDB.from('chat_users').insert([{ user_code: userCode, ...entitlement }]);
   }
+
+  // Same as after a paid checkout: finish onboarding, build the meal plan, say hello on WhatsApp.
+  await completeOnboardingAfterPaidSubscription(userId, { clientDB, adminDB });
+  setImmediate(() => {
+    const { sendWhatsAppWelcomeByUserId } = require('../../services/whatsapp.service');
+    sendWhatsAppWelcomeByUserId(userId, clientDB)
+      .then((r) => { if (!r?.success) console.warn('📱 WhatsApp welcome (free month) skipped or failed:', r?.message); })
+      .catch((e) => console.warn('📱 WhatsApp welcome (free month) error:', e?.message || e));
+  });
 
   return getStatus(userId, { clientDB, adminDB });
 }
@@ -1494,5 +1549,6 @@ module.exports = {
   validateCompanyPromo,
   applyBypassPromo,
   grantFreeMonth,
+  getPaywallFlow,
   resolveUserCompany,
 };

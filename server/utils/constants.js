@@ -11,6 +11,9 @@ const MEMBERSHIP_YEARLY_PRICE_ID = 'price_1UPHYKHIeYfvCylDuCeb8toE';
 const MEMBERSHIP_PORTAL_CONFIGURATION_ID = 'bpc_1UKyznHIeYfvCylDek80muWO';
 const MEMBERSHIP_TRIAL_DAYS = 3;
 
+// Signups without an invite link are put under this company (auth.controller.js).
+const BETTERCHOICE_COMPANY_ID = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
+
 // ─── External API URLs ────────────────────────────────────────────────────────
 const CREATE_MEAL_PLAN_API_URL = 'https://meal-plan-builder-615263253386.europe-west3.run.app/api/create-meal-plan';
 const BOI_EXCHANGE_RATES_URL   = 'https://boi.org.il/PublicApi/GetExchangeRates?asXml=false';
@@ -281,6 +284,7 @@ module.exports = {
   MEMBERSHIP_YEARLY_PRICE_ID,
   MEMBERSHIP_PORTAL_CONFIGURATION_ID,
   MEMBERSHIP_TRIAL_DAYS,
+  BETTERCHOICE_COMPANY_ID,
   CREATE_MEAL_PLAN_API_URL,
   BOI_EXCHANGE_RATES_URL,
   HEALTH_MAX_EVENTS_PER_REQUEST,
