@@ -36,6 +36,7 @@
   --bc-danger: #ef4444;
   --bc-danger-well: #fef2f2;
   --bc-band: var(--bc-canvas);
+  --bc-accent-text: var(--bc-accent);
   /* Green well, same alpha pattern as the wellness well; light uses surface2 */
   --bc-accent-well: #E8F5E9;
   /* NAV_THEME.macros */
@@ -79,9 +80,10 @@
   --bc-accent: #1FB25A;
   --bc-on-accent: #04120A;
   --bc-text: #0A0C0B;
-  --bc-muted: #69716D;
+  --bc-muted: #5F6763;  /* 4.9:1 on the light band */
   --bc-accent-well: rgba(31, 178, 90, 0.09);
   --bc-band: #EEF1EF;   /* every other section: canvas < band < card, so sections read as separate */
+  --bc-accent-text: #0E7A3B; /* green for TEXT on light: 5.4:1 on white (the vivid accent is 2.8:1) */
 }
 
 .dark .theme-bold {
@@ -94,7 +96,49 @@
   --bc-text: #F6F8F7;
   --bc-muted: #98A19C;
   --bc-accent-well: rgba(61, 220, 111, 0.10);
-  --bc-band: #0F1311;
+  --bc-band: #171C19;  /* visibly lifted from the #090B0A canvas */
+  --bc-accent-text: #3DDC6F;
+}
+
+/* Cookie banner (vanilla-cookieconsent) in the site's tokens */
+#cc-main {
+  --cc-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --cc-bg: var(--bc-surface);
+  --cc-primary-color: var(--bc-text);
+  --cc-secondary-color: var(--bc-muted);
+  --cc-btn-primary-bg: var(--bc-accent);
+  --cc-btn-primary-color: var(--bc-on-accent);
+  --cc-btn-primary-border-color: var(--bc-accent);
+  --cc-btn-primary-hover-bg: var(--bc-accent);
+  --cc-btn-primary-hover-color: var(--bc-on-accent);
+  --cc-btn-secondary-bg: transparent;
+  --cc-btn-secondary-color: var(--bc-text);
+  --cc-btn-secondary-border-color: var(--bc-border);
+  --cc-btn-secondary-hover-bg: var(--bc-surface-2);
+  --cc-btn-secondary-hover-color: var(--bc-text);
+  --cc-separator-border-color: var(--bc-border);
+  --cc-footer-bg: var(--bc-surface);
+  --cc-footer-color: var(--bc-muted);
+  --cc-footer-border-color: var(--bc-border);
+  --cc-modal-border-radius: 24px;
+  --cc-btn-border-radius: 24px;
+}
+
+/* Compact cookie bar on phones: Accept / Reject side by side (still equal weight) */
+@media (max-width: 640px) {
+  #cc-main .cm__btns { padding-top: 12px; padding-bottom: 12px; }
+  #cc-main .cm.cm--bar .cm__btns .cm__btn-group { display: flex !important; flex-direction: row !important; gap: 8px !important; }
+  #cc-main .cm.cm--bar .cm__btns .cm__btn-group .cm__btn { flex: 1 1 0 !important; margin: 0 !important; min-width: 0 !important; }
+  #cc-main .cm__body { padding-bottom: 0; }
+}
+
+/* Cookie banner footer links: 44px tap targets */
+#cc-main .cm__footer a,
+#cc-main .cm__footer button,
+#cc-main .cm__link-group a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 
 html,

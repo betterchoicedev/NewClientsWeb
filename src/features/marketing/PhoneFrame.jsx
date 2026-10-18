@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useInView, useReducedMotion } from 'framer-motion';
-import { FOOTAGE, footagePathHint } from './footage';
+import { footageFor, footagePathHint } from './footage';
 
 /**
  * Flat iPhone frame on the app canvas. No shadow, no 3D: a 1px keyline,
@@ -92,7 +92,7 @@ function FootagePlaceholder({ footageKey, title, icon: Icon, tint, language }) {
  * it exists and loads, otherwise the marked placeholder. Plays only in view.
  */
 export function PhoneFootage({ footageKey, title, icon, tint, language }) {
-  const entry = FOOTAGE[footageKey] || null;
+  const entry = footageFor(footageKey, language);
   const src = entry?.src || null;
   const poster = entry?.poster || undefined;
   const videoRef = useRef(null);

@@ -16,6 +16,7 @@ module.exports = {
           surface2: 'var(--bc-surface-2)',
           border: 'var(--bc-border)',
           accent: 'var(--bc-accent)',
+          'accent-text': 'var(--bc-accent-text)',
           'on-accent': 'var(--bc-on-accent)',
           text: 'var(--bc-text)',
           muted: 'var(--bc-muted)',

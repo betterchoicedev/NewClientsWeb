@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useInView } from 'framer-motion';
 import { UserRound, UtensilsCrossed, Shuffle, RefreshCw, Check } from 'lucide-react';
 import { focusClass } from '../../components/brand/ui';
+import MobileStory from './MobileStory';
 
 // "A meal plan made for you": a scroll-driven section of its own.
 // Facts from BetterApp main:
@@ -152,14 +153,6 @@ function MacroBar({ split, language }) {
   );
 }
 
-function ExampleTag({ language }) {
-  return (
-    <span className="flex-none rounded-full border border-dashed border-bc-border px-2.5 py-1 text-[11px] font-semibold text-bc-muted">
-      {language === 'hebrew' ? 'דוגמה להמחשה' : 'Illustrative example'}
-    </span>
-  );
-}
-
 /* ---------- The sticky plan card: one state per scroll beat ---------- */
 
 function PlanCard({ step, language }) {
@@ -168,7 +161,7 @@ function PlanCard({ step, language }) {
   const target = step >= 3 ? 1980 : 2050;
 
   return (
-    <div className="w-full max-w-[480px] rounded-bc-card border border-bc-border bg-bc-surface p-6 sm:p-7 min-h-[460px] flex flex-col">
+    <div className="w-full max-w-[480px] rounded-bc-card border border-bc-border bg-bc-canvas p-6 sm:p-7 min-h-[460px] flex flex-col">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[13px] font-semibold text-bc-muted">{step === 0 ? (he ? 'התשובות שלכם' : 'Your answers') : he ? 'התפריט שלכם' : 'Your plan'}</p>
@@ -179,7 +172,6 @@ function PlanCard({ step, language }) {
             </motion.p>
           </AnimatePresence>
         </div>
-        <ExampleTag language={language} />
       </div>
 
       <AnimatePresence mode="wait">
@@ -188,7 +180,7 @@ function PlanCard({ step, language }) {
             {ANSWERS.map((a, i) => (
               <motion.span key={a.english} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ ...FADE, delay: i * 0.12 }}
                 className="inline-flex items-center gap-1.5 rounded-full border border-bc-border px-3.5 py-2 text-[14px] font-semibold text-bc-text">
-                <Check size={14} aria-hidden="true" className="text-bc-accent" />
+                <Check size={14} aria-hidden="true" className="text-bc-accent-text" />
                 {pick(a, language)}
               </motion.span>
             ))}
@@ -204,7 +196,7 @@ function PlanCard({ step, language }) {
                     <div className="flex items-center gap-3">
                       <span className="w-14 flex-none text-[12px] font-bold text-bc-muted tabular-nums" dir="ltr" style={{ textAlign: 'start' }}>{MEAL_NAMES[i].time}</span>
                       <span className="flex-1 text-[15px] font-semibold text-bc-text">{pick(m, language)}</span>
-                      {step >= 3 ? <Check size={16} aria-hidden="true" className="flex-none text-bc-accent" /> : null}
+                      {step >= 3 ? <Check size={16} aria-hidden="true" className="flex-none text-bc-accent-text" /> : null}
                     </div>
                     <AnimatePresence>
                       {swapping ? (
@@ -245,15 +237,12 @@ function Beat({ step, index, language, onActive, active }) {
   const Icon = step.icon;
   return (
     <div ref={ref} className="py-14 lg:py-0 lg:min-h-[70vh] flex flex-col justify-center border-t border-bc-border first:border-0 lg:border-0">
-      <p className={`flex items-center gap-2 text-[13px] font-bold transition-colors duration-[400ms] ${active ? 'text-bc-accent' : 'text-bc-muted'}`}>
+      <p className={`flex items-center gap-2 text-[13px] font-bold transition-colors duration-[400ms] ${active ? 'text-bc-accent-text' : 'text-bc-muted'}`}>
         <span className="font-choice tabular-nums" dir="ltr">{String(index + 1).padStart(2, '0')}</span>
         <Icon size={16} aria-hidden="true" />
         {pick(step.title, language)}
       </p>
       <p className="mt-3 font-choice font-medium text-[24px] sm:text-[30px] leading-[1.25] text-bc-text max-w-[30rem]">{pick(step.line, language)}</p>
-      <div className="lg:hidden mt-8 flex justify-center">
-        <PlanCard step={index} language={language} />
-      </div>
     </div>
   );
 }
@@ -264,7 +253,7 @@ function Chip({ selected, onClick, children }) {
       type="button"
       aria-pressed={selected}
       onClick={onClick}
-      className={`rounded-full border px-4 py-2 text-[14px] font-semibold transition-colors duration-150 ${focusClass} ${
+      className={`min-h-[44px] rounded-full border px-4 py-2 text-[14px] font-semibold transition-colors duration-150 ${focusClass} ${
         selected ? 'border-bc-accent bg-bc-accent text-bc-on-accent' : 'border-bc-border text-bc-muted hover:text-bc-text hover:border-bc-muted'
       }`}
     >
@@ -283,7 +272,7 @@ function TryIt({ language }) {
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 pb-20 sm:pb-28 grid lg:grid-cols-2 gap-12 items-start">
       <div>
-        <p className="text-[13px] font-bold text-bc-accent">{he ? 'נסו בעצמכם' : 'Try it'}</p>
+        <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{he ? 'נסו בעצמכם' : 'Try it'}</p>
         <h3 className="mt-3 font-choice font-medium text-[28px] sm:text-[40px] leading-[1.08] text-bc-text">
           {he ? 'שתי בחירות, ותפריט אחר לגמרי.' : 'Two choices, a completely different plan.'}
         </h3>
@@ -306,14 +295,13 @@ function TryIt({ language }) {
         </p>
       </div>
 
-      <div className="rounded-bc-card border border-bc-border bg-bc-surface p-6 sm:p-8">
+      <div className="rounded-bc-card border border-bc-border bg-bc-canvas p-6 sm:p-8">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[13px] font-semibold text-bc-muted">{he ? 'התפריט שלכם' : 'Your plan'}</p>
             <p className="mt-1 font-choice font-medium text-[22px] sm:text-[26px] text-bc-text">{pick(goalDef, language)} · {pick(dietDef, language)}</p>
           </div>
-          <ExampleTag language={language} />
-        </div>
+          </div>
         <div className="mt-6"><MacroBar split={dietDef.split} language={language} /></div>
         <AnimatePresence mode="wait">
           <motion.ul key={diet} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FADE} className="mt-6 divide-y divide-bc-border border-t border-bc-border">
@@ -321,7 +309,7 @@ function TryIt({ language }) {
               <li key={meal.english} className="flex items-center justify-between gap-4 py-3.5">
                 <span className="text-[13px] font-bold text-bc-muted w-16 flex-none">{pick(MEAL_NAMES[i], language)}</span>
                 <span className="flex-1 text-[15px] font-semibold text-bc-text">{pick(meal, language)}</span>
-                <span className="text-[12px] font-semibold text-bc-accent flex-none">{he ? '+ חלופות' : '+ swaps'}</span>
+                <span className="text-[12px] font-semibold text-bc-accent-text flex-none">{he ? '+ חלופות' : '+ swaps'}</span>
               </li>
             ))}
           </motion.ul>
@@ -338,7 +326,7 @@ export default function PlanStory({ language }) {
   return (
     <section aria-labelledby="plan-title" className="border-t border-bc-border bg-bc-band">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-28">
-        <p className="text-[13px] font-bold text-bc-accent">{he ? 'מהרגע שמורידים' : 'From the moment you download'}</p>
+        <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{he ? 'מהרגע שמורידים' : 'From the moment you download'}</p>
         <h2 id="plan-title" className="mt-3 font-choice font-medium text-[36px] sm:text-[56px] leading-[1.04] text-bc-text max-w-4xl">
           {he ? 'תפריט שנבנה רק בשבילכם.' : 'A meal plan built only for you.'}
         </h2>
@@ -348,11 +336,32 @@ export default function PlanStory({ language }) {
       </div>
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:grid lg:grid-cols-2 lg:gap-16">
-        <div className="lg:py-[12vh]">
+        <div className="hidden lg:block lg:py-[12vh]">
           {STEPS.map((s, i) => (
             <Beat key={s.title.english} step={s} index={i} language={language} onActive={setActive} active={active === i} />
           ))}
         </div>
+        <MobileStory
+          className="lg:hidden mt-10 mb-16"
+          language={language}
+          steps={STEPS}
+          renderSlide={(s, i) => {
+            const Icon = s.icon;
+            return (
+              <div className="flex flex-col gap-4">
+                <div className="min-h-[148px]">
+                  <p className="flex items-center gap-2 text-[13px] font-bold text-bc-accent-text">
+                    <span className="font-choice tabular-nums" dir="ltr">{String(i + 1).padStart(2, '0')}</span>
+                    <Icon size={16} aria-hidden="true" />
+                    {pick(s.title, language)}
+                  </p>
+                  <p className="mt-2 font-choice font-medium text-[20px] leading-[1.3] text-bc-text">{pick(s.line, language)}</p>
+                </div>
+                <PlanCard step={i} language={language} />
+              </div>
+            );
+          }}
+        />
         <div className="hidden lg:block">
           <div className="sticky top-16 h-[calc(100vh-64px)] flex items-center justify-center">
             <PlanCard step={active} language={language} />
@@ -361,6 +370,9 @@ export default function PlanStory({ language }) {
       </div>
 
       <TryIt language={language} />
+      <p className="mx-auto max-w-6xl px-4 sm:px-6 pb-12 -mt-8 text-[12px] font-semibold text-bc-muted">
+        {he ? 'הארוחות והמספרים כאן להמחשה. התפריט שלכם נבנה מהתשובות שלכם.' : 'Meals and numbers here are illustrative. Your plan is built from your answers.'}
+      </p>
     </section>
   );
 }

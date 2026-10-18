@@ -69,7 +69,7 @@ const copy = {
     title: 'Make the better choice.',
     finalTitle: 'Your plan is waiting.',
     subhead: 'You’ve started over enough times. This time, someone stays with you.',
-    features: 'Nutrition, training, and a coach, in one app.',
+    features: 'A personal meal plan from day one, training and a coach.',
     cta: 'Download free',
     platforms: '3 days free, cancel anytime. iPhone and Android.',
     heroPhone: 'BetterChoice app on iPhone',
@@ -82,7 +82,7 @@ const copy = {
     title: 'עשו את הבחירה הטובה יותר.',
     finalTitle: 'התפריט שלכם מחכה.',
     subhead: 'התחלתם מחדש מספיק פעמים. הפעם, מישהו נשאר איתכם.',
-    features: 'תזונה, אימון ומאמן, באפליקציה אחת.',
+    features: 'תפריט אישי מהיום הראשון, אימונים ומאמנת.',
     cta: 'הורידו בחינם',
     platforms: '3 ימים חינם, ביטול בכל רגע. לאייפון ולאנדרואיד.',
     heroPhone: 'אפליקציית BetterChoice באייפון',
@@ -127,11 +127,11 @@ const SECTIONS = [
 
 const pick = (entry, language) => entry[language] || entry.english;
 
-function HeroPhone({ footageKey, title, className = '' }) {
+function HeroPhone({ footageKey, title, className = '', language }) {
   return (
     <div className={className}>
       <PhoneFrame label={title}>
-        <PhoneFootage footageKey={footageKey} title={title} language="english" />
+        <PhoneFootage footageKey={footageKey} title={title} language={language} />
       </PhoneFrame>
     </div>
   );
@@ -161,13 +161,13 @@ function Hero({ language }) {
             <>
               עשו את
               <br />
-              <span className="text-bc-accent">הבחירה</span> הטובה יותר.
+              <span className="text-bc-accent-text">הבחירה</span> הטובה יותר.
             </>
           ) : (
             <>
               {/* "Make the" + the real wordmark. The logo's lettering replaces "better choice". */}
               <span className="sr-only">{c.title}</span>
-              <span aria-hidden="true">
+              <span aria-hidden="true" style={{ '--bc-accent': 'var(--bc-accent-text)' }}>
                 Make the{' '}
                 <span className="whitespace-nowrap">
                   <Wordmark height="0.74em" decorative className="inline-block align-baseline" />.
@@ -204,12 +204,14 @@ function Hero({ language }) {
           <HeroPhone
             footageKey="training"
             title="Training"
+            language={language}
             className="hidden sm:block mt-20 -mr-16 lg:-mr-10 rotate-[-7deg] scale-[0.88] origin-top"
           />
-          <HeroPhone footageKey="hero" title="Nutrition" className="relative z-10" />
+          <HeroPhone footageKey="hero" title="Nutrition" className="relative z-10" language={language} />
           <HeroPhone
             footageKey="diary"
             title="Analytics"
+            language={language}
             className="hidden sm:block mt-20 -ml-16 lg:-ml-10 rotate-[7deg] scale-[0.88] origin-top"
           />
         </div>
@@ -282,7 +284,7 @@ function ProductTour({ language }) {
   return (
     <section aria-labelledby="tour-title" className="border-t border-bc-border">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-28">
-        <p className="text-[13px] font-bold text-bc-accent">{c.tourEyebrow}</p>
+        <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{c.tourEyebrow}</p>
         <h2 id="tour-title" className="mt-3 font-choice font-medium text-[32px] sm:text-[48px] leading-[1.08] text-bc-text max-w-3xl">
           {c.tourTitle}
         </h2>

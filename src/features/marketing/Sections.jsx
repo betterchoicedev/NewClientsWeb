@@ -11,7 +11,7 @@ const pick = (o, language) => o[language] || o.english;
 function SectionHead({ eyebrow, title, sub, language, center = false }) {
   return (
     <div className={center ? 'text-center flex flex-col items-center' : ''}>
-      {eyebrow ? <p className="text-[13px] font-bold text-bc-accent">{pick(eyebrow, language)}</p> : null}
+      {eyebrow ? <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{pick(eyebrow, language)}</p> : null}
       <h2 className="mt-3 font-choice font-medium text-[32px] sm:text-[48px] leading-[1.08] text-bc-text max-w-3xl">{pick(title, language)}</h2>
       {sub ? <p className="mt-4 text-[17px] sm:text-[19px] font-semibold text-bc-muted max-w-2xl">{pick(sub, language)}</p> : null}
     </div>
@@ -44,7 +44,7 @@ const METHODS = [
   {
     icon: MessageCircle,
     title: { hebrew: 'וואטסאפ', english: 'WhatsApp' },
-    line: { hebrew: 'שולחים ל-Beti תמונה או הקלטה, והיא רושמת.', english: 'Send Beti a photo or a voice note, and she logs it.' },
+    line: { hebrew: 'שולחים למאמנת תמונה או הקלטה, והיא רושמת.', english: 'Send the coach a photo or a voice note, and she logs it.' },
   },
   {
     icon: GlassWater,
@@ -73,9 +73,9 @@ export function LogMethods({ language }) {
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true, amount: 0.3 }}
                 transition={FADE}
-                className="rounded-bc-card border border-bc-border bg-bc-surface p-5 sm:p-7"
+                className="rounded-bc-card border border-bc-border bg-bc-canvas p-5 sm:p-7"
               >
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bc-accent-well)] text-bc-accent">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bc-accent-well)] text-bc-accent-text">
                   <Icon size={22} aria-hidden="true" />
                 </span>
                 <h3 className="mt-5 font-choice font-medium text-[20px] sm:text-[24px] text-bc-text">{pick(m.title, language)}</h3>
@@ -106,7 +106,7 @@ export function Pricing({ language }) {
             english: 'Try everything. Cancel any time from your account settings.',
           }}
         />
-        <div className="rounded-bc-card border border-bc-border bg-bc-surface p-6 sm:p-8">
+        <div className="rounded-bc-card border border-bc-border bg-bc-canvas p-6 sm:p-8">
           <p className="font-choice font-medium text-[44px] sm:text-[56px] leading-none text-bc-text">
             {he ? `${trialDays} ${trialDays > 10 ? 'יום' : 'ימים'} חינם` : `${trialDays} ${trialDays === 1 ? 'day' : 'days'} free`}
           </p>
@@ -127,7 +127,7 @@ export function Pricing({ language }) {
             </div>
           </div>
           <p className="mt-4 text-[13px] font-semibold text-bc-muted">
-            {he ? 'המנוי השנתי מחויב פעם בשנה.' : 'The yearly plan is billed once a year.'}
+            {he ? 'המחירים בדולר אמריקאי (USD). המנוי השנתי מחויב פעם בשנה.' : 'Prices in US dollars (USD). The yearly plan is billed once a year.'}
           </p>
         </div>
       </div>
@@ -167,7 +167,7 @@ const FAQ = [
     },
   },
   {
-    q: { hebrew: 'מי זאת Beti?', english: 'Who is Beti?' },
+    q: { hebrew: 'מי המאמנת באפליקציה?', english: 'Who is the coach in the app?' },
     a: {
       hebrew: 'המאמנת שבאפליקציה. היא מכירה את התוכנית שלכם ואת מה שאכלתם היום, עונה על שאלות תזונה ואימון, ומציעה מה לאכול בארוחה הבאה. זה לא ייעוץ רפואי.',
       english: 'The coach in the app. She knows your plan and what you ate today, answers nutrition and training questions, and suggests your next meal. It’s not medical advice.',

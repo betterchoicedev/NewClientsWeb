@@ -287,7 +287,7 @@ const AccessibilityWidget = () => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed ${side} bottom-20 z-50 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--aw-accent)] text-[var(--aw-on-accent)] transition-opacity duration-150 hover:opacity-90 active:opacity-75 ${focus}`}
+        className={`fixed ${side} bottom-20 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-[var(--aw-border)] bg-[var(--aw-surface)] text-[var(--aw-accent)] transition-opacity duration-150 hover:opacity-90 active:opacity-75 ${focus}`}
         aria-label={t.title}
         aria-expanded={isOpen}
         title={t.title}

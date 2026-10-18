@@ -24,8 +24,8 @@ const CookieConsentComponent = () => {
       },
       guiOptions: {
         consentModal: {
-          layout: "box",
-          position: "bottom right",
+          layout: "bar inline",
+          position: "bottom",
           equalWeightButtons: true,
           flipButtons: false
         },
@@ -57,7 +57,7 @@ const CookieConsentComponent = () => {
           he: {
             consentModal: {
               title: "אנחנו משתמשים בעוגיות",
-              description: "אנו משתמשים בעוגיות כדי להבטיח שאתה מקבל את החוויה הטובה ביותר באתר שלנו. עוגיות אלו עוזרות לנו לשפר את השירות ולהבין כיצד המשתמשים משתמשים באתר.",
+              description: "אנחנו משתמשים בעוגיות כדי לשפר את האתר ולהבין איך משתמשים בו.",
               acceptAllBtn: "קבל הכל",
               acceptNecessaryBtn: "דחה הכל",
               showPreferencesBtn: "נהל העדפות",
@@ -123,7 +123,7 @@ const CookieConsentComponent = () => {
           en: {
             consentModal: {
               title: "We use cookies",
-              description: "We use cookies to ensure you get the best experience on our website. These cookies help us improve our service and understand how users interact with our site.",
+              description: "We use cookies to improve the site and understand how it's used.",
               acceptAllBtn: "Accept all",
               acceptNecessaryBtn: "Reject all",
               showPreferencesBtn: "Manage preferences",
