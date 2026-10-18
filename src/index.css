@@ -100,6 +100,22 @@
   --bc-accent-text: #3DDC6F;
 }
 
+/* TEST (/test): warm light canvas in the BetterMe spirit; light in both modes */
+.theme-warm,
+.dark .theme-warm {
+  --bc-canvas: #FBF8F3;
+  --bc-surface: #FFFFFF;
+  --bc-surface-2: #F1ECE3;
+  --bc-band: #F3EDE3;
+  --bc-border: #E6DED1;
+  --bc-accent: #1FB25A;
+  --bc-accent-text: #0E7A3B;
+  --bc-on-accent: #04120A;
+  --bc-text: #13251D;
+  --bc-muted: #5A6660;
+  --bc-accent-well: rgba(31, 178, 90, 0.10);
+}
+
 /* Cookie banner (vanilla-cookieconsent) in the site's tokens */
 #cc-main {
   --cc-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;

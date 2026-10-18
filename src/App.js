@@ -9,6 +9,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import WhatsAppRegisterPage from './pages/WhatsAppRegisterPage';
 import AccountPage from './pages/AccountPage';
+import TestPage from './pages/TestPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
 import AccessibilityStatementPage from './pages/AccessibilityStatementPage';
@@ -47,6 +48,7 @@ function App() {
               <Routes>
                 {/* Marketing */}
                 <Route path="/" element={<HomePage />} />
+                <Route path="/test" element={<TestPage />} />
                 <Route path="/he" element={<LanguageRedirect lang="hebrew" />} />
                 <Route path="/en" element={<LanguageRedirect lang="english" />} />
                 <Route path="/app" element={<OpenAppPage />} />

@@ -266,11 +266,17 @@ function TryIt({ language }) {
   const he = language === 'hebrew';
   const [goal, setGoal] = useState('recomp');
   const [diet, setDiet] = useState('balanced');
+  // Program cards elsewhere on the page can pre-select a goal ("Get started").
+  useEffect(() => {
+    const onPick = (e) => { if (GOALS.some((g) => g.key === e.detail)) setGoal(e.detail); };
+    window.addEventListener('bc:pick-goal', onPick);
+    return () => window.removeEventListener('bc:pick-goal', onPick);
+  }, []);
   const dietDef = DIETS.find((d) => d.key === diet);
   const goalDef = GOALS.find((g) => g.key === goal);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-6 pb-20 sm:pb-28 grid lg:grid-cols-2 gap-12 items-start">
+    <div id="try-it" className="scroll-mt-20 mx-auto max-w-6xl px-4 sm:px-6 pb-20 sm:pb-28 grid lg:grid-cols-2 gap-12 items-start">
       <div>
         <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{he ? 'נסו בעצמכם' : 'Try it'}</p>
         <h3 className="mt-3 font-choice font-medium text-[28px] sm:text-[40px] leading-[1.08] text-bc-text">
