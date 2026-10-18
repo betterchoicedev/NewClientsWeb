@@ -738,3 +738,9 @@ code {
   .hx-rise, .hx-sway, .hx-steam, .hx-flicker, .hx-twinkle, .hx-glow, .hx-bob, .hx-rot, .hx-fly, .hx-flap, .hx-breathe, .hx-marquee { animation: none !important; }
   .hx-rise, .hx-steam { opacity: 0.5; }
 }
+
+/* /test: things that change with day (light) and night (dark) */
+.hx-day { display: contents; }
+.hx-night { display: none; }
+.dark .hx-day { display: none; }
+.dark .hx-night { display: contents; }

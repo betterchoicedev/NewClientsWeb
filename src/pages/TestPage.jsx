@@ -115,14 +115,15 @@ function SceneHero({ language }) {
           <div className="absolute inset-0 overflow-hidden rounded-[40px] border border-bc-border">
             <KitchenScene className="absolute inset-0 h-full w-full" />
           </div>
-          {/* meals from the plan, floating off the scene */}
+          {/* meals floating off the scene: breakfast by day (light), dinner by night (dark) */}
           {[
-            ['poke-bowl', '-top-6 -left-4 sm:-left-8', 0, '!w-[72px] !h-[72px] sm:!w-[96px] sm:!h-[96px]'],
-            ['shakshuka', 'bottom-24 -left-5 sm:-left-10', 1.2, '!w-[64px] !h-[64px] sm:!w-[88px] sm:!h-[88px]'],
-            ['yogurt-parfait', '-top-8 right-[30%]', 2.1, '!w-[60px] !h-[60px] sm:!w-[80px] sm:!h-[80px]'],
-          ].map(([slug, pos, d, sz]) => (
-            <div key={slug} className={`absolute ${pos} z-10 hx-bob`} style={{ '--a': '-8px', '--dur': '4.5s', '--d': `${d}s` }}>
-              <StickerTile slugs={[slug]} size={96} delay={0.4 + d * 0.2} className={sz} />
+            [['avocado-toast'], ['ramen'], '-top-6 -left-4 sm:-left-8', 0, '!w-[72px] !h-[72px] sm:!w-[96px] sm:!h-[96px]'],
+            [['shakshuka-with-bread'], ['grilled-salmon-plate'], 'bottom-24 -left-5 sm:-left-10', 1.2, '!w-[64px] !h-[64px] sm:!w-[88px] sm:!h-[88px]'],
+            [['cappuccino'], ['sushi-roll-plate'], '-top-8 right-[30%]', 2.1, '!w-[60px] !h-[60px] sm:!w-[80px] sm:!h-[80px]'],
+          ].map(([day, night, pos, d, sz]) => (
+            <div key={pos} className={`absolute ${pos} z-10 hx-bob`} style={{ '--a': '-8px', '--dur': '4.5s', '--d': `${d}s` }}>
+              <span className="hx-day"><StickerTile slugs={day} size={96} delay={0.4 + d * 0.2} className={sz} /></span>
+              <span className="hx-night"><StickerTile slugs={night} size={96} delay={0.4 + d * 0.2} className={sz} /></span>
             </div>
           ))}
           <div className="absolute -bottom-14 sm:-bottom-10 right-[2%] sm:-right-6 origin-bottom-right scale-[0.56] sm:scale-[0.62] -rotate-[5deg]">
