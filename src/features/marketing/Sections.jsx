@@ -139,6 +139,20 @@ export function Pricing({ language }) {
 
 const FAQ = [
   {
+    q: { hebrew: 'איך נבנה התפריט שלי?', english: 'How is my meal plan built?' },
+    a: {
+      hebrew: 'בהורדה עונים על כמה שאלות: מטרה, גוף, שגרה, סגנון אכילה, אלרגיות והגבלות וחלון אכילה. מיד בסיום נבנה תפריט מלא לפי יעדי הקלוריות והמאקרו שלכם, עם חלופות לכל ארוחה.',
+      english: 'When you download, you answer a few questions: goal, body, routine, eating style, allergies and limits, and eating window. Right after, a full plan is built to your calorie and macro targets, with alternatives for every meal.',
+    },
+  },
+  {
+    q: { hebrew: 'התפריט משתנה עם הזמן?', english: 'Does the plan change over time?' },
+    a: {
+      hebrew: 'כשהמשקל או השגרה שלכם משתנים, יעדי הקלוריות מתעדכנים, וכל ארוחה נמדדת מול היעד החדש. אפשר להחליף ולערוך ארוחות בתפריט בכל רגע.',
+      english: 'When your weight or routine changes, your calorie targets update and every meal is checked against the new ones. You can swap and edit meals in the plan any time.',
+    },
+  },
+  {
     q: { hebrew: 'כמה מדויקת הסריקה?', english: 'How accurate is the scan?' },
     a: {
       hebrew: 'זו הערכה, לא משקל מטבח. אתם רואים כל מזון בנפרד, כמה ה-AI בטוח בו ומה הוא ראה, ואפשר לתקן גרמים בלחיצה או במילים. מנות מעורבות ורטבים קשים יותר להערכה.',

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion, useInView } from 'framer-motion';
-import { BookOpen, Dumbbell, MessageCircle, Utensils } from 'lucide-react';
+import { BookOpen, Dumbbell, MessageCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import MarketingShell from '../components/brand/MarketingShell';
 import DownloadLink from '../components/brand/DownloadLink';
@@ -10,6 +10,7 @@ import { primaryButton } from '../components/brand/ui';
 import { Mark, Wordmark } from '../components/brand/Logo';
 import { PhoneFrame, PhoneFootage } from '../features/marketing/PhoneFrame';
 import ScanStory from '../features/marketing/ScanStory';
+import PlanStory from '../features/marketing/PlanStory';
 import { LogMethods, Pricing, Faq, StickyDownload } from '../features/marketing/Sections';
 
 // Motion rule from BetterApp/DESIGN.md: enter is a 400ms fade.
@@ -65,28 +66,30 @@ function MacroChips({ language }) {
 
 const copy = {
   english: {
-    title: 'This time, you don’t start over.',
+    title: 'Your own meal plan, from day one.',
+    eyebrow: 'This time, you don’t start over.',
     tagline: 'Make the better choice.',
-    subhead: 'Snap what you ate, and get your next step, shaped around whatever today looked like.',
-    features: 'Nutrition, training, and a coach, in one app.',
+    subhead: 'Download, answer a few questions, and get a meal plan built for your body, your goal and your taste. As you progress, your targets keep up with you.',
+    features: 'Plus a coach, training plans and a scan that logs meals for you.',
     cta: 'Download free',
     platforms: '3 days free, cancel anytime. iPhone and Android.',
     heroPhone: 'BetterChoice app on iPhone',
     tourEyebrow: 'In the app',
-    tourTitle: 'Your plan. Your training. Your coach.',
+    tourTitle: 'Around your plan: training, a coach, and your progress.',
     qr: 'On a computer? Scan to get the app.',
     finalBody: 'Start with 3 free days, on the App Store and Google Play.',
   },
   hebrew: {
-    title: 'הפעם, לא מתחילים מחדש.',
+    title: 'תפריט משלכם, מהיום הראשון.',
+    eyebrow: 'הפעם, לא מתחילים מחדש.',
     tagline: 'עשו את הבחירה הטובה יותר.',
-    subhead: 'צלמו את מה שאכלתם, וקבלו את הצעד הבא, מותאם ליום שהיה לכם.',
-    features: 'תזונה, אימון ומאמן, באפליקציה אחת.',
+    subhead: 'מורידים, עונים על כמה שאלות, ומקבלים תפריט שנבנה לגוף, למטרה ולטעם שלכם. כשאתם מתקדמים, היעדים מתעדכנים איתכם.',
+    features: 'ועוד: מאמנת אישית, תוכניות אימון וסריקה שרושמת ארוחות בשבילכם.',
     cta: 'הורידו בחינם',
     platforms: '3 ימים חינם, ביטול בכל רגע. לאייפון ולאנדרואיד.',
     heroPhone: 'אפליקציית BetterChoice באייפון',
     tourEyebrow: 'באפליקציה',
-    tourTitle: 'התוכנית שלכם. האימון שלכם. המאמנת שלכם.',
+    tourTitle: 'סביב התפריט: אימונים, מאמנת, וההתקדמות שלכם.',
     qr: 'במחשב? סרקו כדי להוריד.',
     finalBody: 'מתחילים ב-3 ימים חינם, ב-App Store וב-Google Play.',
   },
@@ -95,15 +98,6 @@ const copy = {
 // Order: Nutrition, Training, AI chat, Health diary. Wellness and Journey are
 // "Coming soon" in the app, so they stay off the page until they ship.
 const SECTIONS = [
-  {
-    key: 'nutrition',
-    icon: Utensils,
-    label: { english: 'Nutrition', hebrew: 'תזונה' },
-    line: {
-      english: 'A meal plan built to your calorie and macro targets, with alternatives when you want a swap.',
-      hebrew: 'תפריט שנבנה ליעדי הקלוריות והמאקרו שלכם, עם חלופות כשבא לכם להחליף.',
-    },
-  },
   {
     key: 'training',
     icon: Dumbbell,
@@ -158,6 +152,7 @@ function Hero({ language }) {
         transition={FADE}
         className="mx-auto max-w-4xl px-4 sm:px-6 pt-14 sm:pt-20 flex flex-col items-center text-center"
       >
+        <p className="mb-5 text-[15px] sm:text-[17px] font-bold text-bc-accent">{c.eyebrow}</p>
         <h1
           className={`text-bc-text text-[44px] sm:text-[72px] lg:text-[88px] leading-[1.02] tracking-[-0.02em] ${
             'font-choice font-medium'
@@ -165,15 +160,15 @@ function Hero({ language }) {
         >
           {isHebrew ? (
             <>
-              הפעם,
+              תפריט משלכם,
               <br />
-              לא מתחילים מחדש.
+              מהיום הראשון.
             </>
           ) : (
             <>
-              This time,
+              Your own meal plan,
               <br />
-              you don’t start over.
+              from day one.
             </>
           )}
         </h1>
@@ -410,6 +405,7 @@ export default function HomePage() {
     <MotionConfig reducedMotion="user">
       <MarketingShell className="theme-bold">
         <Hero language={language} />
+        <PlanStory language={language} />
         <ScanStory language={language} />
         <LogMethods language={language} />
         <ProductTour language={language} />
