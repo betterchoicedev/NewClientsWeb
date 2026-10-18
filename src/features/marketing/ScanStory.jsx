@@ -116,7 +116,7 @@ function Plate() {
   );
 }
 
-function Stage({ step, language }) {
+export function Stage({ step, language }) {
   const c = pick(copy, language);
   const reduceMotion = useReducedMotion();
   const at = (k) => STEPS.findIndex((s) => s.key === k) <= step;

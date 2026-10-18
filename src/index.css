@@ -100,9 +100,8 @@
   --bc-accent-text: #3DDC6F;
 }
 
-/* TEST (/test): warm light canvas in the BetterMe spirit; light in both modes */
-.theme-warm,
-.dark .theme-warm {
+/* TEST (/test): warm canvas in the BetterMe spirit. Light: */
+.theme-warm {
   --bc-canvas: #FBF8F3;
   --bc-surface: #FFFFFF;
   --bc-surface-2: #F1ECE3;
@@ -114,6 +113,40 @@
   --bc-text: #13251D;
   --bc-muted: #5A6660;
   --bc-accent-well: rgba(31, 178, 90, 0.10);
+  /* illustrated scenes */
+  --scene-bg: #F1E6D6;
+  --scene-wood: #E6CDA8;
+  --scene-wood-dark: #D2B48A;
+  --scene-plate: #FFFFFF;
+  --scene-plate-rim: #EDE6DA;
+  --scene-iron: #2E3A34;
+  --scene-bowl: #FFFFFF;
+  --scene-shaker: #FFFFFF;
+  --scene-sleeve: #13251D;
+}
+
+/* Warm dark: brown-charcoal instead of the app's green-black, same green accent */
+.dark .theme-warm {
+  --bc-canvas: #16130F;
+  --bc-surface: #201C17;
+  --bc-surface-2: #2B261F;
+  --bc-band: #1C1914;
+  --bc-border: #3A332A;
+  --bc-accent: #3DDC6F;
+  --bc-accent-text: #4FE07D;
+  --bc-on-accent: #04120A;
+  --bc-text: #F6F1E9;
+  --bc-muted: #B5AB9D;
+  --bc-accent-well: rgba(61, 220, 111, 0.12);
+  --scene-bg: #241E18;
+  --scene-wood: #4A3A2A;
+  --scene-wood-dark: #3B2E21;
+  --scene-plate: #F4EEE4;
+  --scene-plate-rim: #D8CDBD;
+  --scene-iron: #0E0D0B;
+  --scene-bowl: #F4EEE4;
+  --scene-shaker: #E9E2D6;
+  --scene-sleeve: #2E3A34;
 }
 
 /* Cookie banner (vanilla-cookieconsent) in the site's tokens */

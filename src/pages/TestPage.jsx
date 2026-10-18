@@ -8,23 +8,20 @@ import DownloadLink from '../components/brand/DownloadLink';
 import StoreBadges from '../components/brand/StoreBadges';
 import { focusClass, primaryButton } from '../components/brand/ui';
 import PlanStory from '../features/marketing/PlanStory';
-import ScanStory from '../features/marketing/ScanStory';
+import ScanStory, { Stage } from '../features/marketing/ScanStory';
 import { Pricing, Faq, StickyDownload } from '../features/marketing/Sections';
+import { PhoneFrame } from '../features/marketing/PhoneFrame';
+import { GoalScene, HeroTable, HandBack, HandFront } from '../features/marketing/test/Scenes';
+import { AppScreen } from '../features/marketing/test/AppScreens';
+import AppFeatures from '../features/marketing/test/AppFeatures';
 
-// TEST (/test): the BetterMe "products" spirit with our product. People-first
-// photography, outcome cards, short triads, a light warm canvas. The production
-// landing (/) is untouched.
-//
-// Photos: Unsplash, free license (no attribution required), picked 2026-10-18:
-// hero-cooking photo-1556911073-a517e752729c, card-man-cooking photo-1556911220-dabc1f02913a,
-// card-pushups photo-1758599880050-b33b1fbf3713, card-bowl photo-1723744910344-370bc4305972,
-// card-couple-kitchen photo-1758523417426-2544532fd8d1, scan-phone photo-1568031814106-ac1b1cc12b71,
-// world-chopping photo-1636647511729-6703539ba71f, world-yoga photo-1758599879067-f99a68ea57ee,
-// world-salad photo-1595786802424-d6efbc413db5, final-workout photo-1758599880557-e3a27500265e.
+// TEST (/test): the BetterMe "products" spirit with our product, drawn instead
+// of photographed: first-person vector scenes (your hand, your table, your
+// plate), the real app recreated as live vector screens, a warm canvas in
+// light and dark. The production landing (/) is untouched.
 
 const FADE = { duration: 0.5, ease: 'easeOut' };
 const pick = (o, language) => (o ? o[language] || o.english : '');
-const P = (name) => `/test-photos/${name}.jpg`;
 
 const copy = {
   hebrew: {
@@ -35,7 +32,7 @@ const copy = {
     cta: 'הורידו בחינם',
     more: 'איך זה עובד',
     note: '3 ימים חינם, ביטול בכל רגע.',
-    programsTitle: 'התוכניות הפופולריות ב-BetterChoice',
+    programsTitle: 'בחרו מטרה. התפריט נבנה סביבה.',
     getStarted: 'התחילו',
     scanEyebrow: 'סריקה',
     scanTitle: 'צלמו. זה רשום.',
@@ -54,7 +51,7 @@ const copy = {
     cta: 'Download free',
     more: 'How it works',
     note: '3 days free, cancel anytime.',
-    programsTitle: 'The most popular plans in BetterChoice',
+    programsTitle: 'Pick a goal. The plan is built around it.',
     getStarted: 'Get started',
     scanEyebrow: 'Scan',
     scanTitle: 'Snap it. It’s logged.',
@@ -68,86 +65,70 @@ const copy = {
 };
 
 // Program cards map to the app's real goals (GOAL_OPTIONS); "Get started"
-// pre-selects that goal in the plan preview below. Promises are about the plan,
-// never about the body (no weight-loss promises).
+// pre-selects that goal in the plan preview. Promises are about the plan.
 const PROGRAMS = [
-  {
-    goal: 'recomp',
-    photo: P('card-man-cooking'),
-    title: { hebrew: 'פחות שומן, אותו שריר:', english: 'Lose fat, keep muscle:' },
-    line: { hebrew: 'תפריט עשיר בחלבון ואימונים שנבנים סביבכם', english: 'A protein-forward plan and workouts built around you' },
-    pos: '60% 40%',
-  },
-  {
-    goal: 'muscle',
-    photo: P('card-pushups'),
-    title: { hebrew: 'בניית שריר:', english: 'Build muscle:' },
-    line: { hebrew: 'יותר חלבון, ותוכנית אימונים של יומיים עד ארבעה בשבוע', english: 'More protein, and a two-to-four-day training plan' },
-    pos: '50% 60%',
-  },
-  {
-    goal: 'lose',
-    photo: P('card-bowl'),
-    title: { hebrew: 'ירידה במשקל:', english: 'Lose weight:' },
-    line: { hebrew: 'תפריט שמתאים לשעות ולטעם שלכם', english: 'A plan that fits your hours and your taste' },
-    pos: '50% 50%',
-  },
-  {
-    goal: 'maintain',
-    photo: P('card-couple-kitchen'),
-    title: { hebrew: 'שמירה על משקל:', english: 'Maintain:' },
-    line: { hebrew: 'לאכול טוב, בלי לספור כל ביס', english: 'Eat well, without counting every bite' },
-    pos: '50% 40%',
-  },
+  { goal: 'recomp', title: { hebrew: 'פחות שומן, אותו שריר', english: 'Lose fat, keep muscle' }, line: { hebrew: 'תפריט עשיר בחלבון ואימונים שנבנים סביבכם', english: 'A protein-forward plan and workouts built around you' } },
+  { goal: 'muscle', title: { hebrew: 'בניית שריר', english: 'Build muscle' }, line: { hebrew: 'יותר חלבון, ותוכנית אימונים של יומיים עד ארבעה בשבוע', english: 'More protein, and a two-to-four-day training plan' } },
+  { goal: 'lose', title: { hebrew: 'ירידה במשקל', english: 'Lose weight' }, line: { hebrew: 'תפריט שמתאים לשעות ולטעם שלכם', english: 'A plan that fits your hours and your taste' } },
+  { goal: 'maintain', title: { hebrew: 'שמירה על משקל', english: 'Maintain' }, line: { hebrew: 'לאכול טוב, בלי לספור כל ביס', english: 'Eat well, without counting every bite' } },
 ];
 
 const WORLD = [
-  {
-    photo: P('world-salad'),
-    label: { hebrew: 'אפליקציה', english: 'App' },
-    name: { hebrew: 'BetterChoice לאייפון ולאנדרואיד', english: 'BetterChoice for iPhone and Android' },
-    kind: 'download',
-  },
-  {
-    photo: P('world-chopping'),
-    label: { hebrew: 'עם הדיאטנית שלכם', english: 'With your dietitian' },
-    name: { hebrew: 'קיבלתם קישור הזמנה? הכל מתחבר', english: 'Got an invite link? It all connects' },
-    kind: 'signup',
-  },
-  {
-    photo: P('world-yoga'),
-    label: { hebrew: 'אימונים', english: 'Training' },
-    name: { hebrew: 'שש תוכניות, בבית או בחדר כושר', english: 'Six plans, at home or at the gym' },
-    kind: 'download',
-  },
+  { scene: 'maintain', label: { hebrew: 'אפליקציה', english: 'App' }, name: { hebrew: 'BetterChoice לאייפון ולאנדרואיד', english: 'BetterChoice for iPhone and Android' }, kind: 'download' },
+  { scene: 'lose', label: { hebrew: 'עם הדיאטנית שלכם', english: 'With your dietitian' }, name: { hebrew: 'קיבלתם קישור הזמנה? הכל מתחבר', english: 'Got an invite link? It all connects' }, kind: 'signup' },
+  { scene: 'muscle', label: { hebrew: 'אימונים', english: 'Training' }, name: { hebrew: 'שש תוכניות, בבית או בחדר כושר', english: 'Six plans, at home or at the gym' }, kind: 'download' },
 ];
 
-function PhotoHero({ language }) {
+/* ---------- Hero: your hand, your table, the app ---------- */
+
+function HeldPhone({ language, screen = 'nutrition', className = '' }) {
+  return (
+    <div className={`relative ${className}`}>
+      <HandBack className="absolute -bottom-[60px] -end-[92px] w-[300px] sm:w-[340px] z-0 rtl:-scale-x-100" />
+      <motion.div className="relative z-10" style={{ rotate: -4 }}>
+        <PhoneFrame label={language === 'hebrew' ? 'אפליקציית BetterChoice' : 'BetterChoice app'}>
+          <AppScreen screen={screen} language={language} />
+        </PhoneFrame>
+      </motion.div>
+      <HandFront className="absolute -bottom-[70px] -start-[86px] w-[300px] sm:w-[340px] z-20 rtl:-scale-x-100" />
+    </div>
+  );
+}
+
+// Split hero: the promise on one side, the moment on the other (your table,
+// your plate, the app in your hand), so the scene is above the fold.
+function SceneHero({ language }) {
   const c = copy[language] || copy.english;
   const scrollToPrograms = () => document.getElementById('programs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   return (
-    <section className="relative isolate min-h-[calc(100svh-64px)] flex items-center justify-center overflow-hidden">
-      <img src={P('hero-cooking')} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover" style={{ objectPosition: '30% 40%' }} />
-      {/* flat scrim for legibility over the photo */}
-      <div className="absolute inset-0 -z-10 bg-[#0B1410]/55" aria-hidden="true" />
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={FADE} className="mx-auto max-w-4xl px-4 sm:px-6 py-20 text-center text-white">
-        <h1 className="font-choice font-medium text-[46px] sm:text-[76px] lg:text-[92px] leading-[1.02] tracking-[-0.02em]">
-          {c.title1}
-          <br />
-          <span className="text-[#3DDC6F]">{c.titleGreen}</span> {c.title2}
-        </h1>
-        <p className="mt-6 text-[18px] sm:text-[22px] font-semibold text-white/90">{c.triad}</p>
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-          <DownloadLink className={`${primaryButton} px-9 !font-medium font-choice text-[16px]`}>{c.cta}</DownloadLink>
-          <button type="button" onClick={scrollToPrograms} className={`inline-flex min-h-[48px] items-center rounded-full border border-white/70 px-8 text-[16px] font-semibold text-white hover:bg-white/10 ${focusClass}`}>
-            {c.more}
-          </button>
-        </div>
-        <p className="mt-4 text-[13px] font-semibold text-white/75">{c.note}</p>
-      </motion.div>
+    <section className="bg-bc-canvas">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-10 sm:pt-14 pb-12 grid lg:grid-cols-[1.05fr_1fr] gap-10 lg:gap-14 items-center lg:min-h-[calc(100svh-64px)]">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={FADE} className="text-center lg:text-start">
+          <h1 className="font-choice font-medium text-[44px] sm:text-[64px] xl:text-[72px] leading-[1.04] tracking-[-0.02em] text-bc-text">
+            {c.title1}
+            <br />
+            <span className="sm:whitespace-nowrap"><span className="text-bc-accent-text">{c.titleGreen}</span> {c.title2}</span>
+          </h1>
+          <p className="mt-5 text-[18px] sm:text-[22px] font-semibold text-bc-text/80 max-w-xl mx-auto lg:mx-0">{c.triad}</p>
+          <div className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+            <DownloadLink className={`${primaryButton} px-9 !font-medium font-choice text-[16px]`}>{c.cta}</DownloadLink>
+            <button type="button" onClick={scrollToPrograms} className={`inline-flex min-h-[48px] items-center rounded-full border border-bc-text/40 px-8 text-[16px] font-semibold text-bc-text hover:bg-bc-text/5 ${focusClass}`}>
+              {c.more}
+            </button>
+          </div>
+          <p className="mt-4 text-[13px] font-semibold text-bc-muted">{c.note}</p>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...FADE, delay: 0.15 }}
+          className="relative isolate overflow-hidden rounded-[40px] h-[460px] sm:h-[560px] lg:h-[620px] flex justify-center border border-bc-border">
+          <HeroTable className="absolute inset-0 -z-10 h-full w-full" />
+          <HeldPhone language={language} screen="nutrition" className="mt-10 sm:mt-12" />
+        </motion.div>
+      </div>
     </section>
   );
 }
+
+/* ---------- Programs: illustrated goal cards ---------- */
 
 function Programs({ language }) {
   const c = copy[language] || copy.english;
@@ -156,10 +137,10 @@ function Programs({ language }) {
     document.getElementById('try-it')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   return (
-    <section id="programs" className="scroll-mt-16 bg-bc-canvas">
+    <section id="programs" className="scroll-mt-16 bg-bc-canvas border-t border-bc-border">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
         <h2 className="mx-auto max-w-3xl text-center font-choice font-medium text-[34px] sm:text-[54px] leading-[1.06] text-bc-text">{c.programsTitle}</h2>
-        <div className="mt-12 flex flex-col gap-5">
+        <div className="mt-12 grid md:grid-cols-2 gap-5">
           {PROGRAMS.map((p, i) => (
             <motion.article
               key={p.goal}
@@ -167,22 +148,22 @@ function Programs({ language }) {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true, amount: 0.25 }}
               transition={FADE}
-              className="relative isolate overflow-hidden rounded-bc-card min-h-[340px] sm:min-h-[420px] flex items-end"
+              className="overflow-hidden rounded-bc-card border border-bc-border bg-bc-surface flex flex-col"
             >
-              <img src={p.photo} alt="" loading="lazy" className="absolute inset-0 -z-10 h-full w-full object-cover" style={{ objectPosition: p.pos }} />
-              {/* soft fade from the bottom so text stays readable without a hard edge */}
-              <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#0B1410]/80 via-[#0B1410]/30 to-transparent" aria-hidden="true" />
-              <div className="p-7 sm:p-10 text-white">
-                <p className="font-choice text-[15px] text-white/75 tabular-nums">{String(i + 1).padStart(2, '0')}</p>
-                <h3 className="mt-1 font-choice font-medium text-[30px] sm:text-[44px] leading-[1.05]">{pick(p.title, language)}</h3>
-                <p className="mt-2 text-[16px] sm:text-[20px] font-semibold text-white/90 max-w-xl">{pick(p.line, language)}</p>
-                <button
-                  type="button"
-                  onClick={() => start(p.goal)}
-                  className={`mt-6 inline-flex min-h-[44px] items-center rounded-full bg-white px-7 text-[15px] font-semibold text-[#13251D] hover:opacity-90 ${focusClass}`}
-                >
-                  {c.getStarted}
-                </button>
+              <GoalScene goal={p.goal} className="block w-full aspect-[3/2]" />
+              <div className="p-6 sm:p-8 flex flex-col gap-2 flex-1">
+                <p className="font-choice text-[15px] text-bc-muted tabular-nums">{String(i + 1).padStart(2, '0')}</p>
+                <h3 className="font-choice font-medium text-[28px] sm:text-[34px] leading-[1.1] text-bc-text">{pick(p.title, language)}</h3>
+                <p className="text-[16px] sm:text-[17px] font-semibold text-bc-muted">{pick(p.line, language)}</p>
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => start(p.goal)}
+                    className={`inline-flex min-h-[44px] items-center rounded-full bg-bc-text px-7 text-[15px] font-semibold text-bc-canvas hover:opacity-90 ${focusClass}`}
+                  >
+                    {c.getStarted}
+                  </button>
+                </div>
               </div>
             </motion.article>
           ))}
@@ -192,15 +173,17 @@ function Programs({ language }) {
   );
 }
 
+/* ---------- Scan teaser: the plate being read ---------- */
+
 function ScanSplit({ language }) {
   const c = copy[language] || copy.english;
   const Arrow = language === 'hebrew' ? ArrowLeft : ArrowRight;
   return (
-    <section className="bg-bc-band">
+    <section className="bg-bc-band border-t border-bc-border">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28 grid lg:grid-cols-2 gap-10 items-center">
         <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }} transition={FADE}
-          className="overflow-hidden rounded-bc-card aspect-[4/3]">
-          <img src={P('scan-phone')} alt="" loading="lazy" className="h-full w-full object-cover" />
+          className="overflow-hidden rounded-bc-card p-6 sm:p-10 flex justify-center" style={{ backgroundColor: 'var(--scene-bg)' }}>
+          <Stage step={1} language={language} />
         </motion.div>
         <div>
           <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{c.scanEyebrow}</p>
@@ -229,8 +212,8 @@ function World({ language }) {
           {WORLD.map((w) => {
             const inner = (
               <>
-                <div className="overflow-hidden rounded-[24px] aspect-[4/3]">
-                  <img src={w.photo} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                <div className="overflow-hidden rounded-[24px] border border-bc-border">
+                  <GoalScene goal={w.scene} className="block w-full aspect-[4/3] transition-transform duration-500 group-hover:scale-[1.03]" />
                 </div>
                 <p className="mt-4 text-[13px] font-bold text-bc-muted">{pick(w.label, language)}</p>
                 <p className="mt-1 font-choice font-medium text-[22px] text-bc-text">{pick(w.name, language)}</p>
@@ -249,15 +232,14 @@ function World({ language }) {
   );
 }
 
-function FinalPhoto({ language }) {
+function FinalScene({ language }) {
   const c = copy[language] || copy.english;
   return (
-    <section id="download" className="relative isolate overflow-hidden scroll-mt-20">
-      <img src={P('final-workout')} alt="" loading="lazy" className="absolute inset-0 -z-10 h-full w-full object-cover" style={{ objectPosition: '50% 45%' }} />
-      <div className="absolute inset-0 -z-10 bg-[#0B1410]/60" aria-hidden="true" />
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 py-28 sm:py-36 flex flex-col items-center text-center text-white">
-        <h2 className="font-choice font-medium text-[38px] sm:text-[60px] leading-[1.05]">{c.finalTitle}</h2>
-        <p className="mt-4 text-[17px] sm:text-[19px] font-semibold text-white/85">{c.finalBody}</p>
+    <section id="download" className="relative isolate overflow-hidden scroll-mt-20 border-t border-bc-border">
+      <HeroTable className="absolute inset-0 -z-10 h-full w-full" />
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 pt-20 pb-56 sm:pb-64 flex flex-col items-center text-center">
+        <h2 className="font-choice font-medium text-[38px] sm:text-[60px] leading-[1.05] text-bc-text">{c.finalTitle}</h2>
+        <p className="mt-4 text-[17px] sm:text-[19px] font-semibold text-bc-muted">{c.finalBody}</p>
         <StoreBadges className="mt-8 justify-center" />
       </div>
     </section>
@@ -269,15 +251,16 @@ export default function TestPage() {
   return (
     <MotionConfig reducedMotion="user">
       <MarketingShell className="theme-warm">
-        <PhotoHero language={language} />
+        <SceneHero language={language} />
         <Programs language={language} />
         <PlanStory language={language} />
+        <AppFeatures language={language} />
         <ScanSplit language={language} />
         <ScanStory language={language} />
         <World language={language} />
         <Pricing language={language} />
         <Faq language={language} />
-        <FinalPhoto language={language} />
+        <FinalScene language={language} />
         <StickyDownload language={language} />
       </MarketingShell>
     </MotionConfig>
