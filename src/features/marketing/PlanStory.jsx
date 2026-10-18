@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import StickerTile from './test/StickerTile';
 import { AnimatePresence, motion, useInView } from 'framer-motion';
 import { UserRound, UtensilsCrossed, Shuffle, RefreshCw, Check } from 'lucide-react';
 import { focusClass } from '../../components/brand/ui';
@@ -78,6 +79,32 @@ const MEAL_NAMES = [
 ];
 
 // Alternatives for lunch in the "swap" beat (illustrative).
+// Food stickers per example meal (main item first), used when the page asks for them.
+const MEAL_STICKERS = {
+  'Shakshuka with wholegrain bread': ['shakshuka-with-bread'],
+  'Baked chicken, rice and salad': ['white-rice', 'chicken-breast', 'cucumber'],
+  'Yogurt with fruit': ['yogurt', 'strawberries', 'blueberries'],
+  'Salmon, sweet potato and vegetables': ['salmon', 'sweet-potato', 'broccoli'],
+  'Three-egg omelette and cottage cheese': ['omelette', 'cottage-cheese'],
+  'Chicken breast, quinoa and vegetables': ['quinoa', 'chicken-breast', 'broccoli'],
+  'Protein yogurt with nuts': ['protein-yogurt', 'almonds', 'walnuts'],
+  'White fish and a big salad': ['vegetable-salad', 'white-fish-fillet'],
+  'Eggs, avocado and vegetables': ['boiled-egg', 'avocado', 'cherry-tomatoes'],
+  'Tuna salad with tahini': ['tuna-salad', 'tahini'],
+  'Cheese and almonds': ['yellow-cheese', 'almonds'],
+  'Baked schnitzel and roasted vegetables': ['schnitzel', 'zucchini', 'bell-pepper'],
+  'Butter omelette with cheese': ['omelette', 'butter', 'yellow-cheese'],
+  'Salmon with avocado': ['salmon', 'avocado'],
+  Walnuts: ['walnuts'],
+  'Steak and green vegetables': ['beef-steak', 'broccoli', 'green-beans'],
+  'Oats with banana': ['oats', 'banana'],
+  'Pasta with chicken and vegetables': ['pasta', 'chicken-breast', 'bell-pepper'],
+  'Pita with hummus': ['hummus', 'pita'],
+  'Rice, fish and vegetables': ['white-rice', 'white-fish-fillet', 'carrot'],
+  'Fish patties, bulgur and salad': ['bulgur', 'white-fish-fillet', 'cucumber'],
+  'Stir-fried tofu with rice': ['white-rice', 'tofu', 'broccoli'],
+};
+
 const SWAPS = [
   { hebrew: 'עוף בתנור, אורז וסלט', english: 'Baked chicken, rice and salad', on: true },
   { hebrew: 'קציצות דג, בורגול וסלט', english: 'Fish patties, bulgur and salad' },
@@ -155,7 +182,7 @@ function MacroBar({ split, language }) {
 
 /* ---------- The sticky plan card: one state per scroll beat ---------- */
 
-function PlanCard({ step, language }) {
+function PlanCard({ step, language, stickers }) {
   const he = language === 'hebrew';
   const meals = EXAMPLE_DAY.balanced;
   const target = step >= 3 ? 1980 : 2050;
@@ -195,6 +222,7 @@ function PlanCard({ step, language }) {
                   <li key={m.english} className="py-3">
                     <div className="flex items-center gap-3">
                       <span className="w-14 flex-none text-[12px] font-bold text-bc-muted tabular-nums" dir="ltr" style={{ textAlign: 'start' }}>{MEAL_NAMES[i].time}</span>
+                      {stickers ? <StickerTile slugs={MEAL_STICKERS[m.english]} size={44} delay={i * 0.12} /> : null}
                       <span className="flex-1 text-[15px] font-semibold text-bc-text">{pick(m, language)}</span>
                       {step >= 3 ? <Check size={16} aria-hidden="true" className="flex-none text-bc-accent-text" /> : null}
                     </div>
@@ -202,7 +230,8 @@ function PlanCard({ step, language }) {
                       {swapping ? (
                         <motion.ul initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={FADE} className="mt-3 ms-14 flex flex-col gap-2 overflow-hidden">
                           {SWAPS.map((s) => (
-                            <li key={s.english} className={`rounded-[14px] border px-3 py-2 text-[13px] font-semibold ${s.on ? 'border-bc-accent text-bc-text' : 'border-bc-border text-bc-muted'}`}>
+                            <li key={s.english} className={`flex items-center gap-2 rounded-[14px] border px-3 py-2 text-[13px] font-semibold ${s.on ? 'border-bc-accent text-bc-text' : 'border-bc-border text-bc-muted'}`}>
+                              {stickers ? <StickerTile slugs={MEAL_STICKERS[s.english]} size={32} /> : null}
                               {pick(s, language)}
                             </li>
                           ))}
@@ -262,7 +291,7 @@ function Chip({ selected, onClick, children }) {
   );
 }
 
-function TryIt({ language }) {
+function TryIt({ language, stickers }) {
   const he = language === 'hebrew';
   const [goal, setGoal] = useState('recomp');
   const [diet, setDiet] = useState('balanced');
@@ -314,6 +343,7 @@ function TryIt({ language }) {
             {EXAMPLE_DAY[diet].map((meal, i) => (
               <li key={meal.english} className="flex items-center justify-between gap-4 py-3.5">
                 <span className="text-[13px] font-bold text-bc-muted w-16 flex-none">{pick(MEAL_NAMES[i], language)}</span>
+                {stickers ? <StickerTile slugs={MEAL_STICKERS[meal.english]} size={52} delay={i * 0.1} /> : null}
                 <span className="flex-1 text-[15px] font-semibold text-bc-text">{pick(meal, language)}</span>
                 <span className="text-[12px] font-semibold text-bc-accent-text flex-none">{he ? '+ חלופות' : '+ swaps'}</span>
               </li>
@@ -325,7 +355,7 @@ function TryIt({ language }) {
   );
 }
 
-export default function PlanStory({ language }) {
+export default function PlanStory({ language, stickers = false }) {
   const he = language === 'hebrew';
   const [active, setActive] = useState(0);
 
@@ -370,12 +400,12 @@ export default function PlanStory({ language }) {
         />
         <div className="hidden lg:block">
           <div className="sticky top-16 h-[calc(100vh-64px)] flex items-center justify-center">
-            <PlanCard step={active} language={language} />
+            <PlanCard step={active} language={language} stickers={stickers} />
           </div>
         </div>
       </div>
 
-      <TryIt language={language} />
+      <TryIt language={language} stickers={stickers} />
       <p className="mx-auto max-w-6xl px-4 sm:px-6 pb-12 -mt-8 text-[12px] font-semibold text-bc-muted">
         {he ? 'הארוחות והמספרים כאן להמחשה. התפריט שלכם נבנה מהתשובות שלכם.' : 'Meals and numbers here are illustrative. Your plan is built from your answers.'}
       </p>

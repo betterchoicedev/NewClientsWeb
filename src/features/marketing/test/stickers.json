@@ -1,0 +1,718 @@
+{
+ "shakshuka-with-bread": {
+  "he": "שקשוקה עם לחם",
+  "en": "Shakshuka with bread",
+  "box": [
+   0.053,
+   0.227,
+   0.893,
+   0.545
+  ]
+ },
+ "white-rice": {
+  "he": "אורז לבן",
+  "en": "White rice",
+  "box": [
+   0.053,
+   0.053,
+   0.893,
+   0.893
+  ],
+  "vessel": true
+ },
+ "chicken-breast": {
+  "he": "חזה עוף",
+  "en": "Chicken breast",
+  "box": [
+   0.053,
+   0.156,
+   0.893,
+   0.686
+  ]
+ },
+ "cucumber": {
+  "he": "מלפפון",
+  "en": "Cucumber",
+  "box": [
+   0.055,
+   0.053,
+   0.889,
+   0.893
+  ]
+ },
+ "yogurt": {
+  "he": "יוגורט",
+  "en": "Yogurt",
+  "box": [
+   0.055,
+   0.055,
+   0.889,
+   0.891
+  ],
+  "vessel": true
+ },
+ "strawberries": {
+  "he": "תותים",
+  "en": "Strawberries",
+  "box": [
+   0.127,
+   0.053,
+   0.744,
+   0.893
+  ]
+ },
+ "blueberries": {
+  "he": "אוכמניות",
+  "en": "Blueberries",
+  "box": [
+   0.053,
+   0.102,
+   0.891,
+   0.795
+  ]
+ },
+ "salmon": {
+  "he": "סלמון",
+  "en": "Salmon",
+  "box": [
+   0.07,
+   0.053,
+   0.857,
+   0.893
+  ]
+ },
+ "sweet-potato": {
+  "he": "בטטה",
+  "en": "Sweet potato",
+  "box": [
+   0.055,
+   0.248,
+   0.891,
+   0.502
+  ]
+ },
+ "broccoli": {
+  "he": "ברוקולי",
+  "en": "Broccoli",
+  "box": [
+   0.078,
+   0.053,
+   0.842,
+   0.893
+  ]
+ },
+ "omelette": {
+  "he": "חביתה",
+  "en": "Omelette",
+  "box": [
+   0.053,
+   0.252,
+   0.893,
+   0.494
+  ]
+ },
+ "cottage-cheese": {
+  "he": "קוטג'",
+  "en": "Cottage cheese",
+  "box": [
+   0.053,
+   0.1,
+   0.893,
+   0.799
+  ],
+  "vessel": true
+ },
+ "quinoa": {
+  "he": "קינואה",
+  "en": "Quinoa",
+  "box": [
+   0.053,
+   0.127,
+   0.893,
+   0.744
+  ],
+  "vessel": true
+ },
+ "protein-yogurt": {
+  "he": "יוגורט חלבון",
+  "en": "Protein yogurt",
+  "box": [
+   0.064,
+   0.053,
+   0.869,
+   0.893
+  ],
+  "vessel": true
+ },
+ "almonds": {
+  "he": "שקדים",
+  "en": "Almonds",
+  "box": [
+   0.057,
+   0.053,
+   0.885,
+   0.893
+  ]
+ },
+ "walnuts": {
+  "he": "אגוזי מלך",
+  "en": "Walnuts",
+  "box": [
+   0.131,
+   0.053,
+   0.736,
+   0.893
+  ]
+ },
+ "vegetable-salad": {
+  "he": "סלט ירקות",
+  "en": "Vegetable salad",
+  "box": [
+   0.053,
+   0.09,
+   0.893,
+   0.818
+  ],
+  "vessel": true
+ },
+ "white-fish-fillet": {
+  "he": "פילה דג לבן",
+  "en": "White fish fillet",
+  "box": [
+   0.053,
+   0.201,
+   0.893,
+   0.596
+  ]
+ },
+ "boiled-egg": {
+  "he": "ביצה קשה",
+  "en": "Boiled egg",
+  "box": [
+   0.053,
+   0.137,
+   0.893,
+   0.725
+  ]
+ },
+ "avocado": {
+  "he": "אבוקדו",
+  "en": "Avocado",
+  "box": [
+   0.053,
+   0.141,
+   0.893,
+   0.717
+  ]
+ },
+ "cherry-tomatoes": {
+  "he": "עגבניות שרי",
+  "en": "Cherry tomatoes",
+  "box": [
+   0.053,
+   0.146,
+   0.893,
+   0.705
+  ]
+ },
+ "tuna-salad": {
+  "he": "סלט טונה",
+  "en": "Tuna salad",
+  "box": [
+   0.053,
+   0.104,
+   0.893,
+   0.791
+  ],
+  "vessel": true
+ },
+ "tahini": {
+  "he": "טחינה",
+  "en": "Tahini",
+  "box": [
+   0.053,
+   0.141,
+   0.893,
+   0.717
+  ],
+  "vessel": true
+ },
+ "yellow-cheese": {
+  "he": "גבינה צהובה",
+  "en": "Yellow cheese",
+  "box": [
+   0.053,
+   0.08,
+   0.893,
+   0.838
+  ]
+ },
+ "schnitzel": {
+  "he": "שניצל",
+  "en": "Schnitzel",
+  "box": [
+   0.053,
+   0.143,
+   0.893,
+   0.713
+  ]
+ },
+ "zucchini": {
+  "he": "קישוא",
+  "en": "Zucchini",
+  "box": [
+   0.053,
+   0.055,
+   0.893,
+   0.891
+  ]
+ },
+ "bell-pepper": {
+  "he": "פלפל",
+  "en": "Bell pepper",
+  "box": [
+   0.162,
+   0.053,
+   0.674,
+   0.893
+  ]
+ },
+ "butter": {
+  "he": "חמאה",
+  "en": "Butter",
+  "box": [
+   0.055,
+   0.17,
+   0.891,
+   0.658
+  ]
+ },
+ "beef-steak": {
+  "he": "סטייק בקר",
+  "en": "Beef steak",
+  "box": [
+   0.053,
+   0.223,
+   0.893,
+   0.553
+  ]
+ },
+ "green-beans": {
+  "he": "שעועית ירוקה",
+  "en": "Green beans",
+  "box": [
+   0.053,
+   0.053,
+   0.893,
+   0.893
+  ]
+ },
+ "oats": {
+  "he": "שיבולת שועל",
+  "en": "Oats",
+  "box": [
+   0.053,
+   0.141,
+   0.893,
+   0.717
+  ],
+  "vessel": true
+ },
+ "banana": {
+  "he": "בננה",
+  "en": "Banana",
+  "box": [
+   0.053,
+   0.15,
+   0.893,
+   0.697
+  ]
+ },
+ "pasta": {
+  "he": "פסטה",
+  "en": "Pasta",
+  "box": [
+   0.053,
+   0.131,
+   0.893,
+   0.736
+  ],
+  "vessel": true
+ },
+ "hummus": {
+  "he": "חומוס",
+  "en": "Hummus",
+  "box": [
+   0.053,
+   0.201,
+   0.893,
+   0.596
+  ],
+  "vessel": true
+ },
+ "pita": {
+  "he": "פיתה",
+  "en": "Pita",
+  "box": [
+   0.053,
+   0.18,
+   0.893,
+   0.639
+  ]
+ },
+ "carrot": {
+  "he": "גזר",
+  "en": "Carrot",
+  "box": [
+   0.352,
+   0.053,
+   0.295,
+   0.893
+  ]
+ },
+ "bulgur": {
+  "he": "בורגול",
+  "en": "Bulgur",
+  "box": [
+   0.053,
+   0.117,
+   0.893,
+   0.764
+  ],
+  "vessel": true
+ },
+ "tofu": {
+  "he": "טופו",
+  "en": "Tofu",
+  "box": [
+   0.053,
+   0.201,
+   0.891,
+   0.596
+  ]
+ },
+ "avocado-toast": {
+  "he": "טוסט אבוקדו",
+  "en": "Avocado toast",
+  "box": [
+   0.096,
+   0.053,
+   0.807,
+   0.893
+  ]
+ },
+ "poke-bowl": {
+  "he": "פוקה",
+  "en": "Poke bowl",
+  "box": [
+   0.053,
+   0.119,
+   0.893,
+   0.76
+  ],
+  "vessel": true
+ },
+ "shakshuka": {
+  "he": "שקשוקה",
+  "en": "Shakshuka",
+  "box": [
+   0.053,
+   0.26,
+   0.893,
+   0.479
+  ]
+ },
+ "yogurt-parfait": {
+  "he": "יוגורט עם גרנולה",
+  "en": "Yogurt parfait",
+  "box": [
+   0.146,
+   0.053,
+   0.705,
+   0.893
+  ],
+  "vessel": true
+ },
+ "falafel-in-pita": {
+  "he": "פלאפל בפיתה",
+  "en": "Falafel in pita",
+  "box": [
+   0.053,
+   0.074,
+   0.893,
+   0.85
+  ]
+ },
+ "sushi-roll-plate": {
+  "he": "מגש סושי",
+  "en": "Sushi roll plate",
+  "box": [
+   0.053,
+   0.162,
+   0.893,
+   0.674
+  ]
+ },
+ "hummus-plate": {
+  "he": "צלחת חומוס",
+  "en": "Hummus plate",
+  "box": [
+   0.053,
+   0.225,
+   0.893,
+   0.549
+  ],
+  "vessel": true
+ },
+ "greek-salad": {
+  "he": "סלט יווני",
+  "en": "Greek salad",
+  "box": [
+   0.053,
+   0.178,
+   0.893,
+   0.643
+  ],
+  "vessel": true
+ },
+ "overnight-oats": {
+  "he": "אוברנייט שיבולת",
+  "en": "Overnight oats",
+  "box": [
+   0.148,
+   0.053,
+   0.701,
+   0.893
+  ],
+  "vessel": true
+ },
+ "chicken-and-rice": {
+  "he": "עוף עם אורז",
+  "en": "Chicken and rice",
+  "box": [
+   0.053,
+   0.053,
+   0.893,
+   0.893
+  ],
+  "vessel": true
+ },
+ "grilled-salmon-plate": {
+  "he": "סלמון עם ירקות",
+  "en": "Grilled salmon plate",
+  "box": [
+   0.053,
+   0.053,
+   0.893,
+   0.893
+  ],
+  "vessel": true
+ },
+ "israeli-salad": {
+  "he": "סלט ישראלי",
+  "en": "Israeli salad",
+  "box": [
+   0.053,
+   0.143,
+   0.891,
+   0.713
+  ],
+  "vessel": true
+ },
+ "malawach": {
+  "he": "מלאווח",
+  "en": "Malawach",
+  "box": [
+   0.055,
+   0.053,
+   0.889,
+   0.893
+  ]
+ },
+ "sabich": {
+  "he": "סביח",
+  "en": "Sabich",
+  "box": [
+   0.053,
+   0.172,
+   0.893,
+   0.654
+  ]
+ },
+ "acai-bowl": {
+  "he": "אסאי",
+  "en": "Acai bowl",
+  "box": [
+   0.053,
+   0.115,
+   0.893,
+   0.768
+  ],
+  "vessel": true
+ },
+ "protein-shake": {
+  "he": "שייק חלבון",
+  "en": "Protein shake",
+  "box": [
+   0.256,
+   0.053,
+   0.486,
+   0.893
+  ]
+ },
+ "smoothie": {
+  "he": "שייק פירות",
+  "en": "Smoothie",
+  "box": [
+   0.182,
+   0.053,
+   0.635,
+   0.893
+  ],
+  "vessel": true
+ },
+ "watermelon": {
+  "he": "אבטיח",
+  "en": "Watermelon",
+  "box": [
+   0.053,
+   0.078,
+   0.893,
+   0.842
+  ]
+ },
+ "mango": {
+  "he": "מנגו",
+  "en": "Mango",
+  "box": [
+   0.139,
+   0.053,
+   0.721,
+   0.893
+  ]
+ },
+ "cappuccino": {
+  "he": "קפוצ'ינו",
+  "en": "Cappuccino",
+  "box": [
+   0.053,
+   0.127,
+   0.893,
+   0.744
+  ],
+  "vessel": true
+ },
+ "challah": {
+  "he": "חלה",
+  "en": "Challah",
+  "box": [
+   0.053,
+   0.072,
+   0.893,
+   0.854
+  ]
+ },
+ "majadra": {
+  "he": "מג'דרה",
+  "en": "Majadra",
+  "box": [
+   0.053,
+   0.229,
+   0.893,
+   0.541
+  ],
+  "vessel": true
+ },
+ "stuffed-peppers": {
+  "he": "פלפלים ממולאים",
+  "en": "Stuffed peppers",
+  "box": [
+   0.053,
+   0.131,
+   0.893,
+   0.736
+  ]
+ },
+ "schnitzel-in-pita": {
+  "he": "שניצל בפיתה",
+  "en": "Schnitzel in pita",
+  "box": [
+   0.055,
+   0.053,
+   0.889,
+   0.893
+  ]
+ },
+ "ramen": {
+  "he": "ראמן",
+  "en": "Ramen",
+  "box": [
+   0.053,
+   0.088,
+   0.893,
+   0.822
+  ],
+  "vessel": true
+ },
+ "caesar-salad": {
+  "he": "סלט קיסר",
+  "en": "Caesar salad",
+  "box": [
+   0.053,
+   0.094,
+   0.893,
+   0.811
+  ],
+  "vessel": true
+ },
+ "pancakes": {
+  "he": "פנקייק",
+  "en": "Pancakes",
+  "box": [
+   0.053,
+   0.105,
+   0.893,
+   0.787
+  ]
+ },
+ "dates": {
+  "he": "תמרים",
+  "en": "Dates",
+  "box": [
+   0.053,
+   0.117,
+   0.893,
+   0.764
+  ]
+ },
+ "pomegranate": {
+  "he": "רימון",
+  "en": "Pomegranate",
+  "box": [
+   0.098,
+   0.053,
+   0.803,
+   0.893
+  ]
+ },
+ "protein-bar": {
+  "he": "חטיף חלבון",
+  "en": "Protein bar",
+  "box": [
+   0.053,
+   0.26,
+   0.893,
+   0.479
+  ]
+ },
+ "dumbbell": {
+  "he": "משקולת",
+  "en": "Dumbbell",
+  "box": [
+   0.053,
+   0.225,
+   0.893,
+   0.549
+  ]
+ }
+}
