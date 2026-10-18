@@ -55,7 +55,7 @@ const METHODS = [
 
 export function LogMethods({ language }) {
   return (
-    <section className="border-t border-bc-border">
+    <section className="border-t border-bc-border bg-bc-band">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
         <SectionHead
           language={language}
@@ -95,7 +95,7 @@ export function Pricing({ language }) {
   const he = language === 'hebrew';
   const { trialDays, monthly, yearlyPerMonth, currency } = PRICING;
   return (
-    <section className="border-t border-bc-border">
+    <section className="border-t border-bc-border bg-bc-band">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28 grid lg:grid-cols-2 gap-10 items-center">
         <SectionHead
           language={language}

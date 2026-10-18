@@ -260,7 +260,7 @@ function Step({ step, index, language, onActive, active }) {
   const Icon = step.icon;
 
   return (
-    <div ref={ref} data-scan-step={index} className="py-14 lg:py-0 lg:min-h-[70vh] flex flex-col justify-center">
+    <div ref={ref} data-scan-step={index} className="py-14 lg:py-0 lg:min-h-[70vh] flex flex-col justify-center border-t border-bc-border first:border-0 lg:border-0">
       <p className={`flex items-center gap-2 text-[13px] font-bold transition-colors duration-[400ms] ${active ? 'text-bc-accent' : 'text-bc-muted'}`}>
         <span className="font-choice tabular-nums" dir="ltr">{String(index + 1).padStart(2, '0')}</span>
         <Icon size={16} aria-hidden="true" />

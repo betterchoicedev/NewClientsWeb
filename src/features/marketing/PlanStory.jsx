@@ -244,7 +244,7 @@ function Beat({ step, index, language, onActive, active }) {
   }, [centered, index, onActive]);
   const Icon = step.icon;
   return (
-    <div ref={ref} className="py-14 lg:py-0 lg:min-h-[70vh] flex flex-col justify-center">
+    <div ref={ref} className="py-14 lg:py-0 lg:min-h-[70vh] flex flex-col justify-center border-t border-bc-border first:border-0 lg:border-0">
       <p className={`flex items-center gap-2 text-[13px] font-bold transition-colors duration-[400ms] ${active ? 'text-bc-accent' : 'text-bc-muted'}`}>
         <span className="font-choice tabular-nums" dir="ltr">{String(index + 1).padStart(2, '0')}</span>
         <Icon size={16} aria-hidden="true" />
@@ -336,7 +336,7 @@ export default function PlanStory({ language }) {
   const [active, setActive] = useState(0);
 
   return (
-    <section aria-labelledby="plan-title" className="border-t border-bc-border">
+    <section aria-labelledby="plan-title" className="border-t border-bc-border bg-bc-band">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-28">
         <p className="text-[13px] font-bold text-bc-accent">{he ? 'מהרגע שמורידים' : 'From the moment you download'}</p>
         <h2 id="plan-title" className="mt-3 font-choice font-medium text-[36px] sm:text-[56px] leading-[1.04] text-bc-text max-w-4xl">

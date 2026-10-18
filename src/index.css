@@ -35,6 +35,7 @@
   --bc-wellness-well: rgba(124, 92, 214, 0.10);
   --bc-danger: #ef4444;
   --bc-danger-well: #fef2f2;
+  --bc-band: var(--bc-canvas);
   /* Green well, same alpha pattern as the wellness well; light uses surface2 */
   --bc-accent-well: #E8F5E9;
   /* NAV_THEME.macros */
@@ -80,18 +81,20 @@
   --bc-text: #0A0C0B;
   --bc-muted: #69716D;
   --bc-accent-well: rgba(31, 178, 90, 0.09);
+  --bc-band: #EEF1EF;   /* every other section: canvas < band < card, so sections read as separate */
 }
 
 .dark .theme-bold {
   --bc-canvas: #090B0A;
   --bc-surface: #131715;
   --bc-surface-2: #1C211E;
-  --bc-border: #262C29;
+  --bc-border: #2F3632;
   --bc-accent: #3DDC6F;
   --bc-on-accent: #04120A;
   --bc-text: #F6F8F7;
   --bc-muted: #98A19C;
   --bc-accent-well: rgba(61, 220, 111, 0.10);
+  --bc-band: #0F1311;
 }
 
 html,

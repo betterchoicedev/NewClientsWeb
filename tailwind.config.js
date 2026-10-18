@@ -11,6 +11,7 @@ module.exports = {
       colors: {
         bc: {
           canvas: 'var(--bc-canvas)',
+          band: 'var(--bc-band)',
           surface: 'var(--bc-surface)',
           surface2: 'var(--bc-surface-2)',
           border: 'var(--bc-border)',
