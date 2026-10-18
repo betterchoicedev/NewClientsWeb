@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion, useInView } from 'framer-motion';
-import { BookOpen, Dumbbell, Utensils } from 'lucide-react';
+import { BookOpen, Dumbbell, MessageCircle, Utensils } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import MarketingShell from '../components/brand/MarketingShell';
 import DownloadLink from '../components/brand/DownloadLink';
@@ -11,8 +11,6 @@ import { Mark, Wordmark } from '../components/brand/Logo';
 import { PhoneFrame, PhoneFootage } from '../features/marketing/PhoneFrame';
 import ScanStory from '../features/marketing/ScanStory';
 import { LogMethods, Pricing, Faq, StickyDownload } from '../features/marketing/Sections';
-import { Moments, BetiSection, DayLoop } from '../features/marketing/BetiStory';
-import { BETI_ART } from '../features/marketing/beti';
 
 // Motion rule from BetterApp/DESIGN.md: enter is a 400ms fade.
 const FADE = { duration: 0.4, ease: 'easeOut' };
@@ -69,28 +67,26 @@ const copy = {
   english: {
     title: 'This time, you don’t start over.',
     tagline: 'Make the better choice.',
-    subhead: 'Snap what you ate. Beti, your coach, shapes the next step around whatever today looked like.',
+    subhead: 'Snap what you ate, and get your next step, shaped around whatever today looked like.',
     features: 'Nutrition, training, and a coach, in one app.',
-    cta: 'Start your 3 free days',
-    heroBubble: '1,420 kcal left today. Aim for 35 g protein at lunch.',
-    platforms: 'For iPhone and Android',
+    cta: 'Download free',
+    platforms: '3 days free, cancel anytime. iPhone and Android.',
     heroPhone: 'BetterChoice app on iPhone',
     tourEyebrow: 'In the app',
-    tourTitle: 'Your plan. Your training. Your progress.',
+    tourTitle: 'Your plan. Your training. Your coach.',
     qr: 'On a computer? Scan to get the app.',
     finalBody: 'Start with 3 free days, on the App Store and Google Play.',
   },
   hebrew: {
     title: 'הפעם, לא מתחילים מחדש.',
     tagline: 'עשו את הבחירה הטובה יותר.',
-    subhead: 'צלמו את מה שאכלתם. Beti, המאמנת שלכם, מתאימה את הצעד הבא לכל יום שהיה לכם.',
+    subhead: 'צלמו את מה שאכלתם, וקבלו את הצעד הבא, מותאם ליום שהיה לכם.',
     features: 'תזונה, אימון ומאמן, באפליקציה אחת.',
-    cta: 'התחילו 3 ימים חינם',
-    heroBubble: 'נשארו לכם 1,420 קק״ל היום. לצהריים כוונו ל-35 ג׳ חלבון.',
-    platforms: 'לאייפון ולאנדרואיד',
+    cta: 'הורידו בחינם',
+    platforms: '3 ימים חינם, ביטול בכל רגע. לאייפון ולאנדרואיד.',
     heroPhone: 'אפליקציית BetterChoice באייפון',
     tourEyebrow: 'באפליקציה',
-    tourTitle: 'התוכנית שלכם. האימון שלכם. ההתקדמות שלכם.',
+    tourTitle: 'התוכנית שלכם. האימון שלכם. המאמנת שלכם.',
     qr: 'במחשב? סרקו כדי להוריד.',
     finalBody: 'מתחילים ב-3 ימים חינם, ב-App Store וב-Google Play.',
   },
@@ -115,6 +111,15 @@ const SECTIONS = [
     line: {
       english: 'Six plans for fat loss or muscle, two to four days a week. Log your weights as you train.',
       hebrew: 'שש תוכניות לחיטוב או לשריר, יומיים עד ארבעה בשבוע. רושמים משקלים תוך כדי אימון.',
+    },
+  },
+  {
+    key: 'chat',
+    icon: MessageCircle,
+    label: { english: 'Your coach', hebrew: 'המאמנת שלכם' },
+    line: {
+      english: 'A coach that knows your plan and your day, and answers with both in mind. By text or voice.',
+      hebrew: 'מאמנת שמכירה את התוכנית שלכם ואת היום שלכם, ועונה בהתאם. בכתיבה או בקול.',
     },
   },
   {
@@ -146,7 +151,7 @@ function Hero({ language }) {
 
   return (
     // Green well (not the canvas) so the dark app recordings don't melt into the page.
-    <section className="relative overflow-hidden" style={{ backgroundColor: 'var(--bc-accent-well)' }}>
+    <section className="relative overflow-hidden">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -202,16 +207,7 @@ function Hero({ language }) {
             title="Training"
             className="hidden sm:block mt-20 -mr-16 lg:-mr-10 rotate-[-7deg] scale-[0.88] origin-top"
           />
-          <div className="relative z-10">
-            <HeroPhone footageKey="hero" title="Nutrition" />
-            {/* Beti with a reply bubble: illustrative, matches the 1,420 kcal shown in the hero clip */}
-            <div className="absolute z-20 top-[150px] sm:top-[170px] left-[34%] sm:left-[80%] w-[180px] sm:w-[250px] flex flex-col items-start pointer-events-none" dir={isHebrew ? 'rtl' : 'ltr'}>
-              <p className="rounded-[20px] rounded-es-[6px] border border-bc-border bg-bc-surface px-4 py-2.5 text-[13px] sm:text-[14px] font-semibold text-bc-text leading-snug">
-                {c.heroBubble}
-              </p>
-              <img src={BETI_ART.wave} alt="" width="110" height="115" className="mt-1 h-[96px] sm:h-[115px] w-auto" />
-            </div>
-          </div>
+          <HeroPhone footageKey="hero" title="Nutrition" className="relative z-10" />
           <HeroPhone
             footageKey="diary"
             title="Analytics"
@@ -412,13 +408,10 @@ export default function HomePage() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <MarketingShell>
+      <MarketingShell className="theme-bold">
         <Hero language={language} />
-        <Moments language={language} />
         <ScanStory language={language} />
         <LogMethods language={language} />
-        <BetiSection language={language} />
-        <DayLoop language={language} />
         <ProductTour language={language} />
         <Pricing language={language} />
         <Faq language={language} />

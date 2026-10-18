@@ -104,10 +104,10 @@ function MarketingFooter() {
 }
 
 /** Public pages: wordmark, language, theme, Download, Log in. No feature navigation. */
-export default function MarketingShell({ children }) {
+export default function MarketingShell({ children, className = '' }) {
   const { direction } = useLanguage();
   return (
-    <div dir={direction} className="min-h-screen flex flex-col bg-bc-canvas text-bc-text font-system text-start">
+    <div dir={direction} className={`min-h-screen flex flex-col bg-bc-canvas text-bc-text font-system text-start ${className}`}>
       <MarketingHeader />
       <main className="flex-1">{children}</main>
       <MarketingFooter />

@@ -68,6 +68,32 @@
   --bc-fat-well: rgba(255, 149, 0, 0.15);
 }
 
+/* Landing page palette (bold): near-black canvas, white type, one vivid green
+   used sparingly. Scoped to the marketing page so account/auth keep the app tokens. */
+.theme-bold {
+  --bc-canvas: #FFFFFF;
+  --bc-surface: #F4F5F4;
+  --bc-surface-2: #EAECEB;
+  --bc-border: #E2E5E3;
+  --bc-accent: #1FB25A;
+  --bc-on-accent: #04120A;
+  --bc-text: #0A0C0B;
+  --bc-muted: #69716D;
+  --bc-accent-well: rgba(31, 178, 90, 0.09);
+}
+
+.dark .theme-bold {
+  --bc-canvas: #090B0A;
+  --bc-surface: #131715;
+  --bc-surface-2: #1C211E;
+  --bc-border: #262C29;
+  --bc-accent: #3DDC6F;
+  --bc-on-accent: #04120A;
+  --bc-text: #F6F8F7;
+  --bc-muted: #98A19C;
+  --bc-accent-well: rgba(61, 220, 111, 0.10);
+}
+
 html,
 body {
   margin: 0;

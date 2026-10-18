@@ -235,7 +235,7 @@ export function StickyDownload({ language }) {
       className={`sm:hidden fixed inset-x-0 bottom-0 z-30 border-t border-bc-border bg-bc-surface px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] transition-transform duration-300 ${show ? 'translate-y-0' : 'translate-y-full'}`}
     >
       <DownloadLink tabIndex={show ? 0 : -1} className={`${primaryButton} w-full !font-medium font-choice`}>
-        {language === 'hebrew' ? 'הורידו את האפליקציה' : 'Download the app'}
+        {language === 'hebrew' ? 'הורידו בחינם' : 'Download free'}
       </DownloadLink>
     </div>
   );
