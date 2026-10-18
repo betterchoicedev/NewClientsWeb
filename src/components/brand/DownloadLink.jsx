@@ -28,7 +28,17 @@ export default function DownloadLink({ className = '', children, ...rest }) {
       // Pages that mount sections lazily mount them all first, so the badges don't move mid-scroll.
       window.dispatchEvent(new Event('bc:reveal-all'));
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      setTimeout(() => target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }), 60);
+      setTimeout(() => {
+        target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+        // If content above settled while scrolling, land on the badges once the scroll ends.
+        const settle = () => {
+          window.removeEventListener('scrollend', settle);
+          const r = target.getBoundingClientRect();
+          if (r.top < 0 || r.bottom > window.innerHeight) target.scrollIntoView({ behavior: 'auto', block: 'center' });
+        };
+        window.addEventListener('scrollend', settle);
+        setTimeout(settle, 1600);
+      }, 60);
       window.history.replaceState(null, '', '#download');
     };
     return (
