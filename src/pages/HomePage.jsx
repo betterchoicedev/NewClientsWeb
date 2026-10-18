@@ -66,11 +66,10 @@ function MacroChips({ language }) {
 
 const copy = {
   english: {
-    title: 'Your own meal plan, from day one.',
-    eyebrow: 'This time, you don’t start over.',
-    tagline: 'Make the better choice.',
-    subhead: 'Download, answer a few questions, and get a meal plan built for your body, your goal and your taste. As you progress, your targets keep up with you.',
-    features: 'Plus a coach, training plans and a scan that logs meals for you.',
+    title: 'Make the better choice.',
+    finalTitle: 'Your plan is waiting.',
+    subhead: 'You’ve started over enough times. This time, someone stays with you.',
+    features: 'Nutrition, training, and a coach, in one app.',
     cta: 'Download free',
     platforms: '3 days free, cancel anytime. iPhone and Android.',
     heroPhone: 'BetterChoice app on iPhone',
@@ -80,11 +79,10 @@ const copy = {
     finalBody: 'Start with 3 free days, on the App Store and Google Play.',
   },
   hebrew: {
-    title: 'תפריט משלכם, מהיום הראשון.',
-    eyebrow: 'הפעם, לא מתחילים מחדש.',
-    tagline: 'עשו את הבחירה הטובה יותר.',
-    subhead: 'מורידים, עונים על כמה שאלות, ומקבלים תפריט שנבנה לגוף, למטרה ולטעם שלכם. כשאתם מתקדמים, היעדים מתעדכנים איתכם.',
-    features: 'ועוד: מאמנת אישית, תוכניות אימון וסריקה שרושמת ארוחות בשבילכם.',
+    title: 'עשו את הבחירה הטובה יותר.',
+    finalTitle: 'התפריט שלכם מחכה.',
+    subhead: 'התחלתם מחדש מספיק פעמים. הפעם, מישהו נשאר איתכם.',
+    features: 'תזונה, אימון ומאמן, באפליקציה אחת.',
     cta: 'הורידו בחינם',
     platforms: '3 ימים חינם, ביטול בכל רגע. לאייפון ולאנדרואיד.',
     heroPhone: 'אפליקציית BetterChoice באייפון',
@@ -152,23 +150,28 @@ function Hero({ language }) {
         transition={FADE}
         className="mx-auto max-w-4xl px-4 sm:px-6 pt-14 sm:pt-20 flex flex-col items-center text-center"
       >
-        <p className="mb-5 text-[15px] sm:text-[17px] font-bold text-bc-accent">{c.eyebrow}</p>
         <h1
           className={`text-bc-text text-[44px] sm:text-[72px] lg:text-[88px] leading-[1.02] tracking-[-0.02em] ${
             'font-choice font-medium'
           }`}
         >
           {isHebrew ? (
+            // Fixed two-line break: "עשו את" / "הבחירה הטובה יותר."
             <>
-              תפריט משלכם,
+              עשו את
               <br />
-              מהיום הראשון.
+              הבחירה הטובה יותר.
             </>
           ) : (
             <>
-              Your own meal plan,
-              <br />
-              from day one.
+              {/* "Make the" + the real wordmark. The logo's lettering replaces "better choice". */}
+              <span className="sr-only">{c.title}</span>
+              <span aria-hidden="true">
+                Make the{' '}
+                <span className="whitespace-nowrap">
+                  <Wordmark height="0.74em" decorative className="inline-block align-baseline" />.
+                </span>
+              </span>
             </>
           )}
         </h1>
@@ -361,22 +364,7 @@ function FinalDownload({ language }) {
           color="var(--bc-on-accent)"
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none"
         />
-        <h2 className="relative text-[32px] sm:text-[48px] leading-[1.1] font-choice font-medium">
-          {language === 'hebrew' ? (
-            c.tagline
-          ) : (
-            <>
-              <span className="sr-only">{c.tagline}</span>
-              {/* On the green band both halves of the wordmark take the band's dark ink. */}
-              <span aria-hidden="true" style={{ '--bc-text': 'var(--bc-on-accent)', '--bc-accent': 'var(--bc-on-accent)' }}>
-                Make the{' '}
-                <span className="whitespace-nowrap">
-                  <Wordmark height="0.74em" decorative className="inline-block align-baseline" />.
-                </span>
-              </span>
-            </>
-          )}
-        </h2>
+        <h2 className="relative text-[32px] sm:text-[48px] leading-[1.1] font-choice font-medium">{c.finalTitle}</h2>
         <p className="relative mt-3 text-[16px] sm:text-[17px] font-semibold opacity-75">{c.finalBody}</p>
         <StoreBadges className="relative mt-8 justify-center" />
         <div className="relative mt-8 hidden lg:flex items-center gap-4">
