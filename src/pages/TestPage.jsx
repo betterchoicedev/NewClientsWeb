@@ -109,13 +109,15 @@ function SceneHero({ language }) {
           <p className="mt-4 text-[13px] font-semibold text-bc-muted">{c.note}</p>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...FADE, delay: 0.15 }}
-          className="relative isolate overflow-hidden rounded-[40px] h-[480px] sm:h-[560px] lg:h-[620px] border border-bc-border">
-          <KitchenScene className="absolute inset-0 -z-10 h-full w-full" />
-          <motion.div className="absolute top-14 sm:top-12 right-[4%] sm:right-[7%] origin-top-right scale-[0.82] sm:scale-100" style={{ rotate: -4 }}>
+          className="relative isolate h-[420px] sm:h-[540px] lg:h-[600px] mb-16 sm:mb-10">
+          <div className="absolute inset-0 overflow-hidden rounded-[40px] border border-bc-border">
+            <KitchenScene className="absolute inset-0 h-full w-full" />
+          </div>
+          <div className="absolute -bottom-14 sm:-bottom-10 right-[2%] sm:-right-6 origin-bottom-right scale-[0.56] sm:scale-[0.62] -rotate-[5deg]">
             <PhoneFrame label={language === 'hebrew' ? 'אפליקציית BetterChoice' : 'BetterChoice app'} className="shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)]">
               <AppScreen screen="nutrition" language={language} />
             </PhoneFrame>
-          </motion.div>
+          </div>
         </motion.div>
       </div>
     </section>

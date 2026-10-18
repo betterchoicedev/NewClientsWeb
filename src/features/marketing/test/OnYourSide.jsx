@@ -241,7 +241,7 @@ export default function OnYourSide({ language }) {
             {/* the streak pops above the phone in the scene */}
             <motion.div
               className="absolute"
-              style={{ left: '60%', top: '38%' }}
+              style={{ left: '29%', top: '44%' }}
               initial={{ opacity: 0, y: 10 }}
               animate={sceneOn ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
               transition={{ type: 'spring', damping: 14, stiffness: 160 }}

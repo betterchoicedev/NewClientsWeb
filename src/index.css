@@ -132,6 +132,11 @@
   --scene-sofa: #9CB8A5;
   --scene-sofa-dark: #86A391;
   --scene-shade: rgba(60, 40, 20, 0.14);
+  --scene-orb: #FFE08A;
+  --scene-stars: 0;
+  --scene-beam: 1;
+  --scene-tile: #F6EFE4;
+  --scene-tile-line: rgba(31, 178, 90, 0.20);
 }
 
 /* Warm dark: brown-charcoal instead of the app's green-black, same green accent */
@@ -165,6 +170,11 @@
   --scene-sofa: #4F6B5A;
   --scene-sofa-dark: #42594B;
   --scene-shade: rgba(0, 0, 0, 0.35);
+  --scene-orb: #F4EEDC;
+  --scene-stars: 1;
+  --scene-beam: 0.22;
+  --scene-tile: #2A231C;
+  --scene-tile-line: rgba(61, 220, 111, 0.16);
 }
 
 /* Cookie banner (vanilla-cookieconsent) in the site's tokens */
@@ -694,4 +704,32 @@ code {
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, rgba(16, 185, 129, 0.7) 0%, rgba(5, 150, 105, 0.7) 100%);
   background-clip: padding-box;
+}
+
+/* /test scene motion: cheap CSS loops, off for reduced motion */
+.hx-rise { animation: hx-rise var(--dur, 7s) ease-in infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: center; opacity: 0; }
+@keyframes hx-rise { 0% { transform: translateY(0) rotate(0deg); opacity: 0; } 15% { opacity: var(--op, 0.8); } 100% { transform: translateY(var(--h, -140px)) rotate(90deg); opacity: 0; } }
+.hx-sway { animation: hx-sway var(--dur, 4s) ease-in-out infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: var(--o, 50% 100%); }
+@keyframes hx-sway { 0%, 100% { transform: rotate(var(--a1, -3deg)); } 50% { transform: rotate(var(--a2, 3deg)); } }
+.hx-steam { animation: hx-steam var(--dur, 3.2s) ease-out infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: 50% 100%; opacity: 0; }
+@keyframes hx-steam { 0% { transform: translateY(6px) scaleX(0.8); opacity: 0; } 30% { opacity: 0.55; } 100% { transform: translateY(-46px) scaleX(1.5); opacity: 0; } }
+.hx-flicker { animation: hx-flicker 1.3s ease-in-out infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes hx-flicker { 0%, 100% { transform: scale(1, 1); } 25% { transform: scale(0.88, 1.16); } 50% { transform: scale(1.06, 0.92); } 75% { transform: scale(0.95, 1.08); } }
+.hx-twinkle { animation: hx-twinkle var(--dur, 2.6s) ease-in-out infinite; animation-delay: var(--d, 0s); }
+@keyframes hx-twinkle { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+.hx-glow { animation: hx-glow var(--dur, 4s) ease-in-out infinite; }
+@keyframes hx-glow { 0%, 100% { opacity: calc(var(--scene-lamp) * 0.75); } 50% { opacity: var(--scene-lamp); } }
+.hx-bob { animation: hx-bob var(--dur, 3s) ease-in-out infinite; animation-delay: var(--d, 0s); }
+@keyframes hx-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(var(--a, -3px)); } }
+.hx-rot { animation: hx-rot var(--dur, 1s) ease-in-out infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: var(--o, 0% 0%); }
+@keyframes hx-rot { 0%, 100% { transform: rotate(0deg); } 40% { transform: rotate(var(--a, -10deg)); } 60% { transform: rotate(calc(var(--a, -10deg) * -0.2)); } }
+.hx-fly { animation: hx-fly var(--dur, 14s) linear infinite; animation-delay: var(--d, 0s); }
+@keyframes hx-fly { 0% { transform: translate(-80px, 10px); } 100% { transform: translate(380px, -40px); } }
+.hx-flap { animation: hx-flap 0.5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes hx-flap { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(-0.6); } }
+.hx-breathe { animation: hx-breathe 4.5s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes hx-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, 1.02); } }
+@media (prefers-reduced-motion: reduce) {
+  .hx-rise, .hx-sway, .hx-steam, .hx-flicker, .hx-twinkle, .hx-glow, .hx-bob, .hx-rot, .hx-fly, .hx-flap, .hx-breathe { animation: none !important; }
+  .hx-rise, .hx-steam { opacity: 0.5; }
 }

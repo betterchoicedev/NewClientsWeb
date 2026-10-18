@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { useSceneIds, SceneDefs, Finish, HexDust, hexD } from './Illustrations';
 
 // Flat vector "lifestyle" scenes for the /test page: everyday moments drawn in
 // the brand's flat style (hexagon weights, the scan-story food), no stock
@@ -57,12 +58,22 @@ function Float({ children, delay = 0, amount = 6 }) {
   );
 }
 
-function Table() {
+// Wall in hex tiles, light falling from the left, a wooden table, and a
+// framed hexagon on the wall.
+function Table({ ids }) {
   return (
     <g>
       <rect x="0" y="0" width="600" height="400" fill="var(--scene-bg, #F1E6D6)" />
+      <rect x="0" y="120" width="600" height="130" fill={`url(#${ids.tiles})`} />
+      <rect x="0" y="116" width="600" height="6" fill={C.woodDark} />
+      <path d="M0 0 L240 0 L420 250 L0 250 Z" fill={`url(#${ids.beam})`} style={{ opacity: 'var(--scene-beam)' }} />
+      <path d={hexD(540, 62, 30)} fill={C.woodDark} />
+      <path d={hexD(540, 62, 24)} fill="var(--scene-cloth)" />
+      <path d={hexD(540, 62, 11)} fill="none" stroke={C.green} strokeWidth="4" />
       <rect x="0" y="250" width="600" height="150" fill={C.wood} />
       <rect x="0" y="250" width="600" height="8" fill={C.woodDark} />
+      <rect x="0" y="258" width="600" height="3" fill="#FFFFFF" opacity="0.25" />
+      {[90, 230, 370, 510].map((x) => <rect key={x} x={x} y="262" width="2" height="138" fill="var(--scene-shade)" />)}
     </g>
   );
 }
@@ -70,6 +81,7 @@ function Table() {
 function PlateBalanced({ x = 250, y = 285, r = 105 }) {
   return (
     <g>
+      <ellipse cx={x} cy={y + 10} rx={r * 1.05} ry={r * 0.36} fill="var(--scene-shade)" />
       <ellipse cx={x} cy={y} rx={r} ry={r * 0.42} fill={C.plateRim} />
       <ellipse cx={x} cy={y - 4} rx={r * 0.86} ry={r * 0.34} fill={C.plate} />
       {/* rice */}
@@ -196,9 +208,12 @@ function Banana({ x, y }) {
 }
 
 export function GoalScene({ goal, className = '' }) {
+  const ids = useSceneIds();
   return (
     <svg viewBox="0 0 600 400" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <Table />
+      <SceneDefs ids={ids} />
+      <Table ids={ids} />
+      <HexDust items={[[120, 230, 4, 0], [200, 200, 3, 1.8], [300, 240, 5, 3.4], [380, 210, 3, 5], [470, 235, 4, 2.6]]} color="var(--bc-accent)" h={-150} />
       {goal === 'recomp' ? (
         <>
           <Float amount={8}>
@@ -234,6 +249,7 @@ export function GoalScene({ goal, className = '' }) {
           <Banana x={470} y={320} />
         </>
       ) : null}
+      <Finish ids={ids} w={600} h={400} />
     </svg>
   );
 }
