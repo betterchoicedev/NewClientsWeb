@@ -33,17 +33,8 @@ const STEPS = [
     icon: Ruler,
     label: { hebrew: 'מדידה', english: 'Measure' },
     line: {
-      hebrew: 'באייפון עם חיישן עומק, האפליקציה מודדת כמה האוכל מתרומם מעל הצלחת.',
-      english: 'On iPhones with a depth sensor, the app measures how high the food rises above the plate.',
-    },
-  },
-  {
-    key: 'calculate',
-    icon: Calculator,
-    label: { hebrew: 'חישוב', english: 'Calculate' },
-    line: {
-      hebrew: 'נפח × צפיפות = גרמים. את החשבון עושה הקוד, לא ה-AI.',
-      english: 'Volume × density = grams. The code does the math, not the AI.',
+      hebrew: 'באייפון עם חיישן עומק, האפליקציה מודדת כמה האוכל מתרומם מעל הצלחת, והופכת את זה לגרמים.',
+      english: 'On iPhones with a depth sensor, the app measures how high the food rises above the plate, and turns that into grams.',
     },
   },
   {
@@ -127,8 +118,9 @@ function Plate() {
 function Stage({ step, language }) {
   const c = pick(copy, language);
   const at = (k) => STEPS.findIndex((s) => s.key === k) <= step;
-  const showBoxes = at('identify') && step < 4;
-  const showDepth = at('measure') && step < 4;
+  const isPlan = STEPS[step].key === 'plan';
+  const showBoxes = at('identify') && !isPlan;
+  const showDepth = at('measure') && !isPlan;
   const showCalc = STEPS[step].key === 'calculate';
   const showCard = STEPS[step].key === 'plan';
   const rice = FOODS[0];
@@ -297,6 +289,20 @@ export default function ScanStory({ language }) {
           {c.title}
         </h2>
         <p className="mt-4 font-choice text-[18px] sm:text-[22px] text-bc-muted">{c.mechanism}</p>
+        <details className="group mt-5 max-w-2xl rounded-[20px] border border-bc-border bg-bc-surface px-5 py-4">
+          <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-[15px] font-bold text-bc-text">
+            {language === 'hebrew' ? 'איך זה עובד?' : 'How does it work?'}
+            <span className="text-bc-muted transition-transform duration-200 group-open:rotate-45" aria-hidden="true">+</span>
+          </summary>
+          <div className="mt-3 flex flex-col gap-2 text-[15px] font-semibold text-bc-muted leading-relaxed">
+            <p>{language === 'hebrew' ? 'ה-AI מזהה כל מזון וסופר יחידות. הוא לא מתבקש לנחש קלוריות.' : 'The AI identifies each food and counts pieces. It is never asked to guess calories.'}</p>
+            <p>
+              {language === 'hebrew' ? 'באייפון עם חיישן עומק, הקוד מוצא את משטח הצלחת, מודד את גובה האוכל ומחשב: ' : 'On iPhones with a depth sensor, the code finds the plate surface, measures the food’s height and computes: '}
+              <span className="font-choice text-bc-text" dir="ltr">volume × density = grams</span>.
+            </p>
+            <p>{language === 'hebrew' ? 'בשאר הטלפונים הכמות מוערכת מהתמונה ומגודל הצלחת. ובכל מקרה אפשר לתקן גרמים בלחיצה.' : 'On other phones the amount is estimated from the photo and the plate size. Either way, you can fix the grams in a tap.'}</p>
+          </div>
+        </details>
       </div>
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:grid lg:grid-cols-2 lg:gap-16">

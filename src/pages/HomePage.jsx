@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion, useInView } from 'framer-motion';
-import { BookOpen, Dumbbell, MessageCircle, Utensils } from 'lucide-react';
+import { BookOpen, Dumbbell, Utensils } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import MarketingShell from '../components/brand/MarketingShell';
 import DownloadLink from '../components/brand/DownloadLink';
@@ -11,6 +11,8 @@ import { Mark, Wordmark } from '../components/brand/Logo';
 import { PhoneFrame, PhoneFootage } from '../features/marketing/PhoneFrame';
 import ScanStory from '../features/marketing/ScanStory';
 import { LogMethods, Pricing, Faq, StickyDownload } from '../features/marketing/Sections';
+import { Moments, BetiSection, DayLoop } from '../features/marketing/BetiStory';
+import { BETI_ART } from '../features/marketing/beti';
 
 // Motion rule from BetterApp/DESIGN.md: enter is a 400ms fade.
 const FADE = { duration: 0.4, ease: 'easeOut' };
@@ -65,30 +67,32 @@ function MacroChips({ language }) {
 
 const copy = {
   english: {
-    title: 'Make the better choice.',
-    subhead: 'You’ve started over enough times. This time, someone stays with you.',
+    title: 'This time, you don’t start over.',
+    tagline: 'Make the better choice.',
+    subhead: 'Snap what you ate. Beti, your coach, shapes the next step around whatever today looked like.',
     features: 'Nutrition, training, and a coach, in one app.',
-    cta: 'Download the app',
+    cta: 'Start your 3 free days',
+    heroBubble: '1,420 kcal left today. Aim for 35 g protein at lunch.',
     platforms: 'For iPhone and Android',
     heroPhone: 'BetterChoice app on iPhone',
     tourEyebrow: 'In the app',
-    tourTitle: 'Everything around the scan, in one app.',
+    tourTitle: 'Your plan. Your training. Your progress.',
     qr: 'On a computer? Scan to get the app.',
-    finalTitle: 'Get the app.',
-    finalBody: 'Available on the App Store and Google Play.',
+    finalBody: 'Start with 3 free days, on the App Store and Google Play.',
   },
   hebrew: {
-    title: 'עשו את הבחירה הטובה יותר.',
-    subhead: 'התחלתם מחדש מספיק פעמים. הפעם, מישהו נשאר איתכם.',
+    title: 'הפעם, לא מתחילים מחדש.',
+    tagline: 'עשו את הבחירה הטובה יותר.',
+    subhead: 'צלמו את מה שאכלתם. Beti, המאמנת שלכם, מתאימה את הצעד הבא לכל יום שהיה לכם.',
     features: 'תזונה, אימון ומאמן, באפליקציה אחת.',
-    cta: 'הורידו את האפליקציה',
+    cta: 'התחילו 3 ימים חינם',
+    heroBubble: 'נשארו לכם 1,420 קק״ל היום. לצהריים כוונו ל-35 ג׳ חלבון.',
     platforms: 'לאייפון ולאנדרואיד',
     heroPhone: 'אפליקציית BetterChoice באייפון',
     tourEyebrow: 'באפליקציה',
-    tourTitle: 'כל מה שמסביב לסריקה, באפליקציה אחת.',
+    tourTitle: 'התוכנית שלכם. האימון שלכם. ההתקדמות שלכם.',
     qr: 'במחשב? סרקו כדי להוריד.',
-    finalTitle: 'הורידו את האפליקציה.',
-    finalBody: 'זמינה ב-App Store וב-Google Play.',
+    finalBody: 'מתחילים ב-3 ימים חינם, ב-App Store וב-Google Play.',
   },
 };
 
@@ -111,15 +115,6 @@ const SECTIONS = [
     line: {
       english: 'Six plans for fat loss or muscle, two to four days a week. Log your weights as you train.',
       hebrew: 'שש תוכניות לחיטוב או לשריר, יומיים עד ארבעה בשבוע. רושמים משקלים תוך כדי אימון.',
-    },
-  },
-  {
-    key: 'chat',
-    icon: MessageCircle,
-    label: { english: 'Beti, your coach', hebrew: 'Beti, המאמנת שלכם' },
-    line: {
-      english: 'Beti knows your plan and your day, and answers with both in mind. By text or voice.',
-      hebrew: 'Beti מכירה את התוכנית שלכם ואת היום שלכם, ועונה בהתאם. בכתיבה או בקול.',
     },
   },
   {
@@ -164,22 +159,16 @@ function Hero({ language }) {
           }`}
         >
           {isHebrew ? (
-            // Fixed two-line break: "עשו את" / "הבחירה הטובה יותר."
             <>
-              עשו את
+              הפעם,
               <br />
-              הבחירה הטובה יותר.
+              לא מתחילים מחדש.
             </>
           ) : (
             <>
-              {/* "Make the" + the real wordmark. The logo's lettering replaces "better choice". */}
-              <span className="sr-only">{c.title}</span>
-              <span aria-hidden="true">
-                Make the{' '}
-                <span className="whitespace-nowrap">
-                  <Wordmark height="0.74em" decorative className="inline-block align-baseline" />.
-                </span>
-              </span>
+              This time,
+              <br />
+              you don’t start over.
             </>
           )}
         </h1>
@@ -213,7 +202,16 @@ function Hero({ language }) {
             title="Training"
             className="hidden sm:block mt-20 -mr-16 lg:-mr-10 rotate-[-7deg] scale-[0.88] origin-top"
           />
-          <HeroPhone footageKey="hero" title="Nutrition" className="relative z-10" />
+          <div className="relative z-10">
+            <HeroPhone footageKey="hero" title="Nutrition" />
+            {/* Beti with a reply bubble: illustrative, matches the 1,420 kcal shown in the hero clip */}
+            <div className="absolute z-20 top-[150px] sm:top-[170px] left-[34%] sm:left-[80%] w-[180px] sm:w-[250px] flex flex-col items-start pointer-events-none" dir={isHebrew ? 'rtl' : 'ltr'}>
+              <p className="rounded-[20px] rounded-es-[6px] border border-bc-border bg-bc-surface px-4 py-2.5 text-[13px] sm:text-[14px] font-semibold text-bc-text leading-snug">
+                {c.heroBubble}
+              </p>
+              <img src={BETI_ART.wave} alt="" width="110" height="115" className="mt-1 h-[96px] sm:h-[115px] w-auto" />
+            </div>
+          </div>
           <HeroPhone
             footageKey="diary"
             title="Analytics"
@@ -372,8 +370,21 @@ function FinalDownload({ language }) {
           color="var(--bc-on-accent)"
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none"
         />
-        <h2 className={`relative text-[32px] sm:text-[44px] leading-[1.1] font-choice font-medium`}>
-          {c.finalTitle}
+        <h2 className="relative text-[32px] sm:text-[48px] leading-[1.1] font-choice font-medium">
+          {language === 'hebrew' ? (
+            c.tagline
+          ) : (
+            <>
+              <span className="sr-only">{c.tagline}</span>
+              {/* On the green band both halves of the wordmark take the band's dark ink. */}
+              <span aria-hidden="true" style={{ '--bc-text': 'var(--bc-on-accent)', '--bc-accent': 'var(--bc-on-accent)' }}>
+                Make the{' '}
+                <span className="whitespace-nowrap">
+                  <Wordmark height="0.74em" decorative className="inline-block align-baseline" />.
+                </span>
+              </span>
+            </>
+          )}
         </h2>
         <p className="relative mt-3 text-[16px] sm:text-[17px] font-semibold opacity-75">{c.finalBody}</p>
         <StoreBadges className="relative mt-8 justify-center" />
@@ -403,8 +414,11 @@ export default function HomePage() {
     <MotionConfig reducedMotion="user">
       <MarketingShell>
         <Hero language={language} />
+        <Moments language={language} />
         <ScanStory language={language} />
         <LogMethods language={language} />
+        <BetiSection language={language} />
+        <DayLoop language={language} />
         <ProductTour language={language} />
         <Pricing language={language} />
         <Faq language={language} />
