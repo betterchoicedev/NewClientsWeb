@@ -241,6 +241,7 @@ export default function OnYourSide({ language }) {
             {/* the streak pops above the phone in the scene */}
             <motion.div
               className="absolute"
+              aria-hidden="true"
               style={{ left: '29%', top: '44%' }}
               initial={{ opacity: 0, y: 10 }}
               animate={sceneOn ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
@@ -254,7 +255,7 @@ export default function OnYourSide({ language }) {
         <div className="mt-12 grid gap-5 md:grid-cols-3">
           {Cards.map((Card, i) => (
             <div key={c.cards[i][0]} className="rounded-bc-card border border-bc-border bg-bc-surface overflow-hidden">
-              <div className="h-[300px]" style={{ backgroundColor: APP.base, fontFamily: SYS }} dir={he ? 'rtl' : 'ltr'}>
+              <div className="h-[300px]" style={{ backgroundColor: APP.base, fontFamily: SYS }} dir={he ? 'rtl' : 'ltr'} aria-hidden="true">
                 <Card c={c} />
               </div>
               <div className="p-6">

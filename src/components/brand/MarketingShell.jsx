@@ -58,7 +58,7 @@ export function MarketingHeader() {
           <button
             type="button"
             onClick={toggleLanguage}
-            aria-label={c.otherLanguageLabel}
+            aria-label={`${c.otherLanguage} · ${c.otherLanguageLabel}`}
             lang={language === 'hebrew' ? 'en' : 'he'}
             className={`${textButton} px-2 sm:px-3`}
           >

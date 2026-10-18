@@ -171,7 +171,8 @@ function MacroBar({ split, language }) {
       </div>
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[13px] font-bold">
         {parts.map((p) => (
-          <span key={p.key} style={{ color: `var(--bc-${p.key})` }}>
+          <span key={p.key} className="inline-flex items-center gap-1.5 text-bc-text">
+            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(--bc-${p.key})` }} />
             {p.label} <span dir="ltr">{p.v}%</span>
           </span>
         ))}
@@ -195,7 +196,7 @@ function PlanCard({ step, language, stickers }) {
           <AnimatePresence mode="wait">
             <motion.p key={target} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FADE}
               className="mt-1 font-choice font-medium text-[26px] text-bc-text tabular-nums" dir="ltr" style={{ textAlign: 'start' }}>
-              {step === 0 ? '…' : `${target.toLocaleString('en-US')} kcal`}
+              {step === 0 ? '…' : `${target.toLocaleString('en-US')} ${he ? 'קק״ל' : 'kcal'}`}
             </motion.p>
           </AnimatePresence>
         </div>
@@ -291,6 +292,9 @@ function Chip({ selected, onClick, children }) {
   );
 }
 
+// Example daily targets per goal (same person, different goal). Illustrative.
+const GOAL_KCAL = { lose: 1750, recomp: 1950, maintain: 2150, muscle: 2450, gain: 2650 };
+
 function TryIt({ language, stickers }) {
   const he = language === 'hebrew';
   const [goal, setGoal] = useState('recomp');
@@ -335,6 +339,12 @@ function TryIt({ language, stickers }) {
           <div>
             <p className="text-[13px] font-semibold text-bc-muted">{he ? 'התפריט שלכם' : 'Your plan'}</p>
             <p className="mt-1 font-choice font-medium text-[22px] sm:text-[26px] text-bc-text">{pick(goalDef, language)} · {pick(dietDef, language)}</p>
+            <AnimatePresence mode="wait">
+              <motion.p key={goal} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FADE}
+                className="mt-1 text-[15px] font-bold text-bc-accent-text tabular-nums">
+                {GOAL_KCAL[goal].toLocaleString('en-US')} {he ? 'קק״ל ביום' : 'kcal a day'}
+              </motion.p>
+            </AnimatePresence>
           </div>
           </div>
         <div className="mt-6"><MacroBar split={dietDef.split} language={language} /></div>
@@ -345,7 +355,7 @@ function TryIt({ language, stickers }) {
                 <span className="text-[13px] font-bold text-bc-muted w-16 flex-none">{pick(MEAL_NAMES[i], language)}</span>
                 {stickers ? <StickerTile slugs={MEAL_STICKERS[meal.english]} size={52} delay={i * 0.1} /> : null}
                 <span className="flex-1 text-[15px] font-semibold text-bc-text">{pick(meal, language)}</span>
-                <span className="text-[12px] font-semibold text-bc-accent-text flex-none">{he ? '+ חלופות' : '+ swaps'}</span>
+                <span className="flex-none rounded-full border border-bc-border px-2 py-0.5 text-[12px] font-semibold text-bc-muted">{he ? '+ חלופות' : '+ swaps'}</span>
               </li>
             ))}
           </motion.ul>
@@ -393,7 +403,7 @@ export default function PlanStory({ language, stickers = false }) {
                   </p>
                   <p className="mt-2 font-choice font-medium text-[20px] leading-[1.3] text-bc-text">{pick(s.line, language)}</p>
                 </div>
-                <PlanCard step={i} language={language} />
+                <PlanCard step={i} language={language} stickers={stickers} />
               </div>
             );
           }}

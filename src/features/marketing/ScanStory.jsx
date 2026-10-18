@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { focusClass } from '../../components/brand/ui';
 import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
-import { Camera, ScanSearch, Ruler, Calculator, Target } from 'lucide-react';
+import { Camera, ScanSearch, Ruler, Target } from 'lucide-react';
 import { FOODS, TOTALS, PLAN, IS_EXAMPLE } from './scanExample';
 import MobileStory from './MobileStory';
 
@@ -123,7 +124,7 @@ export function Stage({ step, language }) {
   const isPlan = STEPS[step].key === 'plan';
   const showBoxes = at('identify') && !isPlan;
   const showDepth = at('measure') && !isPlan;
-  const showCalc = STEPS[step].key === 'calculate';
+  const showCalc = STEPS[step].key === 'measure';
   const showCard = STEPS[step].key === 'plan';
   const rice = FOODS[0];
 
@@ -157,8 +158,9 @@ export function Stage({ step, language }) {
               {reduceMotion ? (
                 <line x1="30" x2="370" y1="210" y2="210" stroke="var(--bc-accent)" strokeWidth="3" />
               ) : (
-                <motion.line x1="30" x2="370" y1="60" y2="60" stroke="var(--bc-accent)" strokeWidth="3"
-                  animate={{ y1: [60, 360, 60], y2: [60, 360, 60] }} transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }} />
+                <motion.g animate={{ y: [0, 300, 0] }} transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}>
+                  <line x1="30" x2="370" y1="60" y2="60" stroke="var(--bc-accent)" strokeWidth="3" />
+                </motion.g>
               )}
             </motion.g>
           )}
@@ -233,7 +235,7 @@ export function Stage({ step, language }) {
               </div>
               <div className="mt-2 flex gap-2 text-[12px] font-bold">
                 {[['p', 'protein'], ['c', 'carbs'], ['f', 'fat']].map(([k, v]) => (
-                  <span key={k} className="rounded-full px-2.5 py-1" style={{ backgroundColor: `var(--bc-${v}-well)`, color: `var(--bc-${v})` }}>
+                  <span key={k} className="rounded-full px-2.5 py-1" style={{ backgroundColor: `var(--bc-${v}-well)`, color: 'var(--bc-text)', boxShadow: `inset 0 0 0 1.5px var(--bc-${v})` }}>
                     {c[k]} <span dir="ltr">{fmt(TOTALS[k])}g</span>
                   </span>
                 ))}
@@ -287,7 +289,7 @@ export default function ScanStory({ language }) {
         </h2>
         <p className="mt-4 font-choice text-[18px] sm:text-[22px] text-bc-muted">{c.mechanism}</p>
         <details className="group mt-5 max-w-2xl rounded-[20px] border border-bc-border bg-bc-surface px-5 py-4">
-          <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-[15px] font-bold text-bc-text">
+          <summary className={`cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-3 rounded text-[15px] font-bold text-bc-text ${focusClass}`}>
             {language === 'hebrew' ? 'איך זה עובד?' : 'How does it work?'}
             <span className="text-bc-muted transition-transform duration-200 group-open:rotate-45" aria-hidden="true">+</span>
           </summary>

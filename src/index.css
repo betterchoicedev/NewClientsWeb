@@ -744,3 +744,14 @@ code {
 .hx-night { display: none; }
 .dark .hx-day { display: none; }
 .dark .hx-night { display: contents; }
+
+/* /test scenes: loops stop while offscreen; marquee pause button */
+[data-paused="true"] [class*="hx-"] { animation-play-state: paused !important; }
+.hx-marquee-paused .hx-marquee { animation-play-state: paused !important; }
+.aw-shift-up .aw-launcher { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); }
+/* while the cookie bar is open it covers the bottom of the screen: keep the accessibility button reachable at the top */
+html.show--consent .aw-launcher { top: calc(76px + env(safe-area-inset-top, 0px)); bottom: auto; }
+@media (prefers-reduced-motion: reduce) {
+  .hx-marquee-toggle { display: none; }
+  .hx-marquee-mask { overflow-x: auto !important; -webkit-mask-image: none; mask-image: none; }
+}

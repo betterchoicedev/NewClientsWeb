@@ -43,6 +43,7 @@ const T = {
     ex: [['מתח (משקל גוף או עזרה)', '4 סטים  /  8-10 חזרות'], ['חתירה בכבל בישיבה', '4 סטים  /  10-12 חזרות'], ['פייס פולס', '3 סטים  /  12-15 חזרות'], ['כפיפת מרפקים במשקולות', '4 סטים  /  10 חזרות']],
     chat: 'צ׳אט AI', ask: 'מה כדאי לי לאכול בארוחה הבאה?',
     reply: 'נשארו לך היום 900 קק״ל ו-48 ג׳ חלבון. משהו עשיר בחלבון יסגור את היום: דג על הגריל (150 ג׳), קינואה (100 ג׳) וסלט ירוק.',
+    breakdown: 'פירוט תזונתי', bProtein: 'חלבון', bCarbs: 'פחמימות', bFat: 'שומן',
     thinking: 'חושב...', notMedical: 'זו אינה עצה רפואית', type: 'הקלידי הודעה...',
     target: 'סה״כ קלוריות יעד', kcalUnit: 'קק״ל', ranges: ['ראשון–חמישי', 'שישי', 'שבת'],
     planMeals: [
@@ -65,6 +66,7 @@ const T = {
     ex: [['Pull-ups (Weighted or Assisted)', '4 SETS  /  8-10 REPS'], ['Seated Cable Row', '4 SETS  /  10-12 REPS'], ['Face Pulls', '3 SETS  /  12-15 REPS'], ['Dumbbell Curls', '4 SETS  /  10 REPS']],
     chat: 'AI Chat', ask: 'What should I eat for my next meal?',
     reply: 'You have 900 kcal and 48 g of protein left today. Something protein-rich closes the day: grilled fish (150 g), quinoa (100 g) and a green salad.',
+    breakdown: 'NUTRITIONAL BREAKDOWN', bProtein: 'Protein', bCarbs: 'Carbs', bFat: 'Fat',
     thinking: 'ANALYZING...', notMedical: 'Not medical advice', type: 'Type a message...',
     target: 'Daily Calorie Target', kcalUnit: 'kcal', ranges: ['Sunday–Thursday', 'Friday', 'Saturday'],
     planMeals: [
@@ -349,13 +351,13 @@ function Chat({ t, he }) {
             <Avatar />
             <div style={{ maxWidth: '90%', backgroundColor: APP.s1, border: `1px solid ${APP.border}`, borderRadius: 20, borderEndStartRadius: 8, padding: '12px 14px' }}>
               <p style={{ margin: 0, fontSize: 15, lineHeight: '22px' }}>{t.reply}</p>
-              <div style={{ marginTop: 10, backgroundColor: APP.s1, border: `1px solid ${APP.border}`, borderRadius: 14, padding: 12 }} dir="ltr">
+              <div style={{ marginTop: 10, backgroundColor: APP.s1, border: `1px solid ${APP.border}`, borderRadius: 14, padding: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: APP.muted }}>NUTRITIONAL BREAKDOWN</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: APP.muted }}>{t.breakdown}</span>
                   <span style={{ fontSize: 15, fontWeight: 800 }}>520 <span style={{ fontSize: 11, fontWeight: 600 }}>kcal</span></span>
                 </div>
                 <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
-                  {[['Protein', 42], ['Carbs', 45], ['Fat', 14]].map(([l, v], i) => (
+                  {[[t.bProtein, 42], [t.bCarbs, 45], [t.bFat, 14]].map(([l, v], i) => (
                     <React.Fragment key={l}>
                       {i ? <span style={{ width: 1, height: 20, backgroundColor: APP.border }} /> : null}
                       <span style={{ textAlign: 'center' }}>

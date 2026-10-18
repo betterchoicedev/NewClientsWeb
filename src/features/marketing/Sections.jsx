@@ -242,6 +242,12 @@ export function StickyDownload({ language }) {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+  // On phones the bar sits where the accessibility button is: lift the button while the bar shows.
+  useEffect(() => {
+    const phone = window.matchMedia?.('(max-width: 639px)').matches;
+    document.documentElement.classList.toggle('aw-shift-up', !!(show && phone));
+    return () => document.documentElement.classList.remove('aw-shift-up');
+  }, [show]);
 
   return (
     <div

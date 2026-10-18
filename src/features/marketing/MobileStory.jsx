@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { focusClass } from '../../components/brand/ui';
 
 // Below lg, a scroll story becomes one swipeable row (step text + its card per
 // slide) instead of the same card stacked four times. Desktop keeps the sticky
@@ -31,7 +32,6 @@ export default function MobileStory({ steps, renderSlide, language, className = 
       <div
         ref={rowRef}
         className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        aria-roledescription="carousel"
       >
         {steps.map((step, i) => (
           <div
@@ -39,23 +39,22 @@ export default function MobileStory({ steps, renderSlide, language, className = 
             ref={(el) => (slideRefs.current[i] = el)}
             data-index={i}
             className="w-[88%] flex-none snap-center"
-            aria-roledescription="slide"
-            aria-label={`${i + 1} / ${steps.length}`}
+            role="group"
+            aria-label={he ? `שלב ${i + 1} מתוך ${steps.length}` : `Step ${i + 1} of ${steps.length}`}
           >
             {renderSlide(step, i, i === active)}
           </div>
         ))}
       </div>
-      <div className="mt-4 flex items-center justify-center gap-2" role="tablist" aria-label={he ? 'שלבים' : 'Steps'}>
+      <div className="mt-4 flex items-center justify-center gap-1">
         {steps.map((_, i) => (
           <button
             key={i}
             type="button"
-            role="tab"
-            aria-selected={i === active}
-            aria-label={`${i + 1}`}
+            aria-current={i === active ? 'step' : undefined}
+            aria-label={he ? `שלב ${i + 1} מתוך ${steps.length}` : `Step ${i + 1} of ${steps.length}`}
             onClick={() => goTo(i)}
-            className="flex h-11 w-8 items-center justify-center"
+            className={`flex h-11 w-11 items-center justify-center rounded-full ${focusClass}`}
           >
             <span
               className="h-1.5 rounded-full transition-all duration-300"

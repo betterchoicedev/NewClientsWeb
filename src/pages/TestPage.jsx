@@ -25,6 +25,7 @@ import { KitchenScene, DinnerScene } from '../features/marketing/test/Illustrati
 // light and dark. The production landing (/) is untouched.
 
 const FADE = { duration: 0.5, ease: 'easeOut' };
+const smooth = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
 const pick = (o, language) => (o ? o[language] || o.english : '');
 
 const copy = {
@@ -37,13 +38,14 @@ const copy = {
     more: 'איך זה עובד',
     note: '3 ימים חינם, ביטול בכל רגע.',
     programsTitle: 'בחרו מטרה. התפריט נבנה סביבה.',
-    getStarted: 'התחילו',
+    getStarted: 'לתפריט לדוגמה',
     scanEyebrow: 'סריקה',
     scanTitle: 'צלמו. זה רשום.',
     scanBody: 'הסריקה מזהה כל מזון, מודדת ומחשבת. אתם רק אוכלים.',
     scanLink: 'איך הסריקה עובדת',
     worldTitle: 'הכירו את העולם של BetterChoice',
-    learnMore: 'למידע נוסף',
+    joinInvite: 'הצטרפו עם ההזמנה',
+    toDownload: 'להורדה',
     finalTitle: 'התפריט שלכם מחכה.',
     finalBody: 'מתחילים ב-3 ימים חינם, ב-App Store וב-Google Play.',
     dinnerCaption: 'גם בארוחת שישי. התפריט מתאים לחיים, לא להפך.',
@@ -57,13 +59,14 @@ const copy = {
     more: 'How it works',
     note: '3 days free, cancel anytime.',
     programsTitle: 'Pick a goal. The plan is built around it.',
-    getStarted: 'Get started',
+    getStarted: 'See a sample plan',
     scanEyebrow: 'Scan',
     scanTitle: 'Snap it. It’s logged.',
     scanBody: 'The scan identifies every food, measures and does the math. You just eat.',
     scanLink: 'How the scan works',
     worldTitle: 'Meet the BetterChoice world',
-    learnMore: 'Learn more',
+    joinInvite: 'Join with your invite',
+    toDownload: 'Download',
     finalTitle: 'Your plan is waiting.',
     finalBody: 'Start with 3 free days, on the App Store and Google Play.',
     dinnerCaption: 'Friday dinner included. The plan fits your life, not the other way around.',
@@ -85,31 +88,52 @@ const WORLD = [
   { scene: 'muscle', label: { hebrew: 'אימונים', english: 'Training' }, name: { hebrew: 'שש תוכניות, בבית או בחדר כושר', english: 'Six plans, at home or at the gym' }, kind: 'download' },
 ];
 
+/**
+ * Mounts a heavy section only when it comes near the screen (the page is long and
+ * React drawing all of it at load blocked the main thread). Reserves roughly its
+ * height meanwhile. Sections other parts link into (plan story, download) are not deferred.
+ */
+function Deferred({ children, minHeight }) {
+  const ref = React.useRef(null);
+  const [show, setShow] = React.useState(typeof IntersectionObserver === 'undefined');
+  React.useEffect(() => {
+    if (show) return undefined;
+    const el = ref.current;
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setShow(true); }, { rootMargin: '800px 0px' });
+    io.observe(el);
+    // An in-page jump (download, scan) mounts everything first so the target doesn't move mid-scroll.
+    const all = () => setShow(true);
+    window.addEventListener('bc:reveal-all', all);
+    return () => { io.disconnect(); window.removeEventListener('bc:reveal-all', all); };
+  }, [show]);
+  return show ? children : <div ref={ref} aria-hidden="true" style={{ minHeight }} />;
+}
+
 /* ---------- Hero: your hand, your table, the app ---------- */
 
 // Split hero: the promise on one side, the moment on the other (your table,
 // your plate, the app in your hand), so the scene is above the fold.
 function SceneHero({ language }) {
   const c = copy[language] || copy.english;
-  const scrollToPrograms = () => document.getElementById('programs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const scrollToPrograms = () => document.getElementById('programs')?.scrollIntoView({ behavior: smooth(), block: 'start' });
   return (
-    <section className="bg-bc-canvas overflow-x-clip">
+    <section className="bg-bc-canvas overflow-x-hidden">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-10 sm:pt-14 pb-12 grid lg:grid-cols-[0.95fr_1.1fr] gap-10 lg:gap-14 items-center lg:min-h-[calc(100svh-64px)]">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={FADE} className="text-center lg:text-start">
+        <div className="text-center lg:text-start">
           <h1 className="font-choice font-medium text-[44px] sm:text-[64px] xl:text-[72px] leading-[1.04] tracking-[-0.02em] text-bc-text">
             {c.title1}
             <br />
             <span className="sm:whitespace-nowrap"><span className="text-bc-accent-text">{c.titleGreen}</span> {c.title2}</span>
           </h1>
-          <p className="mt-5 text-[18px] sm:text-[22px] font-semibold text-bc-text/80 max-w-xl mx-auto lg:mx-0">{c.triad}</p>
+          <p className="mt-5 text-[18px] sm:text-[22px] font-semibold text-bc-text opacity-80 max-w-xl mx-auto lg:mx-0">{c.triad}</p>
           <div className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-3">
             <DownloadLink className={`${primaryButton} px-9 !font-medium font-choice text-[16px]`}>{c.cta}</DownloadLink>
-            <button type="button" onClick={scrollToPrograms} className={`inline-flex min-h-[48px] items-center rounded-full border border-bc-text/40 px-8 text-[16px] font-semibold text-bc-text hover:bg-bc-text/5 ${focusClass}`}>
+            <button type="button" onClick={scrollToPrograms} className={`inline-flex min-h-[48px] items-center rounded-full border border-[color-mix(in_srgb,var(--bc-text)_40%,transparent)] px-8 text-[16px] font-semibold text-bc-text hover:bg-[color-mix(in_srgb,var(--bc-text)_6%,transparent)] ${focusClass}`}>
               {c.more}
             </button>
           </div>
           <p className="mt-4 text-[13px] font-semibold text-bc-muted">{c.note}</p>
-        </motion.div>
+        </div>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...FADE, delay: 0.15 }}
           className="relative isolate h-[420px] sm:h-[540px] lg:h-[600px] mb-16 sm:mb-10">
           <div className="absolute inset-0 overflow-hidden rounded-[40px] border border-bc-border">
@@ -143,7 +167,7 @@ function Programs({ language }) {
   const c = copy[language] || copy.english;
   const start = (goal) => {
     window.dispatchEvent(new CustomEvent('bc:pick-goal', { detail: goal }));
-    document.getElementById('try-it')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('try-it')?.scrollIntoView({ behavior: smooth(), block: 'start' });
   };
   return (
     <section id="programs" className="scroll-mt-16 bg-bc-canvas border-t border-bc-border">
@@ -151,12 +175,8 @@ function Programs({ language }) {
         <h2 className="mx-auto max-w-3xl text-center font-choice font-medium text-[34px] sm:text-[54px] leading-[1.06] text-bc-text">{c.programsTitle}</h2>
         <div className="mt-12 grid md:grid-cols-2 gap-5">
           {PROGRAMS.map((p, i) => (
-            <motion.article
+            <article
               key={p.goal}
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true, amount: 0.25 }}
-              transition={FADE}
               className="overflow-hidden rounded-bc-card border border-bc-border bg-bc-surface flex flex-col"
             >
               <GoalScene goal={p.goal} className="block w-full aspect-[3/2]" />
@@ -168,13 +188,13 @@ function Programs({ language }) {
                   <button
                     type="button"
                     onClick={() => start(p.goal)}
-                    className={`inline-flex min-h-[44px] items-center rounded-full bg-bc-text px-7 text-[15px] font-semibold text-bc-canvas hover:opacity-90 ${focusClass}`}
+                    className={`inline-flex min-h-[44px] items-center rounded-full border border-[color-mix(in_srgb,var(--bc-text)_40%,transparent)] px-6 text-[15px] font-semibold text-bc-text hover:bg-[color-mix(in_srgb,var(--bc-text)_6%,transparent)] ${focusClass}`}
                   >
                     {c.getStarted}
                   </button>
                 </div>
               </div>
-            </motion.article>
+            </article>
           ))}
         </div>
       </div>
@@ -200,7 +220,7 @@ function ScanSplit({ language }) {
           <p className="mt-4 text-[18px] sm:text-[20px] font-semibold text-bc-muted max-w-lg">{c.scanBody}</p>
           <button
             type="button"
-            onClick={() => document.getElementById('scan-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            onClick={() => { window.dispatchEvent(new Event('bc:reveal-all')); setTimeout(() => document.getElementById('scan-title')?.scrollIntoView({ behavior: smooth(), block: 'start' }), 60); }}
             className={`mt-6 inline-flex min-h-[44px] items-center gap-2 text-[16px] font-bold text-bc-text underline underline-offset-4 decoration-bc-border hover:decoration-bc-accent rounded ${focusClass}`}
           >
             {c.scanLink} <Arrow size={18} aria-hidden="true" />
@@ -226,7 +246,7 @@ function World({ language }) {
                 </div>
                 <p className="mt-4 text-[13px] font-bold text-bc-muted">{pick(w.label, language)}</p>
                 <p className="mt-1 font-choice font-medium text-[22px] text-bc-text">{pick(w.name, language)}</p>
-                <span className="mt-2 inline-flex text-[15px] font-semibold text-bc-text underline underline-offset-4 decoration-bc-border group-hover:decoration-bc-accent">{c.learnMore}</span>
+                <span className="mt-2 inline-flex text-[15px] font-semibold text-bc-text underline underline-offset-4 decoration-bc-border group-hover:decoration-bc-accent">{w.kind === 'signup' ? c.joinInvite : c.toDownload}</span>
               </>
             );
             return w.kind === 'signup' ? (
@@ -260,20 +280,28 @@ function FinalScene({ language }) {
 
 export default function TestPage() {
   const { language } = useLanguage();
+  // A test page: keep it out of search results (the home page stays the indexed landing).
+  React.useEffect(() => {
+    const meta = document.createElement('meta');
+    meta.name = 'robots';
+    meta.content = 'noindex';
+    document.head.appendChild(meta);
+    return () => meta.remove();
+  }, []);
   return (
     <MotionConfig reducedMotion="user">
       <MarketingShell className="theme-warm">
         <SceneHero language={language} />
         <Programs language={language} />
         <PlanStory language={language} stickers />
-        <FoodBand language={language} />
-        <AppFeatures language={language} />
-        <OnYourSide language={language} />
-        <ScanSplit language={language} />
-        <ScanStory language={language} />
-        <World language={language} />
-        <Pricing language={language} />
-        <Faq language={language} />
+        <Deferred minHeight="560px"><FoodBand language={language} /></Deferred>
+        <Deferred minHeight="900px"><AppFeatures language={language} /></Deferred>
+        <Deferred minHeight="1200px"><OnYourSide language={language} /></Deferred>
+        <Deferred minHeight="700px"><ScanSplit language={language} /></Deferred>
+        <Deferred minHeight="1800px"><ScanStory language={language} /></Deferred>
+        <Deferred minHeight="700px"><World language={language} /></Deferred>
+        <Deferred minHeight="700px"><Pricing language={language} /></Deferred>
+        <Deferred minHeight="700px"><Faq language={language} /></Deferred>
         <FinalScene language={language} />
         <StickyDownload language={language} />
       </MarketingShell>

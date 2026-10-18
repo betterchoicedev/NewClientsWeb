@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Pause, Play } from 'lucide-react';
+import { focusClass } from '../../../components/brand/ui';
 import StickerTile, { stickerName } from './StickerTile';
 
 // "Real food, every kitchen": two rows of food stickers (from the dietitian
@@ -37,11 +39,22 @@ function Row({ items, language, reverse }) {
 
 export default function FoodBand({ language }) {
   const c = copy[language] || copy.english;
+  const he = language === 'hebrew';
+  const [paused, setPaused] = useState(false);
   return (
-    <section className="bg-bc-canvas border-t border-bc-border py-16 sm:py-24 overflow-hidden">
+    <section className={`bg-bc-canvas border-t border-bc-border py-16 sm:py-24 overflow-hidden ${paused ? 'hx-marquee-paused' : ''}`}>
       <div className="mx-auto max-w-3xl px-4 sm:px-6 text-center">
         <h2 className="font-choice font-medium text-[32px] sm:text-[48px] leading-[1.08] text-bc-text">{c.title}</h2>
         <p className="mt-4 text-[17px] sm:text-[19px] font-semibold text-bc-muted">{c.body}</p>
+        <button
+          type="button"
+          onClick={() => setPaused((p) => !p)}
+          aria-pressed={paused}
+          className={`hx-marquee-toggle mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-full border border-bc-border px-4 text-[14px] font-semibold text-bc-muted hover:text-bc-text ${focusClass}`}
+        >
+          {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
+          {paused ? (he ? 'המשך תנועה' : 'Play') : (he ? 'עצירת התנועה' : 'Pause')}
+        </button>
       </div>
       <div className="mt-10 flex flex-col gap-2">
         <Row items={ROW_A} language={language} />

@@ -58,9 +58,9 @@ const CookieConsentComponent = () => {
             consentModal: {
               title: "אנחנו משתמשים בעוגיות",
               description: "אנחנו משתמשים בעוגיות כדי לשפר את האתר ולהבין איך משתמשים בו.",
-              acceptAllBtn: "קבל הכל",
-              acceptNecessaryBtn: "דחה הכל",
-              showPreferencesBtn: "נהל העדפות",
+              acceptAllBtn: "אישור הכל",
+              acceptNecessaryBtn: "דחיית הכל",
+              showPreferencesBtn: "ניהול העדפות",
               footer: `
                 <a href="/privacy-policy">מדיניות פרטיות</a>
                 <a href="/terms">תנאי שימוש</a>
@@ -71,9 +71,9 @@ const CookieConsentComponent = () => {
             },
             preferencesModal: {
               title: "העדפות עוגיות",
-              acceptAllBtn: "קבל הכל",
-              acceptNecessaryBtn: "דחה הכל",
-              savePreferencesBtn: "שמור העדפות",
+              acceptAllBtn: "אישור הכל",
+              acceptNecessaryBtn: "דחיית הכל",
+              savePreferencesBtn: "שמירת העדפות",
               closeIconLabel: "סגור",
               serviceCounterLabel: "שירות|שירותים",
               sections: [

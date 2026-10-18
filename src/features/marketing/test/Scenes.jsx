@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { useSceneIds, SceneDefs, Finish, HexDust, hexD } from './Illustrations';
+import { useSceneIds, SceneDefs, Finish, HexDust, hexD, useOffscreenPause } from './Illustrations';
 
 // Flat vector "lifestyle" scenes for the /test page: everyday moments drawn in
 // the brand's flat style (hexagon weights, the scan-story food), no stock
@@ -209,8 +209,10 @@ function Banana({ x, y }) {
 
 export function GoalScene({ goal, className = '' }) {
   const ids = useSceneIds();
+  const [pauseRef, near] = useOffscreenPause();
+  if (!near) return <svg ref={pauseRef} viewBox="0 0 600 400" className={className} aria-hidden="true" />;
   return (
-    <svg viewBox="0 0 600 400" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <svg ref={pauseRef} viewBox="0 0 600 400" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <SceneDefs ids={ids} />
       <Table ids={ids} />
       <HexDust items={[[120, 230, 4, 0], [200, 200, 3, 1.8], [300, 240, 5, 3.4], [380, 210, 3, 5], [470, 235, 4, 2.6]]} color="var(--bc-accent)" h={-150} />

@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 
 // Editorial illustrations for /test: everyday moments with people in them
 // (faceless, varied), dressed in the BetterChoice hexagon: honeycomb shelves,
@@ -33,6 +33,27 @@ function darken(hex, f = 0.82) {
 const v = (o) => o; // style helper for CSS custom properties
 
 /* ---------- shared defs ---------- */
+
+/**
+ * Ref for a scene's <svg>, plus whether it has come near the screen yet. Scenes
+ * draw nothing until then (they are big SVGs), and their CSS loops pause while
+ * offscreen. `eager` draws at once (the hero).
+ */
+export function useOffscreenPause(eager = false) {
+  const ref = useRef(null);
+  const [near, setNear] = useState(eager || typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver(([e]) => {
+      el.setAttribute('data-paused', e.isIntersecting ? 'false' : 'true');
+      if (e.isIntersecting) setNear(true);
+    }, { rootMargin: '600px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return [ref, near];
+}
 
 export function useSceneIds() {
   const raw = useId().replace(/[^a-zA-Z0-9]/g, '');
@@ -272,16 +293,18 @@ function Arm({ from, elbow, to, sleeve, skin, rolled = false, w = 17 }) {
 
 export function KitchenScene({ className = '' }) {
   const ids = useSceneIds();
+  const [pauseRef, near] = useOffscreenPause(true);
+  if (!near) return <svg ref={pauseRef} viewBox="0 0 800 600" className={className} aria-hidden="true" />;
   const cook = { skin: SKIN[1], hair: HAIR[1] };
   const P = { x: 250, y: 238, s: 1.15 };
   const L = (lx, ly) => [P.x + lx * P.s, P.y + ly * P.s];
   return (
-    <svg viewBox="0 0 800 600" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <svg ref={pauseRef} viewBox="0 0 800 600" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <SceneDefs ids={ids} />
       <clipPath id={ids.clip}>
         <rect x="74" y="64" width="262" height="242" />
       </clipPath>
-      <g filter={`url(#${ids.soft})`}>
+      <g>
         <rect width="800" height="600" fill="var(--scene-bg)" />
         <rect width="800" height="600" fill={`url(#${ids.wall})`} />
         {/* hex tile backsplash */}
@@ -412,17 +435,19 @@ export function KitchenScene({ className = '' }) {
 
 export function CouchScene({ className = '' }) {
   const ids = useSceneIds();
+  const [pauseRef, near] = useOffscreenPause();
+  if (!near) return <svg ref={pauseRef} viewBox="0 0 800 500" className={className} aria-hidden="true" />;
   const p = { skin: SKIN[2], hair: HAIR[3] };
   const P = { x: 420, y: 198, s: 1.05 };
   const L = (lx, ly) => [P.x + lx * P.s, P.y + ly * P.s];
   const phone = L(4, 54);
   return (
-    <svg viewBox="0 0 800 500" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <svg ref={pauseRef} viewBox="0 0 800 500" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <SceneDefs ids={ids} />
       <clipPath id={ids.clip}>
         <rect x="52" y="62" width="126" height="196" />
       </clipPath>
-      <g filter={`url(#${ids.soft})`}>
+      <g>
         <rect width="800" height="500" fill="var(--scene-bg)" />
         <rect width="800" height="500" fill={`url(#${ids.wall})`} />
         {/* window: sun by day, moon and stars at night */}
@@ -507,7 +532,7 @@ export function CouchScene({ className = '' }) {
         </g>
       ))}
       {/* sofa seat, arms, cushions, blanket, cat */}
-      <g filter={`url(#${ids.soft})`}>
+      <g>
         <rect x="176" y="296" width="468" height="70" rx="22" fill="var(--scene-sofa-dark)" />
         <rect x="160" y="240" width="60" height="132" rx="26" fill="var(--scene-sofa)" />
         <rect x="600" y="240" width="60" height="132" rx="26" fill="var(--scene-sofa)" />
@@ -545,6 +570,8 @@ export function CouchScene({ className = '' }) {
 
 export function DinnerScene({ className = '' }) {
   const ids = useSceneIds();
+  const [pauseRef, near] = useOffscreenPause();
+  if (!near) return <svg ref={pauseRef} viewBox="0 0 900 360" className={className} aria-hidden="true" />;
   const people = [
     { x: 170, skin: SKIN[0], hair: HAIR[2], hairStyle: 'long', shirt: SHIRT.navy, turn: 8, earring: true },
     { x: 350, skin: SKIN[2], hair: HAIR[0], hairStyle: 'short', shirt: SHIRT.clay, turn: 4, beard: true },
@@ -553,9 +580,9 @@ export function DinnerScene({ className = '' }) {
   ];
   const Y = 190;
   return (
-    <svg viewBox="0 0 900 360" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <svg ref={pauseRef} viewBox="0 0 900 360" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <SceneDefs ids={ids} />
-      <g filter={`url(#${ids.soft})`}>
+      <g>
         <rect width="900" height="360" fill="var(--scene-bg)" />
         <rect width="900" height="360" fill={`url(#${ids.wall})`} />
         {/* lower wall in hex tiles */}

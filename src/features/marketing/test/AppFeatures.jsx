@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
-import { ClipboardList, Utensils, Dumbbell, MessageCircle } from 'lucide-react';
+import { ClipboardList, Utensils, Dumbbell, MessageCircle, Pause, Play } from 'lucide-react';
 import { PhoneFrame } from '../PhoneFrame';
 import { AppScreen } from './AppScreens';
 import { focusClass } from '../../../components/brand/ui';
@@ -63,6 +63,23 @@ export default function AppFeatures({ language }) {
   const inView = useInView(ref, { amount: 0.5 });
   const reduce = useReducedMotion();
   const current = TABS.find((t) => t.key === tab);
+  const tabRefs = useRef([]);
+  const pickTab = (key) => { setAuto(false); setTab(key); };
+  // Tabs keyboard: arrows move along the row (mirrored in Hebrew), Home/End jump to the ends.
+  const onKeyDown = (e) => {
+    const i = TABS.findIndex((t) => t.key === tab);
+    const fwd = he ? 'ArrowLeft' : 'ArrowRight';
+    const back = he ? 'ArrowRight' : 'ArrowLeft';
+    let next = null;
+    if (e.key === fwd) next = (i + 1) % TABS.length;
+    else if (e.key === back) next = (i - 1 + TABS.length) % TABS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = TABS.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    pickTab(TABS[next].key);
+    tabRefs.current[next]?.focus();
+  };
 
   useEffect(() => {
     if (!auto || !inView || reduce) return undefined;
@@ -78,17 +95,22 @@ export default function AppFeatures({ language }) {
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28 grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
         <div>
           <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{he ? 'מה יש באפליקציה' : 'Inside the app'}</p>
-          <div className="mt-6 flex flex-wrap gap-2" role="tablist" aria-label={he ? 'מסכים באפליקציה' : 'App screens'}>
-            {TABS.map((t) => {
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label={he ? 'מסכים באפליקציה' : 'App screens'} onKeyDown={onKeyDown}>
+            {TABS.map((t, ti) => {
               const Icon = t.icon;
               const on = t.key === tab;
               return (
                 <button
                   key={t.key}
                   type="button"
+                  ref={(el) => (tabRefs.current[ti] = el)}
                   role="tab"
+                  id={`app-tab-${t.key}`}
                   aria-selected={on}
-                  onClick={() => { setAuto(false); setTab(t.key); }}
+                  aria-controls="app-tabpanel"
+                  tabIndex={on ? 0 : -1}
+                  onClick={() => pickTab(t.key)}
                   className={`relative overflow-hidden inline-flex min-h-[44px] items-center gap-2 rounded-full border px-4 sm:px-5 text-[15px] font-semibold transition-colors ${focusClass} ${
                     on ? 'border-bc-text bg-bc-text text-bc-canvas' : 'border-bc-border text-bc-muted hover:text-bc-text'
                   }`}
@@ -109,12 +131,25 @@ export default function AppFeatures({ language }) {
               );
             })}
           </div>
+          {!reduce ? (
+            <button
+              type="button"
+              onClick={() => setAuto((a) => !a)}
+              aria-label={auto ? (he ? 'עצירת ההחלפה האוטומטית' : 'Pause auto-advance') : (he ? 'הפעלת ההחלפה האוטומטית' : 'Play auto-advance')}
+              className={`inline-flex h-11 w-11 items-center justify-center rounded-full border border-bc-border text-bc-muted hover:text-bc-text ${focusClass}`}
+            >
+              {auto ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+            </button>
+          ) : null}
+          </div>
+          <div id="app-tabpanel" role="tabpanel" aria-labelledby={`app-tab-${tab}`} tabIndex={0} className="rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--bc-accent)]">
           <AnimatePresence mode="wait">
             <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }}>
               <h2 className="mt-8 font-choice font-medium text-[34px] sm:text-[52px] leading-[1.06] text-bc-text">{pick(current.title, language)}</h2>
               <p className="mt-4 text-[18px] sm:text-[20px] font-semibold text-bc-muted max-w-lg">{pick(current.line, language)}</p>
             </motion.div>
           </AnimatePresence>
+          </div>
         </div>
         <div className="flex justify-center rounded-bc-card py-10" style={{ backgroundColor: 'var(--scene-bg)' }}>
           <PhoneFrame label={pick(current.label, language)}>
