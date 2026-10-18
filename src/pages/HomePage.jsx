@@ -157,10 +157,11 @@ function Hero({ language }) {
         >
           {isHebrew ? (
             // Fixed two-line break: "עשו את" / "הבחירה הטובה יותר."
+            // "הבחירה" (choice) in green, like "Choice" in the English wordmark.
             <>
               עשו את
               <br />
-              הבחירה הטובה יותר.
+              <span className="text-bc-accent">הבחירה</span> הטובה יותר.
             </>
           ) : (
             <>
