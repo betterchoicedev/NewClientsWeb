@@ -123,6 +123,15 @@
   --scene-bowl: #FFFFFF;
   --scene-shaker: #FFFFFF;
   --scene-sleeve: #13251D;
+  --scene-sky-top: #BFE0F0;
+  --scene-sky-bottom: #F7E7CF;
+  --scene-sun: rgba(255, 238, 205, 0.55);
+  --scene-lamp: 0.18;
+  --scene-cabinet: #DCCAAE;
+  --scene-cloth: #FBF6EE;
+  --scene-sofa: #9CB8A5;
+  --scene-sofa-dark: #86A391;
+  --scene-shade: rgba(60, 40, 20, 0.14);
 }
 
 /* Warm dark: brown-charcoal instead of the app's green-black, same green accent */
@@ -147,6 +156,15 @@
   --scene-bowl: #F4EEE4;
   --scene-shaker: #E9E2D6;
   --scene-sleeve: #2E3A34;
+  --scene-sky-top: #1C2742;
+  --scene-sky-bottom: #D07F4C;
+  --scene-sun: rgba(255, 160, 80, 0.10);
+  --scene-lamp: 0.6;
+  --scene-cabinet: #2E261E;
+  --scene-cloth: #E9E1D4;
+  --scene-sofa: #4F6B5A;
+  --scene-sofa-dark: #42594B;
+  --scene-shade: rgba(0, 0, 0, 0.35);
 }
 
 /* Cookie banner (vanilla-cookieconsent) in the site's tokens */

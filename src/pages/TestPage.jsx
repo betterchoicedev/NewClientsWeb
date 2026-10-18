@@ -11,9 +11,11 @@ import PlanStory from '../features/marketing/PlanStory';
 import ScanStory, { Stage } from '../features/marketing/ScanStory';
 import { Pricing, Faq, StickyDownload } from '../features/marketing/Sections';
 import { PhoneFrame } from '../features/marketing/PhoneFrame';
-import { GoalScene, HeroTable, HandBack, HandFront } from '../features/marketing/test/Scenes';
+import { GoalScene } from '../features/marketing/test/Scenes';
 import { AppScreen } from '../features/marketing/test/AppScreens';
 import AppFeatures from '../features/marketing/test/AppFeatures';
+import OnYourSide from '../features/marketing/test/OnYourSide';
+import { KitchenScene, DinnerScene } from '../features/marketing/test/Illustrations';
 
 // TEST (/test): the BetterMe "products" spirit with our product, drawn instead
 // of photographed: first-person vector scenes (your hand, your table, your
@@ -42,6 +44,7 @@ const copy = {
     learnMore: 'למידע נוסף',
     finalTitle: 'התפריט שלכם מחכה.',
     finalBody: 'מתחילים ב-3 ימים חינם, ב-App Store וב-Google Play.',
+    dinnerCaption: 'גם בארוחת שישי. התפריט מתאים לחיים, לא להפך.',
   },
   english: {
     title1: 'Make the',
@@ -61,6 +64,7 @@ const copy = {
     learnMore: 'Learn more',
     finalTitle: 'Your plan is waiting.',
     finalBody: 'Start with 3 free days, on the App Store and Google Play.',
+    dinnerCaption: 'Friday dinner included. The plan fits your life, not the other way around.',
   },
 };
 
@@ -81,20 +85,6 @@ const WORLD = [
 
 /* ---------- Hero: your hand, your table, the app ---------- */
 
-function HeldPhone({ language, screen = 'nutrition', className = '' }) {
-  return (
-    <div className={`relative ${className}`}>
-      <HandBack className="absolute -bottom-[60px] -end-[92px] w-[300px] sm:w-[340px] z-0 rtl:-scale-x-100" />
-      <motion.div className="relative z-10" style={{ rotate: -4 }}>
-        <PhoneFrame label={language === 'hebrew' ? 'אפליקציית BetterChoice' : 'BetterChoice app'}>
-          <AppScreen screen={screen} language={language} />
-        </PhoneFrame>
-      </motion.div>
-      <HandFront className="absolute -bottom-[70px] -start-[86px] w-[300px] sm:w-[340px] z-20 rtl:-scale-x-100" />
-    </div>
-  );
-}
-
 // Split hero: the promise on one side, the moment on the other (your table,
 // your plate, the app in your hand), so the scene is above the fold.
 function SceneHero({ language }) {
@@ -102,7 +92,7 @@ function SceneHero({ language }) {
   const scrollToPrograms = () => document.getElementById('programs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   return (
     <section className="bg-bc-canvas">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-10 sm:pt-14 pb-12 grid lg:grid-cols-[1.05fr_1fr] gap-10 lg:gap-14 items-center lg:min-h-[calc(100svh-64px)]">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-10 sm:pt-14 pb-12 grid lg:grid-cols-[0.95fr_1.1fr] gap-10 lg:gap-14 items-center lg:min-h-[calc(100svh-64px)]">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={FADE} className="text-center lg:text-start">
           <h1 className="font-choice font-medium text-[44px] sm:text-[64px] xl:text-[72px] leading-[1.04] tracking-[-0.02em] text-bc-text">
             {c.title1}
@@ -119,9 +109,13 @@ function SceneHero({ language }) {
           <p className="mt-4 text-[13px] font-semibold text-bc-muted">{c.note}</p>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...FADE, delay: 0.15 }}
-          className="relative isolate overflow-hidden rounded-[40px] h-[460px] sm:h-[560px] lg:h-[620px] flex justify-center border border-bc-border">
-          <HeroTable className="absolute inset-0 -z-10 h-full w-full" />
-          <HeldPhone language={language} screen="nutrition" className="mt-10 sm:mt-12" />
+          className="relative isolate overflow-hidden rounded-[40px] h-[480px] sm:h-[560px] lg:h-[620px] border border-bc-border">
+          <KitchenScene className="absolute inset-0 -z-10 h-full w-full" />
+          <motion.div className="absolute top-14 sm:top-12 right-[4%] sm:right-[7%] origin-top-right scale-[0.82] sm:scale-100" style={{ rotate: -4 }}>
+            <PhoneFrame label={language === 'hebrew' ? 'אפליקציית BetterChoice' : 'BetterChoice app'} className="shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)]">
+              <AppScreen screen="nutrition" language={language} />
+            </PhoneFrame>
+          </motion.div>
         </motion.div>
       </div>
     </section>
@@ -235,12 +229,15 @@ function World({ language }) {
 function FinalScene({ language }) {
   const c = copy[language] || copy.english;
   return (
-    <section id="download" className="relative isolate overflow-hidden scroll-mt-20 border-t border-bc-border">
-      <HeroTable className="absolute inset-0 -z-10 h-full w-full" />
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 pt-20 pb-56 sm:pb-64 flex flex-col items-center text-center">
+    <section id="download" className="scroll-mt-20 bg-bc-canvas border-t border-bc-border">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-24 pb-28 flex flex-col items-center text-center">
         <h2 className="font-choice font-medium text-[38px] sm:text-[60px] leading-[1.05] text-bc-text">{c.finalTitle}</h2>
         <p className="mt-4 text-[17px] sm:text-[19px] font-semibold text-bc-muted">{c.finalBody}</p>
         <StoreBadges className="mt-8 justify-center" />
+        <div className="mt-12 w-full overflow-hidden rounded-[40px] border border-bc-border aspect-[16/10] sm:aspect-[5/2]">
+          <DinnerScene className="block h-full w-full" />
+        </div>
+        <p className="mt-4 text-[14px] font-semibold text-bc-muted">{c.dinnerCaption}</p>
       </div>
     </section>
   );
@@ -255,6 +252,7 @@ export default function TestPage() {
         <Programs language={language} />
         <PlanStory language={language} />
         <AppFeatures language={language} />
+        <OnYourSide language={language} />
         <ScanSplit language={language} />
         <ScanStory language={language} />
         <World language={language} />
