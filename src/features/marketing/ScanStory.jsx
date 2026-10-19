@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion, useInView } from 'framer-motion';
-import { Camera, ScanSearch, Ruler, Calculator, Target } from 'lucide-react';
+import { focusClass } from '../../components/brand/ui';
+import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
+import { Camera, ScanSearch, Ruler, Target } from 'lucide-react';
 import { FOODS, TOTALS, PLAN, IS_EXAMPLE } from './scanExample';
+import MobileStory from './MobileStory';
 
 // The hero feature, explained: a sticky, scroll-driven stage drawn in flat
 // vectors. Depth is an ILLUSTRATION of how the scan works (the app does not
@@ -33,17 +35,8 @@ const STEPS = [
     icon: Ruler,
     label: { hebrew: 'מדידה', english: 'Measure' },
     line: {
-      hebrew: 'באייפון עם חיישן עומק, האפליקציה מודדת כמה האוכל מתרומם מעל הצלחת.',
-      english: 'On iPhones with a depth sensor, the app measures how high the food rises above the plate.',
-    },
-  },
-  {
-    key: 'calculate',
-    icon: Calculator,
-    label: { hebrew: 'חישוב', english: 'Calculate' },
-    line: {
-      hebrew: 'נפח × צפיפות = גרמים. את החשבון עושה הקוד, לא ה-AI.',
-      english: 'Volume × density = grams. The code does the math, not the AI.',
+      hebrew: 'באייפון עם חיישן עומק, האפליקציה מודדת כמה האוכל מתרומם מעל הצלחת, והופכת את זה לגרמים.',
+      english: 'On iPhones with a depth sensor, the app measures how high the food rises above the plate, and turns that into grams.',
     },
   },
   {
@@ -124,12 +117,14 @@ function Plate() {
   );
 }
 
-function Stage({ step, language }) {
+export function Stage({ step, language }) {
   const c = pick(copy, language);
+  const reduceMotion = useReducedMotion();
   const at = (k) => STEPS.findIndex((s) => s.key === k) <= step;
-  const showBoxes = at('identify') && step < 4;
-  const showDepth = at('measure') && step < 4;
-  const showCalc = STEPS[step].key === 'calculate';
+  const isPlan = STEPS[step].key === 'plan';
+  const showBoxes = at('identify') && !isPlan;
+  const showDepth = at('measure') && !isPlan;
+  const showCalc = STEPS[step].key === 'measure';
   const showCard = STEPS[step].key === 'plan';
   const rice = FOODS[0];
 
@@ -160,8 +155,13 @@ function Stage({ step, language }) {
                     fill="var(--bc-accent)" fillOpacity={0.1 + i * 0.1} stroke="var(--bc-accent)" strokeOpacity="0.8" strokeWidth="1.5" />
                 ));
               })}
-              <motion.line x1="30" x2="370" y1="60" y2="60" stroke="var(--bc-accent)" strokeWidth="3"
-                animate={{ y1: [60, 360, 60], y2: [60, 360, 60] }} transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }} />
+              {reduceMotion ? (
+                <line x1="30" x2="370" y1="210" y2="210" stroke="var(--bc-accent)" strokeWidth="3" />
+              ) : (
+                <motion.g animate={{ y: [0, 300, 0] }} transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}>
+                  <line x1="30" x2="370" y1="60" y2="60" stroke="var(--bc-accent)" strokeWidth="3" />
+                </motion.g>
+              )}
             </motion.g>
           )}
         </AnimatePresence>
@@ -204,7 +204,7 @@ function Stage({ step, language }) {
             className="absolute inset-x-6 bottom-6 rounded-[24px] border border-bc-border bg-bc-surface p-5">
             <p className="text-[13px] font-semibold text-bc-muted">{pick(rice.name, language)}</p>
             <p className="mt-1 font-choice font-medium text-[26px] sm:text-[30px] text-bc-text tabular-nums" dir="ltr">
-              {rice.volumeMl} ml × {rice.density} = <span className="text-bc-accent">{rice.grams} g</span>
+              {rice.volumeMl} ml × {rice.density} = <span className="text-bc-accent-text">{rice.grams} g</span>
             </p>
             <p className="mt-1 text-[12px] font-semibold text-bc-muted">
               {language === 'hebrew' ? 'נפח מהעומק × צפיפות האורז' : 'volume from depth × rice density'}
@@ -235,24 +235,19 @@ function Stage({ step, language }) {
               </div>
               <div className="mt-2 flex gap-2 text-[12px] font-bold">
                 {[['p', 'protein'], ['c', 'carbs'], ['f', 'fat']].map(([k, v]) => (
-                  <span key={k} className="rounded-full px-2.5 py-1" style={{ backgroundColor: `var(--bc-${v}-well)`, color: `var(--bc-${v})` }}>
+                  <span key={k} className="rounded-full px-2.5 py-1" style={{ backgroundColor: `var(--bc-${v}-well)`, color: 'var(--bc-text)', boxShadow: `inset 0 0 0 1.5px var(--bc-${v})` }}>
                     {c[k]} <span dir="ltr">{fmt(TOTALS[k])}g</span>
                   </span>
                 ))}
               </div>
               <p className="mt-3 rounded-[16px] bg-[var(--bc-accent-well)] px-3 py-2 text-[13px] font-semibold text-bc-text">
-                <span className="text-bc-accent">● </span>{c.planFit} ({c.fits(TOTALS.kcal, PLAN.slotKcal)}). {pick(PLAN.tip, language)}
+                <span className="text-bc-accent-text">● </span>{c.planFit} ({c.fits(TOTALS.kcal, PLAN.slotKcal)}). {pick(PLAN.tip, language)}
               </p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {IS_EXAMPLE ? (
-        <span className="absolute top-1 end-1 rounded-full border border-dashed border-bc-border px-2.5 py-1 text-[11px] font-semibold text-bc-muted">
-          {c.example}
-        </span>
-      ) : null}
     </div>
   );
 }
@@ -268,8 +263,8 @@ function Step({ step, index, language, onActive, active }) {
   const Icon = step.icon;
 
   return (
-    <div ref={ref} data-scan-step={index} className="py-14 lg:py-0 lg:min-h-[70vh] flex flex-col justify-center">
-      <p className={`flex items-center gap-2 text-[13px] font-bold transition-colors duration-[400ms] ${active ? 'text-bc-accent' : 'text-bc-muted'}`}>
+    <div ref={ref} data-scan-step={index} className="py-14 lg:py-0 lg:min-h-[70vh] flex flex-col justify-center border-t border-bc-border first:border-0 lg:border-0">
+      <p className={`flex items-center gap-2 text-[13px] font-bold transition-colors duration-[400ms] ${active ? 'text-bc-accent-text' : 'text-bc-muted'}`}>
         <span className="font-choice tabular-nums" dir="ltr">{String(index + 1).padStart(2, '0')}</span>
         <Icon size={16} aria-hidden="true" />
         {pick(step.label, language)}
@@ -277,10 +272,6 @@ function Step({ step, index, language, onActive, active }) {
       <p className="mt-3 font-choice font-medium text-[24px] sm:text-[30px] leading-[1.25] text-bc-text max-w-[30rem]">
         {pick(step.line, language)}
       </p>
-      {/* below lg each step carries its own stage */}
-      <div className="lg:hidden mt-8 flex justify-center">
-        <Stage step={index} language={language} />
-      </div>
     </div>
   );
 }
@@ -292,25 +283,65 @@ export default function ScanStory({ language }) {
   return (
     <section aria-labelledby="scan-title" className="border-t border-bc-border">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-28">
-        <p className="text-[13px] font-bold text-bc-accent">{c.eyebrow}</p>
+        <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{c.eyebrow}</p>
         <h2 id="scan-title" className="mt-3 font-choice font-medium text-[36px] sm:text-[56px] leading-[1.05] tracking-[-0.01em] text-bc-text max-w-3xl">
           {c.title}
         </h2>
         <p className="mt-4 font-choice text-[18px] sm:text-[22px] text-bc-muted">{c.mechanism}</p>
+        <details className="group mt-5 max-w-2xl rounded-[20px] border border-bc-border bg-bc-surface px-5 py-4">
+          <summary className={`cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-3 rounded text-[15px] font-bold text-bc-text ${focusClass}`}>
+            {language === 'hebrew' ? 'איך זה עובד?' : 'How does it work?'}
+            <span className="text-bc-muted transition-transform duration-200 group-open:rotate-45" aria-hidden="true">+</span>
+          </summary>
+          <div className="mt-3 flex flex-col gap-2 text-[15px] font-semibold text-bc-muted leading-relaxed">
+            <p>{language === 'hebrew' ? 'ה-AI מזהה כל מזון וסופר יחידות. הוא לא מתבקש לנחש קלוריות.' : 'The AI identifies each food and counts pieces. It is never asked to guess calories.'}</p>
+            <p>
+              {language === 'hebrew' ? 'באייפון עם חיישן עומק, הקוד מוצא את משטח הצלחת, מודד את גובה האוכל ומחשב: ' : 'On iPhones with a depth sensor, the code finds the plate surface, measures the food’s height and computes: '}
+              <span className="font-choice text-bc-text" dir="ltr">volume × density = grams</span>.
+            </p>
+            <p>{language === 'hebrew' ? 'בשאר הטלפונים הכמות מוערכת מהתמונה ומגודל הצלחת. ובכל מקרה אפשר לתקן גרמים בלחיצה.' : 'On other phones the amount is estimated from the photo and the plate size. Either way, you can fix the grams in a tap.'}</p>
+          </div>
+        </details>
       </div>
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:grid lg:grid-cols-2 lg:gap-16">
-        <div className="lg:py-[12vh]">
+        <div className="hidden lg:block lg:py-[12vh]">
           {STEPS.map((s, i) => (
             <Step key={s.key} step={s} index={i} language={language} onActive={setActive} active={active === i} />
           ))}
         </div>
+        <MobileStory
+          className="lg:hidden mt-10"
+          language={language}
+          steps={STEPS}
+          renderSlide={(s, i) => {
+            const Icon = s.icon;
+            return (
+              <div className="flex flex-col gap-4">
+                <div className="min-h-[148px]">
+                  <p className="flex items-center gap-2 text-[13px] font-bold text-bc-accent-text">
+                    <span className="font-choice tabular-nums" dir="ltr">{String(i + 1).padStart(2, '0')}</span>
+                    <Icon size={16} aria-hidden="true" />
+                    {pick(s.label, language)}
+                  </p>
+                  <p className="mt-2 font-choice font-medium text-[20px] leading-[1.3] text-bc-text">{pick(s.line, language)}</p>
+                </div>
+                <Stage step={i} language={language} />
+              </div>
+            );
+          }}
+        />
         <div className="hidden lg:block">
           <div className="sticky top-16 h-[calc(100vh-64px)] flex items-center justify-center">
             <Stage step={active} language={language} />
           </div>
         </div>
       </div>
+      {IS_EXAMPLE ? (
+        <p className="mx-auto max-w-6xl px-4 sm:px-6 pb-12 pt-6 text-[12px] font-semibold text-bc-muted">
+          {language === 'hebrew' ? 'הצלחת, הכמויות והערכים כאן להמחשה. סריקת העומק מוצגת כהמחשה של אופן הפעולה.' : 'The plate, amounts and values here are illustrative. The depth scan is shown as an illustration of how it works.'}
+        </p>
+      ) : null}
     </section>
   );
 }

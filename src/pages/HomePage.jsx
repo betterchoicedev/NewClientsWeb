@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion, useInView } from 'framer-motion';
-import { BookOpen, Dumbbell, MessageCircle, Utensils } from 'lucide-react';
+import { BookOpen, Dumbbell, MessageCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import MarketingShell from '../components/brand/MarketingShell';
 import DownloadLink from '../components/brand/DownloadLink';
@@ -10,6 +10,7 @@ import { primaryButton } from '../components/brand/ui';
 import { Mark, Wordmark } from '../components/brand/Logo';
 import { PhoneFrame, PhoneFootage } from '../features/marketing/PhoneFrame';
 import ScanStory from '../features/marketing/ScanStory';
+import PlanStory from '../features/marketing/PlanStory';
 import { LogMethods, Pricing, Faq, StickyDownload } from '../features/marketing/Sections';
 
 // Motion rule from BetterApp/DESIGN.md: enter is a 400ms fade.
@@ -66,44 +67,35 @@ function MacroChips({ language }) {
 const copy = {
   english: {
     title: 'Make the better choice.',
+    finalTitle: 'Your plan is waiting.',
     subhead: 'You’ve started over enough times. This time, someone stays with you.',
-    features: 'Nutrition, training, and a coach, in one app.',
-    cta: 'Download the app',
-    platforms: 'For iPhone and Android',
+    features: 'A personal meal plan from day one, training and a coach.',
+    cta: 'Download free',
+    platforms: '3 days free, cancel anytime. iPhone and Android.',
     heroPhone: 'BetterChoice app on iPhone',
     tourEyebrow: 'In the app',
-    tourTitle: 'Everything around the scan, in one app.',
+    tourTitle: 'Around your plan: training, a coach, and your progress.',
     qr: 'On a computer? Scan to get the app.',
-    finalTitle: 'Get the app.',
-    finalBody: 'Available on the App Store and Google Play.',
+    finalBody: 'Start with 3 free days, on the App Store and Google Play.',
   },
   hebrew: {
     title: 'עשו את הבחירה הטובה יותר.',
+    finalTitle: 'התפריט שלכם מחכה.',
     subhead: 'התחלתם מחדש מספיק פעמים. הפעם, מישהו נשאר איתכם.',
-    features: 'תזונה, אימון ומאמן, באפליקציה אחת.',
-    cta: 'הורידו את האפליקציה',
-    platforms: 'לאייפון ולאנדרואיד',
+    features: 'תפריט אישי מהיום הראשון, אימונים ומאמנת.',
+    cta: 'הורידו בחינם',
+    platforms: '3 ימים חינם, ביטול בכל רגע. לאייפון ולאנדרואיד.',
     heroPhone: 'אפליקציית BetterChoice באייפון',
     tourEyebrow: 'באפליקציה',
-    tourTitle: 'כל מה שמסביב לסריקה, באפליקציה אחת.',
+    tourTitle: 'סביב התפריט: אימונים, מאמנת, וההתקדמות שלכם.',
     qr: 'במחשב? סרקו כדי להוריד.',
-    finalTitle: 'הורידו את האפליקציה.',
-    finalBody: 'זמינה ב-App Store וב-Google Play.',
+    finalBody: 'מתחילים ב-3 ימים חינם, ב-App Store וב-Google Play.',
   },
 };
 
 // Order: Nutrition, Training, AI chat, Health diary. Wellness and Journey are
 // "Coming soon" in the app, so they stay off the page until they ship.
 const SECTIONS = [
-  {
-    key: 'nutrition',
-    icon: Utensils,
-    label: { english: 'Nutrition', hebrew: 'תזונה' },
-    line: {
-      english: 'A meal plan built to your calorie and macro targets, with alternatives when you want a swap.',
-      hebrew: 'תפריט שנבנה ליעדי הקלוריות והמאקרו שלכם, עם חלופות כשבא לכם להחליף.',
-    },
-  },
   {
     key: 'training',
     icon: Dumbbell,
@@ -116,10 +108,10 @@ const SECTIONS = [
   {
     key: 'chat',
     icon: MessageCircle,
-    label: { english: 'Beti, your coach', hebrew: 'Beti, המאמנת שלכם' },
+    label: { english: 'Your coach', hebrew: 'המאמנת שלכם' },
     line: {
-      english: 'Beti knows your plan and your day, and answers with both in mind. By text or voice.',
-      hebrew: 'Beti מכירה את התוכנית שלכם ואת היום שלכם, ועונה בהתאם. בכתיבה או בקול.',
+      english: 'A coach that knows your plan and your day, and answers with both in mind. By text or voice.',
+      hebrew: 'מאמנת שמכירה את התוכנית שלכם ואת היום שלכם, ועונה בהתאם. בכתיבה או בקול.',
     },
   },
   {
@@ -135,11 +127,11 @@ const SECTIONS = [
 
 const pick = (entry, language) => entry[language] || entry.english;
 
-function HeroPhone({ footageKey, title, className = '' }) {
+function HeroPhone({ footageKey, title, className = '', language }) {
   return (
     <div className={className}>
       <PhoneFrame label={title}>
-        <PhoneFootage footageKey={footageKey} title={title} language="english" />
+        <PhoneFootage footageKey={footageKey} title={title} language={language} />
       </PhoneFrame>
     </div>
   );
@@ -151,7 +143,7 @@ function Hero({ language }) {
 
   return (
     // Green well (not the canvas) so the dark app recordings don't melt into the page.
-    <section className="relative overflow-hidden" style={{ backgroundColor: 'var(--bc-accent-well)' }}>
+    <section className="relative overflow-hidden">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -165,16 +157,17 @@ function Hero({ language }) {
         >
           {isHebrew ? (
             // Fixed two-line break: "עשו את" / "הבחירה הטובה יותר."
+            // "הבחירה" (choice) in green, like "Choice" in the English wordmark.
             <>
               עשו את
               <br />
-              הבחירה הטובה יותר.
+              <span className="text-bc-accent-text">הבחירה</span> הטובה יותר.
             </>
           ) : (
             <>
               {/* "Make the" + the real wordmark. The logo's lettering replaces "better choice". */}
               <span className="sr-only">{c.title}</span>
-              <span aria-hidden="true">
+              <span aria-hidden="true" style={{ '--bc-accent': 'var(--bc-accent-text)' }}>
                 Make the{' '}
                 <span className="whitespace-nowrap">
                   <Wordmark height="0.74em" decorative className="inline-block align-baseline" />.
@@ -211,12 +204,14 @@ function Hero({ language }) {
           <HeroPhone
             footageKey="training"
             title="Training"
+            language={language}
             className="hidden sm:block mt-20 -mr-16 lg:-mr-10 rotate-[-7deg] scale-[0.88] origin-top"
           />
-          <HeroPhone footageKey="hero" title="Nutrition" className="relative z-10" />
+          <HeroPhone footageKey="hero" title="Nutrition" className="relative z-10" language={language} />
           <HeroPhone
             footageKey="diary"
             title="Analytics"
+            language={language}
             className="hidden sm:block mt-20 -ml-16 lg:-ml-10 rotate-[7deg] scale-[0.88] origin-top"
           />
         </div>
@@ -289,7 +284,7 @@ function ProductTour({ language }) {
   return (
     <section aria-labelledby="tour-title" className="border-t border-bc-border">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-28">
-        <p className="text-[13px] font-bold text-bc-accent">{c.tourEyebrow}</p>
+        <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{c.tourEyebrow}</p>
         <h2 id="tour-title" className="mt-3 font-choice font-medium text-[32px] sm:text-[48px] leading-[1.08] text-bc-text max-w-3xl">
           {c.tourTitle}
         </h2>
@@ -372,9 +367,7 @@ function FinalDownload({ language }) {
           color="var(--bc-on-accent)"
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none"
         />
-        <h2 className={`relative text-[32px] sm:text-[44px] leading-[1.1] font-choice font-medium`}>
-          {c.finalTitle}
-        </h2>
+        <h2 className="relative text-[32px] sm:text-[48px] leading-[1.1] font-choice font-medium">{c.finalTitle}</h2>
         <p className="relative mt-3 text-[16px] sm:text-[17px] font-semibold opacity-75">{c.finalBody}</p>
         <StoreBadges className="relative mt-8 justify-center" />
         <div className="relative mt-8 hidden lg:flex items-center gap-4">
@@ -401,8 +394,9 @@ export default function HomePage() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <MarketingShell>
+      <MarketingShell className="theme-bold">
         <Hero language={language} />
+        <PlanStory language={language} />
         <ScanStory language={language} />
         <LogMethods language={language} />
         <ProductTour language={language} />

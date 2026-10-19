@@ -268,6 +268,14 @@ const AccessibilityWidget = () => {
     }
   };
 
+  // Escape closes the panel.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setIsOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isOpen]);
+
   const t = text[language === 'hebrew' ? 'hebrew' : 'english'];
 
   const side = direction === 'rtl' ? 'left-4' : 'right-4';
@@ -287,7 +295,7 @@ const AccessibilityWidget = () => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed ${side} bottom-20 z-50 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--aw-accent)] text-[var(--aw-on-accent)] transition-opacity duration-150 hover:opacity-90 active:opacity-75 ${focus}`}
+        className={`aw-launcher fixed ${side} bottom-20 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--aw-accent)] text-[var(--aw-on-accent)] shadow-[0_2px_8px_rgba(0,0,0,0.25)] transition-opacity duration-150 hover:opacity-90 active:opacity-75 ${focus}`}
         aria-label={t.title}
         aria-expanded={isOpen}
         title={t.title}

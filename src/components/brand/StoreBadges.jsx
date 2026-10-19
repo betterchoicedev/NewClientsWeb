@@ -94,7 +94,7 @@ export default function StoreBadges({ className = '' }) {
         className={linkClass}
         aria-label="Download on the App Store"
       >
-        <AppStoreBadgeSvg />
+        <span aria-hidden="true" className="contents"><AppStoreBadgeSvg /></span>
       </a>
       <a
         href={ANDROID_URL}
@@ -103,7 +103,7 @@ export default function StoreBadges({ className = '' }) {
         className={linkClass}
         aria-label="Get it on Google Play"
       >
-        <GooglePlayBadgeSvg />
+        <span aria-hidden="true" className="contents"><GooglePlayBadgeSvg /></span>
       </a>
     </div>
   );

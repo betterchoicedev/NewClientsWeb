@@ -35,6 +35,8 @@
   --bc-wellness-well: rgba(124, 92, 214, 0.10);
   --bc-danger: #ef4444;
   --bc-danger-well: #fef2f2;
+  --bc-band: var(--bc-canvas);
+  --bc-accent-text: var(--bc-accent);
   /* Green well, same alpha pattern as the wellness well; light uses surface2 */
   --bc-accent-well: #E8F5E9;
   /* NAV_THEME.macros */
@@ -66,6 +68,154 @@
   --bc-carbs-well: rgba(0, 122, 255, 0.15);
   --bc-fat: #FF9F0A;
   --bc-fat-well: rgba(255, 149, 0, 0.15);
+}
+
+/* Landing page palette (bold): near-black canvas, white type, one vivid green
+   used sparingly. Scoped to the marketing page so account/auth keep the app tokens. */
+.theme-bold {
+  --bc-canvas: #FFFFFF;
+  --bc-surface: #F4F5F4;
+  --bc-surface-2: #EAECEB;
+  --bc-border: #E2E5E3;
+  --bc-accent: #1FB25A;
+  --bc-on-accent: #04120A;
+  --bc-text: #0A0C0B;
+  --bc-muted: #5F6763;  /* 4.9:1 on the light band */
+  --bc-accent-well: rgba(31, 178, 90, 0.09);
+  --bc-band: #EEF1EF;   /* every other section: canvas < band < card, so sections read as separate */
+  --bc-accent-text: #0E7A3B; /* green for TEXT on light: 5.4:1 on white (the vivid accent is 2.8:1) */
+}
+
+.dark .theme-bold {
+  --bc-canvas: #090B0A;
+  --bc-surface: #131715;
+  --bc-surface-2: #1C211E;
+  --bc-border: #2F3632;
+  --bc-accent: #3DDC6F;
+  --bc-on-accent: #04120A;
+  --bc-text: #F6F8F7;
+  --bc-muted: #98A19C;
+  --bc-accent-well: rgba(61, 220, 111, 0.10);
+  --bc-band: #171C19;  /* visibly lifted from the #090B0A canvas */
+  --bc-accent-text: #3DDC6F;
+}
+
+/* TEST (/test): warm canvas in the BetterMe spirit. Light: */
+.theme-warm {
+  --bc-canvas: #FBF8F3;
+  --bc-surface: #FFFFFF;
+  --bc-surface-2: #F1ECE3;
+  --bc-band: #F3EDE3;
+  --bc-border: #E6DED1;
+  --bc-accent: #1FB25A;
+  --bc-accent-text: #0E7A3B;
+  --bc-on-accent: #04120A;
+  --bc-text: #13251D;
+  --bc-muted: #5A6660;
+  --bc-accent-well: rgba(31, 178, 90, 0.10);
+  /* illustrated scenes */
+  --scene-bg: #F1E6D6;
+  --scene-wood: #E6CDA8;
+  --scene-wood-dark: #D2B48A;
+  --scene-plate: #FFFFFF;
+  --scene-plate-rim: #EDE6DA;
+  --scene-iron: #2E3A34;
+  --scene-bowl: #FFFFFF;
+  --scene-shaker: #FFFFFF;
+  --scene-sleeve: #13251D;
+  --scene-sky-top: #BFE0F0;
+  --scene-sky-bottom: #F7E7CF;
+  --scene-sun: rgba(255, 238, 205, 0.55);
+  --scene-lamp: 0.18;
+  --scene-cabinet: #DCCAAE;
+  --scene-cloth: #FBF6EE;
+  --scene-sofa: #9CB8A5;
+  --scene-sofa-dark: #86A391;
+  --scene-shade: rgba(60, 40, 20, 0.14);
+  --scene-orb: #FFE08A;
+  --scene-stars: 0;
+  --scene-beam: 1;
+  --scene-tile: #F6EFE4;
+  --scene-tile-line: rgba(31, 178, 90, 0.20);
+}
+
+/* Warm dark: brown-charcoal instead of the app's green-black, same green accent */
+.dark .theme-warm {
+  --bc-canvas: #16130F;
+  --bc-surface: #201C17;
+  --bc-surface-2: #2B261F;
+  --bc-band: #1C1914;
+  --bc-border: #3A332A;
+  --bc-accent: #3DDC6F;
+  --bc-accent-text: #4FE07D;
+  --bc-on-accent: #04120A;
+  --bc-text: #F6F1E9;
+  --bc-muted: #B5AB9D;
+  --bc-accent-well: rgba(61, 220, 111, 0.12);
+  --scene-bg: #241E18;
+  --scene-wood: #4A3A2A;
+  --scene-wood-dark: #3B2E21;
+  --scene-plate: #F4EEE4;
+  --scene-plate-rim: #D8CDBD;
+  --scene-iron: #0E0D0B;
+  --scene-bowl: #F4EEE4;
+  --scene-shaker: #E9E2D6;
+  --scene-sleeve: #2E3A34;
+  --scene-sky-top: #1C2742;
+  --scene-sky-bottom: #D07F4C;
+  --scene-sun: rgba(255, 160, 80, 0.10);
+  --scene-lamp: 0.6;
+  --scene-cabinet: #2E261E;
+  --scene-cloth: #E9E1D4;
+  --scene-sofa: #4F6B5A;
+  --scene-sofa-dark: #42594B;
+  --scene-shade: rgba(0, 0, 0, 0.35);
+  --scene-orb: #F4EEDC;
+  --scene-stars: 1;
+  --scene-beam: 0.22;
+  --scene-tile: #2A231C;
+  --scene-tile-line: rgba(61, 220, 111, 0.16);
+}
+
+/* Cookie banner (vanilla-cookieconsent) in the site's tokens */
+#cc-main {
+  --cc-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --cc-bg: var(--bc-surface);
+  --cc-primary-color: var(--bc-text);
+  --cc-secondary-color: var(--bc-muted);
+  --cc-btn-primary-bg: var(--bc-accent);
+  --cc-btn-primary-color: var(--bc-on-accent);
+  --cc-btn-primary-border-color: var(--bc-accent);
+  --cc-btn-primary-hover-bg: var(--bc-accent);
+  --cc-btn-primary-hover-color: var(--bc-on-accent);
+  --cc-btn-secondary-bg: transparent;
+  --cc-btn-secondary-color: var(--bc-text);
+  --cc-btn-secondary-border-color: var(--bc-border);
+  --cc-btn-secondary-hover-bg: var(--bc-surface-2);
+  --cc-btn-secondary-hover-color: var(--bc-text);
+  --cc-separator-border-color: var(--bc-border);
+  --cc-footer-bg: var(--bc-surface);
+  --cc-footer-color: var(--bc-muted);
+  --cc-footer-border-color: var(--bc-border);
+  --cc-modal-border-radius: 24px;
+  --cc-btn-border-radius: 24px;
+}
+
+/* Compact cookie bar on phones: Accept / Reject side by side (still equal weight) */
+@media (max-width: 640px) {
+  #cc-main .cm__btns { padding-top: 12px; padding-bottom: 12px; }
+  #cc-main .cm.cm--bar .cm__btns .cm__btn-group { display: flex !important; flex-direction: row !important; gap: 8px !important; }
+  #cc-main .cm.cm--bar .cm__btns .cm__btn-group .cm__btn { flex: 1 1 0 !important; margin: 0 !important; min-width: 0 !important; }
+  #cc-main .cm__body { padding-bottom: 0; }
+}
+
+/* Cookie banner footer links: 44px tap targets */
+#cc-main .cm__footer a,
+#cc-main .cm__footer button,
+#cc-main .cm__link-group a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 
 html,
@@ -554,4 +704,54 @@ code {
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, rgba(16, 185, 129, 0.7) 0%, rgba(5, 150, 105, 0.7) 100%);
   background-clip: padding-box;
+}
+
+/* /test scene motion: cheap CSS loops, off for reduced motion */
+.hx-rise { animation: hx-rise var(--dur, 7s) ease-in infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: center; opacity: 0; }
+@keyframes hx-rise { 0% { transform: translateY(0) rotate(0deg); opacity: 0; } 15% { opacity: var(--op, 0.8); } 100% { transform: translateY(var(--h, -140px)) rotate(90deg); opacity: 0; } }
+.hx-sway { animation: hx-sway var(--dur, 4s) ease-in-out infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: var(--o, 50% 100%); }
+@keyframes hx-sway { 0%, 100% { transform: rotate(var(--a1, -3deg)); } 50% { transform: rotate(var(--a2, 3deg)); } }
+.hx-steam { animation: hx-steam var(--dur, 3.2s) ease-out infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: 50% 100%; opacity: 0; }
+@keyframes hx-steam { 0% { transform: translateY(6px) scaleX(0.8); opacity: 0; } 30% { opacity: 0.55; } 100% { transform: translateY(-46px) scaleX(1.5); opacity: 0; } }
+.hx-flicker { animation: hx-flicker 1.3s ease-in-out infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes hx-flicker { 0%, 100% { transform: scale(1, 1); } 25% { transform: scale(0.88, 1.16); } 50% { transform: scale(1.06, 0.92); } 75% { transform: scale(0.95, 1.08); } }
+.hx-twinkle { animation: hx-twinkle var(--dur, 2.6s) ease-in-out infinite; animation-delay: var(--d, 0s); }
+@keyframes hx-twinkle { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+.hx-glow { animation: hx-glow var(--dur, 4s) ease-in-out infinite; }
+@keyframes hx-glow { 0%, 100% { opacity: calc(var(--scene-lamp) * 0.75); } 50% { opacity: var(--scene-lamp); } }
+.hx-bob { animation: hx-bob var(--dur, 3s) ease-in-out infinite; animation-delay: var(--d, 0s); }
+@keyframes hx-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(var(--a, -3px)); } }
+.hx-rot { animation: hx-rot var(--dur, 1s) ease-in-out infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: var(--o, 0% 0%); }
+@keyframes hx-rot { 0%, 100% { transform: rotate(0deg); } 40% { transform: rotate(var(--a, -10deg)); } 60% { transform: rotate(calc(var(--a, -10deg) * -0.2)); } }
+.hx-fly { animation: hx-fly var(--dur, 14s) linear infinite; animation-delay: var(--d, 0s); }
+@keyframes hx-fly { 0% { transform: translate(-80px, 10px); } 100% { transform: translate(380px, -40px); } }
+.hx-flap { animation: hx-flap 0.5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes hx-flap { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(-0.6); } }
+.hx-breathe { animation: hx-breathe 4.5s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes hx-breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, 1.02); } }
+.hx-marquee { animation: hx-marquee var(--dur, 60s) linear infinite; }
+.hx-marquee-rev { animation-direction: reverse; }
+.hx-marquee-mask:hover .hx-marquee { animation-play-state: paused; }
+.hx-marquee-mask { -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+@keyframes hx-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .hx-rise, .hx-sway, .hx-steam, .hx-flicker, .hx-twinkle, .hx-glow, .hx-bob, .hx-rot, .hx-fly, .hx-flap, .hx-breathe, .hx-marquee { animation: none !important; }
+  .hx-rise, .hx-steam { opacity: 0.5; }
+}
+
+/* /test: things that change with day (light) and night (dark) */
+.hx-day { display: contents; }
+.hx-night { display: none; }
+.dark .hx-day { display: none; }
+.dark .hx-night { display: contents; }
+
+/* /test scenes: loops stop while offscreen; marquee pause button */
+[data-paused="true"] [class*="hx-"] { animation-play-state: paused !important; }
+.hx-marquee-paused .hx-marquee { animation-play-state: paused !important; }
+.aw-shift-up .aw-launcher { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); }
+/* while the cookie bar is open it covers the bottom of the screen: keep the accessibility button reachable at the top */
+html.show--consent .aw-launcher { top: calc(76px + env(safe-area-inset-top, 0px)); bottom: auto; }
+@media (prefers-reduced-motion: reduce) {
+  .hx-marquee-toggle { display: none; }
+  .hx-marquee-mask { overflow-x: auto !important; -webkit-mask-image: none; mask-image: none; }
 }

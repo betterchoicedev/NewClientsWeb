@@ -189,7 +189,7 @@ function LoginPage() {
           value={formData.password}
           onChange={handleInputChange}
           action={
-            <button type="button" onClick={handleForgotPasswordClick} className={`mb-2 text-[13px] font-semibold text-bc-muted hover:text-bc-text rounded ${focusClass}`}>
+            <button type="button" onClick={handleForgotPasswordClick} className={`-my-3 mb-[-4px] inline-flex min-h-[44px] items-center text-[13px] font-semibold text-bc-muted hover:text-bc-text rounded ${focusClass}`}>
               {isHebrew ? 'שכחתם סיסמה?' : 'Forgot password?'}
             </button>
           }

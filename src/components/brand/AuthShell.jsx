@@ -21,7 +21,7 @@ export function AuthShell({ title, subtitle, children, footer = true }) {
   return (
     <div dir={direction} className="min-h-screen flex flex-col bg-bc-canvas text-bc-text font-system text-start">
       <header className="h-16 px-6 flex items-center justify-between">
-        <Link to="/" aria-label={isHebrew ? 'דף הבית של BetterChoice' : 'BetterChoice home'} className={`rounded-lg ${focusClass}`}>
+        <Link to="/" aria-label={isHebrew ? 'דף הבית של BetterChoice' : 'BetterChoice home'} className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg ${focusClass}`}>
           <Mark size={28} />
         </Link>
         <div className="flex items-center gap-2">

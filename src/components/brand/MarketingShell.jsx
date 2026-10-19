@@ -49,7 +49,7 @@ export function MarketingHeader() {
   return (
     <header className="sticky top-0 z-40 bg-bc-surface border-b border-bc-border">
       <div className="mx-auto max-w-6xl h-16 px-4 sm:px-6 flex items-center justify-between gap-2">
-        <Link to="/" aria-label={c.home} className={`flex items-center rounded-lg ${focusClass}`}>
+        <Link to="/" aria-label={c.home} className={`flex items-center min-h-[44px] min-w-[44px] rounded-lg ${focusClass}`}>
           <span className="sm:hidden"><Mark size={28} /></span>
           <span className="hidden sm:inline-flex"><Lockup height={22} /></span>
         </Link>
@@ -58,7 +58,7 @@ export function MarketingHeader() {
           <button
             type="button"
             onClick={toggleLanguage}
-            aria-label={c.otherLanguageLabel}
+            aria-label={`${c.otherLanguage} · ${c.otherLanguageLabel}`}
             lang={language === 'hebrew' ? 'en' : 'he'}
             className={`${textButton} px-2 sm:px-3`}
           >
@@ -86,7 +86,7 @@ export function MarketingHeader() {
 function MarketingFooter() {
   const { language } = useLanguage();
   const c = copy[language] || copy.english;
-  const linkClass = `text-[13px] font-semibold text-bc-muted hover:text-bc-text transition-colors rounded ${focusClass}`;
+  const linkClass = `inline-flex items-center min-h-[44px] text-[13px] font-semibold text-bc-muted hover:text-bc-text transition-colors rounded ${focusClass}`;
 
   return (
     <footer className="border-t border-bc-border">
@@ -104,10 +104,10 @@ function MarketingFooter() {
 }
 
 /** Public pages: wordmark, language, theme, Download, Log in. No feature navigation. */
-export default function MarketingShell({ children }) {
+export default function MarketingShell({ children, className = '' }) {
   const { direction } = useLanguage();
   return (
-    <div dir={direction} className="min-h-screen flex flex-col bg-bc-canvas text-bc-text font-system text-start">
+    <div dir={direction} className={`min-h-screen flex flex-col bg-bc-canvas text-bc-text font-system text-start ${className}`}>
       <MarketingHeader />
       <main className="flex-1">{children}</main>
       <MarketingFooter />
