@@ -4,7 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { readOnboardingCompanyContext, saveOnboardingCompanyContext } from '../features/onboarding/onboardingCompanyContext';
 import { AuthShell, AuthNotice } from '../components/brand/AuthShell';
-import { primaryButton } from '../components/brand/ui';
+import { primaryButton, secondaryButton } from '../components/brand/ui';
 
 async function ensureOnboardingCompanyContext(managerId, linkId) {
   const existing = readOnboardingCompanyContext();
@@ -39,6 +39,8 @@ function SignupPage() {
   const [isIOS, setIsIOS] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [linkVerified, setLinkVerified] = useState(false);
+  // On a phone, ask whether the app is installed before offering to open it.
+  const [hasApp, setHasApp] = useState(false);
 
   const APPLE_APP_ID = '6770512379';
 
@@ -218,13 +220,6 @@ function SignupPage() {
     };
   }, [invitationToken, language]);
 
-  // Valid invitation on a phone: hand the referral token straight to the app.
-  useEffect(() => {
-    if (!linkVerified || !hasInvitationToken || !isMobile) return;
-    if (!getActiveInvitationToken()) return;
-    window.location.href = getAppSignupUrl();
-  }, [linkVerified, hasInvitationToken, isMobile, invitationToken]);
-
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
@@ -259,20 +254,34 @@ function SignupPage() {
     <AuthShell
       key="app-only-signup"
       title={isHebrew ? 'הוזמנתם להצטרף' : "You're invited"}
-      subtitle={isMobile
+      subtitle={!isMobile
         ? (isHebrew
-          ? 'פותחים את אפליקציית BetterChoice AI להשלמת ההרשמה…'
-          : 'Opening the BetterChoice AI app to finish signing up…')
-        : (isHebrew
           ? 'ההרשמה מתבצעת באפליקציית BetterChoice AI. פתחו את קישור ההזמנה בטלפון שלכם כדי להמשיך.'
-          : 'Signup happens in the BetterChoice AI app. Open this invitation link on your phone to continue.')}
+          : 'Signup happens in the BetterChoice AI app. Open this invitation link on your phone to continue.')
+        : hasApp
+          ? (isHebrew
+            ? 'פתחו את אפליקציית BetterChoice AI כדי להשלים את ההרשמה.'
+            : 'Open the BetterChoice AI app to finish signing up.')
+          : (isHebrew
+            ? 'כבר הורדתם את אפליקציית BetterChoice AI?'
+            : 'Have you already downloaded the BetterChoice AI app?')}
     >
       <div className="flex flex-col gap-3">
         {error ? <AuthNotice>{error}</AuthNotice> : null}
-        {isMobile ? (
+        {isMobile && linkVerified && hasApp ? (
           <a href={getAppSignupUrl()} className={`${primaryButton} w-full`}>
             {isHebrew ? 'פתיחה באפליקציה' : 'Open in the app'}
           </a>
+        ) : null}
+        {isMobile && linkVerified && !hasApp ? (
+          <>
+            <button type="button" onClick={() => setHasApp(true)} className={`${primaryButton} w-full`}>
+              {isHebrew ? 'כן, יש לי את האפליקציה' : 'Yes, I have the app'}
+            </button>
+            <a href="/get" className={`${secondaryButton} w-full`}>
+              {isHebrew ? 'לא, עוד לא' : 'No, not yet'}
+            </a>
+          </>
         ) : null}
       </div>
     </AuthShell>
