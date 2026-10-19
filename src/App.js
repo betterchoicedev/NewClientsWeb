@@ -1,6 +1,5 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
 import SignupPage from './pages/SignupPage';
@@ -47,8 +46,8 @@ function App() {
               <AccessibilityWidget />
               <Routes>
                 {/* Marketing */}
-                <Route path="/" element={<HomePage />} />
-                <Route path="/test" element={<TestPage />} />
+                <Route path="/" element={<TestPage />} />
+                <Route path="/test" element={<Navigate to="/" replace />} />
                 <Route path="/he" element={<LanguageRedirect lang="hebrew" />} />
                 <Route path="/en" element={<LanguageRedirect lang="english" />} />
                 <Route path="/app" element={<OpenAppPage />} />

@@ -19,10 +19,10 @@ import FoodBand from '../features/marketing/test/FoodBand';
 import StickerTile from '../features/marketing/test/StickerTile';
 import { KitchenScene, DinnerScene } from '../features/marketing/test/Illustrations';
 
-// TEST (/test): the BetterMe "products" spirit with our product, drawn instead
+// Home (/): the BetterMe "products" spirit with our product, drawn instead
 // of photographed: first-person vector scenes (your hand, your table, your
 // plate), the real app recreated as live vector screens, a warm canvas in
-// light and dark. The production landing (/) is untouched.
+// light and dark.
 
 const FADE = { duration: 0.5, ease: 'easeOut' };
 const smooth = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
@@ -280,14 +280,6 @@ function FinalScene({ language }) {
 
 export default function TestPage() {
   const { language } = useLanguage();
-  // A test page: keep it out of search results (the home page stays the indexed landing).
-  React.useEffect(() => {
-    const meta = document.createElement('meta');
-    meta.name = 'robots';
-    meta.content = 'noindex';
-    document.head.appendChild(meta);
-    return () => meta.remove();
-  }, []);
   return (
     <MotionConfig reducedMotion="user">
       <MarketingShell className="theme-warm">
