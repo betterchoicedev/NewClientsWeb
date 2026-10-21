@@ -154,7 +154,7 @@ function SceneHero({ language }) {
           ))}
           <div className="absolute -bottom-14 sm:-bottom-10 right-[2%] sm:-right-6 origin-bottom-right scale-[0.56] sm:scale-[0.62] -rotate-[5deg]">
             <PhoneFrame label={language === 'hebrew' ? 'אפליקציית BetterChoice' : 'BetterChoice app'} className="shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)]">
-              <AppScreen screen="nutrition" language={language} />
+              <AppScreen screen="nutrition" language={language} eager />
             </PhoneFrame>
           </div>
         </motion.div>
