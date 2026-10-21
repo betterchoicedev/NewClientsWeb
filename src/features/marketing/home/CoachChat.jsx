@@ -61,22 +61,22 @@ const TONE = { yes: ['✓', '#34C759'], half: ['◐', '#F7B733'], add: ['+', '#6
 
 const copy = {
   hebrew: {
-    eyebrow: 'המאמנת, 24/7',
+    eyebrow: 'מאמן AI · 24 שעות ביממה',
     title: 'שואלים כל דבר. בכל שעה.',
-    body: 'מצלמים מנה ושואלים: לאכול או לא? המאמנת מכירה את התפריט, את היום ואת היעד שלכם, ועונה תוך שניות. גם בחצות.',
-    online: 'המאמנת · זמינה 24/7',
-    checking: 'בודקת את היום שלך…',
+    body: 'מצלמים מנה ושואלים: לאכול או לא? מאמן ה-AI מכיר את התפריט, את היום ואת היעד שלכם, ועונה תוך שניות. גם בחצות.',
+    online: 'מאמן AI · זמין 24/7',
+    checking: 'בודק את היום שלך…',
     type: 'שאלו כל דבר…',
-    day: 'יום אחד עם המאמנת',
+    day: 'יום אחד עם מאמן ה-AI',
   },
   english: {
-    eyebrow: 'The coach, 24/7',
+    eyebrow: 'AI coach, 24/7',
     title: 'Ask anything. Any hour.',
-    body: 'Snap a dish and ask: eat it or not? The coach knows your plan, your day and your goal, and answers in seconds. Even at midnight.',
-    online: 'Coach · available 24/7',
+    body: 'Snap a dish and ask: eat it or not? The AI coach knows your plan, your day and your goal, and answers in seconds. Even at midnight.',
+    online: 'AI coach · available 24/7',
     checking: 'Checking your day…',
     type: 'Ask anything…',
-    day: 'One day with the coach',
+    day: 'One day with the AI coach',
   },
 };
 const pick = (o, language) => (o ? o[language] || o.english : '');
@@ -212,7 +212,7 @@ export default function CoachChat({ language }) {
               <div className="flex flex-none items-center gap-2.5 px-3 py-2.5" style={{ borderBottom: `1px solid ${APP.border}` }}>
                 <Avatar size={34} />
                 <div>
-                  <p className="text-[14px] font-extrabold" style={{ color: APP.text }}>{he ? 'המאמנת שלך' : 'Your coach'}</p>
+                  <p className="text-[14px] font-extrabold" style={{ color: APP.text }}>{he ? 'מאמן ה-AI שלך' : 'Your AI coach'}</p>
                   <p className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: '#34C759' }}>
                     <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />{c.online}
                   </p>

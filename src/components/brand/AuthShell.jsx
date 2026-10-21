@@ -80,7 +80,7 @@ export function AuthShell({ title, subtitle, children, footer = true }) {
         >
           <SceneArt className="aspect-[8/5] rounded-[40px]" pill />
           <p className="mt-5 text-center font-choice font-medium text-[22px] text-bc-text">
-            {isHebrew ? 'התפריט, היומן והמאמנת. הכל מחכה באפליקציה.' : 'Your plan, your log and your coach, all in the app.'}
+            {isHebrew ? 'התפריט, היומן ומאמן ה-AI. הכל מחכה באפליקציה.' : 'Your plan, your log and your AI coach, all in the app.'}
           </p>
         </motion.aside>
       </main>

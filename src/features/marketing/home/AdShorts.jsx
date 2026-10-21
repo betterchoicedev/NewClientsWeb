@@ -89,7 +89,7 @@ export default function AdShorts({ language }) {
       <div className="mx-auto max-w-3xl px-4 sm:px-6 text-center">
         <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">ב-20 שניות</p>
         <h2 className="mt-4 font-choice font-medium text-[32px] sm:text-[48px] leading-[1.08] text-bc-text">האפליקציה, לפי המטרה שלכם.</h2>
-        <p className="mt-4 text-[17px] sm:text-[19px] font-semibold text-bc-muted">צילום, תפריט, אימונים ומאמנת. כ-20 שניות לכל מטרה.</p>
+        <p className="mt-4 text-[17px] sm:text-[19px] font-semibold text-bc-muted">צילום, תפריט, אימונים ומאמן AI. כ-20 שניות לכל מטרה.</p>
       </div>
       <div className="mt-10 mx-auto max-w-6xl">
         <div className="flex snap-x snap-mandatory gap-4 sm:gap-6 overflow-x-auto px-[calc(50%-110px)] sm:px-[calc(50%-125px)] lg:px-6 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:justify-center">

@@ -36,7 +36,7 @@ const copy = {
     title1: 'עשו את',
     titleGreen: 'הבחירה',
     title2: 'הטובה יותר.',
-    triad: 'תפריט אישי. אימונים מותאמים. מאמנת שתמיד שם.',
+    triad: 'תפריט אישי. אימונים מותאמים. מאמן AI שתמיד זמין.',
     cta: 'הורידו בחינם',
     more: 'איך זה עובד',
     note: '3 ימים חינם, ביטול בכל רגע.',
@@ -57,7 +57,7 @@ const copy = {
     title1: 'Make the',
     titleGreen: 'better choice.',
     title2: '',
-    triad: 'A personal meal plan. Workouts that fit. A coach who’s always there.',
+    triad: 'A personal meal plan. Workouts that fit. An AI coach that’s always there.',
     cta: 'Download free',
     more: 'How it works',
     note: '3 days free, cancel anytime.',
@@ -305,11 +305,11 @@ export default function HomePage() {
     <MotionConfig reducedMotion="user">
       <MarketingShell className="theme-warm">
         <SceneHero language={language} />
+        <CoachChat language={language} />
         <Programs language={language} />
         <PlanStory language={language} stickers />
         <Deferred minHeight="560px"><FoodBand language={language} /></Deferred>
         <Deferred minHeight="900px"><AppFeatures language={language} /></Deferred>
-        <Deferred minHeight="900px"><CoachChat language={language} /></Deferred>
         <Deferred minHeight="1200px"><OnYourSide language={language} /></Deferred>
         <Deferred minHeight="760px"><AdShorts language={language} /></Deferred>
         <Deferred minHeight="900px"><LogWays language={language} /></Deferred>

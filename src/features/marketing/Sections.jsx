@@ -94,10 +94,10 @@ const FAQ = [
     },
   },
   {
-    q: { hebrew: 'מי המאמנת באפליקציה?', english: 'Who is the coach in the app?' },
+    q: { hebrew: 'מה זה מאמן ה-AI?', english: 'What is the AI coach?' },
     a: {
-      hebrew: 'המאמנת שבאפליקציה. היא מכירה את התוכנית שלכם ואת מה שאכלתם היום, עונה על שאלות תזונה ואימון, ומציעה מה לאכול בארוחה הבאה. זה לא ייעוץ רפואי.',
-      english: 'The coach in the app. She knows your plan and what you ate today, answers nutrition and training questions, and suggests your next meal. It’s not medical advice.',
+      hebrew: 'מאמן ה-AI שבאפליקציה. הוא מכיר את התוכנית שלכם ואת מה שאכלתם היום, עונה על שאלות תזונה ואימון, ומציעה מה לאכול בארוחה הבאה. זה לא ייעוץ רפואי.',
+      english: 'The AI coach in the app. It knows your plan and what you ate today, answers nutrition and training questions, and suggests your next meal. It’s not medical advice.',
     },
   },
   {

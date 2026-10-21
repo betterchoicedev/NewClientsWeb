@@ -11,8 +11,8 @@ const STATUS = `${(57 / 852) * 100}%`;
 const APP_BG = '#121915';
 const FILES = { nutrition: 'nutrition', training: 'training', chat: 'chat' };
 const ALT = {
-  hebrew: { nutrition: 'מסך התזונה באפליקציה: היום, נותר, חלבון, פחמימות, שומן, מים והארוחות שתועדו', training: 'מסך תוכנית האימונים: השבוע, האימון של היום והתרגילים', chat: 'צ׳אט עם המאמנת: שאלה על פיצה ותשובה עם מספרים מהשבוע' },
-  english: { nutrition: 'The app’s nutrition screen: today, remaining calories, protein, carbs, fat, water and logged meals', training: 'The training plan screen: the week, today’s workout and the exercises', chat: 'A chat with the coach: a question about pizza, answered with numbers from the week' },
+  hebrew: { nutrition: 'מסך התזונה באפליקציה: היום, נותר, חלבון, פחמימות, שומן, מים והארוחות שתועדו', training: 'מסך תוכנית האימונים: השבוע, האימון של היום והתרגילים', chat: 'צ׳אט עם מאמן ה-AI: שאלה על פיצה ותשובה עם מספרים מהשבוע' },
+  english: { nutrition: 'The app’s nutrition screen: today, remaining calories, protein, carbs, fat, water and logged meals', training: 'The training plan screen: the week, today’s workout and the exercises', chat: 'A chat with the AI coach: a question about pizza, answered with numbers from the week' },
 };
 const src = (lang, name) => `${process.env.PUBLIC_URL || ''}/app-screens/${lang}-${name}.webp`;
 
