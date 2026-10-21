@@ -192,6 +192,10 @@
 }
 
 html,
+/* Nothing may make the page wider than the screen (a wide element would shift
+   everything on phones). clip, not hidden, so sticky headers keep working. */
+html, body { max-width: 100%; overflow-x: clip; }
+
 body {
   margin: 0;
   /* App canvas, so mobile browser chrome and initial paint match the app */
