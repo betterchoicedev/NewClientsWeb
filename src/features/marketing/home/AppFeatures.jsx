@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
-import { Utensils, Dumbbell, MessageCircle, Pause, Play } from 'lucide-react';
+import { Utensils, Dumbbell, Pause, Play } from 'lucide-react';
 import { PhoneFrame } from '../PhoneFrame';
 import { AppScreen } from './AppScreens';
 import { focusClass } from '../../../components/brand/ui';
@@ -28,16 +28,6 @@ const TABS = [
     line: {
       hebrew: 'תוכנית בימים שבחרתם, עם סטים וחזרות. רושמים משקלים תוך כדי.',
       english: 'A plan on the days you chose, with sets and reps. Log weights as you go.',
-    },
-  },
-  {
-    key: 'chat',
-    icon: MessageCircle,
-    label: { hebrew: 'המאמנת', english: 'Coach' },
-    title: { hebrew: 'המאמנת שבכיס שלכם. גם ב-23:47.', english: 'A coach in your pocket. Even at 23:47.' },
-    line: {
-      hebrew: 'אכלתם חצי מגש פיצה? היא בודקת את היעד, את היום ואת השבוע, ועונה עם מספרים. בלי אשמה.',
-      english: 'Had half a pizza? She checks your goal, your day and your week, and answers with numbers. No guilt.',
     },
   },
 ];

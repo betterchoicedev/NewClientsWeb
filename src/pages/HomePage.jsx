@@ -17,6 +17,7 @@ import AppFeatures from '../features/marketing/home/AppFeatures';
 import OnYourSide from '../features/marketing/home/OnYourSide';
 import FoodBand from '../features/marketing/home/FoodBand';
 import AdShorts from '../features/marketing/home/AdShorts';
+import CoachChat from '../features/marketing/home/CoachChat';
 import LogWays from '../features/marketing/home/LogWays';
 import StickerTile from '../features/marketing/home/StickerTile';
 import { KitchenScene, DinnerScene } from '../features/marketing/home/Illustrations';
@@ -308,6 +309,7 @@ export default function HomePage() {
         <PlanStory language={language} stickers />
         <Deferred minHeight="560px"><FoodBand language={language} /></Deferred>
         <Deferred minHeight="900px"><AppFeatures language={language} /></Deferred>
+        <Deferred minHeight="900px"><CoachChat language={language} /></Deferred>
         <Deferred minHeight="1200px"><OnYourSide language={language} /></Deferred>
         <Deferred minHeight="760px"><AdShorts language={language} /></Deferred>
         <Deferred minHeight="900px"><LogWays language={language} /></Deferred>
