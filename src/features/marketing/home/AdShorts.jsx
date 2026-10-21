@@ -92,7 +92,7 @@ export default function AdShorts({ language }) {
         <p className="mt-4 text-[17px] sm:text-[19px] font-semibold text-bc-muted">צילום, תפריט, אימונים ומאמנת. כ-20 שניות לכל מטרה.</p>
       </div>
       <div className="mt-10 mx-auto max-w-6xl">
-        <div className="flex snap-x snap-mandatory gap-4 sm:gap-6 overflow-x-auto px-4 sm:px-6 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:justify-center">
+        <div className="flex snap-x snap-mandatory gap-4 sm:gap-6 overflow-x-auto px-[calc(50%-110px)] sm:px-[calc(50%-125px)] lg:px-6 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:justify-center">
           {SHORTS.map((s) => (
             <Short key={s.n} {...s} reduce={reduce} soundOn={sound === s.n} onSound={() => setSound((cur) => (cur === s.n ? null : s.n))} />
           ))}

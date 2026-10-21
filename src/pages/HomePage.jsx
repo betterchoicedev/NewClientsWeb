@@ -152,7 +152,7 @@ function SceneHero({ language }) {
               <span className="hx-night"><StickerTile slugs={night} size={96} delay={0.4 + d * 0.2} className={sz} /></span>
             </div>
           ))}
-          <div className="absolute -bottom-14 sm:-bottom-10 right-[2%] sm:-right-6 origin-bottom-right scale-[0.56] sm:scale-[0.62] -rotate-[5deg]">
+          <div className="absolute -bottom-12 sm:-bottom-10 right-[8%] sm:-right-6 origin-bottom-right scale-[0.54] sm:scale-[0.62] -rotate-[5deg]">
             <PhoneFrame label={language === 'hebrew' ? 'אפליקציית BetterChoice' : 'BetterChoice app'} className="shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)]">
               <AppScreen screen="nutrition" language={language} eager />
             </PhoneFrame>
