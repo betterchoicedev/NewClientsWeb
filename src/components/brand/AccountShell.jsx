@@ -33,7 +33,7 @@ export default function AccountShell({ children }) {
           <Link
             to="/"
             aria-label={isHebrew ? 'דף הבית של BetterChoice' : 'BetterChoice home'}
-            className={`flex items-center rounded-lg ${focusClass}`}
+            className={`flex items-center min-h-[44px] rounded-lg ${focusClass}`}
           >
             <Lockup height={20} />
           </Link>

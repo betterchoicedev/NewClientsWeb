@@ -683,3 +683,32 @@ export function DinnerScene({ className = '' }) {
     </svg>
   );
 }
+
+/* ---------- Empty plate: the 404 ---------- */
+
+export function EmptyPlateScene({ className = '' }) {
+  const ids = useSceneIds();
+  return (
+    <svg viewBox="0 0 600 320" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <SceneDefs ids={ids} />
+      <rect width="600" height="320" fill="var(--scene-bg)" />
+      <rect x="0" y="40" width="600" height="130" fill={`url(#${ids.tiles})`} />
+      <rect x="0" y="166" width="600" height="6" fill={WOOD_DARK} />
+      <rect x="0" y="172" width="600" height="148" fill={WOOD} />
+      <path d={hexD(300, 236, 150, 0.32)} fill={SHIRT.sage} opacity="0.4" />
+      <Shadow ids={ids} cx={300} cy={246} rx={118} ry={22} />
+      <ellipse cx="300" cy="236" rx="112" ry="34" fill="var(--scene-plate-rim)" />
+      <ellipse cx="300" cy="232" rx="88" ry="25" fill="var(--scene-plate)" />
+      <circle cx="322" cy="228" r="2.5" fill="#D9A04E" />
+      <circle cx="281" cy="236" r="2" fill="#5BAE4B" />
+      <rect x="440" y="214" width="8" height="64" rx="4" fill="#9AA39E" transform="rotate(-8 444 246)" />
+      <path d="M432 210 v18 M440 208 v20 M448 208 v20 M456 210 v18" stroke="#9AA39E" strokeWidth="3" strokeLinecap="round" transform="rotate(-8 444 246)" />
+      <g className="hx-bob" style={{ '--a': '-8px', '--dur': '3.5s' }}>
+        <path d={hexD(300, 120, 30)} fill="var(--bc-surface)" stroke={GREEN} strokeWidth="4" />
+        <text x="300" y="132" textAnchor="middle" fontSize="34" fontWeight="800" fill={GREEN}>?</text>
+      </g>
+      <HexDust items={[[180, 200, 4, 0], [420, 190, 3, 2], [250, 160, 3, 3.5]]} color={GREEN} h={-120} />
+      <Finish ids={ids} w={600} h={320} />
+    </svg>
+  );
+}

@@ -8,6 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { apiFetch } from '../lib/apiClient';
 import { normalizePhoneForDatabase } from '../supabase/auth';
 import AccountShell from '../components/brand/AccountShell';
+import { KitchenScene } from '../features/marketing/home/Illustrations';
 import {
   card,
   field,
@@ -653,6 +654,10 @@ export default function AccountPage() {
         </aside>
 
         <div className="min-w-0 max-w-2xl">
+          {/* the home page kitchen, as a band: the site's look on the settings page too */}
+          <div className="relative mb-8 h-32 sm:h-40 overflow-hidden rounded-[28px] border border-bc-border" aria-hidden="true">
+            <KitchenScene className="absolute inset-0 h-full w-full" />
+          </div>
           <h1 className={`text-[32px] leading-tight text-bc-text font-choice font-medium`}>
             {c.pageTitle}
           </h1>
