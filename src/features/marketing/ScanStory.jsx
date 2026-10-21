@@ -3,7 +3,6 @@ import { focusClass } from '../../components/brand/ui';
 import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
 import { Camera, ScanSearch, Ruler, Target } from 'lucide-react';
 import { FOODS, TOTALS, PLAN, IS_EXAMPLE } from './scanExample';
-import MobileStory from './MobileStory';
 import ScanMotion from './ScanMotion';
 
 // The hero feature, explained: a sticky, scroll-driven stage drawn in flat
@@ -44,6 +43,7 @@ const STEPS = [
     key: 'plan',
     icon: Target,
     label: { hebrew: 'מול התוכנית שלכם', english: 'Against your plan' },
+    short: { hebrew: 'התאמה', english: 'Plan fit' },
     line: {
       hebrew: 'כל ארוחה נבדקת מול התוכנית שלכם, עם טיפ לארוחה הבאה. טעיתם? מתקנים גרמים בלחיצה.',
       english: 'Every meal is checked against your plan, with a tip for the next one. Off? Fix the grams in a tap.',
@@ -277,6 +277,49 @@ function Step({ step, index, language, onActive, active }) {
   );
 }
 
+// Phones: one full-width phone with the four steps as buttons above it
+// (tap, or swipe the phone), the step's line under the buttons.
+function MobileScan({ language }) {
+  const [i, setI] = useState(0);
+  const touch = useRef(null);
+  const he = language === 'hebrew';
+  const go = (n) => setI(Math.max(0, Math.min(STEPS.length - 1, n)));
+  const onTouchStart = (e) => { touch.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (touch.current == null) return;
+    const dx = e.changedTouches[0].clientX - touch.current;
+    touch.current = null;
+    if (Math.abs(dx) < 40) return;
+    const forward = he ? dx > 0 : dx < 0; // in Hebrew the next step is to the left
+    go(i + (forward ? 1 : -1));
+  };
+  const step = STEPS[i];
+  return (
+    <div className="lg:hidden mt-8">
+      <div className="grid grid-cols-4 gap-1.5" role="group" aria-label={he ? 'שלבי הסריקה' : 'Scan steps'}>
+        {STEPS.map((s, k) => {
+          const Icon = s.icon;
+          const on = k === i;
+          return (
+            <button key={s.key} type="button" onClick={() => go(k)} aria-pressed={on}
+              className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-[16px] border px-1 text-[12px] font-bold transition-colors ${focusClass} ${on ? 'border-bc-accent bg-[var(--bc-accent-well)] text-bc-text' : 'border-bc-border text-bc-muted'}`}>
+              <Icon size={18} aria-hidden="true" className={on ? 'text-bc-accent-text' : ''} />
+              {pick(s.short || s.label, language)}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-4 min-h-[84px] font-choice font-medium text-[19px] leading-[1.35] text-bc-text" aria-live="polite">
+        <span className="me-2 font-choice text-[14px] text-bc-accent-text tabular-nums" dir="ltr">{String(i + 1).padStart(2, '0')}</span>
+        {pick(step.line, language)}
+      </p>
+      <div className="mt-2 flex justify-center" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        <ScanMotion stepKey={step.key} language={language} bare />
+      </div>
+    </div>
+  );
+}
+
 export default function ScanStory({ language }) {
   const c = pick(copy, language);
   const [active, setActive] = useState(0);
@@ -311,27 +354,7 @@ export default function ScanStory({ language }) {
             <Step key={s.key} step={s} index={i} language={language} onActive={setActive} active={active === i} />
           ))}
         </div>
-        <MobileStory
-          className="lg:hidden mt-10"
-          language={language}
-          steps={STEPS}
-          renderSlide={(s, i) => {
-            const Icon = s.icon;
-            return (
-              <div className="flex flex-col gap-4">
-                <div className="min-h-[148px]">
-                  <p className="flex items-center gap-2 text-[13px] font-bold text-bc-accent-text">
-                    <span className="font-choice tabular-nums" dir="ltr">{String(i + 1).padStart(2, '0')}</span>
-                    <Icon size={16} aria-hidden="true" />
-                    {pick(s.label, language)}
-                  </p>
-                  <p className="mt-2 font-choice font-medium text-[20px] leading-[1.3] text-bc-text">{pick(s.line, language)}</p>
-                </div>
-                <ScanMotion stepKey={s.key} language={language} />
-              </div>
-            );
-          }}
-        />
+        <MobileScan language={language} />
         <div className="hidden lg:block">
           <div className="sticky top-16 h-[calc(100vh-64px)] flex items-center justify-center">
             <ScanMotion stepKey={STEPS[active].key} language={language} className="w-full max-w-[460px]" />

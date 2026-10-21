@@ -37,12 +37,12 @@ function StatusBar() {
   );
 }
 
-export default function ScanMotion({ stepKey, language, className = '', eager = false }) {
+export default function ScanMotion({ stepKey, language, className = '', eager = false, bare = false }) {
   const reduce = useReducedMotion();
   const alt = (ALT[language] || ALT.english)[stepKey] || '';
   return (
-    <div className={`flex items-center justify-center rounded-bc-card py-8 ${className}`} style={{ backgroundColor: 'var(--scene-bg)' }}>
-      <PhoneFrame label={alt}>
+    <div className={bare ? `flex justify-center ${className}` : `flex items-center justify-center rounded-bc-card py-8 ${className}`} style={bare ? undefined : { backgroundColor: 'var(--scene-bg)' }}>
+      <PhoneFrame label={alt} className={bare ? '!w-[min(300px,82vw)]' : ''}>
         <div className="absolute inset-0 overflow-hidden" style={{ backgroundColor: APP_BG }}>
           <StatusBar />
           <div className="absolute inset-x-0 bottom-0 overflow-hidden" style={{ top: STATUS }}>
