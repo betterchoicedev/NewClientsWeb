@@ -1,11 +1,10 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { useSceneIds, SceneDefs, Finish, HexDust, hexD, useOffscreenPause } from './Illustrations';
+import { useSceneIds, SceneDefs, Finish, HexDust, hexD, useOffscreenPause, Person, Arm, HexCell, HexLamp, Leafy, SKIN, HAIR, SHIRT, darken } from './Illustrations';
 
-// Flat vector "lifestyle" scenes for the /test page: everyday moments drawn in
-// the brand's flat style (hexagon weights, the scan-story food), no stock
-// photos and no faces. Colors use theme tokens where the scene meets the page,
-// fixed food colors elsewhere, so they work in warm light and warm dark.
+// Goal scenes for the home page cards: people and food in the brand's flat
+// style (hexagon weights, hex tiles). Theme tokens where the scene meets the
+// page, fixed food colors elsewhere, so they work in warm light and dark.
 
 const C = {
   wood: 'var(--scene-wood, #E6CDA8)',
@@ -207,50 +206,170 @@ function Banana({ x, y }) {
   return <path d={`M${x - 60} ${y - 10} q 60 50 120 -6 q -60 30 -120 6 z`} fill={C.banana} stroke="#D9B33E" strokeWidth="2" />;
 }
 
+// One person per goal, in the home page's style: wall in hex tiles with light
+// from the left, decor (shelves, a lamp, a window, a hex clock), the person
+// behind a wooden table doing the goal, and the goal's food on the table.
+// recomp: curling a hex dumbbell over a balanced plate; muscle: a shake after
+// training, eggs and a kettlebell; lose: a big salad, water and an apple;
+// maintain: a slow coffee with toast and a banana.
+const SCENE_PEOPLE = {
+  recomp: { x: 405, skin: SKIN[1], hair: HAIR[1], hairStyle: 'bun', shirt: SHIRT.sage, turn: -5, earring: true },
+  muscle: { x: 410, skin: SKIN[2], hair: HAIR[0], hairStyle: 'short', shirt: SHIRT.navy, turn: -4, beard: true },
+  lose: { x: 185, skin: SKIN[0], hair: HAIR[2], hairStyle: 'long', shirt: SHIRT.clay, turn: 6, earring: true },
+  maintain: { x: 425, skin: SKIN[3], hair: HAIR[3], hairStyle: 'curly', shirt: SHIRT.mustard, turn: -4 },
+};
+const PY = 150; // neck base
+const PS = 0.95;
+
+function Wall({ ids, goal }) {
+  return (
+    <g>
+      <rect x="0" y="0" width="600" height="400" fill="var(--scene-bg)" />
+      <rect x="0" y="0" width="600" height="400" fill={`url(#${ids.wall})`} />
+      <rect x="0" y="112" width="600" height="160" fill={`url(#${ids.tiles})`} />
+      <rect x="0" y="108" width="600" height="6" fill={C.woodDark} />
+      <path d="M0 0 L240 0 L430 270 L0 270 Z" fill={`url(#${ids.beam})`} style={{ opacity: 'var(--scene-beam)' }} />
+      {goal === 'recomp' ? (
+        <g>
+          <HexCell cx={110} cy={66} r={34}><Leafy x={110} y={88} s={0.5} d={0.4} /></HexCell>
+          <HexCell cx={170} cy={66} r={34}>
+            <rect x="160" y="62" width="20" height="24" rx="5" fill="#F2DE8F" />
+            <rect x="158" y="57" width="24" height="7" rx="3" fill={C.woodDark} />
+          </HexCell>
+          <HexLamp ids={ids} x={280} drop={12} r={20} />
+        </g>
+      ) : null}
+      {goal === 'muscle' ? (
+        <g>
+          {/* barbell on wall pegs, hex plates */}
+          <rect x="60" y="78" width="12" height="16" rx="3" fill={C.woodDark} />
+          <rect x="228" y="78" width="12" height="16" rx="3" fill={C.woodDark} />
+          <rect x="40" y="72" width="220" height="7" rx="3.5" fill="#7E8A84" />
+          {[52, 248].map((x) => (
+            <g key={x}>
+              <path d={hexD(x, 75, 26)} fill={C.iron} />
+              <path d={hexD(x, 75, 11)} fill="none" stroke={C.green} strokeWidth="3.5" />
+            </g>
+          ))}
+          <HexLamp ids={ids} x={310} drop={4} r={18} />
+        </g>
+      ) : null}
+      {goal === 'lose' ? (
+        <g>
+          {/* window with the day outside */}
+          <rect x="370" y="18" width="200" height="182" rx="6" fill={C.woodDark} />
+          <rect x="380" y="28" width="180" height="162" fill={`url(#${ids.sky})`} />
+          <circle className="hx-bob" style={{ '--a': '-4px', '--dur': '6s' }} cx="520" cy="66" r="16" fill="var(--scene-orb)" />
+          <path d="M380 150 q 50 -26 100 -6 q 50 -18 80 2 v 44 h -180 z" fill="#5BAE4B" opacity="0.5" />
+          <rect x="467" y="28" width="6" height="162" fill={C.woodDark} />
+          <rect x="370" y="198" width="210" height="9" rx="3" fill={C.woodDark} />
+          <Leafy x={540} y={196} s={0.5} d={0.8} />
+        </g>
+      ) : null}
+      {goal === 'maintain' ? (
+        <g>
+          {/* hex wall clock, the hands turn */}
+          <path d={hexD(150, 72, 42)} fill="var(--scene-cloth)" stroke={C.woodDark} strokeWidth="6" />
+          <circle cx="150" cy="72" r="3.5" fill={C.iron} />
+          <line className="hx-spin" style={{ '--dur': '60s', transformOrigin: '150px 72px', transformBox: 'view-box' }} x1="150" y1="72" x2="150" y2="44" stroke={C.iron} strokeWidth="3" strokeLinecap="round" />
+          <line className="hx-spin" style={{ '--dur': '720s', transformOrigin: '150px 72px', transformBox: 'view-box' }} x1="150" y1="72" x2="170" y2="72" stroke={C.green} strokeWidth="4" strokeLinecap="round" />
+          <HexCell cx={250} cy={66} r={32}><Leafy x={250} y={88} s={0.46} trailing d={0.3} /></HexCell>
+        </g>
+      ) : null}
+    </g>
+  );
+}
+
+function TableTop() {
+  return (
+    <g>
+      <rect x="0" y="262" width="600" height="138" fill={C.wood} />
+      <rect x="0" y="262" width="600" height="8" fill={C.woodDark} />
+      <rect x="0" y="270" width="600" height="3" fill="#FFFFFF" opacity="0.25" />
+      {[90, 230, 370, 510].map((x) => <rect key={x} x={x} y="273" width="2" height="127" fill="var(--scene-shade)" />)}
+    </g>
+  );
+}
+
+const L = (p, lx, ly) => [p.x + lx * PS, PY + ly * PS];
+
 export function GoalScene({ goal, className = '' }) {
   const ids = useSceneIds();
   const [pauseRef, near] = useOffscreenPause();
   if (!near) return <svg ref={pauseRef} viewBox="0 0 600 400" className={className} aria-hidden="true" />;
+  const p = SCENE_PEOPLE[goal] || SCENE_PEOPLE.recomp;
+  const sleeve = darken(p.shirt, 0.9);
   return (
     <svg ref={pauseRef} viewBox="0 0 600 400" className={className} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <SceneDefs ids={ids} />
-      <Table ids={ids} />
-      <HexDust items={[[120, 230, 4, 0], [200, 200, 3, 1.8], [300, 240, 5, 3.4], [380, 210, 3, 5], [470, 235, 4, 2.6]]} color="var(--bc-accent)" h={-150} />
+      <Wall ids={ids} goal={goal} />
+      <Person ids={ids} x={p.x} y={PY} s={PS} torso={128} {...p} />
+      <TableTop />
+
       {goal === 'recomp' ? (
-        <>
-          <Float amount={8}>
-            <Dumbbell x={470} y={175} s={1.1} />
-          </Float>
-          <PlateBalanced x={250} y={300} r={130} />
-          <Glass x={500} y={330} />
-          <Steam x={300} y={240} />
-        </>
+        <g>
+          <PlateBalanced x={195} y={318} r={112} />
+          <Steam x={225} y={268} />
+          <Glass x={78} y={338} />
+          <Arm from={L(p, -42, 20)} elbow={L(p, -56, 84)} to={[p.x - 78, 296]} sleeve={sleeve} skin={p.skin} rolled />
+          <Arm from={L(p, 42, 20)} elbow={L(p, 62, 92)} to={L(p, 62, 92)} sleeve={p.shirt} skin={p.skin} />
+          {/* the curl: forearm + hex dumbbell turn at the elbow */}
+          <g className="hx-curl" style={{ '--o': '0% 100%', '--a': '-38deg', '--dur': '2.6s' }}>
+            <path d={`M${L(p, 62, 92)[0]} ${L(p, 62, 92)[1]} L${p.x + 72} ${PY + 30}`} stroke={p.skin} strokeWidth="14" strokeLinecap="round" />
+            <circle cx={p.x + 72} cy={PY + 30} r="9.5" fill={p.skin} />
+            <Dumbbell x={p.x + 72} y={PY + 28} s={0.36} />
+          </g>
+        </g>
       ) : null}
+
       {goal === 'muscle' ? (
-        <>
-          <Shaker x={150} y={330} />
-          <Eggs x={280} y={320} />
-          <Float amount={7}>
-            <Kettlebell x={470} y={290} />
-          </Float>
-        </>
+        <g>
+          <Eggs x={120} y={322} />
+          <Kettlebell x={250} y={322} />
+          <Banana x={530} y={330} />
+          <Arm from={L(p, -42, 20)} elbow={L(p, -60, 86)} to={[p.x - 70, 298]} sleeve={sleeve} skin={p.skin} />
+          {/* the shake, raised and tilting */}
+          <g className="hx-curl" style={{ '--o': '50% 100%', '--a': '-14deg', '--dur': '3.4s' }}>
+            <Arm from={L(p, 42, 20)} elbow={L(p, 66, 80)} to={[p.x + 40, PY + 12]} sleeve={p.shirt} skin={p.skin} />
+            <g transform={`translate(${p.x + 40} ${PY + 30}) rotate(-24) scale(0.42) translate(${-p.x - 40} ${-PY - 30})`}>
+              <Shaker x={p.x + 40} y={PY + 30} />
+            </g>
+          </g>
+        </g>
       ) : null}
+
       {goal === 'lose' ? (
-        <>
-          <SaladBowl x={290} y={320} />
-          <Glass x={490} y={340} />
-          <Float amount={6} delay={0.6}>
-            <Apple x={110} y={300} />
-          </Float>
-        </>
+        <g>
+          <SaladBowl x={330} y={328} />
+          <Glass x={500} y={340} />
+          <Float amount={6} delay={0.6}><Apple x={560} y={318} /></Float>
+          <Arm from={L(p, -42, 20)} elbow={L(p, -58, 86)} to={[p.x - 62, 298]} sleeve={sleeve} skin={p.skin} />
+          <Arm from={L(p, 42, 20)} elbow={L(p, 72, 84)} to={L(p, 72, 84)} sleeve={p.shirt} skin={p.skin} />
+          {/* fork into the salad */}
+          <g className="hx-curl" style={{ '--o': '0% 0%', '--a': '-12deg', '--dur': '1.8s' }}>
+            <path d={`M${L(p, 72, 84)[0]} ${L(p, 72, 84)[1]} L${p.x + 104} ${PY + 128}`} stroke={p.skin} strokeWidth="14" strokeLinecap="round" />
+            <circle cx={p.x + 104} cy={PY + 128} r="9.5" fill={p.skin} />
+            <path d={`M${p.x + 104} ${PY + 128} l 26 22 m 0 0 l 6 -2 m -6 2 l 2 6`} stroke="#C9D1CD" strokeWidth="4" strokeLinecap="round" fill="none" />
+          </g>
+        </g>
       ) : null}
+
       {goal === 'maintain' ? (
-        <>
-          <Mug x={140} y={330} />
-          <Toast x={300} y={320} />
-          <Banana x={470} y={320} />
-        </>
+        <g>
+          <Toast x={160} y={322} />
+          <Banana x={290} y={330} />
+          <Glass x={560} y={340} />
+          <Arm from={L(p, -42, 20)} elbow={L(p, -48, 84)} to={[p.x - 16, PY + 96]} sleeve={sleeve} skin={p.skin} />
+          <Arm from={L(p, 42, 20)} elbow={L(p, 48, 84)} to={[p.x + 16, PY + 96]} sleeve={p.shirt} skin={p.skin} />
+          <g className="hx-bob" style={{ '--a': '-3px', '--dur': '4s' }}>
+            <Mug x={p.x} y={PY + 118} />
+            <circle cx={p.x - 30} cy={PY + 92} r="9.5" fill={p.skin} />
+            <circle cx={p.x + 30} cy={PY + 92} r="9.5" fill={p.skin} />
+          </g>
+        </g>
       ) : null}
+
+      <HexDust items={[[110, 240, 4, 0], [200, 200, 3, 1.8], [300, 240, 5, 3.4], [380, 210, 3, 5], [480, 235, 4, 2.6]]} color="var(--bc-accent)" h={-150} />
       <Finish ids={ids} w={600} h={400} />
     </svg>
   );

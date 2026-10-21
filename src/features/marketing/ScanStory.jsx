@@ -276,6 +276,46 @@ function Step({ step, index, language, onActive, active }) {
   );
 }
 
+// The scan from the campaign video (short 1, real app UI): camera on a burger,
+// the LiDAR depth sweep, the foods labelled, the result card counting up.
+// Each step plays its part of the clip on a loop. Hebrew keeps the ad's
+// headline line; English is cropped below it.
+const CLIP_SEGMENTS = { snap: [0, 1.0], measure: [0.95, 2.05], identify: [1.95, 2.55], plan: [2.95, 4.45] };
+const clipSrc = (language, ext) => `${process.env.PUBLIC_URL || ''}/ads/scan-${language === 'hebrew' ? 'he' : 'en'}.${ext}`;
+
+function ScanClip({ stepKey, language, className = '' }) {
+  const ref = useRef(null);
+  const reduce = useReducedMotion();
+  const visible = useInView(ref, { amount: 0.5 });
+  const [from, to] = CLIP_SEGMENTS[stepKey] || CLIP_SEGMENTS.snap;
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return undefined;
+    let raf = 0;
+    const seek = () => { try { v.currentTime = reduce ? (from + to) / 2 : from; } catch (e) { /* not loaded yet */ } };
+    if (v.readyState >= 1) seek(); else v.addEventListener('loadedmetadata', seek, { once: true });
+    if (reduce || !visible) { v.pause(); return undefined; }
+    v.play().catch(() => {});
+    const tick = () => { if (v.currentTime >= to || v.currentTime < from - 0.2) v.currentTime = from; raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); v.pause(); };
+  }, [from, to, reduce, visible]);
+  return (
+    <div className={`overflow-hidden rounded-[32px] border border-bc-border ${className}`}>
+      <video
+        ref={ref}
+        src={clipSrc(language, 'mp4')}
+        poster={clipSrc(language, 'jpg')}
+        muted
+        playsInline
+        preload="metadata"
+        aria-hidden="true"
+        className="block h-full w-full object-cover"
+      />
+    </div>
+  );
+}
+
 export default function ScanStory({ language }) {
   const c = pick(copy, language);
   const [active, setActive] = useState(0);
@@ -326,20 +366,20 @@ export default function ScanStory({ language }) {
                   </p>
                   <p className="mt-2 font-choice font-medium text-[20px] leading-[1.3] text-bc-text">{pick(s.line, language)}</p>
                 </div>
-                <Stage step={i} language={language} />
+                <ScanClip stepKey={s.key} language={language} className={language === 'hebrew' ? 'aspect-[720/980]' : 'aspect-[720/866]'} />
               </div>
             );
           }}
         />
         <div className="hidden lg:block">
           <div className="sticky top-16 h-[calc(100vh-64px)] flex items-center justify-center">
-            <Stage step={active} language={language} />
+            <ScanClip stepKey={STEPS[active].key} language={language} className={`w-full max-w-[440px] ${language === 'hebrew' ? 'aspect-[720/980]' : 'aspect-[720/866]'} max-h-[calc(100vh-112px)]`} />
           </div>
         </div>
       </div>
       {IS_EXAMPLE ? (
         <p className="mx-auto max-w-6xl px-4 sm:px-6 pb-12 pt-6 text-[12px] font-semibold text-bc-muted">
-          {language === 'hebrew' ? 'הצלחת, הכמויות והערכים כאן להמחשה. סריקת העומק מוצגת כהמחשה של אופן הפעולה.' : 'The plate, amounts and values here are illustrative. The depth scan is shown as an illustration of how it works.'}
+          {language === 'hebrew' ? 'הקטע מתוך סרטון של האפליקציה. המנה והערכים להמחשה.' : 'Clip from our app video. The meal and values are illustrative.'}
         </p>
       ) : null}
     </section>

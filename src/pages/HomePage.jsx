@@ -165,39 +165,86 @@ function SceneHero({ language }) {
 
 /* ---------- Programs: illustrated goal cards ---------- */
 
+// Each goal's example day: daily calories, macro split (the app's diet
+// styles), and three meals from the dietitian food stickers. Illustrative.
+const GOAL_DAY = {
+  recomp: { kcal: 1950, split: [40, 30, 30], meals: [['omelette', 'cottage-cheese'], ['quinoa', 'chicken-breast', 'broccoli'], ['protein-yogurt', 'almonds', 'walnuts']] },
+  muscle: { kcal: 2450, split: [40, 30, 30], meals: [['oats', 'banana'], ['pasta', 'chicken-breast', 'bell-pepper'], ['salmon', 'sweet-potato', 'broccoli']] },
+  lose: { kcal: 1750, split: [30, 40, 30], meals: [['shakshuka-with-bread'], ['white-rice', 'chicken-breast', 'cucumber'], ['yogurt', 'strawberries', 'blueberries']] },
+  maintain: { kcal: 2150, split: [30, 40, 30], meals: [['avocado-toast'], ['hummus', 'pita'], ['grilled-salmon-plate']] },
+};
+
 function Programs({ language }) {
   const c = copy[language] || copy.english;
+  const he = language === 'hebrew';
   const start = (goal) => {
     window.dispatchEvent(new CustomEvent('bc:pick-goal', { detail: goal }));
     document.getElementById('try-it')?.scrollIntoView({ behavior: smooth(), block: 'start' });
   };
+  const macroNames = he ? ['חלבון', 'פחמימות', 'שומן'] : ['Protein', 'Carbs', 'Fat'];
+  const macroKeys = ['protein', 'carbs', 'fat'];
   return (
     <section id="programs" className="scroll-mt-16 bg-bc-canvas border-t border-bc-border">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
         <h2 className="mx-auto max-w-3xl text-center font-choice font-medium text-[34px] sm:text-[54px] leading-[1.06] text-bc-text">{c.programsTitle}</h2>
         <div className="mt-12 grid md:grid-cols-2 gap-5">
-          {PROGRAMS.map((p, i) => (
-            <article
-              key={p.goal}
-              className="overflow-hidden rounded-bc-card border border-bc-border bg-bc-surface flex flex-col"
-            >
-              <GoalScene goal={p.goal} className="block w-full aspect-[3/2]" />
-              <div className="p-6 sm:p-8 flex flex-col gap-2 flex-1">
-                <p className="font-choice text-[15px] text-bc-muted tabular-nums">{String(i + 1).padStart(2, '0')}</p>
-                <h3 className="font-choice font-medium text-[28px] sm:text-[34px] leading-[1.1] text-bc-text">{pick(p.title, language)}</h3>
-                <p className="text-[16px] sm:text-[17px] font-semibold text-bc-muted">{pick(p.line, language)}</p>
-                <div className="mt-4">
-                  <button
-                    type="button"
-                    onClick={() => start(p.goal)}
-                    className={`inline-flex min-h-[44px] items-center rounded-full border border-[color-mix(in_srgb,var(--bc-text)_40%,transparent)] px-6 text-[15px] font-semibold text-bc-text hover:bg-[color-mix(in_srgb,var(--bc-text)_6%,transparent)] ${focusClass}`}
-                  >
-                    {c.getStarted}
-                  </button>
+          {PROGRAMS.map((p, i) => {
+            const day = GOAL_DAY[p.goal];
+            return (
+              <article
+                key={p.goal}
+                className="group overflow-hidden rounded-bc-card border border-bc-border bg-bc-surface flex flex-col transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_24px_48px_-24px_rgba(0,0,0,0.35)]"
+              >
+                <div className="relative overflow-hidden">
+                  <GoalScene goal={p.goal} className="block w-full aspect-[3/2] transition-transform duration-700 group-hover:scale-[1.04]" />
+                  {/* the day's target, pinned on the scene */}
+                  <span className="absolute top-4 start-4 inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[14px] font-bold text-bc-text shadow-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--bc-surface) 88%, transparent)', backdropFilter: 'blur(6px)' }}>
+                    <span className="h-2 w-2 rounded-full bg-bc-accent" aria-hidden="true" />
+                    <span className="tabular-nums" dir="ltr">~{day.kcal.toLocaleString('en-US')}</span> {he ? 'קק״ל ביום' : 'kcal a day'}
+                  </span>
                 </div>
-              </div>
-            </article>
-          ))}
+                <div className="p-6 sm:p-8 flex flex-col gap-2 flex-1">
+                  <p className="font-choice text-[15px] text-bc-muted tabular-nums">{String(i + 1).padStart(2, '0')}</p>
+                  <h3 className="font-choice font-medium text-[28px] sm:text-[34px] leading-[1.1] text-bc-text">{pick(p.title, language)}</h3>
+                  <p className="text-[16px] sm:text-[17px] font-semibold text-bc-muted">{pick(p.line, language)}</p>
+                  {/* macro split */}
+                  <div className="mt-4">
+                    <div className="flex h-2.5 w-full overflow-hidden rounded-full" dir="ltr" aria-hidden="true">
+                      {day.split.map((v, k) => <span key={k} style={{ width: `${v}%`, backgroundColor: `var(--bc-${macroKeys[k]})` }} />)}
+                    </div>
+                    <p className="mt-2 flex flex-wrap gap-x-4 text-[13px] font-bold text-bc-text">
+                      {day.split.map((v, k) => (
+                        <span key={k} className="inline-flex items-center gap-1.5">
+                          <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: `var(--bc-${macroKeys[k]})` }} />
+                          {macroNames[k]} <span dir="ltr">{v}%</span>
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                  {/* an example day */}
+                  <div className="mt-4 flex items-center gap-3 rounded-[20px] border border-bc-border bg-bc-canvas px-4 py-3">
+                    <span className="text-[13px] font-bold text-bc-muted">{he ? 'יום לדוגמה' : 'A sample day'}</span>
+                    <span className="flex flex-1 justify-end gap-1">
+                      {day.meals.map((m, k) => (
+                        <span key={k} className="transition-transform duration-300 group-hover:-translate-y-1" style={{ transitionDelay: `${k * 60}ms` }}>
+                          <StickerTile slugs={m} size={56} inView delay={k * 0.12} />
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                  <div className="mt-5">
+                    <button
+                      type="button"
+                      onClick={() => start(p.goal)}
+                      className={`inline-flex min-h-[44px] items-center rounded-full border border-[color-mix(in_srgb,var(--bc-text)_40%,transparent)] px-6 text-[15px] font-semibold text-bc-text hover:bg-[color-mix(in_srgb,var(--bc-text)_6%,transparent)] ${focusClass}`}
+                    >
+                      {c.getStarted}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

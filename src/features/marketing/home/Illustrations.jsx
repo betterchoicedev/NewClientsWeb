@@ -7,9 +7,9 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 // in light mode, lamps on in dark mode. Motion is CSS (.hx-* in index.css),
 // so it is cheap and stops for reduced motion.
 
-const SKIN = ['#F1C9A5', '#E3B08A', '#C68E68', '#8D5A3B'];
-const HAIR = ['#2B1D16', '#5A3A22', '#C9A06A', '#151515', '#8A4B2A'];
-const SHIRT = { sage: '#8FB59A', clay: '#D07A5A', mustard: '#E2B24F', navy: '#3D5A80', cream: '#EFE6D6', plum: '#8E5A7A', pine: '#2F6B4F' };
+export const SKIN = ['#F1C9A5', '#E3B08A', '#C68E68', '#8D5A3B'];
+export const HAIR = ['#2B1D16', '#5A3A22', '#C9A06A', '#151515', '#8A4B2A'];
+export const SHIRT = { sage: '#8FB59A', clay: '#D07A5A', mustard: '#E2B24F', navy: '#3D5A80', cream: '#EFE6D6', plum: '#8E5A7A', pine: '#2F6B4F' };
 const WOOD = 'var(--scene-wood)';
 const WOOD_DARK = 'var(--scene-wood-dark)';
 const GREEN = 'var(--bc-accent)';
@@ -24,7 +24,7 @@ export const hexD = (cx, cy, r, sy = 1) =>
     })
     .join(' ')} Z`;
 
-function darken(hex, f = 0.82) {
+export function darken(hex, f = 0.82) {
   const n = parseInt(hex.slice(1), 16);
   const c = (v) => Math.round(v * f).toString(16).padStart(2, '0');
   return `#${c((n >> 16) & 255)}${c((n >> 8) & 255)}${c(n & 255)}`;
@@ -148,11 +148,11 @@ export function HexDust({ items, color = GREEN, h = -140 }) {
   );
 }
 
-function Shadow({ ids, cx, cy, rx, ry }) {
+export function Shadow({ ids, cx, cy, rx, ry }) {
   return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="var(--scene-shade)" filter={`url(#${ids.blur})`} />;
 }
 
-function Steam({ x, y, n = 3, gap = 14, d = 0 }) {
+export function Steam({ x, y, n = 3, gap = 14, d = 0 }) {
   return (
     <g pointerEvents="none">
       {Array.from({ length: n }, (_, i) => (
@@ -172,7 +172,7 @@ function Steam({ x, y, n = 3, gap = 14, d = 0 }) {
 }
 
 /** Hexagon pendant lamp with a breathing glow. */
-function HexLamp({ ids, x, drop = 80, color = SHIRT.mustard, r = 26 }) {
+export function HexLamp({ ids, x, drop = 80, color = SHIRT.mustard, r = 26 }) {
   return (
     <g>
       <circle className="hx-glow" cx={x} cy={drop + r} r="180" fill={`url(#${ids.glow})`} />
@@ -185,7 +185,7 @@ function HexLamp({ ids, x, drop = 80, color = SHIRT.mustard, r = 26 }) {
 }
 
 /** Honeycomb shelf cell: a thick wooden hexagon. */
-function HexCell({ cx, cy, r = 40, children }) {
+export function HexCell({ cx, cy, r = 40, children }) {
   return (
     <g>
       <path d={hexD(cx, cy, r)} fill="var(--scene-shade)" opacity="0.35" />
@@ -195,7 +195,7 @@ function HexCell({ cx, cy, r = 40, children }) {
   );
 }
 
-function Leafy({ x, y, s = 1, d = 0, trailing = false }) {
+export function Leafy({ x, y, s = 1, d = 0, trailing = false }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`}>
       <g className="hx-sway" style={v({ '--d': `${d}s`, '--dur': '5s', '--o': trailing ? '50% 0%' : '50% 100%' })}>
@@ -212,7 +212,7 @@ function Leafy({ x, y, s = 1, d = 0, trailing = false }) {
   );
 }
 
-function Curtain({ x, y, w, h, flip = false, d = 0 }) {
+export function Curtain({ x, y, w, h, flip = false, d = 0 }) {
   const dir = flip ? -1 : 1;
   return (
     <g className="hx-sway" style={v({ '--d': `${d}s`, '--dur': '7s', '--o': '50% 0%', '--a1': '-1deg', '--a2': '1.2deg' })}>
@@ -231,7 +231,7 @@ function Curtain({ x, y, w, h, flip = false, d = 0 }) {
  * A figure from the waist up, faceless. Origin is the base of the neck.
  * Arms are drawn by each scene in scene coordinates (so they can move).
  */
-function Person({ ids, x, y, s = 1, skin, hair, hairStyle = 'short', shirt, torso = 120, turn = 0, glasses, beard, earring, apron, breathe = true }) {
+export function Person({ ids, x, y, s = 1, skin, hair, hairStyle = 'short', shirt, torso = 120, turn = 0, glasses, beard, earring, apron, breathe = true }) {
   const hx = turn * 1.4;
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`}>
@@ -278,7 +278,7 @@ function Person({ ids, x, y, s = 1, skin, hair, hairStyle = 'short', shirt, tors
 }
 
 /** Upper arm in the sleeve, forearm in skin (rolled) or sleeve, then the hand. */
-function Arm({ from, elbow, to, sleeve, skin, rolled = false, w = 17 }) {
+export function Arm({ from, elbow, to, sleeve, skin, rolled = false, w = 17 }) {
   return (
     <g>
       <path d={`M${from[0]} ${from[1]} L${elbow[0]} ${elbow[1]}`} stroke={sleeve} strokeWidth={w} strokeLinecap="round" />

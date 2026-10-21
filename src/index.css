@@ -728,3 +728,10 @@ html.show--consent .aw-launcher { top: calc(76px + env(safe-area-inset-top, 0px)
   .hx-marquee-toggle { display: none; }
   .hx-marquee-mask { overflow-x: auto !important; -webkit-mask-image: none; mask-image: none; }
 }
+
+/* goal scenes: a curl / sip / forkful, and clock hands */
+.hx-curl { animation: hx-curl var(--dur, 2.6s) ease-in-out infinite; transform-box: fill-box; transform-origin: var(--o, 0% 100%); }
+@keyframes hx-curl { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(var(--a, -30deg)); } }
+.hx-spin { animation: hx-spin var(--dur, 60s) linear infinite; }
+@keyframes hx-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .hx-curl, .hx-spin { animation: none !important; } }
