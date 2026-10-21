@@ -331,7 +331,7 @@ function TryIt({ language, stickers }) {
   const goalDef = GOALS.find((g) => g.key === goal);
 
   return (
-    <div id="try-it" className="scroll-mt-20 mx-auto max-w-6xl px-4 sm:px-6 pb-20 sm:pb-28 grid lg:grid-cols-2 gap-12 items-start">
+    <div id="try-it" className="scroll-mt-20 mx-auto max-w-6xl px-4 sm:px-6 pb-20 sm:pb-28 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-2 gap-12 items-start">
       <div>
         <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{he ? 'נסו בעצמכם' : 'Try it'}</p>
         <h3 className="mt-3 font-choice font-medium text-[28px] sm:text-[40px] leading-[1.08] text-bc-text">
@@ -374,10 +374,10 @@ function TryIt({ language, stickers }) {
           <motion.ul key={diet} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FADE} className="mt-6 divide-y divide-bc-border border-t border-bc-border">
             {EXAMPLE_DAY[diet].map((meal, i) => (
               <li key={meal.english} className="flex items-center justify-between gap-4 py-3.5">
-                <span className="text-[13px] font-bold text-bc-muted w-16 flex-none">{pick(MEAL_NAMES[i], language)}</span>
+                <span className="text-[13px] font-bold text-bc-muted w-14 sm:w-16 flex-none">{pick(MEAL_NAMES[i], language)}</span>
                 {stickers ? <StickerTile slugs={MEAL_STICKERS[meal.english]} size={52} delay={i * 0.1} /> : null}
                 <span className="flex-1 text-[15px] font-semibold text-bc-text">{pick(meal, language)}</span>
-                <span className="flex-none rounded-full border border-bc-border px-2 py-0.5 text-[12px] font-semibold text-bc-muted">{he ? '+ חלופות' : '+ swaps'}</span>
+                <span className="flex-none rounded-full border border-bc-border px-2 py-0.5 text-[12px] font-semibold text-bc-muted max-[379px]:hidden">{he ? '+ חלופות' : '+ swaps'}</span>
               </li>
             ))}
           </motion.ul>
