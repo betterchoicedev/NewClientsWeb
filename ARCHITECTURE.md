@@ -73,7 +73,7 @@ src/
   supabase/
     auth.js              Auth helpers that call /api/auth/* (name is historical)
     secondaryClient.js   Meal-plan API helpers (name is historical)
-  pages/                 One file per route: TestPage (home), Login, Signup, Landing, Account,
+  pages/                 One file per route: HomePage (home), Login, Signup, Landing, Account,
                          AuthCallback, ResetPassword, OpenApp, WhatsAppRegister, DeleteAccount, legal
   components/
     brand/               Shells (Marketing, Auth, Account), RequireAuth, store badges, download link
@@ -93,7 +93,7 @@ public/
 
 | Path | Page |
 |---|---|
-| `/` | Marketing home (`TestPage.jsx`) |
+| `/` | Marketing home (`HomePage.jsx`) |
 | `/he`, `/en` | Set language, then go home |
 | `/login`, `/signup`, `/reset-password`, `/auth/callback` | Auth |
 | `/landing#d=…` | Company campaign landing page |

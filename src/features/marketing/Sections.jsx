@@ -18,79 +18,6 @@ function SectionHead({ eyebrow, title, sub, language, center = false }) {
   );
 }
 
-/* ---------- Every way to log ---------- */
-
-const METHODS = [
-  {
-    icon: Camera,
-    title: { hebrew: 'תמונה', english: 'Photo' },
-    line: { hebrew: 'מצלמים את הצלחת, והסריקה עושה את השאר.', english: 'Snap the plate. The scan does the rest.' },
-  },
-  {
-    icon: ScanBarcode,
-    title: { hebrew: 'ברקוד', english: 'Barcode' },
-    line: { hebrew: 'סורקים את האריזה ומקבלים את הערכים שלה.', english: 'Scan the package and get its values.' },
-  },
-  {
-    icon: Mic,
-    title: { hebrew: 'קול', english: 'Voice' },
-    line: { hebrew: 'אומרים מה אכלתם, במילים שלכם.', english: 'Say what you ate, in your own words.' },
-  },
-  {
-    icon: Type,
-    title: { hebrew: 'טקסט', english: 'Text' },
-    line: { hebrew: 'כותבים "שתי פרוסות לחם עם חומוס" וזהו.', english: 'Type "two slices of bread with hummus" and you’re done.' },
-  },
-  {
-    icon: MessageCircle,
-    title: { hebrew: 'וואטסאפ', english: 'WhatsApp' },
-    line: { hebrew: 'שולחים למאמנת תמונה או הקלטה, והיא רושמת.', english: 'Send the coach a photo or a voice note, and she logs it.' },
-  },
-  {
-    icon: GlassWater,
-    title: { hebrew: 'מים', english: 'Water' },
-    line: { hebrew: 'כוס בלחיצה, עם יעד יומי.', english: 'A glass in one tap, with a daily goal.' },
-  },
-];
-
-export function LogMethods({ language }) {
-  return (
-    <section className="border-t border-bc-border bg-bc-band">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
-        <SectionHead
-          language={language}
-          eyebrow={{ hebrew: 'רישום', english: 'Logging' }}
-          title={{ hebrew: 'כל דרך לרשום, בלי להקליד טבלאות.', english: 'Every way to log, no spreadsheets.' }}
-          sub={{ hebrew: 'מה שנוח לכם באותו רגע. הכל נכנס לאותו יומן.', english: 'Whatever suits the moment. It all lands in the same diary.' }}
-        />
-        <div className="mt-12 grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {METHODS.map((m) => {
-            const Icon = m.icon;
-            return (
-              <motion.div
-                key={m.title.english}
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true, amount: 0.3 }}
-                transition={FADE}
-                className="rounded-bc-card border border-bc-border bg-bc-canvas p-5 sm:p-7"
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bc-accent-well)] text-bc-accent-text">
-                  <Icon size={22} aria-hidden="true" />
-                </span>
-                <h3 className="mt-5 font-choice font-medium text-[20px] sm:text-[24px] text-bc-text">{pick(m.title, language)}</h3>
-                <p className="mt-2 text-[14px] sm:text-[15px] font-semibold text-bc-muted leading-relaxed">{pick(m.line, language)}</p>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ---------- Pricing ---------- */
-
 export function Pricing({ language }) {
   const he = language === 'hebrew';
   const { trialDays, monthly, yearlyPerMonth, currency } = PRICING;
@@ -167,10 +94,10 @@ const FAQ = [
     },
   },
   {
-    q: { hebrew: 'מי המאמנת באפליקציה?', english: 'Who is the coach in the app?' },
+    q: { hebrew: 'מה זה מאמן ה-AI?', english: 'What is the AI coach?' },
     a: {
-      hebrew: 'המאמנת שבאפליקציה. היא מכירה את התוכנית שלכם ואת מה שאכלתם היום, עונה על שאלות תזונה ואימון, ומציעה מה לאכול בארוחה הבאה. זה לא ייעוץ רפואי.',
-      english: 'The coach in the app. She knows your plan and what you ate today, answers nutrition and training questions, and suggests your next meal. It’s not medical advice.',
+      hebrew: 'מאמן ה-AI שבאפליקציה. הוא מכיר את התוכנית שלכם ואת מה שאכלתם היום, עונה על שאלות תזונה ואימון, ומציעה מה לאכול בארוחה הבאה. זה לא ייעוץ רפואי.',
+      english: 'The AI coach in the app. It knows your plan and what you ate today, answers nutrition and training questions, and suggests your next meal. It’s not medical advice.',
     },
   },
   {

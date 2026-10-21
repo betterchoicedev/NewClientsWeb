@@ -1,411 +1,325 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { AnimatePresence, MotionConfig, motion, useInView } from 'framer-motion';
-import { BookOpen, Dumbbell, MessageCircle } from 'lucide-react';
+import React from 'react';
+import { MotionConfig, motion } from 'framer-motion';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import MarketingShell from '../components/brand/MarketingShell';
 import DownloadLink from '../components/brand/DownloadLink';
 import StoreBadges from '../components/brand/StoreBadges';
-import { primaryButton } from '../components/brand/ui';
-import { Mark, Wordmark } from '../components/brand/Logo';
-import { PhoneFrame, PhoneFootage } from '../features/marketing/PhoneFrame';
-import ScanStory from '../features/marketing/ScanStory';
+import { focusClass, primaryButton } from '../components/brand/ui';
 import PlanStory from '../features/marketing/PlanStory';
-import { LogMethods, Pricing, Faq, StickyDownload } from '../features/marketing/Sections';
+import ScanStory, { Stage } from '../features/marketing/ScanStory';
+import { Pricing, Faq, StickyDownload } from '../features/marketing/Sections';
+import { PhoneFrame } from '../features/marketing/PhoneFrame';
+import { GoalScene } from '../features/marketing/home/Scenes';
+import { AppScreen } from '../features/marketing/home/AppScreens';
+import AppFeatures from '../features/marketing/home/AppFeatures';
+import OnYourSide from '../features/marketing/home/OnYourSide';
+import FoodBand from '../features/marketing/home/FoodBand';
+import AdShorts from '../features/marketing/home/AdShorts';
+import CoachChat from '../features/marketing/home/CoachChat';
+import LogWays from '../features/marketing/home/LogWays';
+import StickerTile from '../features/marketing/home/StickerTile';
+import { KitchenScene, DinnerScene } from '../features/marketing/home/Illustrations';
 
-// Motion rule from BetterApp/DESIGN.md: enter is a 400ms fade.
-const FADE = { duration: 0.4, ease: 'easeOut' };
+// Home (/): the BetterMe "products" spirit with our product, drawn instead
+// of photographed: first-person vector scenes (your hand, your table, your
+// plate), the real app recreated as live vector screens, a warm canvas in
+// light and dark.
 
-// Flat color, no gradient or shadow: the green well everywhere, lavender only for wellness.
-const panelTint = (tint) =>
-  tint === 'wellness'
-    ? { fill: 'var(--bc-wellness-well)', line: 'var(--bc-wellness)' }
-    : { fill: 'var(--bc-accent-well)', line: 'var(--bc-accent)' };
-
-/** A radius-32 color panel behind a phone, with the brand hexagon drawn large inside it. */
-function ColorPanel({ tint, children, className = '' }) {
-  const { fill, line } = panelTint(tint);
-  return (
-    <div
-      className={`relative overflow-hidden rounded-bc-card flex items-center justify-center px-8 py-10 sm:px-14 sm:py-12 transition-colors duration-[400ms] ${className}`}
-      style={{ backgroundColor: fill }}
-    >
-      <Mark
-        size={560}
-        color={line}
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-25 pointer-events-none transition-[stroke] duration-[400ms]"
-      />
-      <div className="relative">{children}</div>
-    </div>
-  );
-}
-
-// NAV_THEME.macros, the colors the app uses for protein, carbs, and fat.
-const MACROS = [
-  { key: 'protein', english: 'Protein', hebrew: 'חלבון' },
-  { key: 'carbs', english: 'Carbs', hebrew: 'פחמימות' },
-  { key: 'fat', english: 'Fat', hebrew: 'שומן' },
-];
-
-function MacroChips({ language }) {
-  return (
-    <ul className="mt-6 flex flex-wrap gap-2" aria-label={language === 'hebrew' ? 'מאקרו' : 'Macros'}>
-      {MACROS.map((macro) => (
-        <li
-          key={macro.key}
-          className="inline-flex items-center gap-2 h-9 px-4 rounded-full text-[13px] font-bold"
-          style={{ backgroundColor: `var(--bc-${macro.key}-well)`, color: `var(--bc-${macro.key})` }}
-        >
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: `var(--bc-${macro.key})` }} aria-hidden="true" />
-          {macro[language] || macro.english}
-        </li>
-      ))}
-    </ul>
-  );
-}
+const FADE = { duration: 0.5, ease: 'easeOut' };
+const smooth = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+const pick = (o, language) => (o ? o[language] || o.english : '');
 
 const copy = {
-  english: {
-    title: 'Make the better choice.',
-    finalTitle: 'Your plan is waiting.',
-    subhead: 'You’ve started over enough times. This time, someone stays with you.',
-    features: 'A personal meal plan from day one, training and a coach.',
-    cta: 'Download free',
-    platforms: '3 days free, cancel anytime. iPhone and Android.',
-    heroPhone: 'BetterChoice app on iPhone',
-    tourEyebrow: 'In the app',
-    tourTitle: 'Around your plan: training, a coach, and your progress.',
-    qr: 'On a computer? Scan to get the app.',
-    finalBody: 'Start with 3 free days, on the App Store and Google Play.',
-  },
   hebrew: {
-    title: 'עשו את הבחירה הטובה יותר.',
-    finalTitle: 'התפריט שלכם מחכה.',
-    subhead: 'התחלתם מחדש מספיק פעמים. הפעם, מישהו נשאר איתכם.',
-    features: 'תפריט אישי מהיום הראשון, אימונים ומאמנת.',
+    title1: 'עשו את',
+    titleGreen: 'הבחירה',
+    title2: 'הטובה יותר.',
+    triad: 'תפריט אישי. אימונים מותאמים. מאמן AI שתמיד זמין.',
     cta: 'הורידו בחינם',
-    platforms: '3 ימים חינם, ביטול בכל רגע. לאייפון ולאנדרואיד.',
-    heroPhone: 'אפליקציית BetterChoice באייפון',
-    tourEyebrow: 'באפליקציה',
-    tourTitle: 'סביב התפריט: אימונים, מאמנת, וההתקדמות שלכם.',
-    qr: 'במחשב? סרקו כדי להוריד.',
+    more: 'איך זה עובד',
+    note: '3 ימים חינם, ביטול בכל רגע.',
+    programsTitle: 'בחרו מטרה. התפריט נבנה סביבה.',
+    getStarted: 'לתפריט לדוגמה',
+    scanEyebrow: 'סריקה',
+    scanTitle: 'צלמו. זה רשום.',
+    scanBody: 'הסריקה מזהה כל מזון, מודדת ומחשבת. אתם רק אוכלים.',
+    scanLink: 'איך הסריקה עובדת',
+    worldTitle: 'הכירו את העולם של BetterChoice',
+    joinInvite: 'הצטרפו עם ההזמנה',
+    toDownload: 'להורדה',
+    finalTitle: 'התפריט שלכם מחכה.',
     finalBody: 'מתחילים ב-3 ימים חינם, ב-App Store וב-Google Play.',
+    dinnerCaption: 'גם בארוחת שישי. התפריט מתאים לחיים, לא להפך.',
+  },
+  english: {
+    title1: 'Make the',
+    titleGreen: 'better choice.',
+    title2: '',
+    triad: 'A personal meal plan. Workouts that fit. An AI coach that’s always there.',
+    cta: 'Download free',
+    more: 'How it works',
+    note: '3 days free, cancel anytime.',
+    programsTitle: 'Pick a goal. The plan is built around it.',
+    getStarted: 'See a sample plan',
+    scanEyebrow: 'Scan',
+    scanTitle: 'Snap it. It’s logged.',
+    scanBody: 'The scan identifies every food, measures and does the math. You just eat.',
+    scanLink: 'How the scan works',
+    worldTitle: 'Meet the BetterChoice world',
+    joinInvite: 'Join with your invite',
+    toDownload: 'Download',
+    finalTitle: 'Your plan is waiting.',
+    finalBody: 'Start with 3 free days, on the App Store and Google Play.',
+    dinnerCaption: 'Friday dinner included. The plan fits your life, not the other way around.',
   },
 };
 
-// Order: Nutrition, Training, AI chat, Health diary. Wellness and Journey are
-// "Coming soon" in the app, so they stay off the page until they ship.
-const SECTIONS = [
-  {
-    key: 'training',
-    icon: Dumbbell,
-    label: { english: 'Training', hebrew: 'אימון' },
-    line: {
-      english: 'Six plans for fat loss or muscle, two to four days a week. Log your weights as you train.',
-      hebrew: 'שש תוכניות לחיטוב או לשריר, יומיים עד ארבעה בשבוע. רושמים משקלים תוך כדי אימון.',
-    },
-  },
-  {
-    key: 'chat',
-    icon: MessageCircle,
-    label: { english: 'Your coach', hebrew: 'המאמנת שלכם' },
-    line: {
-      english: 'A coach that knows your plan and your day, and answers with both in mind. By text or voice.',
-      hebrew: 'מאמנת שמכירה את התוכנית שלכם ואת היום שלכם, ועונה בהתאם. בכתיבה או בקול.',
-    },
-  },
-  {
-    key: 'diary',
-    icon: BookOpen,
-    label: { english: 'Progress', hebrew: 'התקדמות' },
-    line: {
-      english: 'Calories and macros against your plan, your weight and measurements, and your streak.',
-      hebrew: 'קלוריות ומאקרו מול התוכנית, משקל ומדידות, והרצף שלכם.',
-    },
-  },
+// Program cards map to the app's real goals (GOAL_OPTIONS); "Get started"
+// pre-selects that goal in the plan preview. Promises are about the plan.
+const PROGRAMS = [
+  { goal: 'recomp', title: { hebrew: 'פחות שומן, אותו שריר', english: 'Lose fat, keep muscle' }, line: { hebrew: 'תפריט עשיר בחלבון ואימונים שנבנים סביבכם', english: 'A protein-forward plan and workouts built around you' } },
+  { goal: 'muscle', title: { hebrew: 'בניית שריר', english: 'Build muscle' }, line: { hebrew: 'החלבון לא יספור את עצמו. יעד חלבון ותוכנית כוח.', english: 'Protein won’t count itself. A protein target and a strength plan.' } },
+  { goal: 'lose', title: { hebrew: 'ירידה במשקל', english: 'Lose weight' }, line: { hebrew: 'בלי לספור כל ביס. תפריט שמתאים לשעות ולטעם שלכם.', english: 'Without counting every bite. A plan that fits your hours and taste.' } },
+  { goal: 'maintain', title: { hebrew: 'שמירה על משקל', english: 'Maintain' }, line: { hebrew: 'לאכול טוב, בלי לספור כל ביס', english: 'Eat well, without counting every bite' } },
 ];
 
-const pick = (entry, language) => entry[language] || entry.english;
+const WORLD = [
+  { scene: 'maintain', label: { hebrew: 'אפליקציה', english: 'App' }, name: { hebrew: 'BetterChoice לאייפון ולאנדרואיד', english: 'BetterChoice for iPhone and Android' }, kind: 'download' },
+  { scene: 'lose', label: { hebrew: 'עם הדיאטנית שלכם', english: 'With your dietitian' }, name: { hebrew: 'קיבלתם קישור הזמנה? הכל מתחבר', english: 'Got an invite link? It all connects' }, kind: 'signup' },
+  { scene: 'muscle', label: { hebrew: 'אימונים', english: 'Training' }, name: { hebrew: 'שש תוכניות, בבית או בחדר כושר', english: 'Six plans, at home or at the gym' }, kind: 'download' },
+];
 
-function HeroPhone({ footageKey, title, className = '', language }) {
-  return (
-    <div className={className}>
-      <PhoneFrame label={title}>
-        <PhoneFootage footageKey={footageKey} title={title} language={language} />
-      </PhoneFrame>
-    </div>
-  );
+/**
+ * Mounts a heavy section only when it comes near the screen (the page is long and
+ * React drawing all of it at load blocked the main thread). Reserves roughly its
+ * height meanwhile. Sections other parts link into (plan story, download) are not deferred.
+ */
+function Deferred({ children, minHeight }) {
+  const ref = React.useRef(null);
+  const [show, setShow] = React.useState(typeof IntersectionObserver === 'undefined');
+  React.useEffect(() => {
+    if (show) return undefined;
+    const el = ref.current;
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setShow(true); }, { rootMargin: '800px 0px' });
+    io.observe(el);
+    // An in-page jump (download, scan) mounts everything first so the target doesn't move mid-scroll.
+    const all = () => setShow(true);
+    window.addEventListener('bc:reveal-all', all);
+    return () => { io.disconnect(); window.removeEventListener('bc:reveal-all', all); };
+  }, [show]);
+  return show ? children : <div ref={ref} aria-hidden="true" style={{ minHeight }} />;
 }
 
-function Hero({ language }) {
+/* ---------- Hero: your hand, your table, the app ---------- */
+
+// Split hero: the promise on one side, the moment on the other (your table,
+// your plate, the app in your hand), so the scene is above the fold.
+function SceneHero({ language }) {
   const c = copy[language] || copy.english;
-  const isHebrew = language === 'hebrew';
-
+  const scrollToPrograms = () => document.getElementById('programs')?.scrollIntoView({ behavior: smooth(), block: 'start' });
   return (
-    // Green well (not the canvas) so the dark app recordings don't melt into the page.
-    <section className="relative overflow-hidden">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={FADE}
-        className="mx-auto max-w-4xl px-4 sm:px-6 pt-14 sm:pt-20 flex flex-col items-center text-center"
-      >
-        <h1
-          className={`text-bc-text text-[44px] sm:text-[72px] lg:text-[88px] leading-[1.02] tracking-[-0.02em] ${
-            'font-choice font-medium'
-          }`}
-        >
-          {isHebrew ? (
-            // Fixed two-line break: "עשו את" / "הבחירה הטובה יותר."
-            // "הבחירה" (choice) in green, like "Choice" in the English wordmark.
-            <>
-              עשו את
-              <br />
-              <span className="text-bc-accent-text">הבחירה</span> הטובה יותר.
-            </>
-          ) : (
-            <>
-              {/* "Make the" + the real wordmark. The logo's lettering replaces "better choice". */}
-              <span className="sr-only">{c.title}</span>
-              <span aria-hidden="true" style={{ '--bc-accent': 'var(--bc-accent-text)' }}>
-                Make the{' '}
-                <span className="whitespace-nowrap">
-                  <Wordmark height="0.74em" decorative className="inline-block align-baseline" />.
-                </span>
-              </span>
-            </>
-          )}
-        </h1>
-        <p className="mt-6 text-bc-text text-[20px] sm:text-[24px] leading-snug font-semibold max-w-[36rem]">
-          {c.subhead}
-        </p>
-        <p className="mt-3 text-bc-muted text-[15px] sm:text-[17px] font-semibold">{c.features}</p>
-        {/* Choice Sans ships 400/500 only and has no Hebrew, so it applies to the English label at 500. */}
-        <DownloadLink className={`${primaryButton} mt-8 px-10 !font-medium font-choice text-[16px] tracking-[0.01em]`}>
-          {c.cta}
-        </DownloadLink>
-        <span className="mt-3 text-[13px] font-semibold text-bc-muted">{c.platforms}</span>
-      </motion.div>
-
-      {/* Three real app screens, fanned flat (no 3D), cropped at the bottom like a stage. */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ ...FADE, delay: 0.15 }}
-        className="relative mt-14 h-[430px] sm:h-[560px] overflow-hidden"
-        role="img"
-        aria-label={c.heroPhone}
-      >
-        <Mark
-          size={760}
-          className="absolute left-1/2 top-24 -translate-x-1/2 opacity-20 pointer-events-none"
-        />
-        <div className="relative flex justify-center items-start" dir="ltr">
-          <HeroPhone
-            footageKey="training"
-            title="Training"
-            language={language}
-            className="hidden sm:block mt-20 -mr-16 lg:-mr-10 rotate-[-7deg] scale-[0.88] origin-top"
-          />
-          <HeroPhone footageKey="hero" title="Nutrition" className="relative z-10" language={language} />
-          <HeroPhone
-            footageKey="diary"
-            title="Analytics"
-            language={language}
-            className="hidden sm:block mt-20 -ml-16 lg:-ml-10 rotate-[7deg] scale-[0.88] origin-top"
-          />
-        </div>
-      </motion.div>
-    </section>
-  );
-}
-
-function SectionBlock({ section, index, language, onActive }) {
-  const ref = useRef(null);
-  // Active while the block crosses the middle of the viewport.
-  const centered = useInView(ref, { margin: '-50% 0px -50% 0px' });
-  const isHebrew = language === 'hebrew';
-  const tintColor = section.tint === 'wellness' ? 'var(--bc-wellness)' : 'var(--bc-accent)';
-  const label = pick(section.label, language);
-
-  useEffect(() => {
-    if (centered) onActive(index);
-  }, [centered, index, onActive]);
-
-  return (
-    <motion.article
-      ref={ref}
-      initial={{ opacity: 0 }}
-      whileInView={{ opacity: 1 }}
-      viewport={{ once: true, amount: 0.3 }}
-      transition={FADE}
-      aria-labelledby={`section-${section.key}`}
-      className="py-16 lg:py-0 lg:min-h-[80vh] flex flex-col justify-center border-t border-bc-border lg:border-0 first:border-0"
-    >
-      <p
-        className="self-start inline-flex items-center gap-2 h-9 px-4 rounded-full text-[13px] font-bold"
-        style={{ color: tintColor, backgroundColor: panelTint(section.tint).fill }}
-      >
-        <section.icon size={16} aria-hidden="true" />
-        <span id={`section-${section.key}`}>{label}</span>
-        <span className="font-choice tabular-nums opacity-70" dir="ltr">{String(index + 1).padStart(2, '0')}</span>
-      </p>
-      <h2
-        className={`mt-4 text-bc-text text-[28px] sm:text-[36px] lg:text-[40px] leading-[1.15] tracking-[-0.01em] max-w-[28rem] ${
-          'font-choice font-medium'
-        }`}
-      >
-        {pick(section.line, language)}
-      </h2>
-      {section.key === 'nutrition' ? <MacroChips language={language} /> : null}
-
-      {/* Below lg every block carries its own phone; on lg the sticky phone takes over. */}
-      <ColorPanel tint={section.tint} className="lg:hidden mt-10">
-        <PhoneFrame label={label}>
-          <PhoneFootage
-            footageKey={section.key}
-            title={label}
-            icon={section.icon}
-            tint={section.tint}
-            language={language}
-          />
-        </PhoneFrame>
-      </ColorPanel>
-    </motion.article>
-  );
-}
-
-function ProductTour({ language }) {
-  const c = copy[language] || copy.english;
-  const [active, setActive] = useState(0);
-  const current = SECTIONS[active];
-  const currentLabel = pick(current.label, language);
-
-  return (
-    <section aria-labelledby="tour-title" className="border-t border-bc-border">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-28">
-        <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{c.tourEyebrow}</p>
-        <h2 id="tour-title" className="mt-3 font-choice font-medium text-[32px] sm:text-[48px] leading-[1.08] text-bc-text max-w-3xl">
-          {c.tourTitle}
-        </h2>
-      </div>
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:grid lg:grid-cols-2 lg:gap-16">
-        <div className="lg:py-[10vh]">
-          {SECTIONS.map((section, index) => (
-            <SectionBlock
-              key={section.key}
-              section={section}
-              index={index}
-              language={language}
-              onActive={setActive}
-            />
-          ))}
-        </div>
-
-        <div className="hidden lg:block">
-          <div className="sticky top-16 h-[calc(100vh-64px)] flex flex-col items-center justify-center gap-6">
-            <ColorPanel tint={current.tint} className="w-full max-w-[480px] !py-6">
-            <PhoneFrame label={currentLabel}>
-              <AnimatePresence initial={false}>
-                <motion.div
-                  key={current.key}
-                  className="absolute inset-0"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={FADE}
-                >
-                  <PhoneFootage
-                    footageKey={current.key}
-                    title={currentLabel}
-                    icon={current.icon}
-                    tint={current.tint}
-                    language={language}
-                  />
-                </motion.div>
-              </AnimatePresence>
-            </PhoneFrame>
-            </ColorPanel>
-            <div className="flex items-center gap-2" aria-hidden="true">
-              {SECTIONS.map((section, index) => (
-                <span
-                  key={section.key}
-                  className="h-1.5 rounded-full transition-all duration-[400ms]"
-                  style={{
-                    width: index === active ? 20 : 6,
-                    backgroundColor:
-                      index === active
-                        ? section.tint === 'wellness'
-                          ? 'var(--bc-wellness)'
-                          : 'var(--bc-accent)'
-                        : 'var(--bc-border)',
-                  }}
-                />
-              ))}
-            </div>
+    <section className="bg-bc-canvas overflow-x-hidden">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-10 sm:pt-14 pb-12 grid lg:grid-cols-[0.95fr_1.1fr] gap-10 lg:gap-14 items-center lg:min-h-[calc(100svh-64px)]">
+        <div className="text-center lg:text-start">
+          <h1 className="font-choice font-medium text-[44px] sm:text-[64px] xl:text-[72px] leading-[1.04] tracking-[-0.02em] text-bc-text">
+            {c.title1}
+            <br />
+            <span className="sm:whitespace-nowrap"><span className="text-bc-accent-text">{c.titleGreen}</span> {c.title2}</span>
+          </h1>
+          <p className="mt-5 text-[18px] sm:text-[22px] font-semibold text-bc-text opacity-80 max-w-xl mx-auto lg:mx-0">{c.triad}</p>
+          <div className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+            <DownloadLink className={`${primaryButton} px-9 !font-medium font-choice text-[16px]`}>{c.cta}</DownloadLink>
+            <button type="button" onClick={scrollToPrograms} className={`inline-flex min-h-[48px] items-center rounded-full border border-[color-mix(in_srgb,var(--bc-text)_40%,transparent)] px-8 text-[16px] font-semibold text-bc-text hover:bg-[color-mix(in_srgb,var(--bc-text)_6%,transparent)] ${focusClass}`}>
+              {c.more}
+            </button>
           </div>
+          <p className="mt-4 text-[13px] font-semibold text-bc-muted">{c.note}</p>
+        </div>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ ...FADE, delay: 0.15 }}
+          className="relative isolate h-[420px] sm:h-[540px] lg:h-[600px] mb-16 sm:mb-10">
+          <div className="absolute inset-0 overflow-hidden rounded-[40px] border border-bc-border">
+            <KitchenScene className="absolute inset-0 h-full w-full" />
+          </div>
+          {/* meals floating off the scene: breakfast by day (light), dinner by night (dark) */}
+          {[
+            [['avocado-toast'], ['ramen'], '-top-6 -left-4 sm:-left-8', 0, '!w-[72px] !h-[72px] sm:!w-[96px] sm:!h-[96px]'],
+            [['shakshuka-with-bread'], ['grilled-salmon-plate'], 'bottom-24 -left-5 sm:-left-10', 1.2, '!w-[64px] !h-[64px] sm:!w-[88px] sm:!h-[88px]'],
+            [['cappuccino'], ['sushi-roll-plate'], '-top-8 right-[30%]', 2.1, '!w-[60px] !h-[60px] sm:!w-[80px] sm:!h-[80px]'],
+          ].map(([day, night, pos, d, sz]) => (
+            <div key={pos} className={`absolute ${pos} z-10 hx-bob`} style={{ '--a': '-8px', '--dur': '4.5s', '--d': `${d}s` }}>
+              <span className="hx-day"><StickerTile slugs={day} size={96} delay={0.4 + d * 0.2} className={sz} /></span>
+              <span className="hx-night"><StickerTile slugs={night} size={96} delay={0.4 + d * 0.2} className={sz} /></span>
+            </div>
+          ))}
+          <div className="absolute -bottom-12 sm:-bottom-10 right-[8%] sm:-right-6 origin-bottom-right scale-[0.54] sm:scale-[0.62] -rotate-[5deg]">
+            <PhoneFrame label={language === 'hebrew' ? 'אפליקציית BetterChoice' : 'BetterChoice app'} className="shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)]">
+              <AppScreen screen="nutrition" language={language} eager />
+            </PhoneFrame>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Programs: illustrated goal cards ---------- */
+
+// Each goal's example day: daily calories, macro split (the app's diet
+// styles), and three meals from the dietitian food stickers. Illustrative.
+const GOAL_DAY = {
+  recomp: { kcal: 1950, split: [40, 30, 30], meals: [['omelette', 'cottage-cheese'], ['quinoa', 'chicken-breast', 'broccoli'], ['protein-yogurt', 'almonds', 'walnuts']] },
+  muscle: { kcal: 2450, split: [40, 30, 30], meals: [['oats', 'banana'], ['pasta', 'chicken-breast', 'bell-pepper'], ['salmon', 'sweet-potato', 'broccoli']] },
+  lose: { kcal: 1750, split: [30, 40, 30], meals: [['shakshuka-with-bread'], ['white-rice', 'chicken-breast', 'cucumber'], ['yogurt', 'strawberries', 'blueberries']] },
+  maintain: { kcal: 2150, split: [30, 40, 30], meals: [['avocado-toast'], ['hummus', 'pita'], ['grilled-salmon-plate']] },
+};
+
+function Programs({ language }) {
+  const c = copy[language] || copy.english;
+  const he = language === 'hebrew';
+  const start = (goal) => {
+    window.dispatchEvent(new CustomEvent('bc:pick-goal', { detail: goal }));
+    document.getElementById('try-it')?.scrollIntoView({ behavior: smooth(), block: 'start' });
+  };
+  const macroNames = he ? ['חלבון', 'פחמימות', 'שומן'] : ['Protein', 'Carbs', 'Fat'];
+  const macroKeys = ['protein', 'carbs', 'fat'];
+  return (
+    <section id="programs" className="scroll-mt-16 bg-bc-canvas border-t border-bc-border">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
+        <h2 className="mx-auto max-w-3xl text-center font-choice font-medium text-[34px] sm:text-[54px] leading-[1.06] text-bc-text">{c.programsTitle}</h2>
+        <div className="mt-12 grid md:grid-cols-2 gap-5">
+          {PROGRAMS.map((p, i) => {
+            const day = GOAL_DAY[p.goal];
+            return (
+              <article
+                key={p.goal}
+                className="group overflow-hidden rounded-bc-card border border-bc-border bg-bc-surface flex flex-col transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_24px_48px_-24px_rgba(0,0,0,0.35)]"
+              >
+                <div className="relative overflow-hidden">
+                  <GoalScene goal={p.goal} className="block w-full aspect-[3/2] transition-transform duration-700 group-hover:scale-[1.04]" />
+                  {/* the day's target, pinned on the scene */}
+                  <span className="absolute top-4 start-4 inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[14px] font-bold text-bc-text shadow-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--bc-surface) 88%, transparent)', backdropFilter: 'blur(6px)' }}>
+                    <span className="h-2 w-2 rounded-full bg-bc-accent" aria-hidden="true" />
+                    <span className="tabular-nums" dir="ltr">~{day.kcal.toLocaleString('en-US')}</span> {he ? 'קק״ל ביום' : 'kcal a day'}
+                  </span>
+                </div>
+                <div className="p-6 sm:p-8 flex flex-col gap-2 flex-1">
+                  <p className="font-choice text-[15px] text-bc-muted tabular-nums">{String(i + 1).padStart(2, '0')}</p>
+                  <h3 className="font-choice font-medium text-[28px] sm:text-[34px] leading-[1.1] text-bc-text">{pick(p.title, language)}</h3>
+                  <p className="text-[16px] sm:text-[17px] font-semibold text-bc-muted">{pick(p.line, language)}</p>
+                  {/* macro split */}
+                  <div className="mt-4">
+                    <div className="flex h-2.5 w-full overflow-hidden rounded-full" dir="ltr" aria-hidden="true">
+                      {day.split.map((v, k) => <span key={k} style={{ width: `${v}%`, backgroundColor: `var(--bc-${macroKeys[k]})` }} />)}
+                    </div>
+                    <p className="mt-2 flex flex-wrap gap-x-4 text-[13px] font-bold text-bc-text">
+                      {day.split.map((v, k) => (
+                        <span key={k} className="inline-flex items-center gap-1.5">
+                          <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: `var(--bc-${macroKeys[k]})` }} />
+                          {macroNames[k]} <span dir="ltr">{v}%</span>
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                  {/* an example day */}
+                  <div className="mt-4 flex items-center gap-3 rounded-[20px] border border-bc-border bg-bc-canvas px-4 py-3">
+                    <span className="text-[13px] font-bold text-bc-muted">{he ? 'יום לדוגמה' : 'A sample day'}</span>
+                    <span className="flex flex-1 justify-end gap-1">
+                      {day.meals.map((m, k) => (
+                        <span key={k} className="transition-transform duration-300 group-hover:-translate-y-1" style={{ transitionDelay: `${k * 60}ms` }}>
+                          <StickerTile slugs={m} size={56} inView delay={k * 0.12} />
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                  <div className="mt-5">
+                    <button
+                      type="button"
+                      onClick={() => start(p.goal)}
+                      className={`inline-flex min-h-[44px] items-center rounded-full border border-[color-mix(in_srgb,var(--bc-text)_40%,transparent)] px-6 text-[15px] font-semibold text-bc-text hover:bg-[color-mix(in_srgb,var(--bc-text)_6%,transparent)] ${focusClass}`}
+                    >
+                      {c.getStarted}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>
   );
 }
 
-function FinalDownload({ language }) {
+function World({ language }) {
   const c = copy[language] || copy.english;
   return (
-    <section id="download" className="scroll-mt-20 mx-auto max-w-6xl px-4 sm:px-6 pb-20">
-      {/* The closing band is flat accent with the dark label color, like the primary button. */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true, amount: 0.4 }}
-        transition={FADE}
-        className="relative overflow-hidden rounded-bc-card bg-bc-accent text-bc-on-accent px-6 py-16 sm:py-20 flex flex-col items-center text-center"
-      >
-        <Mark
-          size={620}
-          color="var(--bc-on-accent)"
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10 pointer-events-none"
-        />
-        <h2 className="relative text-[32px] sm:text-[48px] leading-[1.1] font-choice font-medium">{c.finalTitle}</h2>
-        <p className="relative mt-3 text-[16px] sm:text-[17px] font-semibold opacity-75">{c.finalBody}</p>
-        <StoreBadges className="relative mt-8 justify-center" />
-        <div className="relative mt-8 hidden lg:flex items-center gap-4">
-          <img src="/qr-app.svg" alt="" width="96" height="96" className="rounded-[12px] bg-white p-1.5" />
-          <span className="max-w-[12rem] text-start text-[14px] font-semibold opacity-80">{c.qr}</span>
+    <section className="bg-bc-canvas border-t border-bc-border">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
+        <h2 className="text-center font-choice font-medium text-[32px] sm:text-[48px] leading-[1.08] text-bc-text">{c.worldTitle}</h2>
+        <div className="mt-12 grid md:grid-cols-3 gap-4">
+          {WORLD.map((w) => {
+            const inner = (
+              <>
+                <div className="overflow-hidden rounded-[24px] border border-bc-border">
+                  <GoalScene goal={w.scene} className="block w-full aspect-[4/3] transition-transform duration-500 group-hover:scale-[1.03]" />
+                </div>
+                <p className="mt-4 text-[13px] font-bold text-bc-muted">{pick(w.label, language)}</p>
+                <p className="mt-1 font-choice font-medium text-[22px] text-bc-text">{pick(w.name, language)}</p>
+                <span className="mt-2 inline-flex text-[15px] font-semibold text-bc-text underline underline-offset-4 decoration-bc-border group-hover:decoration-bc-accent">{w.kind === 'signup' ? c.joinInvite : c.toDownload}</span>
+              </>
+            );
+            return w.kind === 'signup' ? (
+              <Link key={w.name.english} to="/signup" className={`group block rounded-bc-card ${focusClass}`}>{inner}</Link>
+            ) : (
+              <DownloadLink key={w.name.english} className={`group block rounded-bc-card ${focusClass}`}>{inner}</DownloadLink>
+            );
+          })}
         </div>
-      </motion.div>
+      </div>
+    </section>
+  );
+}
+
+function FinalScene({ language }) {
+  const c = copy[language] || copy.english;
+  return (
+    <section id="download" className="scroll-mt-20 bg-bc-canvas border-t border-bc-border">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-20 sm:pt-24 pb-28 flex flex-col items-center text-center">
+        <h2 className="font-choice font-medium text-[38px] sm:text-[60px] leading-[1.05] text-bc-text">{c.finalTitle}</h2>
+        <p className="mt-4 text-[17px] sm:text-[19px] font-semibold text-bc-muted">{c.finalBody}</p>
+        <StoreBadges className="mt-8 justify-center" />
+        <div className="mt-12 w-full overflow-hidden rounded-[40px] border border-bc-border aspect-[16/10] sm:aspect-[5/2]">
+          <DinnerScene className="block h-full w-full" />
+        </div>
+        <p className="mt-4 text-[14px] font-semibold text-bc-muted">{c.dinnerCaption}</p>
+      </div>
     </section>
   );
 }
 
 export default function HomePage() {
   const { language } = useLanguage();
-  const location = useLocation();
-
-  // Header "Download" on other pages links to /#download.
-  useEffect(() => {
-    if (location.hash !== '#download') return;
-    const id = window.requestAnimationFrame(() => {
-      document.getElementById('download')?.scrollIntoView({ block: 'center' });
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [location.hash]);
-
   return (
     <MotionConfig reducedMotion="user">
-      <MarketingShell className="theme-bold">
-        <Hero language={language} />
-        <PlanStory language={language} />
-        <ScanStory language={language} />
-        <LogMethods language={language} />
-        <ProductTour language={language} />
-        <Pricing language={language} />
-        <Faq language={language} />
-        <FinalDownload language={language} />
+      <MarketingShell className="theme-warm">
+        <SceneHero language={language} />
+        <CoachChat language={language} />
+        <Programs language={language} />
+        <PlanStory language={language} stickers />
+        <Deferred minHeight="560px"><FoodBand language={language} /></Deferred>
+        <Deferred minHeight="900px"><AppFeatures language={language} /></Deferred>
+        <Deferred minHeight="1200px"><OnYourSide language={language} /></Deferred>
+        <Deferred minHeight="760px"><AdShorts language={language} /></Deferred>
+        <Deferred minHeight="900px"><LogWays language={language} /></Deferred>
+        <Deferred minHeight="1800px"><ScanStory language={language} /></Deferred>
+        <Deferred minHeight="700px"><World language={language} /></Deferred>
+        <Deferred minHeight="700px"><Pricing language={language} /></Deferred>
+        <Deferred minHeight="700px"><Faq language={language} /></Deferred>
+        <FinalScene language={language} />
         <StickyDownload language={language} />
       </MarketingShell>
     </MotionConfig>
   );
 }
-

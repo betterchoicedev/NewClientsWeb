@@ -7,6 +7,20 @@ import { signInWithGoogle, resetPassword, signIn } from '../supabase/auth';
 import { AuthShell, AuthField, AuthNotice, AuthDivider, GoogleIcon } from '../components/brand/AuthShell';
 import { card, primaryButton, secondaryButton, focusClass } from '../components/brand/ui';
 
+// The API passes Supabase's English messages through; show them in the page's language.
+const LOGIN_ERRORS = [
+  [/invalid login credentials/i, 'האימייל או הסיסמה שגויים.', 'Wrong email or password.'],
+  [/email not confirmed/i, 'צריך לאשר את האימייל לפני ההתחברות. בדקו את תיבת הדואר.', 'Please confirm your email first. Check your inbox.'],
+  [/too many|rate limit/i, 'יותר מדי ניסיונות. נסו שוב בעוד כמה דקות.', 'Too many attempts. Try again in a few minutes.'],
+  [/network|failed to fetch/i, 'אין חיבור לשרת. בדקו את החיבור ונסו שוב.', 'Can’t reach the server. Check your connection and try again.'],
+];
+function loginErrorText(message, language) {
+  const he = language === 'hebrew';
+  const hit = LOGIN_ERRORS.find(([re]) => re.test(message || ''));
+  if (hit) return he ? hit[1] : hit[2];
+  return he ? 'ההתחברות נכשלה. נסו שוב.' : (message || 'Login failed');
+}
+
 function LoginPage() {
   const { language, toggleLanguage } = useLanguage();
   const isHebrew = language === 'hebrew';
@@ -120,7 +134,7 @@ function LoginPage() {
       );
 
       if (signInError) {
-        setError(signInError.message || (language === 'hebrew' ? 'שגיאה בהתחברות' : 'Login failed'));
+        setError(loginErrorText(signInError.message, language));
         setLoading(false);
         return;
       }
