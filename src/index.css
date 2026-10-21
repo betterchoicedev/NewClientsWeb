@@ -70,37 +70,9 @@
   --bc-fat-well: rgba(255, 149, 0, 0.15);
 }
 
-/* Landing page palette (bold): near-black canvas, white type, one vivid green
-   used sparingly. Scoped to the marketing page so account/auth keep the app tokens. */
-.theme-bold {
-  --bc-canvas: #FFFFFF;
-  --bc-surface: #F4F5F4;
-  --bc-surface-2: #EAECEB;
-  --bc-border: #E2E5E3;
-  --bc-accent: #1FB25A;
-  --bc-on-accent: #04120A;
-  --bc-text: #0A0C0B;
-  --bc-muted: #5F6763;  /* 4.9:1 on the light band */
-  --bc-accent-well: rgba(31, 178, 90, 0.09);
-  --bc-band: #EEF1EF;   /* every other section: canvas < band < card, so sections read as separate */
-  --bc-accent-text: #0E7A3B; /* green for TEXT on light: 5.4:1 on white (the vivid accent is 2.8:1) */
-}
-
-.dark .theme-bold {
-  --bc-canvas: #090B0A;
-  --bc-surface: #131715;
-  --bc-surface-2: #1C211E;
-  --bc-border: #2F3632;
-  --bc-accent: #3DDC6F;
-  --bc-on-accent: #04120A;
-  --bc-text: #F6F8F7;
-  --bc-muted: #98A19C;
-  --bc-accent-well: rgba(61, 220, 111, 0.10);
-  --bc-band: #171C19;  /* visibly lifted from the #090B0A canvas */
-  --bc-accent-text: #3DDC6F;
-}
-
-/* TEST (/test): warm canvas in the BetterMe spirit. Light: */
+/* The site palette: a warm canvas (light) and brown-charcoal (dark) with one green.
+   Defined on :root so every page, the cookie banner and the accessibility widget share it. */
+:root,
 .theme-warm {
   --bc-canvas: #FBF8F3;
   --bc-surface: #FFFFFF;
@@ -140,6 +112,7 @@
 }
 
 /* Warm dark: brown-charcoal instead of the app's green-black, same green accent */
+.dark,
 .dark .theme-warm {
   --bc-canvas: #16130F;
   --bc-surface: #201C17;

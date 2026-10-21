@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import StickerTile from './test/StickerTile';
+import StickerTile from './home/StickerTile';
 import { AnimatePresence, motion, useInView } from 'framer-motion';
 import { UserRound, UtensilsCrossed, Shuffle, RefreshCw, Check } from 'lucide-react';
 import { focusClass } from '../../components/brand/ui';
