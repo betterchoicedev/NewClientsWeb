@@ -44,10 +44,10 @@ const TABS = [
     key: 'chat',
     icon: MessageCircle,
     label: { hebrew: 'המאמנת', english: 'Coach' },
-    title: { hebrew: 'שואלים, ומקבלים תשובה עם מספרים.', english: 'Ask, and get an answer with numbers.' },
+    title: { hebrew: 'המאמנת שבכיס שלכם. גם ב-23:47.', english: 'A coach in your pocket. Even at 23:47.' },
     line: {
-      hebrew: 'המאמנת מכירה את התפריט ואת היום שלכם, ומציעה ארוחה שסוגרת את היעד.',
-      english: 'The coach knows your plan and your day, and suggests a meal that closes the gap.',
+      hebrew: 'אכלתם חצי מגש פיצה? היא בודקת את היעד, את היום ואת השבוע, ועונה עם מספרים. בלי אשמה.',
+      english: 'Had half a pizza? She checks your goal, your day and your week, and answers with numbers. No guilt.',
     },
   },
 ];

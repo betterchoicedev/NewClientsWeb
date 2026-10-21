@@ -18,8 +18,9 @@ export default function AccountShell({ children }) {
     if (signingOut) return;
     setSigningOut(true);
     try {
-      await signOut();
+      // Leave the protected page first, or RequireAuth sends the signed-out user to /login.
       navigate('/', { replace: true });
+      await signOut();
     } catch (error) {
       console.error('Logout error:', error);
       setSigningOut(false);

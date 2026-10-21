@@ -41,8 +41,9 @@ const T = {
     todayWorkout: 'האימון של היום', pull: 'משיכה', sets: 'סטים', exercises: 'תרגילים', planned: 'תרגילים מתוכננים',
     kg: 'ק״ג', days: ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'],
     ex: [['מתח (משקל גוף או עזרה)', '4 סטים  /  8-10 חזרות'], ['חתירה בכבל בישיבה', '4 סטים  /  10-12 חזרות'], ['פייס פולס', '3 סטים  /  12-15 חזרות'], ['כפיפת מרפקים במשקולות', '4 סטים  /  10 חזרות']],
-    chat: 'צ׳אט AI', ask: 'מה כדאי לי לאכול בארוחה הבאה?',
-    reply: 'נשארו לך היום 900 קק״ל ו-48 ג׳ חלבון. משהו עשיר בחלבון יסגור את היום: דג על הגריל (150 ג׳), קינואה (100 ג׳) וסלט ירוק.',
+    chat: 'צ׳אט AI', ask: 'אכלתי חצי מגש פיצה. הרסתי את הדיאטה?',
+    reply: 'ממש לא! חרגת היום ב-250 קלוריות, וזה בסדר. השבוע עמדת ביעד 5 ימים מתוך 6, אז ההתקדמות שלך ממשיכה. מחר בבוקר נתחיל עם ארוחה עשירה בחלבון.',
+    checking: 'בודק את הנתונים שלך…', facts: ['מטרה: ירידה במשקל', 'היום: 250 קל׳ מעל היעד', 'השבוע: 5 מתוך 6 ימים ביעד'],
     breakdown: 'פירוט תזונתי', bProtein: 'חלבון', bCarbs: 'פחמימות', bFat: 'שומן',
     thinking: 'חושב...', notMedical: 'זו אינה עצה רפואית', type: 'הקלידי הודעה...',
     target: 'סה״כ קלוריות יעד', kcalUnit: 'קק״ל', ranges: ['ראשון–חמישי', 'שישי', 'שבת'],
@@ -64,8 +65,9 @@ const T = {
     todayWorkout: "TODAY'S WORKOUT", pull: 'Pull', sets: 'SETS', exercises: 'EXERCISES', planned: 'Planned Exercises',
     kg: 'kg', days: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
     ex: [['Pull-ups (Weighted or Assisted)', '4 SETS  /  8-10 REPS'], ['Seated Cable Row', '4 SETS  /  10-12 REPS'], ['Face Pulls', '3 SETS  /  12-15 REPS'], ['Dumbbell Curls', '4 SETS  /  10 REPS']],
-    chat: 'AI Chat', ask: 'What should I eat for my next meal?',
-    reply: 'You have 900 kcal and 48 g of protein left today. Something protein-rich closes the day: grilled fish (150 g), quinoa (100 g) and a green salad.',
+    chat: 'AI Chat', ask: 'I ate half a pizza tray. Did I ruin my diet?',
+    reply: 'Not at all! You’re 250 calories over today, and that’s fine. You hit your target 5 of 6 days this week, so you’re still on track. Tomorrow we start with a protein-rich breakfast.',
+    checking: 'Checking your data…', facts: ['Goal: lose weight', 'Today: 250 kcal over', 'This week: 5 of 6 days on target'],
     breakdown: 'NUTRITIONAL BREAKDOWN', bProtein: 'Protein', bCarbs: 'Carbs', bFat: 'Fat',
     thinking: 'ANALYZING...', notMedical: 'Not medical advice', type: 'Type a message...',
     target: 'Daily Calorie Target', kcalUnit: 'kcal', ranges: ['Sunday–Thursday', 'Friday', 'Saturday'],
@@ -322,11 +324,11 @@ function Avatar({ size = 34 }) {
   );
 }
 
-// Storyboard: the question is sent, the coach thinks, the answer lands with
-// its nutritional breakdown.
+// Storyboard (from the campaign ads): "I ate half a pizza, did I ruin my diet?",
+// the coach checks the user's goal, today and the week, then answers without guilt.
 function Chat({ t, he }) {
   const ref = useRef(null);
-  const step = useStep(ref, [500, 1900]);
+  const step = useStep(ref, [500, 1300, 2700]);
   return (
     <div ref={ref}>
       <Header title={t.chat} he={he} />
@@ -337,37 +339,30 @@ function Chat({ t, he }) {
             {t.ask}
           </motion.p>
         ) : null}
-        {step === 1 ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Avatar />
-            {[0, 1, 2].map((i) => (
-              <motion.span key={i} animate={{ y: [0, -4, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }} style={{ width: 6, height: 6, borderRadius: 6, backgroundColor: APP.muted, display: 'inline-block' }} />
-            ))}
-            <span style={{ fontSize: 12, fontWeight: 700, color: APP.muted }}>{t.thinking}</span>
+        {step >= 1 && step < 3 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Avatar />
+              {[0, 1, 2].map((i) => (
+                <motion.span key={i} animate={{ y: [0, -4, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }} style={{ width: 6, height: 6, borderRadius: 6, backgroundColor: APP.muted, display: 'inline-block' }} />
+              ))}
+              <span style={{ fontSize: 12, fontWeight: 700, color: APP.muted }}>{t.checking}</span>
+            </div>
+            {step >= 2 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingInlineStart: 44 }}>
+                {t.facts.map((f, i) => (
+                  <motion.span key={f} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.25 }}
+                    style={{ fontSize: 12, fontWeight: 700, color: APP.text, border: `1px solid ${APP.border}`, borderRadius: 999, padding: '4px 10px' }}>{f}</motion.span>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
-        {step >= 2 ? (
+        {step >= 3 ? (
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', damping: 16, stiffness: 140 }} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <Avatar />
             <div style={{ maxWidth: '90%', backgroundColor: APP.s1, border: `1px solid ${APP.border}`, borderRadius: 20, borderEndStartRadius: 8, padding: '12px 14px' }}>
               <p style={{ margin: 0, fontSize: 15, lineHeight: '22px' }}>{t.reply}</p>
-              <div style={{ marginTop: 10, backgroundColor: APP.s1, border: `1px solid ${APP.border}`, borderRadius: 14, padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: APP.muted }}>{t.breakdown}</span>
-                  <span style={{ fontSize: 15, fontWeight: 800 }}>520 <span style={{ fontSize: 11, fontWeight: 600 }}>kcal</span></span>
-                </div>
-                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
-                  {[[t.bProtein, 42], [t.bCarbs, 45], [t.bFat, 14]].map(([l, v], i) => (
-                    <React.Fragment key={l}>
-                      {i ? <span style={{ width: 1, height: 20, backgroundColor: APP.border }} /> : null}
-                      <span style={{ textAlign: 'center' }}>
-                        <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: APP.muted }}>{l}</span>
-                        <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{v}g</span>
-                      </span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
             </div>
           </motion.div>
         ) : null}

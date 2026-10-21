@@ -16,6 +16,8 @@ import { AppScreen } from '../features/marketing/home/AppScreens';
 import AppFeatures from '../features/marketing/home/AppFeatures';
 import OnYourSide from '../features/marketing/home/OnYourSide';
 import FoodBand from '../features/marketing/home/FoodBand';
+import AdShorts from '../features/marketing/home/AdShorts';
+import LogWays from '../features/marketing/home/LogWays';
 import StickerTile from '../features/marketing/home/StickerTile';
 import { KitchenScene, DinnerScene } from '../features/marketing/home/Illustrations';
 
@@ -77,8 +79,8 @@ const copy = {
 // pre-selects that goal in the plan preview. Promises are about the plan.
 const PROGRAMS = [
   { goal: 'recomp', title: { hebrew: 'פחות שומן, אותו שריר', english: 'Lose fat, keep muscle' }, line: { hebrew: 'תפריט עשיר בחלבון ואימונים שנבנים סביבכם', english: 'A protein-forward plan and workouts built around you' } },
-  { goal: 'muscle', title: { hebrew: 'בניית שריר', english: 'Build muscle' }, line: { hebrew: 'יותר חלבון, ותוכנית אימונים של יומיים עד ארבעה בשבוע', english: 'More protein, and a two-to-four-day training plan' } },
-  { goal: 'lose', title: { hebrew: 'ירידה במשקל', english: 'Lose weight' }, line: { hebrew: 'תפריט שמתאים לשעות ולטעם שלכם', english: 'A plan that fits your hours and your taste' } },
+  { goal: 'muscle', title: { hebrew: 'בניית שריר', english: 'Build muscle' }, line: { hebrew: 'החלבון לא יספור את עצמו. יעד חלבון ותוכנית כוח.', english: 'Protein won’t count itself. A protein target and a strength plan.' } },
+  { goal: 'lose', title: { hebrew: 'ירידה במשקל', english: 'Lose weight' }, line: { hebrew: 'בלי לספור כל ביס. תפריט שמתאים לשעות ולטעם שלכם.', english: 'Without counting every bite. A plan that fits your hours and taste.' } },
   { goal: 'maintain', title: { hebrew: 'שמירה על משקל', english: 'Maintain' }, line: { hebrew: 'לאכול טוב, בלי לספור כל ביס', english: 'Eat well, without counting every bite' } },
 ];
 
@@ -202,35 +204,6 @@ function Programs({ language }) {
   );
 }
 
-/* ---------- Scan teaser: the plate being read ---------- */
-
-function ScanSplit({ language }) {
-  const c = copy[language] || copy.english;
-  const Arrow = language === 'hebrew' ? ArrowLeft : ArrowRight;
-  return (
-    <section className="bg-bc-band border-t border-bc-border">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28 grid lg:grid-cols-2 gap-10 items-center">
-        <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }} transition={FADE}
-          className="overflow-hidden rounded-bc-card p-6 sm:p-10 flex justify-center" style={{ backgroundColor: 'var(--scene-bg)' }}>
-          <Stage step={1} language={language} />
-        </motion.div>
-        <div>
-          <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{c.scanEyebrow}</p>
-          <h2 className="mt-4 font-choice font-medium text-[36px] sm:text-[56px] leading-[1.04] text-bc-text">{c.scanTitle}</h2>
-          <p className="mt-4 text-[18px] sm:text-[20px] font-semibold text-bc-muted max-w-lg">{c.scanBody}</p>
-          <button
-            type="button"
-            onClick={() => { window.dispatchEvent(new Event('bc:reveal-all')); setTimeout(() => document.getElementById('scan-title')?.scrollIntoView({ behavior: smooth(), block: 'start' }), 60); }}
-            className={`mt-6 inline-flex min-h-[44px] items-center gap-2 text-[16px] font-bold text-bc-text underline underline-offset-4 decoration-bc-border hover:decoration-bc-accent rounded ${focusClass}`}
-          >
-            {c.scanLink} <Arrow size={18} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function World({ language }) {
   const c = copy[language] || copy.english;
   return (
@@ -289,7 +262,8 @@ export default function HomePage() {
         <Deferred minHeight="560px"><FoodBand language={language} /></Deferred>
         <Deferred minHeight="900px"><AppFeatures language={language} /></Deferred>
         <Deferred minHeight="1200px"><OnYourSide language={language} /></Deferred>
-        <Deferred minHeight="700px"><ScanSplit language={language} /></Deferred>
+        <Deferred minHeight="760px"><AdShorts language={language} /></Deferred>
+        <Deferred minHeight="900px"><LogWays language={language} /></Deferred>
         <Deferred minHeight="1800px"><ScanStory language={language} /></Deferred>
         <Deferred minHeight="700px"><World language={language} /></Deferred>
         <Deferred minHeight="700px"><Pricing language={language} /></Deferred>
