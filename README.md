@@ -116,7 +116,7 @@ The full set used in production lives on the Cloud Run service, not in `.env`. [
 | `npm run dev` | Website dev server (`react-scripts start`, http://localhost:3000). Calls the **production** API |
 | `npm start` | **The API**, not the website (`node server/server.js`, port 8080) |
 | `npm run build` | Production website build into `build/` |
-| `node --test server/tests/` | API unit tests (Node's built-in runner, offline fakes) |
+| `node --test "server/tests/**/*.test.js"` | API unit tests (Node's built-in runner, offline fakes) |
 | `curl http://localhost:8080/health` | API health check |
 
 ---
@@ -126,7 +126,7 @@ The full set used in production lives on the Cloud Run service, not in `.env`. [
 - **API**: tests live in `server/tests/*.test.js` and use `node:test` with in-memory fakes for Supabase and Stripe. They don't touch production.
 
   ```bash
-  node --test server/tests/
+  node --test "server/tests/**/*.test.js"   # a bare folder fails on Windows with Node 24
   node --test server/tests/paywallFlow.test.js   # one file
   ```
 

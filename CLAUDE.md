@@ -14,7 +14,7 @@ Guidance for AI coding agents in this repo. Human docs: [README.md](README.md) (
 npm run dev                    # website (localhost:3000), calls the PRODUCTION API
 npm start                      # the API (node server/server.js, port 8080), NOT the website
 npm run build                  # website build into build/
-node --test server/tests/      # API tests (offline fakes)
+node --test "server/tests/**/*.test.js"   # API tests (offline fakes; the quoted glob works on Windows too)
 ```
 
 The dev machine is Windows. There is no lint script and no CI.
@@ -22,7 +22,7 @@ The dev machine is Windows. There is no lint script and no CI.
 ## Rules
 
 - **Everything is production.** There is no staging. The website's API URL is hard-coded to production in `src/lib/apiClient.js`, and a local API uses the production databases, Stripe and WhatsApp. Never run requests or scripts that write data unless the user asked for that exact write. Don't change `getApiUrl()` in a commit.
-- **Test every change.** For API logic, add or update a `node:test` file in `server/tests/` with in-memory fakes (see `paywallFlow.test.js`), never real clients. Run `node --test server/tests/` and report pass/fail with output. For website changes, say what you checked by hand.
+- **Test every change.** For API logic, add or update a `node:test` file in `server/tests/` with in-memory fakes (see `paywallFlow.test.js`), never real clients. Run `node --test "server/tests/**/*.test.js"` and report pass/fail with output. For website changes, say what you checked by hand.
 - **Backward compatibility.** Old mobile app versions call this API for weeks. Never remove or rename an endpoint, request field or response field the app may read. Add new fields instead.
 - **No secrets in the frontend.** `REACT_APP_*` variables referenced in `src/` are baked into the public bundle. Never reference a key, token or service-role value from `src/`. The browser never talks to Supabase or Stripe secrets directly.
 - **New routes sit behind auth.** Add `requireAuth` to the route and its prefix to `PROTECTED_API_PREFIXES` in `server/middleware/auth.js`. A public route needs a deliberate reason and an entry in `PUBLIC_API_PREFIXES`. Check that the caller owns the data (`req.userId`, `req.userCode`, the ownership helpers), never an id from the body or query.
