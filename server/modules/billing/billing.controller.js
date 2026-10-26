@@ -82,7 +82,7 @@ async function checkCommitmentPeriods(req, res) {
           const { error: updateError } = await clientDB.from('stripe_subscriptions').update({ cancel_at_period_end: true, updated_at: new Date().toISOString() }).eq('stripe_subscription_id', sub.stripe_subscription_id);
           if (!updateError) {
             cancelledCount++;
-            results.push({ subscriptionId: sub.stripe_subscription_id, commitmentEndDate: commitmentEndDate.toISOString(), periodEndDate: new Date(updatedSubscription.current_period_end * 1000).toISOString(), status: 'cancelled_at_period_end' });
+            results.push({ subscriptionId: sub.stripe_subscription_id, commitmentEndDate: commitmentEndDate.toISOString(), periodEndDate: new Date((updatedSubscription.items?.data?.[0]?.current_period_end ?? updatedSubscription.current_period_end) * 1000).toISOString(), status: 'cancelled_at_period_end' });
           }
         } catch (error) {
           results.push({ subscriptionId: sub.stripe_subscription_id, error: error.message });
@@ -135,7 +135,7 @@ async function syncToDatabase(req, res) {
         };
 
         const commitmentMonths = COMMITMENT_MONTHS_MAP[priceId] || null;
-        const currentDate = new Date(subscription.current_period_start * 1000);
+        const currentDate = new Date((subscription.items?.data?.[0]?.current_period_start ?? subscription.current_period_start) * 1000);
         let commitmentEndDate = null;
 
         if (commitmentMonths) {
@@ -153,8 +153,8 @@ async function syncToDatabase(req, res) {
           stripe_price_id: priceId,
           subscription_type: subscriptionType,
           status: subscription.status,
-          current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          current_period_start: new Date((subscription.items?.data?.[0]?.current_period_start ?? subscription.current_period_start) * 1000).toISOString(),
+          current_period_end: new Date((subscription.items?.data?.[0]?.current_period_end ?? subscription.current_period_end) * 1000).toISOString(),
           cancel_at_period_end: subscription.cancel_at_period_end || false,
           amount_total: finalAmount,
           currency,
