@@ -22,6 +22,7 @@ const onboardingRoutes = require('./modules/onboarding/onboarding.routes');
 const trackingRoutes   = require('./modules/tracking/tracking.routes');
 const coachingRoutes   = require('./modules/coaching/coaching.routes');
 const marketingRoutes  = require('./modules/marketing/marketing.routes');
+const inviteRoutes     = require('./modules/invite/invite.routes');
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 const app = express();
@@ -61,6 +62,7 @@ app.use('/api', profileRoutes);
 app.use('/api', trackingRoutes);
 app.use('/api', coachingRoutes);
 app.use('/api', marketingRoutes);
+app.use('/api', inviteRoutes);
 
 // ─── 404 handler ──────────────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));

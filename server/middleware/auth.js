@@ -142,6 +142,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/weekly-macro-summary-svg',
     '/api/macro-summary-svg',
     '/api/db/registration-links',
+    '/api/invite-codes/',
     '/api/onboarding/classify-activity',
     '/health',
   ];
@@ -176,6 +177,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/auth/refresh',
     '/api/auth/update-password',
     '/api/auth/client/',
+    '/api/my-dietitian',
   ];
 
   function isPublicApiPath(path) {
