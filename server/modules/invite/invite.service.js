@@ -115,8 +115,9 @@ async function claimInviteCode(userId, rawCode, { clientDB, adminDB, ensureClien
   return toPublicInvite(presentable(settings, owner));
 }
 
-// The signed-in client's dietitian for the "My dietitian" card, or null when their dietitian
-// has not set up a profile (e.g. normal signups under the BetterChoice manager).
+// The signed-in client's dietitian for the "My dietitian" card, or null until their dietitian
+// has set up a public profile (a display name or photo). Every coach has a code, including the
+// default BetterChoice manager that normal signups belong to, so a code alone is not enough.
 async function getMyDietitian(userId, { clientDB, adminDB }) {
   if (!adminDB) return null;
   const { data: client } = await clientDB.from('clients').select('user_code').eq('user_id', userId).maybeSingle();
@@ -124,7 +125,7 @@ async function getMyDietitian(userId, { clientDB, adminDB }) {
   const { data: chatUser } = await adminDB.from('chat_users').select('provider_id').eq('user_code', client.user_code).maybeSingle();
   if (!chatUser?.provider_id) return null;
   const settings = await loadDietitianSettings(chatUser.provider_id, { adminDB });
-  if (!settings) return null;
+  if (!settings || !(settings.display_name || settings.photo_url)) return null;
   const owner = await loadProfileWithCompany(chatUser.provider_id, { adminDB });
   if (!owner) return null;
   return toPublicDietitian(presentable(settings, owner));

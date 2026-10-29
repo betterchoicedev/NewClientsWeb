@@ -231,6 +231,14 @@ test('my dietitian: card info with the welcome message, null without a dietitian
     companyLogoUrl: 'https://cdn.example/logo.png',
   });
   assert.equal(await getMyDietitian('u1', claimDeps()), null, 'default manager has no settings row');
+
+  // A coach with only a code (no display name or photo) shows no card.
+  const bare = claimDeps();
+  await claimInviteCode('u1', 'DANA', bare);
+  const row = bare.adminDB.tables.dietitian_settings[0];
+  row.display_name = null;
+  row.photo_url = null;
+  assert.equal(await getMyDietitian('u1', bare), null);
 });
 
 // ── end to end through resolveUserCompany and checkout ────────────────────────
