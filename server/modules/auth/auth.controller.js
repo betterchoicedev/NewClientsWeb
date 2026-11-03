@@ -1,5 +1,6 @@
 const { clientDB, supabaseAuth, adminDB } = require('../../config/db');
 const { decodeJwtPayloadServer } = require('../../utils/helpers');
+const { resolveSignupProvider } = require('../invite/invite.service');
 
 // ─── Auth helper functions ────────────────────────────────────────────────────
 
@@ -503,7 +504,7 @@ async function deleteAccount(req, res) {
 
 async function signup(req, res) {
   try {
-    const { email, password, userData = {}, invitationToken, providerId, managerLinkData } = req.body;
+    const { email, password, userData = {}, invitationToken, providerId, managerLinkData, inviteCode } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
     if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
@@ -624,12 +625,16 @@ async function signup(req, res) {
     }
     if (!userCode) return res.status(500).json({ error: 'Failed to generate unique user code', code: 500 });
 
-    // Determine provider ID
+    // Determine provider ID: a dietitian's invite code first, then the registration link,
+    // then a providerId from older app versions (only when it is a real staff profile).
     let finalProviderId = null;
-    if (managerId) {
+    const signupProvider = await resolveSignupProvider({ inviteCode, providerId: managerId ? null : providerId }, { adminDB });
+    if (inviteCode && signupProvider) {
+      finalProviderId = signupProvider;
+    } else if (managerId) {
       finalProviderId = managerId;
-    } else if (providerId && typeof providerId === 'string' && providerId.trim().length > 0) {
-      finalProviderId = providerId.trim();
+    } else if (signupProvider) {
+      finalProviderId = signupProvider;
     } else if (adminDB) {
       const betterChoiceCompanyId = '4ab37b7b-dff1-4ee5-9920-0281e0c6468a';
       const { data: defaultManagerData } = await adminDB.from('profiles').select('id').eq('company_id', betterChoiceCompanyId).eq('role', 'company_manager').order('created_at', { ascending: true }).limit(1).maybeSingle();
@@ -881,6 +886,7 @@ async function createClient(req, res) {
       invitationToken,
       managerLinkData,
       providerToken,
+      inviteCode,
     } = req.body;
 
     if (!userId || !userData) {
@@ -1064,7 +1070,7 @@ async function createClient(req, res) {
           phone_number: userData.phone,
           whatsapp_number: userData.phone,
           platform: userData.platform || 'whatsapp',
-          provider_id: providerId || null,
+          provider_id: (await resolveSignupProvider({ inviteCode, providerId }, { adminDB })) || null,
           activated: true,
           is_verified: false,
           language: 'en',
