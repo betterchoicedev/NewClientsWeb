@@ -50,11 +50,11 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy hidden revision
-        run: gcloud run deploy "$SERVICE" --source . --region "$REGION" --project "$PROJECT" --no-traffic --tag ci --quiet
+        run: gcloud run deploy "$SERVICE" --source . --region "$REGION" --project "$PROJECT" --no-traffic --tag next --quiet
 
       - name: Health check the hidden revision
         run: |
-          url=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT" --format=json | jq -r '.status.traffic[] | select(.tag=="ci") | .url')
+          url=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT" --format=json | jq -r '.status.traffic[] | select(.tag=="next") | .url')
           echo "hidden revision: $url"
           code=$(curl -s -o /dev/null -w '%{http_code}' "$url/health")
           echo "health -> $code"
@@ -65,6 +65,6 @@ jobs:
 
       - name: Send all traffic to it
         run: |
-          rev=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT" --format=json | jq -r '.status.traffic[] | select(.tag=="ci") | .revisionName')
+          rev=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT" --format=json | jq -r '.status.traffic[] | select(.tag=="next") | .revisionName')
           gcloud run services update-traffic "$SERVICE" --region "$REGION" --project "$PROJECT" --to-revisions "$rev=100" --quiet
           echo "live: $rev"
