@@ -17,6 +17,7 @@ const {
   resolveSignupProvider,
   claimInviteCode,
   getMyDietitian,
+  WELCOME_WINDOW_MS,
 } = require('../modules/invite/invite.service');
 const { MEMBERSHIP_PRODUCT_ID } = require('../utils/constants');
 
@@ -196,7 +197,7 @@ test('signup provider: the code wins, a sent providerId must be a real profile',
 });
 
 function claimDeps({ client, chat = chatDB() } = {}) {
-  const clientDB = fakeDB({ clients: [{ user_id: 'u1', user_code: 'ABCDEF', onboarding_completed: false, subscription_status: null, ...client }] });
+  const clientDB = fakeDB({ clients: [{ user_id: 'u1', user_code: 'ABCDEF', onboarding_completed: false, subscription_status: null, created_at: new Date().toISOString(), ...client }] });
   const ensureClientAndChatUser = async (userId) => clientDB.tables.clients.find((c) => c.user_id === userId);
   return { clientDB, adminDB: chat, ensureClientAndChatUser };
 }
@@ -239,6 +240,28 @@ test('my dietitian: card info with the welcome message, null without a dietitian
   row.display_name = null;
   row.photo_url = null;
   assert.equal(await getMyDietitian('u1', bare), null);
+});
+
+test('my dietitian: the welcome message only reaches clients who joined in the last 14 days', async () => {
+  const NOW = Date.parse('2026-11-03T12:00:00Z');
+  const daysAgo = (d) => new Date(NOW - d * 24 * 60 * 60 * 1000).toISOString();
+  const mineFor = async ({ clientCreated, chatCreated }) => {
+    const deps = claimDeps({ client: { created_at: clientCreated } });
+    await claimInviteCode('u1', 'DANA', deps);
+    deps.adminDB.tables.chat_users[0].created_at = chatCreated;
+    return getMyDietitian('u1', { ...deps, now: () => NOW });
+  };
+
+  assert.equal((await mineFor({ clientCreated: daysAgo(3), chatCreated: daysAgo(3) })).welcomeMessage, 'Welcome!');
+  assert.equal((await mineFor({ clientCreated: daysAgo(14), chatCreated: undefined })).welcomeMessage, 'Welcome!');
+  // A long-time client of a dietitian who adds a welcome message later: card, no message.
+  const old = await mineFor({ clientCreated: daysAgo(200), chatCreated: daysAgo(200) });
+  assert.equal(old.name, 'Dana Cohen');
+  assert.equal(old.welcomeMessage, null);
+  assert.equal((await mineFor({ clientCreated: daysAgo(15), chatCreated: daysAgo(40) })).welcomeMessage, null);
+  // No timestamps at all: no message.
+  assert.equal((await mineFor({ clientCreated: null, chatCreated: null })).welcomeMessage, null);
+  assert.equal(WELCOME_WINDOW_MS, 14 * 24 * 60 * 60 * 1000);
 });
 
 // ── end to end through resolveUserCompany and checkout ────────────────────────

@@ -115,20 +115,39 @@ async function claimInviteCode(userId, rawCode, { clientDB, adminDB, ensureClien
   return toPublicInvite(presentable(settings, owner));
 }
 
+// The welcome message is for clients who just joined through a code. There is no claim
+// timestamp, so "joined" is the newest of the client's account rows; a code can only be
+// claimed before onboarding ends, so that is close to when they joined. Existing clients of a
+// dietitian who adds a message later never get it.
+const WELCOME_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+function joinedRecently(timestamps, nowMs) {
+  const times = timestamps.map((t) => Date.parse(t)).filter(Number.isFinite);
+  if (!times.length) return false;
+  const joined = Math.max(...times);
+  return nowMs - joined <= WELCOME_WINDOW_MS;
+}
+
 // The signed-in client's dietitian for the "My dietitian" card, or null until their dietitian
 // has set up a public profile (a display name or photo). Every coach has a code, including the
 // default BetterChoice manager that normal signups belong to, so a code alone is not enough.
-async function getMyDietitian(userId, { clientDB, adminDB }) {
+async function getMyDietitian(userId, { clientDB, adminDB, now = () => Date.now() }) {
   if (!adminDB) return null;
-  const { data: client } = await clientDB.from('clients').select('user_code').eq('user_id', userId).maybeSingle();
+  let { data: client, error: clientErr } = await clientDB.from('clients').select('user_code, created_at').eq('user_id', userId).maybeSingle();
+  if (clientErr) {
+    // Never lose the card over the join date: chat_users.created_at still decides.
+    ({ data: client } = await clientDB.from('clients').select('user_code').eq('user_id', userId).maybeSingle());
+  }
   if (!client?.user_code) return null;
-  const { data: chatUser } = await adminDB.from('chat_users').select('provider_id').eq('user_code', client.user_code).maybeSingle();
+  const { data: chatUser } = await adminDB.from('chat_users').select('provider_id, created_at').eq('user_code', client.user_code).maybeSingle();
   if (!chatUser?.provider_id) return null;
   const settings = await loadDietitianSettings(chatUser.provider_id, { adminDB });
   if (!settings || !(settings.display_name || settings.photo_url)) return null;
   const owner = await loadProfileWithCompany(chatUser.provider_id, { adminDB });
   if (!owner) return null;
-  return toPublicDietitian(presentable(settings, owner));
+  const card = toPublicDietitian(presentable(settings, owner));
+  if (!joinedRecently([client.created_at, chatUser.created_at], now())) card.welcomeMessage = null;
+  return card;
 }
 
-module.exports = { lookupInvite, resolveSignupProvider, claimInviteCode, getMyDietitian };
+module.exports = { WELCOME_WINDOW_MS, lookupInvite, resolveSignupProvider, claimInviteCode, getMyDietitian };
