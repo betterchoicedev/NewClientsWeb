@@ -1,10 +1,10 @@
 const { clientDB, adminDB } = require('../../config/db');
 const svc = require('../../services/meal-plan-regeneration');
 
-// GET /api/meal-plan/regenerations → { used, limit, remaining, pending, last }
+// GET /api/meal-plan/regenerations → { used, limit, remaining, pending, last, allowed, reason }
 async function regenerationStatus(req, res) {
   try {
-    const status = await svc.getRegenerationStatus(req.userCode, { adminDB });
+    const status = await svc.getRegenerationStatus(req.userCode, { adminDB, clientDB });
     res.set('Cache-Control', 'no-store');
     return res.json(status);
   } catch (error) {

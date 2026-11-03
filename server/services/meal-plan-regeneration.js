@@ -8,6 +8,9 @@
  *
  * The plan itself is built by createAndSaveOnboardingMealPlanForUser with the client's notes,
  * and saved as the active plan the same way the onboarding plan is.
+ *
+ * Only AI plans may be remade. A client of a real dietitian never gets the option, so an AI
+ * plan can't overwrite their dietitian's work (see checkRegenerationAllowed).
  */
 
 const REGENERATION_LIMIT = 3;
@@ -16,6 +19,8 @@ const NOTES_MIN_LENGTH = 3;
 const NOTES_MAX_LENGTH = 1000;
 const ERROR_MAX_LENGTH = 500;
 const TABLE = 'meal_plan_regenerations';
+// Providers with these roles are the company default every normal signup gets, not a dietitian.
+const DEFAULT_PROVIDER_ROLES = new Set(['company_manager', 'sys_admin']);
 
 function httpError(status, code, message) {
   const err = new Error(message);
@@ -76,10 +81,68 @@ function requireDeps(userCode, adminDB) {
   if (!adminDB) throw httpError(503, 'unavailable', 'Chat database is not configured');
 }
 
-/** GET /api/meal-plan/regenerations */
-async function getRegenerationStatus(userCode, { adminDB, now = () => Date.now() } = {}) {
+async function readOptional(query) {
+  const { data, error } = await query;
+  if (error && error.code !== 'PGRST116') throw error;
+  return data || null;
+}
+
+/**
+ * Whether the client may ask for an AI plan: { allowed: true } or { allowed: false, reason }.
+ *
+ * Not allowed (reason 'dietitian_plan') when
+ *  - the active plan carries a dietitian_id (made or activated from the dietitian site; AI
+ *    plans never set it), or
+ *  - the client's provider is a real dietitian: anyone who isn't a company manager / admin
+ *    (the default every normal signup gets), or a coach with a public profile (name or photo).
+ * The dietitian site does not stamp dietitian_id when it edits a plan in place, so plan data
+ * alone can't prove an AI plan was never touched; the provider rule covers that case.
+ */
+async function checkRegenerationAllowed(userCode, { clientDB, adminDB }) {
+  const blocked = { allowed: false, reason: 'dietitian_plan' };
+
+  const chatUser = await readOptional(
+    adminDB.from('chat_users').select('provider_id').eq('user_code', userCode).maybeSingle(),
+  );
+  const providerId = chatUser?.provider_id || null;
+  if (providerId) {
+    const profile = await readOptional(
+      adminDB.from('profiles').select('id, role').eq('id', providerId).maybeSingle(),
+    );
+    if (profile && !DEFAULT_PROVIDER_ROLES.has(profile.role)) return blocked;
+    const { loadDietitianSettings } = require('./dietitian-invite');
+    const settings = await loadDietitianSettings(providerId, { adminDB });
+    if (settings && (settings.display_name || settings.photo_url)) return blocked;
+  }
+
+  const chatPlans = await readOptional(
+    adminDB
+      .from('meal_plans_and_schemas')
+      .select('id, dietitian_id')
+      .eq('user_code', userCode)
+      .eq('record_type', 'meal_plan')
+      .eq('status', 'active'),
+  );
+  if ((chatPlans || []).some((p) => p.dietitian_id)) return blocked;
+
+  if (clientDB) {
+    const clientPlans = await readOptional(
+      clientDB.from('client_meal_plans').select('id, dietitian_id').eq('user_code', userCode).eq('active', true),
+    );
+    if ((clientPlans || []).some((p) => p.dietitian_id)) return blocked;
+  }
+
+  return { allowed: true, reason: null };
+}
+
+/** GET /api/meal-plan/regenerations → summary + { allowed, reason } */
+async function getRegenerationStatus(userCode, { adminDB, clientDB, now = () => Date.now() } = {}) {
   requireDeps(userCode, adminDB);
-  return summarizeRegenerations(await loadRows(userCode, adminDB), now());
+  const [rows, access] = await Promise.all([
+    loadRows(userCode, adminDB),
+    checkRegenerationAllowed(userCode, { clientDB, adminDB }),
+  ]);
+  return { ...summarizeRegenerations(rows, now()), ...access };
 }
 
 function defaultGenerate({ clientDB, adminDB }) {
@@ -119,7 +182,7 @@ async function runRegeneration({ id, userCode, notes }, { adminDB, generate }) {
  * POST /api/meal-plan/regenerate. userCode must come from the auth token (req.userCode).
  * Resolves to { id, remaining } once the pending row exists; the plan is built afterwards
  * through `schedule` (setImmediate). Throws an error with .status and .code otherwise:
- * 400 invalid_notes, 409 in_progress, 409 limit_reached.
+ * 400 invalid_notes, 403 dietitian_plan, 409 in_progress, 409 limit_reached.
  */
 async function requestRegeneration(userCode, rawNotes, deps = {}) {
   const { adminDB, clientDB } = deps;
@@ -131,6 +194,11 @@ async function requestRegeneration(userCode, rawNotes, deps = {}) {
   const notes = normalizeNotes(rawNotes);
   if (!notes) {
     throw httpError(400, 'invalid_notes', `Tell us what to change in ${NOTES_MIN_LENGTH} to ${NOTES_MAX_LENGTH} characters`);
+  }
+
+  const access = await checkRegenerationAllowed(userCode, { clientDB, adminDB });
+  if (!access.allowed) {
+    throw httpError(403, 'dietitian_plan', 'Your dietitian made your plan. Ask them for changes.');
   }
 
   const rows = await loadRows(userCode, adminDB);
@@ -170,6 +238,7 @@ module.exports = {
   NOTES_MAX_LENGTH,
   normalizeNotes,
   summarizeRegenerations,
+  checkRegenerationAllowed,
   getRegenerationStatus,
   requestRegeneration,
   runRegeneration,

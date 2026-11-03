@@ -7,6 +7,7 @@ const {
   summarizeRegenerations,
   getRegenerationStatus,
   requestRegeneration,
+  checkRegenerationAllowed,
   PENDING_TIMEOUT_MS,
 } = require('../services/meal-plan-regeneration');
 const {
@@ -156,6 +157,64 @@ test('stale pending (over 10 minutes) is closed as failed and no longer blocks',
   assert.equal(res.remaining, 2);
   const closed = adminDB.tables.meal_plan_regenerations.find((r) => r.id === stale.id);
   assert.equal(closed.status, 'failed');
+});
+
+// ── Dietitian plans are never replaced ─────────────────────────────────────────
+
+const DEFAULT_MANAGER = 'mgr-default';
+const DIETITIAN = 'diet-1';
+
+function accessWorld({ providerId = DEFAULT_MANAGER, providerRole = 'company_manager', settings = null, chatPlan = {}, clientPlan = {} } = {}) {
+  const adminDB = fakeDB({
+    meal_plan_regenerations: [],
+    chat_users: [{ user_code: 'U1', provider_id: providerId }],
+    profiles: [{ id: DEFAULT_MANAGER, role: 'company_manager' }, { id: DIETITIAN, role: providerRole }],
+    dietitian_settings: settings ? [{ profile_id: providerId, is_active: true, ...settings }] : [],
+    meal_plans_and_schemas: [{ id: 'p1', user_code: 'U1', record_type: 'meal_plan', status: 'active', dietitian_id: null, ...chatPlan }],
+  });
+  const clientDB = fakeDB({ client_meal_plans: [{ id: 'p1', user_code: 'U1', active: true, dietitian_id: null, ...clientPlan }] });
+  return { adminDB, clientDB };
+}
+
+test('access: an AI plan of a default-manager client may be remade', async () => {
+  const w = accessWorld();
+  assert.deepEqual(await checkRegenerationAllowed('U1', w), { allowed: true, reason: null });
+  const s = await getRegenerationStatus('U1', { ...w, now: () => NOW });
+  assert.equal(s.allowed, true);
+  assert.equal(s.remaining, 3);
+});
+
+test('access: a plan made or activated by a dietitian is blocked, in either database', async () => {
+  for (const w of [accessWorld({ chatPlan: { dietitian_id: DIETITIAN } }), accessWorld({ clientPlan: { dietitian_id: DIETITIAN } })]) {
+    assert.deepEqual(await checkRegenerationAllowed('U1', w), { allowed: false, reason: 'dietitian_plan' });
+  }
+  // An old dietitian plan that is no longer active does not count.
+  const expired = accessWorld({ chatPlan: { status: 'expired', dietitian_id: DIETITIAN } });
+  assert.equal((await checkRegenerationAllowed('U1', expired)).allowed, true);
+});
+
+test('access: a client whose provider is a real dietitian is blocked even on an AI plan', async () => {
+  assert.equal((await checkRegenerationAllowed('U1', accessWorld({ providerId: DIETITIAN, providerRole: 'employee' }))).allowed, false);
+  // A company manager with a public dietitian profile is a dietitian too...
+  const solo = accessWorld({ providerId: DIETITIAN, providerRole: 'company_manager', settings: { display_name: 'Dana' } });
+  assert.equal((await checkRegenerationAllowed('U1', solo)).allowed, false);
+  // ...but a company manager with only an invite code is the company default.
+  const bare = accessWorld({ providerId: DIETITIAN, providerRole: 'company_manager', settings: { invite_code: 'BC', display_name: null } });
+  assert.equal((await checkRegenerationAllowed('U1', bare)).allowed, true);
+});
+
+test('access: GET reports allowed false and POST is refused with 403 dietitian_plan, nothing written', async () => {
+  const w = accessWorld({ chatPlan: { dietitian_id: DIETITIAN } });
+  const s = await getRegenerationStatus('U1', { ...w, now: () => NOW });
+  assert.equal(s.allowed, false);
+  assert.equal(s.reason, 'dietitian_plan');
+  let generated = false;
+  await assert.rejects(
+    requestRegeneration('U1', 'more fish please', { ...w, generate: async () => { generated = true; }, schedule: (fn) => fn(), now: () => NOW }),
+    (e) => e.status === 403 && e.code === 'dietitian_plan',
+  );
+  assert.equal(generated, false);
+  assert.equal(w.adminDB.tables.meal_plan_regenerations.length, 0);
 });
 
 // ── Background run ────────────────────────────────────────────────────────────
