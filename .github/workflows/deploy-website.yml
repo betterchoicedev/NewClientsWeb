@@ -1,0 +1,81 @@
+# Client website betterchoice.one: bucket gs://betterchoice.one in project cs-poc-7e0pglhfx8qi4evv0hn4qsh,
+# served by a Google load balancer with Cloud CDN. Every push to main that touches the site builds and uploads it.
+#
+# Order matters so visitors never get a blank page:
+#   1. hashed files (static/) first, cached for a year; old ones are never deleted, so a page that is
+#      still open keeps loading the files it asked for,
+#   2. other public files,
+#   3. index.html (+ service worker) last, with no-cache so the CDN and browsers always revalidate it.
+name: Deploy website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-website.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-website
+  cancel-in-progress: false
+
+env:
+  BUCKET: gs://betterchoice.one
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        # CRA turns lint warnings into errors when CI=true.
+        run: CI=false npm run build
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/615263253386/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@production-eu1.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload hashed files
+        run: gcloud storage cp -r build/static "$BUCKET/" --cache-control="public,max-age=31536000,immutable"
+
+      - name: Upload other public files
+        run: >
+          gcloud storage rsync build "$BUCKET" --recursive
+          --exclude='^static/|^index\.html$|^service-worker\.js$|^asset-manifest\.json$'
+
+      - name: Upload the page last, never cached
+        run: |
+          for f in index.html asset-manifest.json service-worker.js; do
+            if [ -f "build/$f" ]; then
+              gcloud storage cp "build/$f" "$BUCKET/$f" --cache-control="no-cache, max-age=0"
+            fi
+          done
+
+      - name: Check the live site serves this build
+        run: |
+          want=$(grep -oE 'static/js/main\.[a-f0-9]+\.js' build/index.html | head -1)
+          for i in 1 2 3 4 5 6; do
+            got=$(curl -s -H 'Cache-Control: no-cache' "https://betterchoice.one/?v=$GITHUB_SHA" | grep -oE 'static/js/main\.[a-f0-9]+\.js' | head -1)
+            echo "want $want, live $got"
+            [ "$got" = "$want" ] && exit 0
+            sleep 20
+          done
+          echo "The CDN may still hold the old page for up to an hour (it was cached before this workflow set no-cache)."
