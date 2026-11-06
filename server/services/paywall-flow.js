@@ -3,11 +3,13 @@
 //   free_month  free month with no card; the app locks when it ends until they pay
 //   card_trial  today's flow: card at checkout, short Stripe trial, then auto-charge
 //
-// Users who came through a company / invite link always get card_trial, which uses
-// their company's pricing. Normal signups are put under the BetterChoice company,
-// so that company counts as no company. See sql/paywall_flows.sql.
+// Users whose dietitian picked a plan preset get that preset's trial (free month,
+// card trial or none). Other company / invite-link users always get card_trial,
+// which uses their company's pricing. Normal signups are put under the BetterChoice
+// company, so that company counts as no company. See sql/paywall_flows.sql.
 
 const { MEMBERSHIP_TRIAL_DAYS, BETTERCHOICE_COMPANY_ID } = require('../utils/constants');
+const { presetPaywallFlow } = require('./dietitian-invite');
 
 const FREE_MONTH_FLOW = 'free_month';
 const CARD_TRIAL_FLOW = 'card_trial';
@@ -56,6 +58,14 @@ async function getUserPaywallFlow(userId, { clientDB, adminDB, resolveUserCompan
   try {
     if (typeof resolveUserCompany === 'function') {
       const company = await resolveUserCompany(userId, { clientDB, adminDB });
+      const preset = company?.dietitian?.preset;
+      if (preset) {
+        return presetPaywallFlow(preset, {
+          freeMonthFlow: FREE_MONTH_FLOW,
+          cardTrialFlow: CARD_TRIAL_FLOW,
+          reminderDays: REMINDER_DAYS,
+        });
+      }
       if (company?.companyId && String(company.companyId) !== BETTERCHOICE_COMPANY_ID) return CARD_TRIAL;
     }
     return await readPaywallSettings(clientDB);

@@ -1,0 +1,70 @@
+# Clients API (Cloud Run "newclientsweb", me-west1): the server/ folder of this repo.
+# Tests, then a hidden revision (no traffic), a health check against it, and only then 100% traffic.
+# A failed check leaves the current revision serving. The website itself is not deployed here.
+name: Deploy Clients API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+env:
+  SERVICE: newclientsweb
+  REGION: me-west1
+  PROJECT: production-eu1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci --omit=dev
+
+      - name: Server tests
+        run: for f in server/tests/*.test.js; do node --test "$f" || exit 1; done
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/615263253386/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deployer@production-eu1.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy hidden revision
+        run: gcloud run deploy "$SERVICE" --source . --region "$REGION" --project "$PROJECT" --no-traffic --tag next --quiet
+
+      - name: Health check the hidden revision
+        run: |
+          url=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT" --format=json | jq -r '.status.traffic[] | select(.tag=="next") | .url')
+          echo "hidden revision: $url"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$url/health")
+          echo "health -> $code"
+          test "$code" = 200
+          anon=$(curl -s -o /dev/null -w '%{http_code}' "$url/api/my-dietitian")
+          echo "anonymous my-dietitian -> $anon (must be 401)"
+          test "$anon" = 401
+
+      - name: Send all traffic to it
+        run: |
+          rev=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT" --format=json | jq -r '.status.traffic[] | select(.tag=="next") | .revisionName')
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" --project "$PROJECT" --to-revisions "$rev=100" --quiet
+          echo "live: $rev"

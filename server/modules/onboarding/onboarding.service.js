@@ -17,6 +17,7 @@ const {
   expireFreeMonthForUser,
   loadFreeMonthProgress,
 } = require('../../services/paywall-flow');
+const { loadDietitian, applyDietitianOverrides } = require('../../services/dietitian-invite');
 
 const VALID_PHASES = new Set(['welcome', 'products', 'promo', 'payment', 'questions', 'committing', 'pwa', 'finalizing', 'done']);
 const MAX_DRAFT_BYTES = 48 * 1024;
@@ -1309,7 +1310,9 @@ async function resolveUserCompany(userId, { clientDB, adminDB }) {
     return null;
   }
 
-  const companyConfig = parseCompanyConfig(company.config);
+  // The client's own dietitian adds questions and may replace the company's pricing.
+  const dietitian = await loadDietitian(chatUser.provider_id, { adminDB });
+  const companyConfig = applyDietitianOverrides(parseCompanyConfig(company.config), dietitian);
   // #region agent log
   agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve ok', {
     companyId: company.id,
@@ -1322,6 +1325,8 @@ async function resolveUserCompany(userId, { clientDB, adminDB }) {
     companyId: company.id,
     companyName: company.name,
     companyConfig,
+    providerId: chatUser.provider_id,
+    dietitian,
   };
 }
 

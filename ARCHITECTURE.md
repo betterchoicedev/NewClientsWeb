@@ -176,6 +176,7 @@ All routes mount under `/api`.
 | `tracking` | `/calendar-events`, `/daily-xp/today`, `/daily-xp/weekly`, `/weight-logs`, `POST /health/ingest`, `GET /health/summary` |
 | `coaching` | `/chat-messages`, `/messages`, `/meal-plan`, `/meal-plan-history`, `/training-plan`, `/companies`, `/assign-client-company` |
 | `billing` | `POST /webhooks/stripe`, `/stripe/create-checkout-session`, `/stripe/create-portal-session`, `GET /stripe/my-subscription`, `/stripe/membership-prices`, `POST /stripe/cancel-my-subscription`, `/subscription/validate-access-code`, `GET /exchange-rates` |
+| `meal-plan` | `GET /meal-plan/regenerations`, `POST /meal-plan/regenerate` (client asks for a new AI plan with notes, max 3; `services/meal-plan-regeneration.js`, table `meal_plan_regenerations` in the Chat DB) |
 | `marketing` | `POST /landing/validate`, `/db/registration-links/find`, `/waiting-list/*`, `/contact`, `GET /macro-summary-svg`, `/weekly-macro-summary-svg`, `POST /whatsapp/send-welcome` |
 
 `GET /health` sits outside `/api`.
