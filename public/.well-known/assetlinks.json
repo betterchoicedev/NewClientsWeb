@@ -1,10 +1,13 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "live.betterchoice.betterchoiceai",
       "sha256_cert_fingerprints": [
+        "68:A0:71:EE:62:C7:AD:0E:07:6A:D7:18:2B:36:32:87:AF:F5:05:BF:D7:F1:93:C9:6E:FC:B7:EA:6C:22:6B:99",
         "A4:DD:45:A2:14:0A:22:E1:BD:F8:56:8D:71:92:19:8F:24:B2:F8:B6:A9:0C:BB:B5:0F:CA:DB:6F:80:AF:DC:36"
       ]
     }
