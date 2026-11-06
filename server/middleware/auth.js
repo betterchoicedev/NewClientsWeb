@@ -154,6 +154,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/whatsapp/',
     '/api/profile/',
     '/api/food-logs',
+    '/api/starred-meals',
     '/api/calendar-events',
     '/api/daily-xp/',
     '/api/chat-messages',
