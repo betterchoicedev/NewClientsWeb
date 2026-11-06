@@ -1,4 +1,4 @@
-const { clientDB, supabaseAuth, adminDB } = require('../../config/db');
+const { clientDB, supabaseAuth, adminDB, createStatelessAuthClient } = require('../../config/db');
 const { decodeJwtPayloadServer } = require('../../utils/helpers');
 const { resolveSignupProvider } = require('../invite/invite.service');
 
@@ -66,23 +66,8 @@ async function resolveUserCodeForAuthUser(authUserId, email) {
 
 // ─── Route handlers ───────────────────────────────────────────────────────────
 
-async function refreshSession(req, res) {
-  try {
-    const { refresh_token } = req.body || {};
-    if (!refresh_token || typeof refresh_token !== 'string') {
-      return res.status(400).json({ error: 'refresh_token is required' });
-    }
-    const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token });
-    if (error || !data?.session?.access_token) {
-      console.warn('🔁 Refresh failed:', error?.message || 'no session returned');
-      return res.status(401).json({ error: error?.message || 'Failed to refresh session' });
-    }
-    res.json({ session: data.session, user: data.user, error: null });
-  } catch (error) {
-    console.error('❌ POST /api/auth/refresh error:', error);
-    res.status(401).json({ error: error.message || 'Failed to refresh session' });
-  }
-}
+// POST /api/auth/refresh lives in ./session-refresh (401 only for a dead refresh token).
+const { refreshSession } = require('./session-refresh');
 
 async function appleVerify(req, res) {
   try {
@@ -102,7 +87,7 @@ async function appleVerify(req, res) {
       return res.status(404).json({ error: 'no_account', email: claimedEmail });
     }
 
-    const { data, error } = await clientDB.auth.signInWithIdToken({ provider: 'apple', token: identityToken });
+    const { data, error } = await createStatelessAuthClient().auth.signInWithIdToken({ provider: 'apple', token: identityToken });
     if (error) {
       console.error('❌ Apple signInWithIdToken error:', error);
       return res.status(401).json({ error: error.message || 'Apple sign-in rejected' });
@@ -162,7 +147,7 @@ async function appleExchange(req, res) {
       return res.status(409).json({ error: 'account_exists', email: claimedEmail });
     }
 
-    const { data, error } = await clientDB.auth.signInWithIdToken({
+    const { data, error } = await createStatelessAuthClient().auth.signInWithIdToken({
       provider: 'apple',
       token: identityToken,
     });
