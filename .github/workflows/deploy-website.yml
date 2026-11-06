@@ -59,7 +59,12 @@ jobs:
       - name: Upload other public files
         run: >
           gcloud storage rsync build "$BUCKET" --recursive
-          --exclude='^static/|^index\.html$|^service-worker\.js$|^asset-manifest\.json$'
+          --exclude='^\.well-known/|^static/|^index\.html$|^service-worker\.js$|^asset-manifest\.json$'
+
+      - name: App link files (Apple and Android read these to open links in the app)
+        run: |
+          gcloud storage cp public/.well-known/apple-app-site-association "$BUCKET/.well-known/apple-app-site-association" --content-type=application/json --cache-control="public,max-age=3600"
+          gcloud storage cp public/.well-known/assetlinks.json "$BUCKET/.well-known/assetlinks.json" --content-type=application/json --cache-control="public,max-age=3600"
 
       - name: Upload the page last, never cached
         run: |

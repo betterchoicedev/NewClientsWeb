@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TGJUABB9YA.com.betterchoice.betterchoiceai"],
+        "components": [{ "/": "/signup*", "comment": "Dietitian links: /signup#c=CODE" }]
+      }
+    ]
+  }
+}

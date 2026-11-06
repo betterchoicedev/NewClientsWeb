@@ -27,15 +27,16 @@ export function Pricing({ language }) {
         <SectionHead
           language={language}
           eyebrow={{ hebrew: 'מחיר', english: 'Price' }}
-          title={{ hebrew: `${PRICING.trialDays} ימים עלינו.`, english: `${PRICING.trialDays} days on us.` }}
+          title={{ hebrew: 'חודש עלינו.', english: 'A month on us.' }}
           sub={{
-            hebrew: 'מנסים את הכל. אפשר לבטל בכל רגע מהגדרות החשבון.',
-            english: 'Try everything. Cancel any time from your account settings.',
+            hebrew: 'מנסים את הכל, בלי כרטיס אשראי. בסוף החודש בוחרים מסלול.',
+            english: 'Try everything, no card needed. Pick a plan when the month ends.',
           }}
         />
         <div className="rounded-bc-card border border-bc-border bg-bc-canvas p-6 sm:p-8">
-          <p className="font-choice font-medium text-[44px] sm:text-[56px] leading-none text-bc-text">
-            {he ? `${trialDays} ${trialDays > 10 ? 'יום' : 'ימים'} חינם` : `${trialDays} ${trialDays === 1 ? 'day' : 'days'} free`}
+          {/* Choice Sans is Latin-only, so Hebrew keeps the body font. */}
+          <p className={`${he ? "font-bold" : "font-choice font-medium"} text-[44px] sm:text-[56px] leading-none text-bc-text`}>
+            {trialDays === 30 ? (he ? 'חודש חינם' : '1 month free') : he ? `${trialDays} ימים חינם` : `${trialDays} days free`}
           </p>
           <div className="mt-6 grid grid-cols-2 gap-3">
             <div className="rounded-bc-field border border-bc-border p-4">
