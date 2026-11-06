@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
 import SignupPage from './pages/SignupPage';
@@ -8,7 +9,6 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import WhatsAppRegisterPage from './pages/WhatsAppRegisterPage';
 import AccountPage from './pages/AccountPage';
-import TestPage from './pages/TestPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
 import AccessibilityStatementPage from './pages/AccessibilityStatementPage';
@@ -46,7 +46,7 @@ function App() {
               <AccessibilityWidget />
               <Routes>
                 {/* Marketing */}
-                <Route path="/" element={<TestPage />} />
+                <Route path="/" element={<HomePage />} />
                 <Route path="/test" element={<Navigate to="/" replace />} />
                 <Route path="/he" element={<LanguageRedirect lang="hebrew" />} />
                 <Route path="/en" element={<LanguageRedirect lang="english" />} />

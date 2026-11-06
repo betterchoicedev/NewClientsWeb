@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import StickerTile from './test/StickerTile';
-import { AnimatePresence, motion, useInView } from 'framer-motion';
+import StickerTile from './home/StickerTile';
+import { CouchScene } from './home/Illustrations';
+import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
 import { UserRound, UtensilsCrossed, Shuffle, RefreshCw, Check } from 'lucide-react';
 import { focusClass } from '../../components/brand/ui';
 import MobileStory from './MobileStory';
@@ -112,12 +113,12 @@ const SWAPS = [
 ];
 
 const ANSWERS = [
-  { hebrew: 'פחות שומן, אותו שריר', english: 'Lose fat, keep muscle' },
-  { hebrew: 'מאוזן', english: 'Balanced' },
-  { hebrew: 'בלי לקטוז', english: 'No lactose' },
-  { hebrew: 'אוכלים 08:00–20:00', english: 'Eat 08:00–20:00' },
-  { hebrew: '3 אימונים בשבוע', english: '3 workouts a week' },
-  { hebrew: '4 ארוחות ביום', english: '4 meals a day' },
+  { hebrew: 'פחות שומן, אותו שריר', english: 'Lose fat, keep muscle', icon: '🎯' },
+  { hebrew: 'מאוזן', english: 'Balanced', icon: '🥗' },
+  { hebrew: 'בלי לקטוז', english: 'No lactose', icon: '🥛' },
+  { hebrew: 'אוכלים 08:00–20:00', english: 'Eat 08:00–20:00', icon: '⏰' },
+  { hebrew: '3 אימונים בשבוע', english: '3 workouts a week', icon: '🏋️' },
+  { hebrew: '4 ארוחות ביום', english: '4 meals a day', icon: '🍽️' },
 ];
 
 const STEPS = [
@@ -185,18 +186,19 @@ function MacroBar({ split, language }) {
 
 function PlanCard({ step, language, stickers }) {
   const he = language === 'hebrew';
+  const reduce = useReducedMotion();
   const meals = EXAMPLE_DAY.balanced;
   const target = step >= 3 ? 1980 : 2050;
 
   return (
-    <div className="w-full max-w-[480px] rounded-bc-card border border-bc-border bg-bc-canvas p-6 sm:p-7 min-h-[460px] flex flex-col">
+    <div className="w-full max-w-[480px] rounded-bc-card border border-bc-border bg-bc-canvas p-6 sm:p-7 min-h-[460px] flex flex-col" style={step === 0 ? { backgroundImage: 'radial-gradient(120% 80% at 50% 0%, var(--bc-accent-well), transparent 70%)' } : undefined}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[13px] font-semibold text-bc-muted">{step === 0 ? (he ? 'התשובות שלכם' : 'Your answers') : he ? 'התפריט שלכם' : 'Your plan'}</p>
           <AnimatePresence mode="wait">
             <motion.p key={target} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FADE}
-              className="mt-1 font-choice font-medium text-[26px] text-bc-text tabular-nums" dir="ltr" style={{ textAlign: 'start' }}>
-              {step === 0 ? '…' : `${target.toLocaleString('en-US')} ${he ? 'קק״ל' : 'kcal'}`}
+              className={`mt-1 font-choice font-medium text-bc-text tabular-nums ${step === 0 ? 'text-[22px] sm:text-[24px] leading-snug' : 'text-[26px]'}`} dir={step === 0 ? undefined : 'ltr'} style={{ textAlign: 'start' }}>
+              {step === 0 ? (he ? 'ספרו לנו מי אתם. את השאר אנחנו בונים.' : 'Tell us who you are. We build the rest.') : `${target.toLocaleString('en-US')} ${he ? 'קק״ל' : 'kcal'}`}
             </motion.p>
           </AnimatePresence>
         </div>
@@ -204,14 +206,34 @@ function PlanCard({ step, language, stickers }) {
 
       <AnimatePresence mode="wait">
         {step === 0 ? (
-          <motion.div key="answers" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FADE} className="mt-6 flex flex-wrap gap-2">
-            {ANSWERS.map((a, i) => (
-              <motion.span key={a.english} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ ...FADE, delay: i * 0.12 }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-bc-border px-3.5 py-2 text-[14px] font-semibold text-bc-text">
-                <Check size={14} aria-hidden="true" className="text-bc-accent-text" />
-                {pick(a, language)}
-              </motion.span>
-            ))}
+          <motion.div key="answers" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FADE} className="mt-5 flex flex-1 flex-col">
+            <div className="relative h-36 overflow-hidden rounded-[24px] border border-bc-border" aria-hidden="true">
+              <CouchScene className="absolute inset-0 h-full w-full" />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {ANSWERS.map((a, i) => (
+                <motion.span key={a.english}
+                  initial={reduce ? false : { opacity: 0, y: 14, scale: 0.85, rotate: i % 2 ? 4 : -4 }}
+                  animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', damping: 14, stiffness: 180, delay: 0.15 + i * 0.16 }}
+                  className="inline-flex items-center gap-2 rounded-full border border-bc-border bg-bc-surface px-3.5 py-2 text-[14px] font-bold text-bc-text shadow-[0_6px_16px_-10px_rgba(0,0,0,0.45)]">
+                  <span aria-hidden="true" className="text-[16px] leading-none">{a.icon}</span>
+                  {pick(a, language)}
+                  <Check size={14} aria-hidden="true" className="text-bc-accent-text" />
+                </motion.span>
+              ))}
+            </div>
+            <div className="mt-auto pt-5">
+              <div className="flex items-center justify-between text-[13px] font-bold">
+                <span className="text-bc-accent-text">{he ? 'בונים את התפריט שלכם…' : 'Building your plan…'}</span>
+                <span className="text-bc-muted">{he ? 'כמה דקות, פעם אחת' : 'A few minutes, once'}</span>
+              </div>
+              <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-bc-surface2" dir="ltr">
+                <motion.span className="block h-full rounded-full bg-bc-accent"
+                  initial={{ width: reduce ? '100%' : '6%' }} animate={{ width: reduce ? '100%' : ['6%', '100%'] }}
+                  transition={reduce ? { duration: 0 } : { duration: 3.2, ease: 'easeInOut', repeat: Infinity, repeatDelay: 0.6 }} />
+              </div>
+            </div>
           </motion.div>
         ) : (
           <motion.div key="plan" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FADE} className="mt-5 flex flex-col">
@@ -309,7 +331,7 @@ function TryIt({ language, stickers }) {
   const goalDef = GOALS.find((g) => g.key === goal);
 
   return (
-    <div id="try-it" className="scroll-mt-20 mx-auto max-w-6xl px-4 sm:px-6 pb-20 sm:pb-28 grid lg:grid-cols-2 gap-12 items-start">
+    <div id="try-it" className="scroll-mt-20 mx-auto max-w-6xl px-4 sm:px-6 pb-20 sm:pb-28 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-2 gap-12 items-start">
       <div>
         <p className="inline-flex rounded-full border border-bc-border px-3 py-1 text-[13px] font-bold text-bc-accent-text">{he ? 'נסו בעצמכם' : 'Try it'}</p>
         <h3 className="mt-3 font-choice font-medium text-[28px] sm:text-[40px] leading-[1.08] text-bc-text">
@@ -352,10 +374,10 @@ function TryIt({ language, stickers }) {
           <motion.ul key={diet} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={FADE} className="mt-6 divide-y divide-bc-border border-t border-bc-border">
             {EXAMPLE_DAY[diet].map((meal, i) => (
               <li key={meal.english} className="flex items-center justify-between gap-4 py-3.5">
-                <span className="text-[13px] font-bold text-bc-muted w-16 flex-none">{pick(MEAL_NAMES[i], language)}</span>
+                <span className="text-[13px] font-bold text-bc-muted w-14 sm:w-16 flex-none">{pick(MEAL_NAMES[i], language)}</span>
                 {stickers ? <StickerTile slugs={MEAL_STICKERS[meal.english]} size={52} delay={i * 0.1} /> : null}
                 <span className="flex-1 text-[15px] font-semibold text-bc-text">{pick(meal, language)}</span>
-                <span className="flex-none rounded-full border border-bc-border px-2 py-0.5 text-[12px] font-semibold text-bc-muted">{he ? '+ חלופות' : '+ swaps'}</span>
+                <span className="flex-none rounded-full border border-bc-border px-2 py-0.5 text-[12px] font-semibold text-bc-muted max-sm:hidden">{he ? '+ חלופות' : '+ swaps'}</span>
               </li>
             ))}
           </motion.ul>

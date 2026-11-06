@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
-import { ClipboardList, Utensils, Dumbbell, MessageCircle, Pause, Play } from 'lucide-react';
+import { Utensils, Dumbbell, Pause, Play } from 'lucide-react';
 import { PhoneFrame } from '../PhoneFrame';
 import { AppScreen } from './AppScreens';
 import { focusClass } from '../../../components/brand/ui';
@@ -10,16 +10,6 @@ import { focusClass } from '../../../components/brand/ui';
 // while in view until the visitor picks one.
 
 const TABS = [
-  {
-    key: 'plan',
-    icon: ClipboardList,
-    label: { hebrew: 'התפריט', english: 'Meal plan' },
-    title: { hebrew: 'תפריט שנבנה בשבילכם.', english: 'A plan built for you.' },
-    line: {
-      hebrew: 'יעד קלוריות, חלבון, פחמימות ושומן לפי המטרה שלכם, ארוחות לכל יום, ואפשרויות החלפה כשבא לכם משהו אחר.',
-      english: 'Calorie and macro targets for your goal, meals for every day, and swaps when you feel like something else.',
-    },
-  },
   {
     key: 'nutrition',
     icon: Utensils,
@@ -38,16 +28,6 @@ const TABS = [
     line: {
       hebrew: 'תוכנית בימים שבחרתם, עם סטים וחזרות. רושמים משקלים תוך כדי.',
       english: 'A plan on the days you chose, with sets and reps. Log weights as you go.',
-    },
-  },
-  {
-    key: 'chat',
-    icon: MessageCircle,
-    label: { hebrew: 'המאמנת', english: 'Coach' },
-    title: { hebrew: 'שואלים, ומקבלים תשובה עם מספרים.', english: 'Ask, and get an answer with numbers.' },
-    line: {
-      hebrew: 'המאמנת מכירה את התפריט ואת היום שלכם, ומציעה ארוחה שסוגרת את היעד.',
-      english: 'The coach knows your plan and your day, and suggests a meal that closes the gap.',
     },
   },
 ];

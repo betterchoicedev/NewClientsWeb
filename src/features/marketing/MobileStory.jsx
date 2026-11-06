@@ -31,14 +31,14 @@ export default function MobileStory({ steps, renderSlide, language, className = 
     <div className={className}>
       <div
         ref={rowRef}
-        className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-4 flex snap-x snap-mandatory gap-8 overflow-x-auto px-4 scroll-px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {steps.map((step, i) => (
           <div
             key={i}
             ref={(el) => (slideRefs.current[i] = el)}
             data-index={i}
-            className="w-[88%] flex-none snap-center"
+            className="w-full flex-none snap-center"
             role="group"
             aria-label={he ? `שלב ${i + 1} מתוך ${steps.length}` : `Step ${i + 1} of ${steps.length}`}
           >

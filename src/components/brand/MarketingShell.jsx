@@ -60,7 +60,7 @@ export function MarketingHeader() {
             onClick={toggleLanguage}
             aria-label={`${c.otherLanguage} · ${c.otherLanguageLabel}`}
             lang={language === 'hebrew' ? 'en' : 'he'}
-            className={`${textButton} px-2 sm:px-3`}
+            className={`${textButton} px-2 sm:px-3 whitespace-nowrap`}
           >
             {c.otherLanguage}
           </button>
@@ -73,10 +73,11 @@ export function MarketingHeader() {
           >
             {isDarkMode ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
           </button>
-          <Link to={isAuthenticated ? '/account' : '/login'} className={`${textButton} px-2 sm:px-3`}>
+          <Link to={isAuthenticated ? '/account' : '/login'} className={`${textButton} px-2 sm:px-3 whitespace-nowrap`}>
             {isAuthenticated ? c.account : c.login}
           </Link>
-          <DownloadLink className={secondaryButton}>{c.download}</DownloadLink>
+          {/* very narrow phones: the sticky download bar does this job */}
+          <DownloadLink className={`${secondaryButton} max-[399px]:!hidden whitespace-nowrap`}>{c.download}</DownloadLink>
         </nav>
       </div>
     </header>
