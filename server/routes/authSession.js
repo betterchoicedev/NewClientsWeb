@@ -2,6 +2,8 @@
  * Session & OAuth routes (browser never touches Supabase directly).
  */
 
+const { refreshSession } = require('../modules/auth/session-refresh');
+
 const MOBILE_APP_OAUTH_REDIRECT = (
   process.env.MOBILE_OAUTH_REDIRECT || 'betterchoicemobile://auth/callback'
 ).trim();
@@ -114,20 +116,8 @@ function registerAuthSessionRoutes(app, { supabaseAuth, supabaseUrl, supabaseAno
     }
   });
 
-  app.post('/api/auth/refresh', async (req, res) => {
-    try {
-      const { refresh_token } = req.body;
-      if (!refresh_token) {
-        return res.status(400).json({ error: 'refresh_token is required' });
-      }
-      const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token });
-      if (error) throw error;
-      res.json({ session: data.session, user: data.user, error: null });
-    } catch (error) {
-      console.error('POST /api/auth/refresh error:', error);
-      res.status(401).json({ error: error.message || 'Failed to refresh session' });
-    }
-  });
+  // 401 only when the refresh token is dead; 503 when Supabase could not be reached.
+  app.post('/api/auth/refresh', refreshSession);
 
   app.post('/api/auth/logout', async (_req, res) => {
     res.json({ error: null });
