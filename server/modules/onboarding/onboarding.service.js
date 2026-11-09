@@ -1386,23 +1386,8 @@ async function validateCompanyPromo(userId, { code, companyId, productIds = [] }
     const config = parseCompanyConfig(company.config);
     const pricing = config?.pricing || {};
 
-    const bypass = (pricing.bypassCodes || []).find(
-      (entry) => isPromoEntryActive(entry) && String(entry.code || '').toUpperCase() === normalized
-    );
-    if (bypass) {
-      if (bypass.expiresAt && new Date(bypass.expiresAt) < new Date()) {
-        continue;
-      }
-      return {
-        valid: true,
-        type: 'bypass',
-        code: normalized,
-        companyId: company.id,
-        companyName: company.name,
-        companyConfig: config,
-        productIds: selectedIds,
-      };
-    }
+    const bypass = findBypassCode(company, config, normalized, selectedIds);
+    if (bypass) return bypass;
 
     const promo = (pricing.promoCodes || []).find(
       (entry) =>
@@ -1428,7 +1413,37 @@ async function validateCompanyPromo(userId, { code, companyId, productIds = [] }
     }
   }
 
+  // The user's own company (e.g. their dietitian's) may not be the one that issued a free
+  // code such as BETTERFREE. Free codes are unique strings, so look them up in every other
+  // company too; applying one moves the user to the issuing company, as it always has.
+  // Discount codes stay limited to the user's company: they are tied to its products.
+  if (companyId) {
+    const others = (await fetchCompanies({ adminDB, clientDB })).filter((c) => c.id !== companyId);
+    for (const company of others) {
+      const bypass = findBypassCode(company, parseCompanyConfig(company.config), normalized, selectedIds);
+      if (bypass) return bypass;
+    }
+  }
+
   return { valid: false, error: 'Code is invalid or unavailable' };
+}
+
+/** The company's active, unexpired free (bypass) code matching `normalized`, as a validation result. */
+function findBypassCode(company, config, normalized, selectedIds) {
+  const entry = (config?.pricing?.bypassCodes || []).find(
+    (e) => isPromoEntryActive(e) && String(e.code || '').toUpperCase() === normalized
+  );
+  if (!entry) return null;
+  if (entry.expiresAt && new Date(entry.expiresAt) < new Date()) return null;
+  return {
+    valid: true,
+    type: 'bypass',
+    code: normalized,
+    companyId: company.id,
+    companyName: company.name,
+    companyConfig: config,
+    productIds: selectedIds,
+  };
 }
 
 async function applyBypassPromo(userId, { code, companyId, productIds = [] }, { clientDB, adminDB, email }) {
