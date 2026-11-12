@@ -3,8 +3,6 @@
  * clientDB = main Supabase; adminDB = chat Supabase (separate projects).
  */
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const { createAndSaveOnboardingMealPlanForUser } = require('../../services/ai.service');
 const { buildMealPlanStructure, sortMealPlanStructure, normalizeMealPlanStructureForDb } = require('../../utils/mealStructure');
 const { formatMacrosGramStrings } = require('../../utils/nutritionFormats');
@@ -23,26 +21,6 @@ const VALID_PHASES = new Set(['welcome', 'products', 'promo', 'payment', 'questi
 const MAX_DRAFT_BYTES = 48 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// #region agent log
-const DEBUG_LOG_PATH = path.resolve(__dirname, '../../../../.cursor/debug-6a05fb.log');
-function agentDebugLog(location, message, data, hypothesisId) {
-  try {
-    fs.appendFileSync(
-      DEBUG_LOG_PATH,
-      `${JSON.stringify({ sessionId: '6a05fb', location, message, data, hypothesisId, timestamp: Date.now() })}\n`
-    );
-  } catch (_) { /* ignore */ }
-}
-function countCustomStepsInConfig(companyConfig) {
-  const config = parseCompanyConfig(companyConfig);
-  const steps = config?.onboarding?.customSteps;
-  const raw = Array.isArray(steps) ? steps.length : 0;
-  const filtered = Array.isArray(steps)
-    ? steps.filter((s) => s && (s.question || s.title || s.titleEn || s.label)).length
-    : 0;
-  return { raw, filtered, hasOnboarding: Boolean(config?.onboarding) };
-}
-// #endregion
 
 const ACTIVITY_MULT = {
   sedentary: 1.2,
@@ -950,15 +928,6 @@ async function getStatus(userId, { clientDB, adminDB, companyId: hintedCompanyId
     }
   }
 
-  // #region agent log
-  agentDebugLog('onboarding.service.js:getStatus', 'status company context', {
-    hasCompany: Boolean(company),
-    companyId: company?.companyId || null,
-    ...(company?.companyConfig ? countCustomStepsInConfig(company.companyConfig) : { raw: 0, filtered: 0, hasOnboarding: false }),
-    resumeStepHint,
-    phase,
-  }, 'B');
-  // #endregion
 
   return {
     completed: client.onboarding_completed === true || subscriptionStatus === 'active' || subscriptionStatus === 'trialing',
@@ -1259,9 +1228,6 @@ async function assignClientToCompanyManager(userId, companyId, { clientDB, admin
 
 async function resolveUserCompany(userId, { clientDB, adminDB }) {
   if (!adminDB || !userId) {
-    // #region agent log
-    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'no_admin_db_or_userId', hasAdminDB: Boolean(adminDB) }, 'A');
-    // #endregion
     return null;
   }
 
@@ -1271,9 +1237,6 @@ async function resolveUserCompany(userId, { clientDB, adminDB }) {
     .eq('user_id', userId)
     .maybeSingle();
   if (!client?.user_code) {
-    // #region agent log
-    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'no_user_code' }, 'A');
-    // #endregion
     return null;
   }
 
@@ -1283,9 +1246,6 @@ async function resolveUserCompany(userId, { clientDB, adminDB }) {
     .eq('user_code', client.user_code)
     .maybeSingle();
   if (!chatUser?.provider_id) {
-    // #region agent log
-    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'no_provider_id', userCodeLen: String(client.user_code).length }, 'A');
-    // #endregion
     return null;
   }
 
@@ -1295,31 +1255,18 @@ async function resolveUserCompany(userId, { clientDB, adminDB }) {
     .eq('id', chatUser.provider_id)
     .maybeSingle();
   if (!provider?.company_id) {
-    // #region agent log
-    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'no_company_id_on_provider', hasProviderId: Boolean(chatUser.provider_id) }, 'A');
-    // #endregion
     return null;
   }
 
   const rows = await fetchCompanies({ adminDB, clientDB, companyId: provider.company_id });
   const company = rows[0];
   if (!company) {
-    // #region agent log
-    agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve failed', { reason: 'company_row_not_found', companyId: provider.company_id }, 'A');
-    // #endregion
     return null;
   }
 
   // The client's own dietitian adds questions and may replace the company's pricing.
   const dietitian = await loadDietitian(chatUser.provider_id, { adminDB });
   const companyConfig = applyDietitianOverrides(parseCompanyConfig(company.config), dietitian);
-  // #region agent log
-  agentDebugLog('onboarding.service.js:resolveUserCompany', 'resolve ok', {
-    companyId: company.id,
-    companyName: company.name,
-    ...countCustomStepsInConfig(companyConfig),
-  }, 'A');
-  // #endregion
 
   return {
     companyId: company.id,
@@ -1349,15 +1296,6 @@ async function initCommerceSession(userId, { email, companyId: hintedCompanyId }
   const companyConfig = company?.companyConfig || null;
   const customProducts = extractRawCustomProducts(companyConfig);
 
-  // #region agent log
-  agentDebugLog('onboarding.service.js:initCommerceSession', 'commerce company context', {
-    hasCompany: Boolean(company),
-    companyId: company?.companyId || null,
-    usedHintedCompanyId: Boolean(hintedCompanyId),
-    hintedCompanyId: hintedCompanyId || null,
-    ...(companyConfig ? countCustomStepsInConfig(companyConfig) : { raw: 0, filtered: 0, hasOnboarding: false }),
-  }, 'B');
-  // #endregion
 
   return {
     userCode: client.user_code,
