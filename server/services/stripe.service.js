@@ -56,7 +56,7 @@ function membershipExpiresIso(subscription, commitmentEndDate, priceId) {
   if (!isMembershipPrice(priceId, productId) && !isCompanyOfferSubscription(subscription)) return null;
   const unix = subscription.status === 'trialing' && subscription.trial_end
     ? subscription.trial_end
-    : subscription.current_period_end;
+    : (subscription.items?.data?.[0]?.current_period_end ?? subscription.current_period_end);
   return unix ? new Date(unix * 1000).toISOString() : null;
 }
 
@@ -274,8 +274,8 @@ async function handleSubscriptionCreated(subscription, { clientDB, adminDB, send
       stripe_price_id: priceId,
       subscription_type: subscriptionType,
       status: subscription.status,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end:   new Date(subscription.current_period_end   * 1000).toISOString(),
+      current_period_start: new Date((subscription.items?.data?.[0]?.current_period_start ?? subscription.current_period_start) * 1000).toISOString(),
+      current_period_end:   new Date((subscription.items?.data?.[0]?.current_period_end   ?? subscription.current_period_end)   * 1000).toISOString(),
       cancel_at_period_end: subscription.cancel_at_period_end || false,
       amount_total:   finalAmount,
       currency,
@@ -368,8 +368,8 @@ async function handleSubscriptionUpdated(subscription, { clientDB, adminDB }) {
 
     const { error: updateError } = await clientDB.from('stripe_subscriptions').update({
       status: subscription.status,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end:   new Date(subscription.current_period_end   * 1000).toISOString(),
+      current_period_start: new Date((subscription.items?.data?.[0]?.current_period_start ?? subscription.current_period_start) * 1000).toISOString(),
+      current_period_end:   new Date((subscription.items?.data?.[0]?.current_period_end   ?? subscription.current_period_end)   * 1000).toISOString(),
       cancel_at_period_end: subscription.cancel_at_period_end || false,
       amount_total:    finalAmount,
       commitment_months:   commitmentMonths,
@@ -434,7 +434,7 @@ async function handleSubscriptionDeleted(subscription, { clientDB, adminDB }) {
       const price          = subscription.items.data[0]?.price;
       const priceId        = price?.id;
       const commitmentMonths = resolveCommitmentMonths(priceId);
-      const currentDate    = new Date(subscription.current_period_start * 1000);
+      const currentDate    = new Date((subscription.items?.data?.[0]?.current_period_start ?? subscription.current_period_start) * 1000);
       let commitmentEndDate = null;
       if (commitmentMonths) {
         commitmentEndDate = new Date(currentDate);
