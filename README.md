@@ -99,6 +99,8 @@ Some API variables carry a `REACT_APP_` prefix for historical reasons. They are 
 | `DEEPSEEK_ENDPOINT`, `DEEPSEEK_API_KEY`, `DEEPSEEK_DEPLOYMENT`, `DEEPSEEK_TEXT_DEPLOYMENT` | Food photo and text analysis LLM |
 | `AZURE_OPENAI_API_BASE`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT` | AI meal-plan edits |
 | `CLASSIFY_ACTIVITY_BASE`, `CLASSIFY_ACTIVITY_KEY`, `CLASSIFY_ACTIVITY_DEPLOYMENT`, `OPENAI_API_KEY` | Activity classification and onboarding meal suggestions |
+| `AI_PROVIDER` (`legacy` default, or `betterproxy`), `AI_PROVIDER_FOOD` / `AI_PROVIDER_ACTIVITY` / `AI_PROVIDER_MEAL_PLAN` | Send the AI calls above through BetterProxy, all at once or per role (`services/llmProvider.js`). If BetterProxy isn't configured, the call stays on the legacy provider |
+| `BETTERPROXY_BASE_URL`, `BETTERPROXY_API_KEY`, `BETTERPROXY_MODEL` (default `gpt-4o`), `BETTERPROXY_VISION_MODEL`, `BETTERPROXY_MINI_MODEL` (default `gpt-4o-mini`) | BetterProxy endpoint, key and models, used when `AI_PROVIDER` says `betterproxy` |
 | `FRONTEND_URL` (or `REACT_APP_FRONTEND_URL`) | Website origin for OAuth redirects (default `http://localhost:3000`) |
 | `API_PUBLIC_URL` | Public API origin, if it can't be read from the request |
 | `MOBILE_OAUTH_REDIRECT`, `MOBILE_RESET_REDIRECT` | Mobile deep links (defaults `betterchoicemobile://auth/callback`, `betterchoicemobile://reset-password`) |

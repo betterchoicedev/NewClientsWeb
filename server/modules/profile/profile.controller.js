@@ -1,5 +1,6 @@
 const { randomUUID } = require('crypto');
 const OpenAI = require('openai');
+const { openAIClientConfig, openAIParams } = require('../../services/llmProvider');
 const { clientDB, adminDB } = require('../../config/db');
 const { parseTimeToFloat } = require('../../utils/helpers');
 const { formatCityLabelForQuery } = require('../../utils/cityDisplay');
@@ -210,16 +211,20 @@ async function autoGenerateMeals(req, res) {
     const foodAllergies = normalizeStringList(body.foodAllergies ?? body.food_allergies);
     const foodLimitations = normalizeStringList(body.foodLimitations ?? body.food_limitations);
 
-    const apiKey = process.env.CLASSIFY_ACTIVITY_KEY || process.env.OPENAI_API_KEY;
-    const apiBase = (process.env.CLASSIFY_ACTIVITY_BASE || '').replace(/\/$/, '');
-    const model = process.env.CLASSIFY_ACTIVITY_DEPLOYMENT || 'gpt-4o-mini';
-
-    if (!apiKey) return res.status(500).json({ error: 'AI key is not configured on the server' });
-
-    const client = new OpenAI({
-      apiKey,
-      ...(apiBase ? { baseURL: apiBase } : {}),
+    const ai = openAIClientConfig({
+      role: 'activity',
+      kind: 'mini',
+      legacy: {
+        apiKey: process.env.CLASSIFY_ACTIVITY_KEY || process.env.OPENAI_API_KEY,
+        baseURL: (process.env.CLASSIFY_ACTIVITY_BASE || '').replace(/\/$/, ''),
+        model: process.env.CLASSIFY_ACTIVITY_DEPLOYMENT || 'gpt-4o-mini',
+      },
     });
+
+    if (!ai) return res.status(500).json({ error: 'AI key is not configured on the server' });
+
+    const client = new OpenAI(ai.options);
+    const model = ai.model;
 
     const isHe = language === 'he' || language === 'hebrew';
     const langInstructions = isHe
@@ -279,11 +284,11 @@ ${preferredMealCount ? `- User already picked ${preferredMealCount} meals — pr
     ];
 
     // Prefer simple json_object — nested strict json_schema often returns empty content via BetterProxy.
-    let content = await callMealStructureLlm(client, model, messages, { type: 'json_object' });
+    let content = await callMealStructureLlm(client, model, messages, { type: 'json_object' }, ai);
 
     if (!content) {
       console.warn('[autoGenerateMeals] json_object empty — retrying without response_format');
-      content = await callMealStructureLlm(client, model, messages, null);
+      content = await callMealStructureLlm(client, model, messages, null, ai);
     }
 
     if (!content) {
@@ -314,7 +319,7 @@ ${preferredMealCount ? `- User already picked ${preferredMealCount} meals — pr
   }
 }
 
-async function callMealStructureLlm(client, model, messages, responseFormat) {
+async function callMealStructureLlm(client, model, messages, responseFormat, ai = null) {
   const params = {
     model,
     messages,
@@ -323,7 +328,7 @@ async function callMealStructureLlm(client, model, messages, responseFormat) {
   };
   if (responseFormat) params.response_format = responseFormat;
 
-  const response = await client.chat.completions.create(params);
+  const response = await client.chat.completions.create(ai ? openAIParams(ai, params) : params);
   const choice = response.choices?.[0];
   const message = choice?.message;
   const content = typeof message?.content === 'string' ? message.content.trim() : '';
@@ -384,16 +389,20 @@ async function classifyActivity(req, res) {
     const { activityDescription } = req.body;
     if (!activityDescription || !activityDescription.trim()) return res.status(400).json({ error: 'activityDescription is required' });
 
-    const apiKey = process.env.CLASSIFY_ACTIVITY_KEY;
-    const apiBase = (process.env.CLASSIFY_ACTIVITY_BASE || '').replace(/\/$/, '');
-    const model = process.env.CLASSIFY_ACTIVITY_DEPLOYMENT || 'gpt-4o-mini';
-
-    if (!apiKey) return res.status(500).json({ error: 'CLASSIFY_ACTIVITY_KEY is not configured on the server' });
-
-    const client = new OpenAI({
-      apiKey,
-      ...(apiBase ? { baseURL: apiBase } : {}),
+    const ai = openAIClientConfig({
+      role: 'activity',
+      kind: 'mini',
+      legacy: {
+        apiKey: process.env.CLASSIFY_ACTIVITY_KEY,
+        baseURL: (process.env.CLASSIFY_ACTIVITY_BASE || '').replace(/\/$/, ''),
+        model: process.env.CLASSIFY_ACTIVITY_DEPLOYMENT || 'gpt-4o-mini',
+      },
     });
+
+    if (!ai) return res.status(500).json({ error: 'CLASSIFY_ACTIVITY_KEY is not configured on the server' });
+
+    const client = new OpenAI(ai.options);
+    const model = ai.model;
 
     const systemPrompt = `You are an expert fitness and nutrition routing AI. Assign the Harris-Benedict activity level from the user's description of their job(s) AND intentional exercise.
 
@@ -427,7 +436,7 @@ Mandatory mappings (do not override):
 
 In reasoning, cite which rule and job segment drove the level. If you considered "moderate" but a physical job was mentioned, explain why "very" was chosen instead.`;
 
-    const response = await client.chat.completions.create({
+    const response = await client.chat.completions.create(openAIParams(ai, {
       model,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -451,7 +460,7 @@ In reasoning, cite which rule and job segment drove the level. If you considered
       },
       temperature: 1,
       max_completion_tokens: 200,
-    });
+    }));
 
     const content = response.choices?.[0]?.message?.content;
     if (!content) return res.status(502).json({ error: 'Empty response from AI' });
