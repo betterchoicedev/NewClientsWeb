@@ -212,6 +212,8 @@ All routes mount under `/api`.
 | Activity classification, onboarding meal suggestions | `CLASSIFY_ACTIVITY_*` (default model `gpt-4o-mini`) |
 | Full meal-plan generation | Meal-plan builder service (`CREATE_MEAL_PLAN_API_URL` in `utils/constants.js`) |
 
+Each AI use above can be moved to BetterProxy with `AI_PROVIDER=betterproxy` (all roles) or `AI_PROVIDER_FOOD` / `_ACTIVITY` / `_MEAL_PLAN` (one role), plus `BETTERPROXY_*`. `services/llmProvider.js` picks the target. The default is the legacy provider.
+
 **Account deletion.** `DELETE /api/auth/account` cancels Stripe billing, deletes the user's rows in both projects and removes the auth user.
 
 ---

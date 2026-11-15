@@ -14,6 +14,33 @@ const {
 } = require('../utils/helpers');
 const { sortMealPlanMeals } = require('../utils/mealStructure');
 const { formatMacrosGramStrings, normalizeMealPlanForDb } = require('../utils/nutritionFormats');
+const { postChatCompletion, chatTarget } = require('./llmProvider');
+
+// Today's food-analysis endpoint (DEEPSEEK_* env names). BetterProxy replaces it
+// when AI_PROVIDER(_FOOD)=betterproxy; see services/llmProvider.js.
+function legacyFoodTarget(model) {
+  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
+  const apiKey  = process.env.DEEPSEEK_API_KEY;
+  if (!apiBase || !apiKey || !model) return null;
+  return {
+    url: `${apiBase}/chat/completions`,
+    headers: { 'Content-Type': 'application/json', 'api-key': apiKey, 'Authorization': `Bearer ${apiKey}` },
+    model,
+  };
+}
+
+// Today's meal-plan endpoint (Azure OpenAI deployment). BetterProxy replaces it
+// when AI_PROVIDER(_MEAL_PLAN)=betterproxy.
+function legacyMealPlanTarget(env = process.env) {
+  const apiBase    = (env.AZURE_OPENAI_API_BASE || '').replace(/\/$/, '');
+  const apiKey     = env.AZURE_OPENAI_API_KEY;
+  const deployment = env.AZURE_OPENAI_DEPLOYMENT;
+  if (!apiBase || !apiKey || !deployment) return null;
+  return {
+    url: `${apiBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`,
+    headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+  };
+}
 
 // ─── Prompt builders ──────────────────────────────────────────────────────────
 
@@ -174,32 +201,23 @@ Return ONLY a valid JSON object matching the schema. No markdown, no explanation
 // ─── LLM callers ─────────────────────────────────────────────────────────────
 
 async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
-  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
-  const apiKey  = process.env.DEEPSEEK_API_KEY;
-  const model   = process.env.DEEPSEEK_DEPLOYMENT;
-
-  if (!apiBase || !apiKey || !model) {
-    throw new Error('Vision LLM is not configured on the server (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY / DEEPSEEK_DEPLOYMENT).');
-  }
-
-  const url    = `${apiBase}/chat/completions`;
   const dataUrl = `data:image/jpeg;base64,${compressedJpegBuffer.toString('base64')}`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'api-key': apiKey,
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
+  const response = await postChatCompletion({
+    role: 'food',
+    kind: 'vision',
+    legacy: legacyFoodTarget(process.env.DEEPSEEK_DEPLOYMENT),
+    body: {
       max_completion_tokens: 4000,
       reasoning_effort: 'medium',
       response_format: { type: 'json_schema', json_schema: FOOD_IMAGE_LLM_SCHEMA },
       messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: dataUrl } }] }],
-    }),
+    },
   });
+
+  if (!response) {
+    throw new Error('Vision LLM is not configured on the server (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY / DEEPSEEK_DEPLOYMENT, or BETTERPROXY_*).');
+  }
 
   if (!response.ok) {
     const errText = await response.text();
@@ -217,25 +235,21 @@ async function callFoodVisionLLM(compressedJpegBuffer, prompt) {
 }
 
 async function callFoodTextLLM(prompt) {
-  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
-  const apiKey  = process.env.DEEPSEEK_API_KEY;
-  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o';
-
-  if (!apiBase || !apiKey) {
-    throw new Error('Text LLM is not configured on the server (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY).');
-  }
-
-  const response = await fetch(`${apiBase}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api-key': apiKey, 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
+  const response = await postChatCompletion({
+    role: 'food',
+    kind: 'text',
+    legacy: legacyFoodTarget(process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o'),
+    body: {
       max_completion_tokens: 2000,
       temperature: 0.2,
       response_format: { type: 'json_schema', json_schema: FOOD_TEXT_LLM_SCHEMA },
       messages: [{ role: 'user', content: prompt }],
-    }),
+    },
   });
+
+  if (!response) {
+    throw new Error('Text LLM is not configured on the server (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY, or BETTERPROXY_*).');
+  }
 
   if (!response.ok) {
     const errText = await response.text();
@@ -250,24 +264,20 @@ async function callFoodTextLLM(prompt) {
 }
 
 async function callMacroLookupLLM(weightedItems) {
-  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
-  const apiKey  = process.env.DEEPSEEK_API_KEY;
-  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o';
-
-  if (!apiBase || !apiKey) throw new Error('Macro LLM is not configured (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY).');
-
   const prompt = buildMacroLookupPrompt(weightedItems);
-  const response = await fetch(`${apiBase}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api-key': apiKey, 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
+  const response = await postChatCompletion({
+    role: 'food',
+    kind: 'text',
+    legacy: legacyFoodTarget(process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o'),
+    body: {
       max_completion_tokens: 1500,
       temperature: 0.1,
       response_format: { type: 'json_schema', json_schema: FOOD_MACRO_LLM_SCHEMA },
       messages: [{ role: 'user', content: prompt }],
-    }),
+    },
   });
+
+  if (!response) throw new Error('Macro LLM is not configured (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY, or BETTERPROXY_*).');
 
   if (!response.ok) {
     const errText = await response.text();
@@ -281,24 +291,20 @@ async function callMacroLookupLLM(weightedItems) {
 }
 
 async function callPlanMatchLLM(computedTotals, planMeal) {
-  const apiBase = (process.env.DEEPSEEK_ENDPOINT || '').replace(/\/$/, '');
-  const apiKey  = process.env.DEEPSEEK_API_KEY;
-  const model   = process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o';
-
-  if (!apiBase || !apiKey) throw new Error('Plan match LLM is not configured (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY).');
-
   const prompt = buildPlanMatchPrompt(computedTotals, planMeal);
-  const response = await fetch(`${apiBase}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api-key': apiKey, 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
+  const response = await postChatCompletion({
+    role: 'food',
+    kind: 'text',
+    legacy: legacyFoodTarget(process.env.DEEPSEEK_TEXT_DEPLOYMENT || 'gpt-4o'),
+    body: {
       max_completion_tokens: 200,
       temperature: 0.1,
       response_format: { type: 'json_schema', json_schema: PLAN_MATCH_LLM_SCHEMA },
       messages: [{ role: 'user', content: prompt }],
-    }),
+    },
   });
+
+  if (!response) throw new Error('Plan match LLM is not configured (DEEPSEEK_ENDPOINT / DEEPSEEK_API_KEY, or BETTERPROXY_*).');
 
   if (!response.ok) {
     const errText = await response.text();
@@ -462,11 +468,8 @@ function buildImageAnalysisResponseBody(visionReport, weightedItems, macroReport
 // ─── Meal plan generation ─────────────────────────────────────────────────────
 
 async function generateUpdatedMealPlan(currentMealPlanStr, userRequestStr, userProfileObj) {
-  const apiBase    = (process.env.AZURE_OPENAI_API_BASE || '').replace(/\/$/, '');
-  const apiKey     = process.env.AZURE_OPENAI_API_KEY;
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-
-  if (!apiBase || !apiKey || !deployment) {
+  const legacy = legacyMealPlanTarget();
+  if (!chatTarget({ role: 'mealPlan', legacy })) {
     throw new Error('Azure OpenAI is not configured on the server');
   }
 
@@ -496,16 +499,16 @@ INSTRUCTIONS:
 Update the CURRENT MEAL PLAN to accommodate the USER MODIFICATION REQUEST. Ensure all changes strictly comply with the USER PROFILE. If a specific meal is changed in calories/macros, rebalance the removed/added calories and macros across the remaining meals by adjusting ingredient portions. Recalculate the totals.
 `;
 
-  const url = `${apiBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-    body: JSON.stringify({
+  const response = await postChatCompletion({
+    role: 'mealPlan',
+    kind: 'text',
+    legacy,
+    body: {
       messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
       response_format: { type: 'json_schema', json_schema: { name: 'updated_meal_plan', strict: true, schema: mealPlanSchema } },
       temperature: 0.1,
       max_tokens: 4000,
-    }),
+    },
   });
 
   if (!response.ok) {
@@ -600,23 +603,23 @@ Rewrite the DRAFT PLAN so it follows the CLIENT CHANGE REQUESTS, within the USER
 }
 
 /** Runs the client-notes pass on Azure OpenAI (same deployment as the meal-plan edit endpoint). */
-async function applyClientNotesToMealPlan(promptInput, { fetchImpl = fetch } = {}) {
-  const apiBase    = (process.env.AZURE_OPENAI_API_BASE || '').replace(/\/$/, '');
-  const apiKey     = process.env.AZURE_OPENAI_API_KEY;
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-  if (!apiBase || !apiKey || !deployment) throw new Error('Azure OpenAI is not configured on the server');
+async function applyClientNotesToMealPlan(promptInput, { fetchImpl = fetch, env = process.env } = {}) {
+  const legacy = legacyMealPlanTarget(env);
+  if (!chatTarget({ role: 'mealPlan', legacy, env })) throw new Error('Azure OpenAI is not configured on the server');
 
   const { systemPrompt, userPrompt } = buildClientNotesMealPlanPrompt(promptInput);
-  const url = `${apiBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
-  const response = await fetchImpl(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-    body: JSON.stringify({
+  const response = await postChatCompletion({
+    role: 'mealPlan',
+    kind: 'text',
+    legacy,
+    env,
+    fetchImpl,
+    body: {
       messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
       response_format: { type: 'json_schema', json_schema: { name: 'regenerated_meal_plan', strict: true, schema: mealPlanSchema } },
       temperature: 0.4,
       max_tokens: 8000,
-    }),
+    },
   });
 
   if (!response.ok) {
