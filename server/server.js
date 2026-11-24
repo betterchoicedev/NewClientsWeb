@@ -26,6 +26,7 @@ const inviteRoutes     = require('./modules/invite/invite.routes');
 const mealPlanRoutes   = require('./modules/meal-plan/meal-plan.routes');
 const starredMealRoutes = require('./modules/starred-meals/starred-meals.routes');
 const streakRoutes = require('./modules/streak/streak.routes');
+const pointsRoutes = require('./modules/points/points.routes');
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 const app = express();
@@ -69,6 +70,7 @@ app.use('/api', inviteRoutes);
 app.use('/api', mealPlanRoutes);
 app.use('/api', starredMealRoutes);
 app.use('/api', streakRoutes);
+app.use('/api', pointsRoutes);
 
 // ─── 404 handler ──────────────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
