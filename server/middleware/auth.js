@@ -157,6 +157,7 @@ function createAuthMiddleware(supabaseAuth, supabaseDb, chatSupabase) {
     '/api/starred-meals',
     '/api/streak',
     '/api/points',
+    '/api/challenges',
     '/api/calendar-events',
     '/api/daily-xp/',
     '/api/chat-messages',
