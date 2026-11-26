@@ -17,11 +17,36 @@
 
 const streak = require('./streak');
 
-/** First night (first candle) of each Hanukkah. Add next year's before it starts. */
+/**
+ * First night of each Hanukkah, 2026 to 2045: the evening before 25 Kislev (the first candle).
+ * Checked against the Hebrew calendar in tests/hanukkah.test.js (Intl 'en-u-ca-hebrew').
+ * The app (BetterApp src/features/rewards/logic/hanukkah.ts) keeps the same table; keep both equal.
+ */
 const SEASONS = [
   { year: 2026, firstNight: '2026-12-04' },
+  { year: 2027, firstNight: '2027-12-24' },
+  { year: 2028, firstNight: '2028-12-12' },
+  { year: 2029, firstNight: '2029-12-01' },
+  { year: 2030, firstNight: '2030-12-20' },
+  { year: 2031, firstNight: '2031-12-09' },
+  { year: 2032, firstNight: '2032-11-27' },
+  { year: 2033, firstNight: '2033-12-16' },
+  { year: 2034, firstNight: '2034-12-06' },
+  { year: 2035, firstNight: '2035-12-25' },
+  { year: 2036, firstNight: '2036-12-13' },
+  { year: 2037, firstNight: '2037-12-02' },
+  { year: 2038, firstNight: '2038-12-21' },
+  { year: 2039, firstNight: '2039-12-11' },
+  { year: 2040, firstNight: '2040-11-29' },
+  { year: 2041, firstNight: '2041-12-17' },
+  { year: 2042, firstNight: '2042-12-07' },
+  { year: 2043, firstNight: '2043-12-26' },
+  { year: 2044, firstNight: '2044-12-14' },
+  { year: 2045, firstNight: '2045-12-03' },
 ];
 const NIGHTS = 8;
+/** A season stays the current one through this many days after its last night (the app's summary day). */
+const AFTER_DAYS = 1;
 
 /** Names that count, in Hebrew and English (any case, any spelling the logs use). */
 const SUFGANIYA_NAME = /סופגנ|sufgan|doughnut|donut|דונאט/i;
@@ -45,13 +70,14 @@ function nightsOf(season) {
 }
 
 /**
- * The season `today` belongs to: the first one that has not ended more than 30 days ago,
- * else the latest one. With `phase`: before / during / after.
+ * The current or upcoming season on `today`: the first one whose last night was at most
+ * AFTER_DAYS ago, else the latest in the table. With `phase`: before / during / after.
+ * Progress, tonight and the badge are always for that one year (`id` is `hanukkah-<year>`).
  */
 function seasonFor(today, seasons = SEASONS) {
   const sorted = [...seasons].sort((a, b) => a.firstNight.localeCompare(b.firstNight));
   const season =
-    sorted.find((s) => streak.addDays(nightsOf(s)[NIGHTS - 1], 30) >= today) || sorted[sorted.length - 1];
+    sorted.find((s) => streak.addDays(nightsOf(s)[NIGHTS - 1], AFTER_DAYS) >= today) || sorted[sorted.length - 1];
   const nights = nightsOf(season);
   const phase = today < nights[0] ? 'before' : today > nights[NIGHTS - 1] ? 'after' : 'during';
   return { ...season, nights, phase };
@@ -153,6 +179,7 @@ async function getHanukkah(userCode, { today: requested } = {}, { adminDB, now }
 module.exports = {
   SEASONS,
   NIGHTS,
+  AFTER_DAYS,
   SUFGANIYA_NAME,
   nightsOf,
   seasonFor,
