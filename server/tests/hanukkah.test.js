@@ -20,15 +20,44 @@ test('phase: before / during / after, by the local calendar day', () => {
   assert.equal(seasonFor('2026-12-03').phase, 'before');
   assert.equal(seasonFor('2026-12-04').phase, 'during');
   assert.equal(seasonFor('2026-12-11').phase, 'during');
-  assert.equal(seasonFor('2026-12-12').phase, 'after');
-  assert.equal(seasonFor('2026-12-13').phase, 'after');
+  assert.equal(seasonFor('2026-12-12').phase, 'after'); // the summary day
+  assert.equal(seasonFor('2026-12-12').year, 2026);
 });
 
-test('season choice: the next one once the last ended 30+ days ago', () => {
-  const seasons = [{ year: 2026, firstNight: '2026-12-04' }, { year: 2027, firstNight: '2027-12-24' }];
-  assert.equal(seasonFor('2026-12-20', seasons).year, 2026);
-  assert.equal(seasonFor('2027-02-01', seasons).year, 2027);
-  assert.equal(seasonFor('2030-01-01', seasons).year, 2027); // nothing newer: the latest
+test('current or upcoming season: the next year from 2 days after the last night', () => {
+  assert.deepEqual([seasonFor('2026-12-13').year, seasonFor('2026-12-13').phase], [2027, 'before']);
+  assert.equal(seasonFor('2026-06-01').year, 2026);
+  assert.deepEqual([seasonFor('2027-12-24').year, seasonFor('2027-12-24').phase], [2027, 'during']);
+  // 2027 ends on 31 Dec, so 1 Jan 2028 is its summary day.
+  assert.deepEqual(nightsOf(svc.SEASONS.find((x) => x.year === 2027)).slice(-1), ['2027-12-31']);
+  // 2035 runs into January: 1 Jan 2036 is night 8 of the 2035 season.
+  assert.deepEqual([seasonFor('2036-01-01').year, seasonFor('2036-01-01').phase], [2035, 'during']);
+  assert.equal(buildChallenge([], '2036-01-01').tonight.night, 8);
+  assert.deepEqual([seasonFor('2028-01-01').year, seasonFor('2028-01-01').phase], [2027, 'after']);
+  assert.deepEqual([seasonFor('2028-01-02').year, seasonFor('2028-01-02').phase], [2028, 'before']);
+  assert.equal(seasonFor('2060-01-01').year, 2045); // past the table: the latest
+});
+
+test('the table is right: every first night is the evening before 25 Kislev (Intl hebrew calendar)', () => {
+  const fmt = new Intl.DateTimeFormat('en-u-ca-hebrew', { timeZone: 'UTC', day: 'numeric', month: 'long' });
+  const years = svc.SEASONS.map((x) => x.year);
+  assert.deepEqual(years, Array.from({ length: 20 }, (_, i) => 2026 + i));
+  for (const season of svc.SEASONS) {
+    const day25 = new Date(`${season.firstNight}T12:00:00Z`);
+    day25.setUTCDate(day25.getUTCDate() + 1);
+    const parts = Object.fromEntries(fmt.formatToParts(day25).map((x) => [x.type, x.value]));
+    assert.equal(`${parts.day} ${parts.month}`, '25 Kislev', String(season.year));
+    assert.equal(season.firstNight.slice(0, 4), String(season.year));
+  }
+});
+
+test('progress is per year: 2026 logs never count for 2027', () => {
+  const rows = NIGHTS_2026.map((d) => sufganiya(d));
+  const c = buildChallenge(rows, '2027-12-25');
+  assert.equal(c.id, 'hanukkah-2027');
+  assert.equal(c.year, 2027);
+  assert.equal(c.done, 0);
+  assert.equal(c.badgeEarned, false);
 });
 
 // ── Timezone edge at midnight ─────────────────────────────────────────────────
@@ -117,7 +146,7 @@ test('nights logged, tonight, done/total; duplicates and other foods do not coun
 test('all 8 nights earn the badge, and it stays after Hanukkah', () => {
   const rows = NIGHTS_2026.map((d) => sufganiya(d));
   assert.equal(buildChallenge(rows, '2026-12-11').badgeEarned, true);
-  const after = buildChallenge(rows, '2026-12-13');
+  const after = buildChallenge(rows, '2026-12-12');
   assert.equal(after.phase, 'after');
   assert.equal(after.tonight, null);
   assert.equal(after.badgeEarned, true);
@@ -125,8 +154,8 @@ test('all 8 nights earn the badge, and it stays after Hanukkah', () => {
 
 test('7 of 8 is no badge; logs outside the nights or after today never count', () => {
   const rows = NIGHTS_2026.slice(1).map((d) => sufganiya(d));
-  rows.push(sufganiya('2026-12-03'), sufganiya('2026-12-12'));
-  const c = buildChallenge(rows, '2026-12-13');
+  rows.push(sufganiya('2026-12-03'), sufganiya('2026-12-12'), sufganiya('2027-12-24'));
+  const c = buildChallenge(rows, '2026-12-12');
   assert.equal(c.done, 7);
   assert.equal(c.badgeEarned, false);
   assert.equal(buildChallenge([sufganiya('2026-12-08')], '2026-12-07').done, 0);
