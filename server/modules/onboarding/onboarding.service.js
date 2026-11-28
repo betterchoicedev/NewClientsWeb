@@ -329,6 +329,32 @@ async function ensureClientAndChatUser(userId, { clientDB, adminDB, email }) {
   return created;
 }
 
+/**
+ * Flat text keys the chat prompt renders key by key (the AI server's format_client_preference
+ * skips nested values), besides the diet style and the free-text food preferences.
+ */
+const COACH_PREFERENCE_KEYS = ['coach_tone', 'coach_focus', 'coach_checkins', 'coach_about'];
+
+/**
+ * `client_preference` (clients and chat_users): the free-text food preferences, the diet
+ * style, "Other: describe your diet", "I already have a meal plan" and the coach set-up
+ * choices, all as flat keys. Undefined when the answers carry none of them.
+ */
+function buildClientPreference(answers = {}) {
+  const prefs = {};
+  if (answers.client_preference) prefs.dietary_preferences = String(answers.client_preference).trim();
+  if (answers.diet_style) prefs.diet_style = String(answers.diet_style).trim();
+  if (typeof answers.diet_description === 'string' && answers.diet_description.trim()) {
+    prefs.diet_description = answers.diet_description.trim();
+  }
+  if (answers.has_own_plan === true || answers.has_own_plan === 'true') prefs.has_own_plan = true;
+  for (const key of COACH_PREFERENCE_KEYS) {
+    const value = answers[key];
+    if (typeof value === 'string' && value.trim()) prefs[key] = value.trim();
+  }
+  return Object.keys(prefs).length ? prefs : undefined;
+}
+
 function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {}) {
   const age = calculateAgeFromDob(answers.date_of_birth);
   const birthDate = toYYYYMMDD(answers.date_of_birth);
@@ -398,13 +424,9 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
   if (answers.custom_answers && typeof answers.custom_answers === 'object') {
     clientData.custom_answers = answers.custom_answers;
   }
-  if (answers.client_preference || answers.diet_style) {
-    const prefs = {};
-    if (answers.client_preference) prefs.dietary_preferences = String(answers.client_preference).trim();
-    if (answers.diet_style) prefs.diet_style = String(answers.diet_style).trim();
-    
-    clientData.client_preference = prefs;
-    
+  const clientPreference = buildClientPreference(answers);
+  if (clientPreference) {
+    clientData.client_preference = clientPreference;
     if (answers.client_preference) {
       clientData.dietary_preferences = String(answers.client_preference).trim();
     }
@@ -437,12 +459,7 @@ function mapAnswersToPayloads(answers = {}, { markOnboardingDone = false } = {})
     daily_target_total_calories: dailyCalories || undefined,
     base_daily_total_calories: bmr != null ? Math.round(bmr) : undefined,
     macros: macros ? formatMacrosGramStrings(macros) : undefined,
-    client_preference: (answers.client_preference || answers.diet_style)
-      ? { 
-          ...(answers.client_preference ? { dietary_preferences: String(answers.client_preference).trim() } : {}),
-          ...(answers.diet_style ? { diet_style: String(answers.diet_style).trim() } : {})
-        }
-      : undefined,
+    client_preference: clientPreference,
     phone_number: phone || undefined,
     whatsapp_number: phone || undefined,
     full_name: fullName || undefined,
@@ -520,6 +537,8 @@ const STEP_FIELD_MAP = {
   calories: { clientKeys: [], chatKeys: ['daily_target_total_calories', 'macros', 'base_daily_total_calories'] },
   meals: { clientKeys: [], chatKeys: ['number_of_meals', 'meal_plan_structure'] },
   medical: { clientKeys: ['medical_conditions'], chatKeys: ['medical_conditions'] },
+  // "Set up your coach": tone / focus / check-ins / about, flat in client_preference.
+  coach_setup: { clientKeys: [], chatKeys: ['client_preference'] },
 };
 
 function pickPartialPayload(full, keys) {
@@ -1493,6 +1512,8 @@ async function grantFreeMonth(userId, { clientDB, adminDB }) {
 
 module.exports = {
   VALID_PHASES,
+  STEP_FIELD_MAP,
+  buildClientPreference,
   saveDraft,
   saveStep,
   commitOnboarding,
